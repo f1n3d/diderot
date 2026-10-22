@@ -351,6 +351,13 @@ final class DocumentModel {
     @ObservationIgnored private var unsavedAtEnd: (ref: NodeRef, node: PMNode)?
     private var commitTask: Task<Void, Never>?
     private var pendingFocus: (path: [Int], cursor: CursorRequest)?
+    /// The block became active through Return or Backspace in the previous one: the page keeps its place and only
+    /// keeps the caret visible, while a tapped block is centered.
+    @ObservationIgnored private(set) var activatedByTyping = false
+    /// Return and Backspace operations still running (quick typing overlaps them).
+    @ObservationIgnored private var typingSwitches = 0
+    /// Return or Backspace is switching blocks; meanwhile the old editor briefly shows the line break as a second line.
+    var isSwitchingByTyping: Bool { typingSwitches > 0 }
     /// Active block state adopted on undo/redo; writing it back would add a history step and lose "Redo".
     @ObservationIgnored private var adoptedText: AttributedString?
     @ObservationIgnored private var adoptedCode: String?
@@ -547,6 +554,7 @@ final class DocumentModel {
         }
         let itemPath = enclosingItemPath(ref.path)
         activeBlockFrame = .zero
+        activatedByTyping = typingSwitches > 0
         active = Active(ref: ref, type: node.type, attrs: node.attrs, itemPath: itemPath)
         if node.type == "codeBlock" {
             activeCode = node.plainText
@@ -652,7 +660,11 @@ final class DocumentModel {
         let characters = activeText.characters
         guard characters.first == Self.sentinel else {
             activeText = Self.withSentinel(activeText)
-            Task { await mergeWithPrevious(active) }
+            Task {
+                typingSwitches += 1
+                defer { typingSwitches -= 1 }
+                await mergeWithPrevious(active)
+            }
             return
         }
         if let newline = characters.firstIndex(of: "\n") {
@@ -664,7 +676,12 @@ final class DocumentModel {
                 perform(first)
                 return
             }
-            Task { await handleReturn(active) }
+            // Right away: the editor would show the line break as a second line until the next update.
+            Task.immediate {
+                typingSwitches += 1
+                defer { typingSwitches -= 1 }
+                await handleReturn(active)
+            }
             return
         }
         // Typing closes the "+" menu; the slash menu follows the text.
