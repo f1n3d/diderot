@@ -164,10 +164,13 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
-    /// After an offline start, the user switches to b before the connection is back.
+    /// After an offline start, the user switches to b before the connection is back. The reconnect's user request
+    /// waits for the switch: on a GitHub runner another request took the hook and the test didn't wait at all (0.25 s).
     @Test func lateReconnectKeepsTheSwitch() async throws {
         let session = try await offlineSessionOnA()
         let other = StoredSession(serverURL: b, token: "b")
+        StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+        defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
         StubURLProtocol.beforeNextAnswer.withLock { $0 = { await session.switchTo(other) } }
         await session.reconnectIfNeeded()
         #expect(session.ready?.server.url == b)
@@ -779,6 +782,9 @@ private nonisolated final class MemorySecretStore: SecretStore {
 /// something else fall back as on errors. `beforeNextAnswer` runs once while the next request waits (slow network).
 private nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     static let beforeNextAnswer = Mutex<(@Sendable () async -> Void)?>(nil)
+    /// Host and path (`a.example.com/api/users/me`) of the request that takes `beforeNextAnswer`; `nil`: the next one.
+    /// Taken by any other request (another session's, a background check), the hook delays nothing the test awaits.
+    static let beforeNextAnswerFor = Mutex<String?>(nil)
     static let offline = Mutex(false)
     static let body = Mutex<String?>(nil)
     static let status = Mutex(200)
@@ -791,7 +797,9 @@ private nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendabl
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return
         }
-        let action = Self.beforeNextAnswer.withLock { $0.take() }
+        let target = (request.url?.host ?? "") + (request.url?.path ?? "")
+        let isFor = Self.beforeNextAnswerFor.withLock { $0 }.map { $0 == target } ?? true
+        let action = isFor ? Self.beforeNextAnswer.withLock { $0.take() } : nil
         Task {
             await action?()
             let body = Self.body.withLock { $0 } ?? #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}}}"#
