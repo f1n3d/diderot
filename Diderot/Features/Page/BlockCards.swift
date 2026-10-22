@@ -47,7 +47,7 @@ struct NodeView: View {
     var body: some View {
         switch node.type {
         case "paragraph", "heading", "detailsSummary":
-            TextNodeView(model: model, node: node, ref: ref, isEditing: model.active?.ref == ref || model.handoff == ref)
+            TextNodeView(model: model, node: node, ref: ref, isEditing: model.active?.ref == ref)
         case "bulletList", "orderedList":
             ListNodeView(model: model, node: node, ref: ref)
         case "taskList":
@@ -109,8 +109,7 @@ struct TextNodeView: View {
     let model: DocumentModel
     let node: PMNode
     let ref: NodeRef
-    /// Active, or still showing its editor after a block switch (handoff). Set by NodeView so inactive blocks don't
-    /// observe `active`/`handoff` and aren't rebuilt on every switch.
+    /// Active. Set by NodeView so inactive blocks don't observe `active` and aren't rebuilt on every switch.
     let isEditing: Bool
     @Environment(\.renderContext) private var context
     @Environment(\.pageFind) private var find
@@ -135,13 +134,23 @@ struct TextNodeView: View {
         if isEditing {
             let isActive = model.active?.ref == ref
             VStack(alignment: .leading, spacing: 6) {
-                ActiveTextEditor(model: model, ref: ref, font: font)
-                    // Its own height, not the row's: beside a checkbox it took the checkbox's.
-                    .fixedSize(horizontal: false, vertical: true)
-                    // The text view puts the font's leading below every line, the reader only between lines: without
-                    // the last one the editor is as tall as the reader's text, so the blocks below don't move.
-                    .padding(.bottom, -fontLeading)
+                // The page's one editor (`PageEditor`) lies on this text: hidden, it keeps the block's place and size
+                // as the reader would show the text (the editor draws it the same), and tells the editor where to lie.
+                // An empty text gets a space's height, as in the reader.
+                Text(model.activeText.characters.isEmpty ? AttributedString(" ") : model.activeText)
+                    .font(font)
                     .multilineTextAlignment(align.textAlignment)
+                    .frame(maxWidth: .infinity, alignment: align.frameAlignment)
+                    .hidden()
+                    .accessibilityHidden(true)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
+                        if model.active?.ref == ref { model.editorFrame = (ref, frame) }
+                    }
+                    .onChange(of: EditorStyle(font: font, leading: fontLeading, alignment: align.textAlignment), initial: true) { _, style in
+                        guard model.active?.ref == ref else { return }
+                        model.editorStyle = style
+                        model.activeFont = style.font
+                    }
                 if isActive, model.showsInsertMenu {
                     InsertMenuView(model: model)
                 } else if isActive, model.mentionQuery != nil {
@@ -216,8 +225,33 @@ struct TextNodeView: View {
     }
 }
 
-/// The one active `TextEditor` (paragraph, heading, toggle summary). After a block switch the previous block's editor
-/// briefly stays, showing its last state, until the new one has focus.
+/// The page's one text editor, lying on the active text block (paragraph, heading, toggle title; `TextNodeView` keeps its
+/// place). It stays the same view while the active block changes, so focus, the keyboard and its state stay and the
+/// caret moves at once; one editor per block made iOS hand focus over at every Return. While a code block (with its
+/// own editor) is active, it stays hidden at its last place.
+struct PageEditor: View {
+    let model: DocumentModel
+
+    var body: some View {
+        if let active = model.active, let place = model.editorFrame {
+            let isText = active.type != "codeBlock"
+            ActiveTextEditor(model: model, ref: isText ? active.ref : place.ref, font: model.editorStyle.font)
+                // Its own height, not the row's: beside a checkbox it took the checkbox's.
+                .fixedSize(horizontal: false, vertical: true)
+                // The text view puts the font's leading below every line, the reader only between lines: without the
+                // last one the editor is as tall as the reader's text, so the blocks below don't move.
+                .padding(.bottom, -model.editorStyle.leading)
+                .multilineTextAlignment(model.editorStyle.alignment)
+                .frame(width: place.frame.width, alignment: .topLeading)
+                // Until the new block reports its place, the editor would show the new text at the old one.
+                .opacity(isText && place.ref == active.ref ? 1 : 0)
+                .allowsHitTesting(isText)
+                .offset(x: place.frame.minX, y: place.frame.minY)
+        }
+    }
+}
+
+/// The text editor in `PageEditor`.
 struct ActiveTextEditor: View {
     @Bindable var model: DocumentModel
     let ref: NodeRef
@@ -236,36 +270,44 @@ struct ActiveTextEditor: View {
             // the tap and the block or table row doesn't grow.
             .padding(.vertical, -8)
             .padding(.horizontal, -5)
-            .accessibilityIdentifier(isActive ? "active-editor" : "handoff-editor")
+            .accessibilityIdentifier(isActive ? "active-editor" : "idle-editor")
+            .accessibilityHidden(!isActive)
             .modifier(EditorFocus(model: model, ref: ref, onFocus: {
                 // Pasting a copied synced block embeds it instead of inserting its markup as text.
                 let model = model
                 SyncedBlockPasteProxy.install { reference in model.pasteSyncedReferenceIntoActive(reference) }
+                if let view = FirstResponder.current as? UITextView {
+                    model.editorTextView = view
+                    TextInputHooks.install(on: view)
+                    TextInputHooks.onBackspaceAtStart = { [weak model] view in
+                        guard let model, view === model.editorTextView else { return false }
+                        return model.backspaceAtStart()
+                    }
+                }
             }))
             .onAppear { if isActive { applyCursor() } }
             .onChange(of: model.cursorRequest) { _, _ in if isActive { applyCursor() } }
             .onChange(of: model.activeText) { _, _ in if isActive { model.activeTextChanged() } }
             .onChange(of: model.activeSelection) { _, _ in if isActive { model.activeSelectionChanged() } }
-            .onChange(of: isActive ? font : nil, initial: true) { _, font in if let font { model.activeFont = font } }
     }
 
     private var text: Binding<AttributedString> {
-        isActive ? $model.activeText : Binding(get: { model.handoffText }, set: { _ in })
+        isActive ? $model.activeText : .constant(AttributedString())
     }
 
     private var selection: Binding<AttributedTextSelection> {
-        isActive ? $model.activeSelection : Binding(get: { model.handoffSelection }, set: { _ in })
+        isActive ? $model.activeSelection : .constant(AttributedTextSelection())
     }
 
     private func applyCursor() {
         guard let request = model.cursorRequest else { return }
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(90))
+            // After this update: the editor has focus already but shows the new block's text only then.
+            try? await Task.sleep(for: .zero)
             guard model.cursorRequest == request else { return }
             var resolved = request
             if case .point(let point) = request {
-                // Character offset in the text view, which also shows the invisible start character.
-                resolved = await Self.offset(at: point, in: String(model.activeText.characters)).map { .offset(max($0, 1) - 1) } ?? .end
+                resolved = await Self.offset(at: point, in: String(model.activeText.characters)).map { .offset($0) } ?? .end
                 guard model.cursorRequest == request else { return }
             }
             let text = model.activeText
@@ -273,11 +315,11 @@ struct ActiveTextEditor: View {
             let index: AttributedString.Index
             switch resolved {
             case .start:
-                index = characters.isEmpty ? text.startIndex : characters.index(after: text.startIndex)
+                index = text.startIndex
             case .end, .point:
                 index = text.endIndex
             case .offset(let offset):
-                index = characters.index(text.startIndex, offsetBy: min(offset + 1, characters.count))
+                index = characters.index(text.startIndex, offsetBy: min(offset, characters.count))
             }
             model.activeSelection = AttributedTextSelection(insertionPoint: index)
             model.cursorRequest = nil
@@ -323,6 +365,11 @@ private struct EditorFocus: ViewModifier {
             .onChange(of: focused) { _, isFocused in
                 if isFocused { onFocus() }
                 model.editorFocusChanged(isFocused, instance: instance, ref: ref)
+            }
+            // The page's editor stays in the window when a code block takes over; back in a text block it takes focus
+            // from the code block's editor directly.
+            .onChange(of: isActive) { _, active in
+                if active, !focused, !model.editsInSheet { focused = true }
             }
             .onChange(of: model.editsInSheet) { _, editing in
                 // After the link, comment or insert sheet (or emoji keyboard), editing continues in the same block.
@@ -693,6 +740,8 @@ struct ToggleNodeView: View {
         // Editable pages follow the stored state, also a collaborator's; read-only pages keep their own (web parity).
         .onChange(of: model.isEditable ? node.bool("open") ?? false : nil) { _, open in
             if let open { withAnimation(.snappy) { isExpanded = open } }
+            // Closed with the cursor inside: editing ends, as the content's editor used to vanish with it.
+            if open == false, let active = model.active?.ref.path, active.starts(with: ref.path + [1]) { model.deactivate() }
         }
     }
 }

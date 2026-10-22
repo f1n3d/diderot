@@ -256,7 +256,6 @@ final class DocumentModel {
         let itemPath: [Int]?
     }
 
-    nonisolated static let sentinel: Character = "\u{200B}"
     static let editableTextTypes: Set<String> = ["paragraph", "heading", "detailsSummary"]
 
     let page: Page
@@ -267,7 +266,7 @@ final class DocumentModel {
     private(set) var active: Active?
     var activeText = AttributedString()
     var activeSelection = AttributedTextSelection()
-    /// Font the active text editor draws with (set by it); saving compares system bold against it.
+    /// Font the active text block draws with (set by its `TextNodeView`); saving compares system bold against it.
     @ObservationIgnored var activeFont = Font.body
     var activeCode = ""
     var cursorRequest: CursorRequest?
@@ -276,16 +275,22 @@ final class DocumentModel {
     /// Active editor frame (incl. slash/mention menu) in the document space, to center it above the keyboard;
     /// `.zero` until the new editor is measured.
     var activeBlockFrame: CGRect = .zero
-    /// Previously active block; its editor stays with its last state until the new editor takes focus directly from
-    /// it, else the keyboard would briefly hide and reappear.
+    /// Where the page's one text editor lies (`PageEditor`, document space): over the text of the block that reported
+    /// it last. Until the newly active block reports its place, the editor stays hidden at the old one.
+    var editorFrame: (ref: NodeRef, frame: CGRect)?
+    /// How the page's text editor draws the active block's text.
+    var editorStyle = EditorStyle(font: .body, leading: 0, alignment: .leading)
+    /// The page text editor's text view, for Backspace at the text's start (`TextInputHooks`).
+    @ObservationIgnored weak var editorTextView: UITextView?
+    /// Previously active code block: its own editor stays with its last state until the next editor takes focus
+    /// directly from it, else the keyboard would briefly hide and reappear. Text blocks share the page's one editor,
+    /// which keeps focus.
     private(set) var handoff: NodeRef?
-    private(set) var handoffText = AttributedString()
-    private(set) var handoffSelection = AttributedTextSelection()
     private(set) var handoffCode = ""
     @ObservationIgnored private var handoffTask: Task<Void, Never>?
     /// Text after "/" before the cursor (at block start or after whitespace, web parity); `nil` = no slash menu.
     private(set) var slashQuery: String?
-    /// Character offset of the "/" in the active text, counting the leading sentinel.
+    /// Character offset of the "/" in the active text.
     @ObservationIgnored private var slashOffset: Int?
     /// Insert menu from the keyboard toolbar "+": the "/" list, but inserting after the block.
     private(set) var showsPlusMenu = false
@@ -503,10 +508,17 @@ final class DocumentModel {
         return applied
     }
 
-    /// Active and handoff blocks with a UniqueID follow when their path shifts; otherwise the editor would lose focus.
+    /// The active block follows by its UniqueID when its path shifts; otherwise the editor would edit another block.
     private func followMovedBlocks() {
-        if let active, let id = active.ref.id, node(at: active.ref.path)?.string("id") != id, let path = path(where: { $0.string("id") == id }) {
-            self.active = Active(ref: NodeRef(path: path, id: id), type: active.type, attrs: active.attrs, itemPath: enclosingItemPath(path))
+        if let active, let id = active.ref.id, node(at: active.ref.path)?.string("id") != id {
+            if let path = path(where: { $0.string("id") == id }) {
+                self.active = Active(ref: NodeRef(path: path, id: id), type: active.type, attrs: active.attrs, itemPath: enclosingItemPath(path))
+            } else {
+                // A collaborator deleted it. Its editor used to vanish with it; the page's one editor stays, so end here.
+                overrides[active.ref.identity] = nil
+                commitTask?.cancel()
+                deactivate()
+            }
         }
         // Without an id (code block, toggle title), another block type or none at the path means a collaborator
         // added or removed a block before it; its input would replace that block, so editing ends unsaved.
@@ -514,9 +526,6 @@ final class DocumentModel {
             overrides[active.ref.identity] = nil
             commitTask?.cancel()
             deactivate()
-        }
-        if let handoff, let id = handoff.id, node(at: handoff.path)?.string("id") != id, let path = path(where: { $0.string("id") == id }) {
-            self.handoff = NodeRef(path: path, id: id)
         }
     }
 
@@ -550,7 +559,7 @@ final class DocumentModel {
         if active?.ref == ref { return }
         if let previous = active {
             commitPendingNow()
-            beginHandoff(from: previous.ref)
+            if previous.type == "codeBlock" { beginHandoff(from: previous.ref) }
         }
         let itemPath = enclosingItemPath(ref.path)
         activeBlockFrame = .zero
@@ -559,7 +568,9 @@ final class DocumentModel {
         if node.type == "codeBlock" {
             activeCode = node.plainText
         } else {
-            activeText = Self.withSentinel(Self.editorText(from: node.children))
+            activeText = Self.editorText(from: node.children)
+            // The page's one editor keeps its selection from block to block; the old indices don't fit this text.
+            activeSelection = AttributedTextSelection(insertionPoint: activeText.endIndex)
         }
         slashQuery = nil
         showsPlusMenu = false
@@ -610,8 +621,6 @@ final class DocumentModel {
 
     private func beginHandoff(from ref: NodeRef) {
         handoff = ref
-        handoffText = activeText
-        handoffSelection = activeSelection
         handoffCode = activeCode
         handoffTask?.cancel()
         // If the new editor never takes focus (e.g. it doesn't appear), don't leave the old one in place.
@@ -654,19 +663,22 @@ final class DocumentModel {
         report(await engine.setAttributes(ref.target, attributes: attributes))
     }
 
-    /// Called after every `activeText` change: Backspace at the start, Return, or typing.
+    /// Backspace with the cursor at the text's start (`TextInputHooks`; the text doesn't change, so `activeTextChanged`
+    /// can't notice it): joins the block with the one before, as on the web. False leaves the key to the text view.
+    func backspaceAtStart() -> Bool {
+        guard let active, active.type != "codeBlock" else { return false }
+        Task {
+            typingSwitches += 1
+            defer { typingSwitches -= 1 }
+            await mergeWithPrevious(active)
+        }
+        return true
+    }
+
+    /// Called after every `activeText` change: Return or typing.
     func activeTextChanged() {
         guard let active, active.type != "codeBlock" else { return }
         let characters = activeText.characters
-        guard characters.first == Self.sentinel else {
-            activeText = Self.withSentinel(activeText)
-            Task {
-                typingSwitches += 1
-                defer { typingSwitches -= 1 }
-                await mergeWithPrevious(active)
-            }
-            return
-        }
         if let newline = characters.firstIndex(of: "\n") {
             // Return with the slash menu open picks the first enabled item (web parity); the line break is dropped.
             if slashQuery != nil, let first = insertMatches.first(where: isEnabled) {
@@ -862,16 +874,15 @@ final class DocumentModel {
     }
 
     /// `mark` ("/" or "@") before the cursor, at block start or after whitespace (incl. the line break U+2028),
-    /// followed by at most `maxLength` non-whitespace characters; the offset counts the sentinel. The limits only end
-    /// a menu once a longer word is typed: 24 is above every command keyword ("/"), 30 above most names ("@").
+    /// followed by at most `maxLength` non-whitespace characters. The limits only end a menu once a longer word is
+    /// typed: 24 is above every command keyword ("/"), 30 above most names ("@").
     private func trigger(_ mark: Character, maxLength: Int, cursor: AttributedString.Index) -> (query: String, offset: Int)? {
         let text = activeText
         let before = Array(text[text.startIndex..<cursor].characters)
-        guard let offset = before.lastIndex(of: mark), offset >= 1 else { return nil }
+        guard let offset = before.lastIndex(of: mark) else { return nil }
         let query = before[(offset + 1)...]
         guard query.count <= maxLength, !query.contains(where: \.isWhitespace) else { return nil }
-        let previous = before[offset - 1]
-        guard previous == Self.sentinel || previous.isWhitespace else { return nil }
+        guard offset == 0 || before[offset - 1].isWhitespace else { return nil }
         // Mark and query are typed text, never an atom's: a user mention shows as "@label", a status or math may
         // contain either, and an atom between mark and cursor would be lost with the pick.
         let index = text.characters.index(text.startIndex, offsetBy: offset)
@@ -884,7 +895,7 @@ final class DocumentModel {
         guard let offset = slashOffset, let query = slashQuery else { return cursorOffset() }
         let characters = activeText.characters
         let length = query.count + 1
-        guard offset >= 1, offset + length <= characters.count else { return cursorOffset() }
+        guard offset + length <= characters.count else { return cursorOffset() }
         let start = characters.index(activeText.startIndex, offsetBy: offset)
         let end = characters.index(start, offsetBy: length)
         guard String(activeText[start..<end].characters) == "/" + query else { return cursorOffset() }
@@ -895,7 +906,7 @@ final class DocumentModel {
         return offset
     }
 
-    /// Cursor offset in the active text, in characters, counting the sentinel.
+    /// Cursor offset in the active text, in characters.
     private func cursorOffset() -> Int {
         activeText.characters.distance(from: activeText.startIndex, to: insertionIndex())
     }
@@ -1464,7 +1475,7 @@ final class DocumentModel {
         if active.type == "codeBlock" {
             return PMNode(type: "codeBlock", attrs: active.attrs, content: activeCode.isEmpty ? nil : [PMNode(type: "text", text: activeCode)])
         }
-        let inlines = Self.inlines(from: Self.stripped(activeText), base: activeFont)
+        let inlines = Self.inlines(from: activeText, base: activeFont)
         return PMNode(type: active.type, attrs: active.attrs, content: inlines.isEmpty ? nil : inlines)
     }
 
@@ -1523,12 +1534,12 @@ final class DocumentModel {
 
     private func handleReturn(_ active: Active) async {
         guard let engine else { return }
-        let full = Self.stripped(activeText)
+        let full = activeText
         guard let newline = full.characters.firstIndex(of: "\n") else { return }
         let before = AttributedString(full[full.startIndex..<newline])
         let afterStart = full.characters.index(after: newline)
         let after = AttributedString(full[afterStart..<full.endIndex])
-        activeText = Self.withSentinel(before)
+        activeText = before
         commitTask?.cancel()
 
         let beforeInlines = Self.inlines(from: before, base: activeFont)
@@ -1539,7 +1550,7 @@ final class DocumentModel {
         // follows a closed one (web parity); right after the title it would split the toggle (only title + content).
         let detailsPath = Array(active.ref.path.dropLast())
         if active.type == "detailsSummary", let details = node(at: detailsPath), details.type == "details" {
-            activeText = Self.withSentinel(before + after)
+            activeText = before + after
             let titleInlines = Self.inlines(from: before + after, base: activeFont)
             let title = PMNode(type: active.type, attrs: active.attrs, content: titleInlines.isEmpty ? nil : titleInlines)
             overrides[active.ref.identity] = title
@@ -1679,7 +1690,7 @@ final class DocumentModel {
     /// Backspace at block start: joins with the previous text block or removes an empty block.
     private func mergeWithPrevious(_ active: Active) async {
         guard let engine else { return }
-        let currentInlines = Self.inlines(from: Self.stripped(activeText), base: activeFont)
+        let currentInlines = Self.inlines(from: activeText, base: activeFont)
         let path = active.ref.path
         var previousPath = path
         // An item's first paragraph joins the previous item's last paragraph, any other block its previous sibling.
@@ -1703,12 +1714,9 @@ final class DocumentModel {
             let offset = previous.plainText.count
             overrides[active.ref.identity] = nil
             commitTask?.cancel()
-            // Activate the previous block now with the merged text. The old editor stays (empty) until the new one
-            // has focus, and its block goes only afterwards, so the keyboard stays up.
+            // Activate the previous block now with the merged text; the merged block goes afterwards.
             let previousRef = NodeRef(path: previousPath, node: previous)
             activate(previousRef, node: merged, cursor: .offset(offset))
-            handoffText = Self.withSentinel(AttributedString())
-            handoffSelection = AttributedTextSelection()
             guard report(await engine.replaceBlock(previousRef.target, with: merged)) else {
                 deactivate()
                 return
@@ -1974,13 +1982,13 @@ final class DocumentModel {
             deactivate()
             return
         }
-        let offset = max(activeText.characters.distance(from: activeText.startIndex, to: insertionIndex()) - 1, 0)
+        let offset = activeText.characters.distance(from: activeText.startIndex, to: insertionIndex())
         active = Active(ref: NodeRef(path: path, node: node), type: node.type, attrs: node.attrs, itemPath: enclosingItemPath(path))
         if node.type == "codeBlock" {
             activeCode = node.plainText
             adoptedCode = activeCode
         } else {
-            activeText = Self.withSentinel(Self.editorText(from: node.children))
+            activeText = Self.editorText(from: node.children)
             adoptedText = activeText
             cursorRequest = .offset(offset)
         }
@@ -2062,19 +2070,6 @@ final class DocumentModel {
         EditorText.display(InlineAttributedText.attributedString(from: inlines))
     }
 
-    static func withSentinel(_ text: AttributedString) -> AttributedString {
-        if text.characters.first == sentinel { return text }
-        var result = AttributedString(String(sentinel))
-        result.append(text)
-        return result
-    }
-
-    static func stripped(_ text: AttributedString) -> AttributedString {
-        guard text.characters.first == sentinel else { return text }
-        let start = text.characters.index(after: text.startIndex)
-        return AttributedString(text[start..<text.endIndex])
-    }
-
     #if DEBUG
     /// Test hooks (`DOCMOST_DEBUG_FOCUS`, `DOCMOST_DEBUG_TYPE`, `DOCMOST_DEBUG_EDIT`), run after the first sync.
     func applyDebugHooks() async {
@@ -2099,4 +2094,11 @@ final class DocumentModel {
         }
     }
     #endif
+}
+
+/// How the page's one text editor draws the active block's text: as the block would (font, leading, alignment).
+struct EditorStyle: Equatable {
+    var font: Font
+    var leading: CGFloat
+    var alignment: TextAlignment
 }

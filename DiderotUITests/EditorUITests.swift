@@ -699,6 +699,24 @@ import XCTest
         finishEditing(app)
     }
 
+    /// A new item starts with a capital, and the keyboard drops the shift after the first letter: typed by tapping
+    /// keys, as a person does (`typeText` bypasses the keyboard's own state). Backspace twice leaves the page as it was.
+    func test60_NewItemStartsWithCapital() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Punkt eins")
+        Thread.sleep(forTimeInterval: 1.0)
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor in the new item")
+        Thread.sleep(forTimeInterval: 1.0)
+        XCTAssertTrue(app.keyboards.keys["A"].exists, "The new item doesn't start with a capital")
+        app.keyboards.keys["A"].tap()
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertTrue(app.keyboards.keys["l"].exists, "The keyboard kept the shift after the first letter")
+        editor.typeText(XCUIKeyboardKey.delete.rawValue + XCUIKeyboardKey.delete.rawValue)
+        Thread.sleep(forTimeInterval: 1.0)
+        finishEditing(app)
+    }
+
     /// Backspace in an empty paragraph right after a table: the paragraph disappears and the cursor jumps to the end
     /// of the last cell, without the keyboard hiding.
     func test17_BackspaceAfterTableKeepsKeyboard() {
