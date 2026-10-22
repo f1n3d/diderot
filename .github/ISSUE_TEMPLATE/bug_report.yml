@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in Diderot doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't report security problems here, but privately as [SECURITY.md](https://github.com/f1n3d/diderot/blob/main/SECURITY.md) describes. Problems that also happen in Docmost's web app belong to [Docmost](https://github.com/docmost/docmost/issues).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: And what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a page
+        2. Tap …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: Diderot version
+      description: "Settings › About › Version (German: Einstellungen › Info)"
+      placeholder: 0.6.0 (11)
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and system
+      placeholder: iPhone 17 Pro, iOS 27.1
+    validations:
+      required: true
+  - type: input
+    id: docmost-version
+    attributes:
+      label: Docmost version
+      description: The version of your Docmost server, if you know it.
+      placeholder: 0.96.0
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or a screen recording
+      description: Optional. Issues are public, so hide private content first.
