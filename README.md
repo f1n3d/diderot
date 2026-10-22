@@ -2,6 +2,20 @@
 
 A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0. Diderot is an independent project, not affiliated with Docmost.
 
+## Goals
+
+A safe, stable app with an editor as simple and robust as possible that still covers everything Docmost offers on the web. Every change is measured against these goals:
+
+- **No data loss:** every input reaches the server or stays safe on the device, also without a network, after a crash or when signing out.
+- **Unknown content stays intact:** what the app doesn't know, such as blocks of a newer Docmost version, stays unchanged when editing; opening and closing a page changes nothing.
+- **Collaboration without surprises:** changes by others appear live without moving the caret or overwriting the wrong block.
+- **iOS features work as in any app:** capitalization, autocorrect, dictation, text replacements, Writing Tools, copying with formatting, undo by shaking or swiping, hardware keyboards on the iPad.
+- **Security and privacy:** credentials only in the Keychain, no content or tokens in logs, no tracking; nothing leaves the device except to the own server. Unencrypted HTTP only deliberately, such as at home, and with a notice.
+- **Visible errors:** when something can't be saved, the app says so right away and understandably; nothing fails silently.
+- **Smooth on large pages:** pages with hundreds of blocks open and scroll without stutter, and typing has no noticeable delay.
+- **Testable:** fast tests without a simulator check the editor's core (Return, Backspace, lists, formatting); the slower UI tests check how the parts work together.
+- **Accessible:** VoiceOver and larger text sizes work throughout.
+
 ## Features
 
 - Sign-in with a password, in the embedded browser (SSO, MFA) or via LDAP; manage device sessions. Passkeys at the identity provider work only in part, see [Sign-in](#sign-in).
