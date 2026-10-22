@@ -522,18 +522,23 @@ struct PageView: View {
     // MARK: - Centering above the keyboard
 
     /// A block became active: center it above the keyboard in one motion as the keyboard slides in (its notification
-    /// triggers that in `keyboardChanged`). With the keyboard already up, the new editor's first frame does it
-    /// (`activeFrameChanged`): started right away, the motion ran while the editor was built, dropped frames, and
-    /// restarted when the editor settled.
+    /// triggers that in `keyboardChanged`). With the keyboard already up, the placed caret does it (`cursorPlaced`):
+    /// started right away, the motion ran while the editor was built, dropped frames, and restarted when the editor
+    /// settled. After Return or Backspace the page keeps its place instead, as in other editors.
     private func activeBlockChanged() {
         centering.task?.cancel()
-        guard model?.active != nil else {
+        guard let model, model.active != nil else {
+            centering.centerUntil = .distantPast
+            return
+        }
+        scrollToUnbuiltActiveBlock()
+        // `cursorPlaced` only keeps the new caret visible.
+        guard !model.activatedByTyping else {
             centering.centerUntil = .distantPast
             return
         }
         // Right after the tap the editor still changes (height, table bar); keep re-centering it for that long.
         centering.centerUntil = .now + 0.8
-        scrollToUnbuiltActiveBlock()
         guard centering.keyboardTop == nil else { return }
         centering.task = Task { @MainActor in
             // Without a keyboard this is only the fallback in case none appears (hardware keyboard without toolbar).
@@ -603,16 +608,20 @@ struct PageView: View {
             // While the keyboard is still coming, its notification does the centering; with it up, the placed caret
             // starts it (`cursorPlaced`).
             if centering.keyboardTop != nil, model.cursorRequest == nil { center(duration: 0.35) }
-        } else {
+        } else if !model.isSwitchingByTyping {
             reveal(duration: 0.2)
         }
     }
 
     /// The new editor has focus and its caret: the work of the switch is done, so the centering runs without dropping
-    /// frames (started with the editor's first frame, it stuttered for about 150 ms).
+    /// frames (started with the editor's first frame, it stuttered for about 150 ms). Without centering (Return,
+    /// Backspace) the caret only stays visible.
     private func cursorPlaced() {
-        guard centering.isCentering, centering.keyboardTop != nil else { return }
-        center(duration: 0.35)
+        if !centering.isCentering {
+            reveal(duration: 0.2)
+        } else if centering.keyboardTop != nil {
+            center(duration: 0.35)
+        }
     }
 
     /// Centers the active editor in the visible range. From 80% of the range's height, its end (where the cursor sits
@@ -643,6 +652,9 @@ struct PageView: View {
         } else if case .point(let point)? = model.cursorRequest {
             // Tapped: the caret goes to that line shortly (`ActiveTextEditor`), not to the end it starts at.
             rect = CGRect(x: frame.minX, y: centering.windowY(of: frame.minY + point.y) - 18 - shift, width: frame.width, height: 36)
+        } else if model.cursorRequest != nil {
+            // Not placed yet: the selection still belongs to the previous block, and `cursorPlaced` comes back here.
+            return
         } else if model.isCursorAtEnd {
             let lineTop = max(frame.minY, frame.maxY - 36)
             rect = CGRect(x: frame.minX, y: centering.windowY(of: lineTop) - shift, width: frame.width, height: frame.maxY - lineTop)
@@ -652,7 +664,8 @@ struct PageView: View {
             return
         }
         let top = visible.lowerBound + 8
-        let bottom = visible.upperBound - 8
+        // A line of air above the keyboard's bar shows that the page goes on.
+        let bottom = visible.upperBound - 38
         var delta: CGFloat = 0
         if rect.maxY > bottom { delta = rect.maxY - bottom }
         if rect.minY - delta < top { delta = rect.minY - top }

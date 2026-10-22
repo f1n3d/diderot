@@ -680,6 +680,25 @@ import XCTest
         finishEditing(app)
     }
 
+    /// Return and Backspace in a list item well above the keyboard don't move the page: only a tap centers its block.
+    /// Backspace merges the new item back, so the page keeps its content.
+    func test59_ReturnKeepsPagePosition() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Punkt eins")
+        Thread.sleep(forTimeInterval: 1.5)
+        let heading = app.staticTexts["Überschrift"].firstMatch
+        let before = heading.frame.minY
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor in the new item")
+        Thread.sleep(forTimeInterval: 1.0)
+        XCTAssertEqual(heading.frame.minY, before, accuracy: 1, "Return moved the page")
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        editor = activeEditor(app, "No editor after Backspace")
+        Thread.sleep(forTimeInterval: 1.0)
+        XCTAssertEqual(heading.frame.minY, before, accuracy: 1, "Backspace moved the page")
+        finishEditing(app)
+    }
+
     /// Backspace in an empty paragraph right after a table: the paragraph disappears and the cursor jumps to the end
     /// of the last cell, without the keyboard hiding.
     func test17_BackspaceAfterTableKeepsKeyboard() {
