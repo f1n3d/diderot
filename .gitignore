@@ -1,0 +1,34 @@
+# Xcode
+xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+DerivedData/
+*.xcresult
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/*/.build/
+Packages/*/.swiftpm/
+
+# Tools and local artifacts
+Tools/.cache/
+Tools/screenshots/
+.env
+Config/Local.xcconfig
+
+# macOS
+.DS_Store
+
+# Local Claude Code settings
+.claude/
+
+# Editor engine (JavaScript)
+Engine/node_modules/
+Engine/dist/

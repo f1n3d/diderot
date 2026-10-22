@@ -1,0 +1,42 @@
+{
+    "data": [
+        {
+            "id": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+            "slugId": "8scNdSalJ7",
+            "title": "Handbuch",
+            "icon": "\ud83d\udcd8",
+            "isBase": false,
+            "position": "a041v",
+            "parentPageId": null,
+            "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+            "deletedAt": null,
+            "hasChildren": true
+        },
+        {
+            "id": "01a11ad8-2dc4-708f-8921-5db0eacf9d59",
+            "slugId": "zkPQaC7Hum",
+            "title": "Handbuch \u2013 Kapitel 1",
+            "icon": "\ud83d\udcc4",
+            "isBase": false,
+            "position": "a01Ud",
+            "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+            "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+            "deletedAt": null,
+            "hasChildren": true
+        },
+        {
+            "id": "01a11ad8-2e09-718d-820a-da24be7aa8e5",
+            "slugId": "wyhHGDDk6f",
+            "title": "Handbuch \u2013 Abschnitt 1.1",
+            "icon": "\ud83d\udd39",
+            "isBase": false,
+            "position": "a0BcS",
+            "parentPageId": "01a11ad8-2dc4-708f-8921-5db0eacf9d59",
+            "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+            "deletedAt": null,
+            "hasChildren": false
+        }
+    ],
+    "success": true,
+    "status": 200
+}

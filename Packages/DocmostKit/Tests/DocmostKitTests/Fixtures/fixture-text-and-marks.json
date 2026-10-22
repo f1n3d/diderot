@@ -1,0 +1,78 @@
+{
+  "title": "Fixture: Text & Marks",
+  "icon": "✍️",
+  "content": {
+    "type": "doc",
+    "content": [
+      {"type": "heading", "attrs": {"level": 1, "id": "fixtureheadone"}, "content": [{"type": "text", "text": "Heading level 1"}]},
+      {"type": "paragraph", "attrs": {"id": "fixtureparaone"}, "content": [
+        {"type": "text", "text": "Plain text with "},
+        {"type": "text", "text": "bold", "marks": [{"type": "bold"}]},
+        {"type": "text", "text": ", "},
+        {"type": "text", "text": "italic", "marks": [{"type": "italic"}]},
+        {"type": "text", "text": ", "},
+        {"type": "text", "text": "underline", "marks": [{"type": "underline"}]},
+        {"type": "text", "text": ", "},
+        {"type": "text", "text": "strikethrough", "marks": [{"type": "strike"}]},
+        {"type": "text", "text": ", "},
+        {"type": "text", "text": "inline code", "marks": [{"type": "code"}]},
+        {"type": "text", "text": ", H"},
+        {"type": "text", "text": "2", "marks": [{"type": "subscript"}]},
+        {"type": "text", "text": "O and E=mc"},
+        {"type": "text", "text": "2", "marks": [{"type": "superscript"}]},
+        {"type": "text", "text": "."}
+      ]},
+      {"type": "heading", "attrs": {"level": 2, "id": "fixtureheadtwo"}, "content": [{"type": "text", "text": "Heading level 2"}]},
+      {"type": "paragraph", "content": [
+        {"type": "text", "text": "Combined "},
+        {"type": "text", "text": "bold italic", "marks": [{"type": "bold"}, {"type": "italic"}]},
+        {"type": "text", "text": " and "},
+        {"type": "text", "text": "bold code", "marks": [{"type": "bold"}, {"type": "code"}]},
+        {"type": "text", "text": " and a "},
+        {"type": "text", "text": "yellow highlight", "marks": [{"type": "highlight", "attrs": {"color": "#faf594", "colorName": "yellow"}}]},
+        {"type": "text", "text": " and "},
+        {"type": "text", "text": "red text", "marks": [{"type": "textStyle", "attrs": {"color": "#e03131"}}]},
+        {"type": "text", "text": " and a "},
+        {"type": "text", "text": "comment mark", "marks": [{"type": "comment", "attrs": {"commentId": "00000000-0000-0000-0000-000000000000", "resolved": false}}]},
+        {"type": "text", "text": "."}
+      ]},
+      {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "Heading level 3"}]},
+      {"type": "paragraph", "content": [
+        {"type": "text", "text": "External link: "},
+        {"type": "text", "text": "docmost.com", "marks": [{"type": "link", "attrs": {"href": "https://docmost.com", "target": "_blank", "internal": false}}]},
+        {"type": "text", "text": ". Internal link: "},
+        {"type": "text", "text": "{{PAGE_TITLE}}", "marks": [{"type": "link", "attrs": {"href": "/s/demo/p/{{PAGE_SLUG}}", "internal": true}}]},
+        {"type": "text", "text": ". Anchor link: "},
+        {"type": "text", "text": "jump to heading 2", "marks": [{"type": "link", "attrs": {"href": "#fixtureheadtwo", "internal": true}}]},
+        {"type": "text", "text": "."}
+      ]},
+      {"type": "paragraph", "content": [
+        {"type": "text", "text": "Mentions: "},
+        {"type": "mention", "attrs": {"id": "mentionfixtureuser", "label": "{{USER_NAME}}", "entityType": "user", "entityId": "{{USER_ID}}", "creatorId": "{{USER_ID}}"}},
+        {"type": "text", "text": " and page "},
+        {"type": "mention", "attrs": {"id": "mentionfixturepage", "label": "{{PAGE_TITLE}}", "entityType": "page", "entityId": "{{PAGE_ID}}", "slugId": "{{PAGE_SLUGID}}", "creatorId": "{{USER_ID}}"}},
+        {"type": "text", "text": ". Status: "},
+        {"type": "status", "attrs": {"text": "In progress", "color": "blue"}},
+        {"type": "text", "text": " "},
+        {"type": "status", "attrs": {"text": "Done", "color": "green"}},
+        {"type": "text", "text": " "},
+        {"type": "status", "attrs": {"text": "Blocked", "color": "red"}},
+        {"type": "text", "text": ". Inline math: "},
+        {"type": "mathInline", "attrs": {"text": "E = mc^2"}},
+        {"type": "text", "text": "."}
+      ]},
+      {"type": "paragraph", "content": [
+        {"type": "text", "text": "Line one"},
+        {"type": "hardBreak"},
+        {"type": "text", "text": "line two after a hard break."}
+      ]},
+      {"type": "paragraph", "attrs": {"textAlign": "center"}, "content": [{"type": "text", "text": "Centered paragraph."}]},
+      {"type": "paragraph", "attrs": {"textAlign": "right"}, "content": [{"type": "text", "text": "Right-aligned paragraph."}]},
+      {"type": "paragraph", "attrs": {"indent": 1}, "content": [{"type": "text", "text": "Indented once."}]},
+      {"type": "paragraph", "attrs": {"indent": 2}, "content": [{"type": "text", "text": "Indented twice."}]},
+      {"type": "paragraph", "attrs": {"dir": "rtl"}, "content": [{"type": "text", "text": "שלום – right-to-left paragraph."}]},
+      {"type": "paragraph"},
+      {"type": "paragraph", "content": [{"type": "text", "text": "Previous paragraph was empty. 🙂 Emoji and ümlauts: äöü ß."}]}
+    ]
+  }
+}

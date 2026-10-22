@@ -1,0 +1,568 @@
+{
+    "data": {
+        "id": "01a11aec-e549-788f-b0e9-be304df20d17",
+        "pageId": "01a11aeb-fa78-7b54-b3ca-f9d15f1e2981",
+        "slugId": "2LOKBMGvRj",
+        "title": "Fixture: Text & Marks",
+        "icon": "\u270d\ufe0f",
+        "coverPhoto": null,
+        "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "contributorIds": [
+            "01a11a90-f71c-707b-ba76-800020050b3d"
+        ],
+        "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-10-08T09:51:35.241Z",
+        "content": {
+            "type": "doc",
+            "content": [
+                {
+                    "type": "heading",
+                    "attrs": {
+                        "id": "fixtureheadone",
+                        "dir": "auto",
+                        "level": 1,
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "Heading level 1",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "id": "fixtureparaone",
+                        "dir": "auto",
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "Plain text with ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "bold",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "bold",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": ", ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "italic",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "italic",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": ", ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "underline",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "underline",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": ", ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "strikethrough",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "strike",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": ", ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "inline code",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "code",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": ", H",
+                            "type": "text"
+                        },
+                        {
+                            "text": "2",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "subscript",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": "O and E=mc",
+                            "type": "text"
+                        },
+                        {
+                            "text": "2",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "superscript",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": ".",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "heading",
+                    "attrs": {
+                        "id": "fixtureheadtwo",
+                        "dir": "auto",
+                        "level": 2,
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "Heading level 2",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "Combined ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "bold italic",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "bold",
+                                    "attrs": {}
+                                },
+                                {
+                                    "type": "italic",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": " and ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "bold code",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "bold",
+                                    "attrs": {}
+                                },
+                                {
+                                    "type": "code",
+                                    "attrs": {}
+                                }
+                            ]
+                        },
+                        {
+                            "text": " and a ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "yellow highlight",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "highlight",
+                                    "attrs": {
+                                        "color": "#f9e79f",
+                                        "colorName": "yellow"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "text": " and ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "red text",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "textStyle",
+                                    "attrs": {
+                                        "color": "#e03131"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "text": " and a ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "comment mark",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "comment",
+                                    "attrs": {
+                                        "resolved": false,
+                                        "commentId": "00000000-0000-0000-0000-000000000000"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "text": ".",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "heading",
+                    "attrs": {
+                        "dir": "auto",
+                        "level": 3,
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "Heading level 3",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "External link: ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "docmost.com",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "link",
+                                    "attrs": {
+                                        "rel": "noopener noreferrer nofollow",
+                                        "href": "https://docmost.com",
+                                        "class": null,
+                                        "title": null,
+                                        "target": "_blank",
+                                        "internal": false
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "text": ". Internal link: ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "Handbuch",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "link",
+                                    "attrs": {
+                                        "rel": "noopener noreferrer nofollow",
+                                        "href": "/s/demo/p/handbuch-8scNdSalJ7",
+                                        "class": null,
+                                        "title": null,
+                                        "target": "_blank",
+                                        "internal": true
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "text": ". Anchor link: ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "jump to heading 2",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "link",
+                                    "attrs": {
+                                        "rel": "noopener noreferrer nofollow",
+                                        "href": "#fixtureheadtwo",
+                                        "class": null,
+                                        "title": null,
+                                        "target": "_blank",
+                                        "internal": true
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "text": ".",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "Mentions: ",
+                            "type": "text"
+                        },
+                        {
+                            "type": "mention",
+                            "attrs": {
+                                "id": "mentionfixtureuser",
+                                "dir": "auto",
+                                "label": "Dev Admin",
+                                "entityId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                                "entityType": "user"
+                            }
+                        },
+                        {
+                            "text": " and page ",
+                            "type": "text"
+                        },
+                        {
+                            "type": "mention",
+                            "attrs": {
+                                "id": "mentionfixturepage",
+                                "dir": "auto",
+                                "label": "Handbuch",
+                                "slugId": "8scNdSalJ7",
+                                "entityId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                                "entityType": "page"
+                            }
+                        },
+                        {
+                            "text": ". Status: ",
+                            "type": "text"
+                        },
+                        {
+                            "type": "status",
+                            "attrs": {
+                                "dir": "auto",
+                                "text": "In progress",
+                                "color": "blue"
+                            }
+                        },
+                        {
+                            "text": " ",
+                            "type": "text"
+                        },
+                        {
+                            "type": "status",
+                            "attrs": {
+                                "dir": "auto",
+                                "text": "Done",
+                                "color": "green"
+                            }
+                        },
+                        {
+                            "text": " ",
+                            "type": "text"
+                        },
+                        {
+                            "type": "status",
+                            "attrs": {
+                                "dir": "auto",
+                                "text": "Blocked",
+                                "color": "red"
+                            }
+                        },
+                        {
+                            "text": ". Inline math: ",
+                            "type": "text"
+                        },
+                        {
+                            "type": "mathInline",
+                            "attrs": {
+                                "dir": "auto",
+                                "text": "E = mc^2"
+                            }
+                        },
+                        {
+                            "text": ".",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "Line one",
+                            "type": "text"
+                        },
+                        {
+                            "type": "hardBreak",
+                            "attrs": {
+                                "dir": "auto"
+                            }
+                        },
+                        {
+                            "text": "line two after a hard break.",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 0,
+                        "textAlign": "center"
+                    },
+                    "content": [
+                        {
+                            "text": "Centered paragraph.",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 0,
+                        "textAlign": "right"
+                    },
+                    "content": [
+                        {
+                            "text": "Right-aligned paragraph.",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 1
+                    },
+                    "content": [
+                        {
+                            "text": "Indented once.",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 2
+                    },
+                    "content": [
+                        {
+                            "text": "Indented twice.",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "rtl",
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "\u05e9\u05dc\u05d5\u05dd \u2013 right-to-left paragraph.",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 0
+                    }
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "dir": "auto",
+                        "indent": 0
+                    },
+                    "content": [
+                        {
+                            "text": "Previous paragraph was empty. \ud83d\ude42 Emoji and \u00fcmlauts: \u00e4\u00f6\u00fc \u00df.",
+                            "type": "text"
+                        }
+                    ]
+                }
+            ]
+        },
+        "lastUpdatedBy": {
+            "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+            "name": "Dev Admin",
+            "avatarUrl": null
+        },
+        "contributors": [
+            {
+                "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "name": "Dev Admin",
+                "avatarUrl": null
+            }
+        ]
+    },
+    "success": true,
+    "status": 200
+}

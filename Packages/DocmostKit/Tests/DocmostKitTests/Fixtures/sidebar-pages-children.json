@@ -1,0 +1,57 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a11ad8-2dc4-708f-8921-5db0eacf9d59",
+                "slugId": "zkPQaC7Hum",
+                "title": "Handbuch \u2013 Kapitel 1",
+                "icon": "\ud83d\udcc4",
+                "position": "a01Ud",
+                "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "isBase": false,
+                "deletedAt": null,
+                "hasChildren": true,
+                "canEdit": true
+            },
+            {
+                "id": "01a11ad8-2e92-79e7-82d0-dbfdfdba20d7",
+                "slugId": "rNIRRLQ6ic",
+                "title": "Handbuch \u2013 Kapitel 2",
+                "icon": "\ud83d\udcc4",
+                "position": "a17tr",
+                "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "isBase": false,
+                "deletedAt": null,
+                "hasChildren": false,
+                "canEdit": true
+            },
+            {
+                "id": "01a11ad8-2ecf-753b-8bc7-903050ef01b4",
+                "slugId": "IBRntT15PS",
+                "title": "Handbuch \u2013 Kapitel 3",
+                "icon": "\ud83d\udcc4",
+                "position": "a2BYb",
+                "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "isBase": false,
+                "deletedAt": null,
+                "hasChildren": false,
+                "canEdit": true
+            }
+        ],
+        "meta": {
+            "limit": 100,
+            "hasNextPage": false,
+            "hasPrevPage": false,
+            "nextCursor": null,
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}

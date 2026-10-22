@@ -1,0 +1,493 @@
+{
+ "type": "doc",
+ "content": [
+  {
+   "type": "heading",
+   "attrs": {
+    "dir": "auto",
+    "level": 1,
+    "indent": 0
+   },
+   "content": [
+    {
+     "text": "Überschrift",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "attrs": {
+    "dir": "auto",
+    "indent": 0
+   },
+   "content": [
+    {
+     "text": "Erster Absatz mit ",
+     "type": "text"
+    },
+    {
+     "text": "fett",
+     "type": "text",
+     "marks": [
+      {
+       "type": "bold",
+       "attrs": {}
+      }
+     ]
+    },
+    {
+     "text": ", ",
+     "type": "text"
+    },
+    {
+     "text": "kursiv",
+     "type": "text",
+     "marks": [
+      {
+       "type": "italic",
+       "attrs": {}
+      }
+     ]
+    },
+    {
+     "text": " und ",
+     "type": "text"
+    },
+    {
+     "text": "code",
+     "type": "text",
+     "marks": [
+      {
+       "type": "code",
+       "attrs": {}
+      }
+     ]
+    },
+    {
+     "text": ".",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "type": "bulletList",
+   "attrs": {
+    "dir": "auto"
+   },
+   "content": [
+    {
+     "type": "listItem",
+     "attrs": {
+      "dir": "auto"
+     },
+     "content": [
+      {
+       "type": "paragraph",
+       "attrs": {
+        "dir": "auto",
+        "indent": 0
+       },
+       "content": [
+        {
+         "text": "Punkt eins",
+         "type": "text"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "listItem",
+     "attrs": {
+      "dir": "auto"
+     },
+     "content": [
+      {
+       "type": "paragraph",
+       "attrs": {
+        "dir": "auto",
+        "indent": 0
+       },
+       "content": [
+        {
+         "text": "Punkt zwei",
+         "type": "text"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "taskList",
+   "attrs": {
+    "dir": "auto"
+   },
+   "content": [
+    {
+     "type": "taskItem",
+     "attrs": {
+      "dir": "auto",
+      "checked": false
+     },
+     "content": [
+      {
+       "type": "paragraph",
+       "attrs": {
+        "dir": "auto",
+        "indent": 0
+       },
+       "content": [
+        {
+         "text": "Aufgabe offen",
+         "type": "text"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "taskItem",
+     "attrs": {
+      "dir": "auto",
+      "checked": true
+     },
+     "content": [
+      {
+       "type": "paragraph",
+       "attrs": {
+        "dir": "auto",
+        "indent": 0
+       },
+       "content": [
+        {
+         "text": "Aufgabe erledigt",
+         "type": "text"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "codeBlock",
+   "attrs": {
+    "dir": "auto",
+    "language": "swift"
+   },
+   "content": [
+    {
+     "text": "let x = 1",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "attrs": {
+    "dir": "auto",
+    "indent": 0
+   },
+   "content": [
+    {
+     "text": "Letzter Absatz.",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "type": "table",
+   "attrs": {
+    "dir": "auto"
+   },
+   "content": [
+    {
+     "type": "tableRow",
+     "attrs": {
+      "dir": "auto"
+     },
+     "content": [
+      {
+       "type": "tableHeader",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "Kopf A",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableHeader",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "Kopf B",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "attrs": {
+      "dir": "auto"
+     },
+     "content": [
+      {
+       "type": "tableCell",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "ZeileEins",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "b1",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "attrs": {
+      "dir": "auto"
+     },
+     "content": [
+      {
+       "type": "tableCell",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "ZeileZwei",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "b2",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "attrs": {
+      "dir": "auto"
+     },
+     "content": [
+      {
+       "type": "tableCell",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "ZeileDrei",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "b3",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tableRow",
+     "attrs": {
+      "dir": "auto"
+     },
+     "content": [
+      {
+       "type": "tableCell",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "ZeileVier",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "tableCell",
+       "attrs": {
+        "dir": "auto",
+        "colspan": 1,
+        "rowspan": 1
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "dir": "auto",
+          "indent": 0
+         },
+         "content": [
+          {
+           "text": "b4",
+           "type": "text"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "attrs": {
+    "dir": "auto",
+    "indent": 0
+   },
+   "content": [
+    {
+     "text": "Nach der Tabelle.",
+     "type": "text"
+    }
+   ]
+  }
+ ]
+}

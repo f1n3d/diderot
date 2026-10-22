@@ -1,0 +1,70 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "01a12164-d31f-7981-83df-b963b06a7ff6",
+        "pageId": "01a12164-d30a-7e7b-abf6-598651e1ca6c",
+        "cells": {
+          "prp5vvmfjb13": "optwg4rc46h3",
+          "prprssn5lttp": "Karte 1"
+        },
+        "position": "a06cw",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-10-09T16:00:18.207Z",
+        "updatedAt": "2026-10-09T16:00:18.223Z",
+        "deletedAt": null
+      },
+      {
+        "id": "01a12164-d325-7266-8c32-cb8eed6e4124",
+        "pageId": "01a12164-d30a-7e7b-abf6-598651e1ca6c",
+        "cells": {
+          "prp5vvmfjb13": "optujyqkzfae",
+          "prprssn5lttp": "Karte 2"
+        },
+        "position": "a12m1",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": null,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-10-09T16:00:18.213Z",
+        "updatedAt": "2026-10-09T16:00:18.213Z",
+        "deletedAt": null
+      },
+      {
+        "id": "01a12164-d329-7196-969c-21873ad11644",
+        "pageId": "01a12164-d30a-7e7b-abf6-598651e1ca6c",
+        "cells": {
+          "prp5vvmfjb13": "optf0x57v3zu",
+          "prprssn5lttp": "Karte 3"
+        },
+        "position": "a218o",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": null,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-10-09T16:00:18.216Z",
+        "updatedAt": "2026-10-09T16:00:18.216Z",
+        "deletedAt": null
+      }
+    ],
+    "meta": {
+      "limit": 100,
+      "hasNextPage": false,
+      "hasPrevPage": false,
+      "nextCursor": null,
+      "prevCursor": null
+    },
+    "references": {
+      "users": {
+        "01a11a90-f71c-707b-ba76-800020050b3d": {
+          "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+          "name": "Dev Admin",
+          "avatarUrl": null
+        }
+      },
+      "pages": {}
+    }
+  },
+  "success": true,
+  "status": 200
+}

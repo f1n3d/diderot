@@ -1,0 +1,42 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a11aec-e549-788f-b0e9-be304df20d17",
+                "pageId": "01a11aeb-fa78-7b54-b3ca-f9d15f1e2981",
+                "slugId": "2LOKBMGvRj",
+                "title": "Fixture: Text & Marks",
+                "icon": "\u270d\ufe0f",
+                "coverPhoto": null,
+                "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "contributorIds": [
+                    "01a11a90-f71c-707b-ba76-800020050b3d"
+                ],
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "createdAt": "2026-10-08T09:51:35.241Z",
+                "lastUpdatedBy": {
+                    "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                    "name": "Dev Admin",
+                    "avatarUrl": null
+                },
+                "contributors": [
+                    {
+                        "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                        "name": "Dev Admin",
+                        "avatarUrl": null
+                    }
+                ]
+            }
+        ],
+        "meta": {
+            "limit": 20,
+            "hasNextPage": false,
+            "hasPrevPage": false,
+            "nextCursor": null,
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}

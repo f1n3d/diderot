@@ -1,0 +1,135 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a11ad8-3479-7e39-b675-ac91d90be107",
+                "slugId": "GfTTSAzqHF",
+                "title": null,
+                "icon": null,
+                "coverPhoto": null,
+                "position": "a56KO",
+                "parentPageId": null,
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "isLocked": false,
+                "isBase": false,
+                "createdAt": "2026-10-08T09:28:59.257Z",
+                "updatedAt": "2026-10-08T09:28:59.257Z",
+                "deletedAt": null,
+                "contributorIds": [],
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                }
+            },
+            {
+                "id": "01a11ad8-3468-7c25-a192-9bb4867defc6",
+                "slugId": "oOMJPaPQ7g",
+                "title": "Protokolle \u2013 Kapitel 3",
+                "icon": "\ud83d\udcc4",
+                "coverPhoto": null,
+                "position": "a20Iq",
+                "parentPageId": "01a11ad8-334a-71ec-806e-8acfd4d16800",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "isLocked": false,
+                "isBase": false,
+                "createdAt": "2026-10-08T09:28:59.240Z",
+                "updatedAt": "2026-10-08T09:28:59.240Z",
+                "deletedAt": null,
+                "contributorIds": [],
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                }
+            },
+            {
+                "id": "01a11ad8-342f-7ff4-950e-a5a467dfed34",
+                "slugId": "xSU9mnmKVh",
+                "title": "Protokolle \u2013 Kapitel 2",
+                "icon": "\ud83d\udcc4",
+                "coverPhoto": null,
+                "position": "a1AcN",
+                "parentPageId": "01a11ad8-334a-71ec-806e-8acfd4d16800",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "isLocked": false,
+                "isBase": false,
+                "createdAt": "2026-10-08T09:28:59.183Z",
+                "updatedAt": "2026-10-08T09:28:59.183Z",
+                "deletedAt": null,
+                "contributorIds": [],
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                }
+            },
+            {
+                "id": "01a11ad8-33f8-768f-bb49-3048e2b6b726",
+                "slugId": "7dqofIAAOL",
+                "title": "Protokolle \u2013 Abschnitt 1.2",
+                "icon": "\ud83d\udd39",
+                "coverPhoto": null,
+                "position": "a13hB",
+                "parentPageId": "01a11ad8-3383-7edd-9c4e-4701b1d67b44",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "isLocked": false,
+                "isBase": false,
+                "createdAt": "2026-10-08T09:28:59.128Z",
+                "updatedAt": "2026-10-08T09:28:59.128Z",
+                "deletedAt": null,
+                "contributorIds": [],
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                }
+            },
+            {
+                "id": "01a11ad8-33bd-7944-ab00-343af4b5192c",
+                "slugId": "dUDNZpfn5R",
+                "title": "Protokolle \u2013 Abschnitt 1.1",
+                "icon": "\ud83d\udd39",
+                "coverPhoto": null,
+                "position": "a04Df",
+                "parentPageId": "01a11ad8-3383-7edd-9c4e-4701b1d67b44",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "isLocked": false,
+                "isBase": false,
+                "createdAt": "2026-10-08T09:28:59.069Z",
+                "updatedAt": "2026-10-08T09:28:59.069Z",
+                "deletedAt": null,
+                "contributorIds": [],
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                }
+            }
+        ],
+        "meta": {
+            "limit": 5,
+            "hasNextPage": true,
+            "hasPrevPage": false,
+            "nextCursor": "dXBkYXRlZEF0PTIwMjYtMTAtMDhUMDklM0EyOCUzQTU5LjA2OVomaWQ9MDFhMTFhZDgtMzNiZC03OTQ0LWFiMDAtMzQzYWY0YjUxOTJj",
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}

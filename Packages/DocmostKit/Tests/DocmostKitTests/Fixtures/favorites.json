@@ -1,0 +1,58 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a11af3-bf9c-7c2d-8d85-10ca21678338",
+                "userId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "pageId": null,
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "templateId": null,
+                "type": "space",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "createdAt": "2026-10-08T09:59:04.348Z",
+                "page": null,
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo",
+                    "logo": null
+                },
+                "template": null
+            },
+            {
+                "id": "01a11af3-bf8f-7f9a-a3c4-399cb28df53a",
+                "userId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "pageId": "01a11ad8-2e09-718d-820a-da24be7aa8e5",
+                "spaceId": null,
+                "templateId": null,
+                "type": "page",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "createdAt": "2026-10-08T09:59:04.335Z",
+                "page": {
+                    "id": "01a11ad8-2e09-718d-820a-da24be7aa8e5",
+                    "slugId": "wyhHGDDk6f",
+                    "title": "Handbuch \u2013 Abschnitt 1.1",
+                    "icon": "\ud83d\udd39",
+                    "isBase": false,
+                    "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2"
+                },
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo",
+                    "logo": null
+                },
+                "template": null
+            }
+        ],
+        "meta": {
+            "limit": 20,
+            "hasNextPage": false,
+            "hasPrevPage": false,
+            "nextCursor": null,
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}

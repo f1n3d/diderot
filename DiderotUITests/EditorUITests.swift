@@ -1,0 +1,1366 @@
+import XCTest
+
+/// Tap tests for in-place editing in the page view against the dev instance (`Tools/run-uitests.sh`). Tests type
+/// stamped text (`DOCMOST_STAMP`); the script resets the page first, then checks via the API what reached the server.
+@MainActor final class EditorUITests: XCTestCase {
+    private let stamp = ProcessInfo.processInfo.environment["DOCMOST_STAMP"] ?? String(Int(Date().timeIntervalSince1970) % 100_000)
+
+    override func setUpWithError() throws {
+        try requireEnvironment(["DOCMOST_DEBUG_PAGE"])
+    }
+
+    // MARK: - Helpers
+
+    private func launch(openPage: Bool) -> XCUIApplication {
+        let keys = openPage ? ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"] : []
+        return launchApp(extraEnvironment: environment.filter { keys.contains($0.key) })
+    }
+
+    /// Opens the test page and waits for the engine sync ("Saved").
+    private func launchPage() -> XCUIApplication {
+        let app = launch(openPage: true)
+        waitForSync(app)
+        return app
+    }
+
+    private func waitForSync(_ app: XCUIApplication) {
+        let pill = element(app, "page-status")
+        XCTAssertTrue(pill.waitForExistence(timeout: 40), "Page didn't load")
+        let synced = expectation(for: NSPredicate(format: "label IN %@", ["Saved", "Gespeichert"]), evaluatedWith: pill)
+        wait(for: [synced], timeout: 30)
+    }
+
+    /// Taps a text block at the right end of its last line, which puts the caret at the end, and waits for the editor.
+    private func edit(_ app: XCUIApplication, blockContaining text: String) -> XCUIElement {
+        let block = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", text)).firstMatch
+        let end = CGVector(dx: 1, dy: 0.85)
+        XCTAssertTrue(scrollTo(block, in: app, anchor: end), "Block “\(text)” not found")
+        block.coordinate(withNormalizedOffset: end).withOffset(CGVector(dx: -2, dy: 0)).tap()
+        return activeEditor(app, "Editor doesn't appear after tapping “\(text)”")
+    }
+
+    private func finishEditing(_ app: XCUIApplication) {
+        let editor = app.textViews["active-editor"]
+        app.buttons["editor-done"].tap()
+        // After hardware key events iOS brings the on-screen keyboard back and the toolbar moves up with it; a tap
+        // during that move misses "Done".
+        if !editor.waitForNonExistence(timeout: 3) { app.buttons["editor-done"].tap() }
+        XCTAssertTrue(editor.waitForNonExistence(timeout: 8), "Editor didn't close")
+    }
+
+    /// Scrolls until the point at `anchor` (unit coordinates of the element) lies in the page's free area: below the
+    /// navigation bar, above the keyboard and the floating "+". A block that only peeks in at an edge counts as
+    /// hittable for XCUITest, but a tap at a given point of it can miss.
+    private func scrollTo(_ element: XCUIElement, in app: XCUIApplication, anchor: CGVector = CGVector(dx: 0.5, dy: 0.5)) -> Bool {
+        func freeArea() -> ClosedRange<CGFloat> {
+            let top = app.navigationBars.firstMatch.frame.maxY + 8
+            var bottom = app.windows.firstMatch.frame.maxY - 8
+            for blocker in [app.keyboards.firstMatch, app.buttons["page-add-block"]] where blocker.exists {
+                bottom = min(bottom, blocker.frame.minY - 8)
+            }
+            return top...max(top, bottom)
+        }
+        for _ in 0..<10 {
+            guard element.exists else {
+                app.swipeUp()
+                continue
+            }
+            let area = freeArea(), y = element.frame.minY + element.frame.height * anchor.dy
+            if area.contains(y), element.isHittable { return true }
+            // Move that point to the middle of the free area, without momentum.
+            let shift = max(-300, min(300, (area.lowerBound + area.upperBound) / 2 - y))
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: shift)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        return false
+    }
+
+    // MARK: - Tests
+
+    /// Tap a paragraph, type, toggle bold, keep typing, finish: the reader shows the text at once; the server gets
+    /// "Tipp<stamp>" and bold "Fett<stamp>" at the end of the paragraph.
+    func test1_TapParagraphTypeAndBold() {
+        let app = launchPage()
+        snapshot(app, "1-page")
+        // The page opens at the very top (title visible), without horizontal offset.
+        let title = element(app, "page-title")
+        XCTAssertTrue(title.waitForExistence(timeout: 5) && title.isHittable, "Page doesn't open at the very top")
+        let heading = app.staticTexts["Überschrift"].firstMatch
+        XCTAssertTrue(heading.exists, "Heading missing")
+        XCTAssertGreaterThanOrEqual(heading.frame.minX, 8, "Content is shifted horizontally")
+        let editor = edit(app, blockContaining: "Erster Absatz")
+        let bold = app.buttons["format-bold"]
+        let toolbarVisible = bold.waitForExistence(timeout: 8)
+        snapshot(app, "1-editing")
+        XCTAssertTrue(toolbarVisible, "Format toolbar doesn't appear")
+        editor.typeText(" Tipp\(stamp)")
+        XCTAssertFalse(bold.isSelected, "Bold is marked active before toggling")
+        bold.tap()
+        XCTAssertTrue(bold.wait(for: \.isSelected, toEqual: true, timeout: 3), "Bold isn't marked active after toggling")
+        editor.typeText(" Fett\(stamp)")
+        snapshot(app, "1-typed")
+        finishEditing(app)
+        let shown = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Fett\(stamp)")).firstMatch
+        XCTAssertTrue(shown.waitForExistence(timeout: 5), "Reader doesn't show the typed text after editing ends")
+        snapshot(app, "1-after")
+    }
+
+    /// New paragraph via "+", type, bold: expects "Neu<stamp>", bold "NeuFett<stamp>" and bold "Taste<stamp>" from ⌘B
+    /// on the selected word (system formatting sets only the font).
+    func test2_AddParagraphTypeAndBold() {
+        let app = launchPage()
+        let editor = appendBlock(app, editable: "New paragraph doesn't become editable")
+        let bold = app.buttons["format-bold"]
+        XCTAssertTrue(bold.waitForExistence(timeout: 8), "Format toolbar doesn't appear in the new paragraph")
+        editor.typeText("Neu\(stamp)")
+        bold.tap()
+        editor.typeText(" NeuFett\(stamp)")
+        bold.tap()
+        editor.typeText(" Taste\(stamp)")
+        editor.typeKey(.leftArrow, modifierFlags: [.shift, .option])
+        // A person pauses between selecting, ⌘B and "Done"; back to back, ⌘B was often lost.
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeKey("b", modifierFlags: .command)
+        Thread.sleep(forTimeInterval: 0.6)
+        XCTAssertTrue(bold.wait(for: \.isSelected, toEqual: true, timeout: 3), "The Bold button doesn't show the bold from ⌘B")
+        snapshot(app, "2-typed")
+        finishEditing(app)
+    }
+
+    /// Tap a list item and type: expects "Liste<stamp>" in it.
+    func test3_TapListItemAndType() {
+        let app = launchPage()
+        let editor = edit(app, blockContaining: "Punkt eins")
+        XCTAssertTrue(app.buttons["format-bold"].waitForExistence(timeout: 8), "Format toolbar doesn't appear in the list item")
+        editor.typeText(" Liste\(stamp)")
+        snapshot(app, "3-typed")
+        finishEditing(app)
+    }
+
+    /// The real path: Home → space → page (via the space search) → tap paragraph → type → done.
+    func test4_NavigateAndEdit() {
+        let app = launch(openPage: false)
+        let slug = environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo"
+        let space = app.buttons["space-\(slug)"]
+        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card “\(slug)” not on the home screen")
+        space.tap()
+        // The search runs in the space view; results replace the page tree.
+        let search = app.textFields["space-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 20), "Search field in the space not found")
+        search.tap()
+        let title = environment["DOCMOST_UITEST_PAGE_TITLE"] ?? "Editor-Test"
+        search.typeText(title)
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'search-result-' AND label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 20), "Search result “\(title)” missing")
+        snapshot(app, "4-search")
+        result.tap()
+        waitForSync(app)
+        snapshot(app, "4-page")
+        let editor = edit(app, blockContaining: "Letzter Absatz")
+        editor.typeText(" Weg\(stamp)")
+        finishEditing(app)
+        let shown = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Weg\(stamp)")).firstMatch
+        XCTAssertTrue(shown.waitForExistence(timeout: 5), "Reader doesn't show the typed text")
+        snapshot(app, "4-after")
+    }
+
+    /// Return creates a new paragraph; Backspace at the start of an empty paragraph merges it back.
+    func test5_ReturnAndBackspace() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Letzter Absatz")
+        editor.typeText("\n")
+        // The new paragraph gets a new editor.
+        editor = activeEditor(app, "No editor after Return")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Return\(stamp)")
+        snapshot(app, "5-return")
+        finishEditing(app)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", "Return\(stamp)")).firstMatch.waitForExistence(timeout: 5), "New paragraph missing in the reader")
+
+        editor = edit(app, blockContaining: "Letzter Absatz")
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor after the second Return")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        editor = activeEditor(app, "No editor after Backspace")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText(" Merge\(stamp)")
+        snapshot(app, "5-merge")
+        finishEditing(app)
+    }
+
+    /// New page via the space's FAB: opens in the editor, title focused; then types into its first block, sets the
+    /// icon via the emoji keyboard and moves the page to the trash.
+    func test6_CreatePageFromSpace() {
+        let app = launch(openPage: false)
+        let slug = environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo"
+        let space = app.buttons["space-\(slug)"]
+        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card missing")
+        space.tap()
+        let fab = app.buttons["space-new-page"]
+        XCTAssertTrue(fab.waitForExistence(timeout: 20), "FAB missing")
+        fab.tap()
+        let title = element(app, "page-title")
+        XCTAssertTrue(title.waitForExistence(timeout: 20), "New page doesn't open in the editor")
+        snapshot(app, "6-new-page")
+        Thread.sleep(forTimeInterval: 0.8)
+        let pageTitle = "Neue Seite \(stamp)"
+        app.typeText(pageTitle + "\n")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", pageTitle)).firstMatch.waitForExistence(timeout: 10)
+            || app.navigationBars[pageTitle].waitForExistence(timeout: 5), "Title wasn't applied")
+        snapshot(app, "6-titled")
+        // Type into the empty page's first block (its id comes from the engine) and keep typing past the sync.
+        waitForSync(app)
+        app.buttons["page-space"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 0, dy: 50)).tap()
+        let editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Text\(stamp)")
+        // Past the commit (400 ms) and the engine's document update.
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertTrue(editor.exists, "Editor closes after the sync")
+        editor.typeText(" weiter")
+        snapshot(app, "6-body")
+        finishEditing(app)
+        Thread.sleep(forTimeInterval: 1.5)
+        let icon = app.buttons["page-icon"]
+        XCTAssertTrue(icon.waitForExistence(timeout: 10), "Icon button missing")
+        icon.tap()
+        let emojiField = app.textFields["emoji-field"].firstMatch
+        XCTAssertTrue(emojiField.waitForExistence(timeout: 5), "Emoji field missing")
+        Thread.sleep(forTimeInterval: 1.0)
+        emojiField.typeText("🚀")
+        let iconSet = expectation(for: NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "🚀", "🚀"), evaluatedWith: app.buttons["page-icon"])
+        wait(for: [iconSet], timeout: 15)
+        snapshot(app, "6-icon")
+        // Saving reloads the page: open the menu only afterwards, retrying once if needed.
+        Thread.sleep(forTimeInterval: 1.5)
+        let trash = button(app, labels: ["Move to Trash", "In den Papierkorb", "In den Papierkorb verschieben"])
+        let moreFrame = app.buttons["page-more"].frame
+        app.buttons["page-more"].tap()
+        if !trash.waitForExistence(timeout: 4) {
+            app.buttons["page-more"].tap()
+        }
+        XCTAssertTrue(trash.waitForExistence(timeout: 5), "Trash menu item missing")
+        trash.tap()
+        assertPopover(app, at: moreFrame)
+        let confirm = button(app, labels: ["Move to Trash", "In den Papierkorb", "In den Papierkorb verschieben"])
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Confirmation missing")
+        confirm.tap()
+        // The banner's own text: the "Moved to trash" toast would satisfy a looser match.
+        let banner = app.staticTexts.matching(NSPredicate(format: "label IN %@", ["This page is in the trash.", "Diese Seite liegt im Papierkorb."])).firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 15), "Trash banner missing")
+
+        // Delete it permanently from the space's trash, so runs leave no pages behind; that confirmation shows at the
+        // swiped row.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let spaceTrash = app.buttons["space-trash"]
+        XCTAssertTrue(spaceTrash.waitForExistence(timeout: 10), "Space trash button missing")
+        spaceTrash.tap()
+        let row = app.cells.containing(NSPredicate(format: "label == %@", pageTitle)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 15), "Page missing from the space's trash")
+        let rowFrame = row.frame
+        row.swipeLeft()
+        let deleteLabels = ["Delete Permanently", "Endgültig löschen"]
+        let delete = button(app, labels: deleteLabels)
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "Swipe shows no “Delete Permanently”")
+        delete.tap()
+        assertPopover(app, at: rowFrame)
+        app.popovers.firstMatch.buttons.matching(NSPredicate(format: "label IN %@", deleteLabels)).firstMatch.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10), "Page still in the trash after deleting it permanently")
+    }
+
+    /// Long-press a block and drag it onto the heading: "Letzter Absatz" lands before "Überschrift".
+    func test7_DragBlock() {
+        let app = launchPage()
+        let source = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Letzter Absatz")).firstMatch
+        let heading = app.staticTexts["Überschrift"].firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 10) && heading.exists, "Blocks not found")
+        source.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1.2, thenDragTo: heading.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)))
+        snapshot(app, "7-dragged")
+        let moved = expectation(for: NSPredicate { _, _ in
+            let s = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Letzter Absatz")).firstMatch
+            let h = app.staticTexts["Überschrift"].firstMatch
+            return s.exists && h.exists && s.frame.minY < h.frame.minY
+        }, evaluatedWith: nil)
+        wait(for: [moved], timeout: 10)
+    }
+
+    /// "/zit" in a new paragraph → quote; the text lands in the quote.
+    func test9_SlashCommandQuote() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Letzter Absatz")
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor after Return")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("/zit")
+        let quote = app.buttons["slash-block-quote"]
+        XCTAssertTrue(quote.waitForExistence(timeout: 8), "Slash menu shows no quote")
+        snapshot(app, "9-slash")
+        quote.tap()
+        editor = activeEditor(app, "Quote doesn't become editable")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Zitat\(stamp)")
+        snapshot(app, "9-quote")
+        finishEditing(app)
+    }
+
+    /// "@Editor" in a list item → suggestion "Editor-Test" → mention. Bold on part of it ("Test") keeps the mention,
+    /// as on the web, where a selection covers it whole or not at all.
+    func test10_MentionPage() {
+        let app = launchPage()
+        let editor = edit(app, blockContaining: "Punkt zwei")
+        editor.typeText(" @Editor")
+        let suggestion = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "mention-page-", "Editor-Test")).firstMatch
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 10), "No page suggestion for the mention")
+        snapshot(app, "10-mention")
+        suggestion.tap()
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("danach\(stamp)")
+        snapshot(app, "10-inserted")
+        // Back over the typed word and the space after the mention, then select the mention's last 4 characters.
+        for _ in " danach\(stamp)" { editor.typeKey(.leftArrow, modifierFlags: []) }
+        for _ in "Test" { editor.typeKey(.leftArrow, modifierFlags: .shift) }
+        let bold = app.buttons["format-bold"]
+        bold.tap()
+        XCTAssertTrue(bold.wait(for: \.isSelected, toEqual: true, timeout: 3), "Bold isn't marked active on part of the mention")
+        snapshot(app, "10-part-bold")
+        finishEditing(app)
+    }
+
+    /// Page tree: long-press "Editor-Test" and drag it to the top; the page becomes the first root page.
+    func test11_TreeDragToTop() {
+        let app = launch(openPage: false)
+        let slug = environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo"
+        let space = app.buttons["space-\(slug)"]
+        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card missing")
+        space.tap()
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "page-"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 20), "Page tree empty")
+        let first = rows.element(boundBy: 0)
+        let firstId = first.identifier
+        let pageId = environment["DOCMOST_DEBUG_PAGE"]!
+        let source = app.buttons["page-\(pageId)"]
+        XCTAssertTrue(scrollTo(source, in: app), "Test page not in the tree")
+        XCTAssertNotEqual(firstId, "page-\(pageId)", "Test page is already at the top – reset the test data")
+        // Scrolling may have hidden the first row: scroll back up until it is hittable.
+        for _ in 0..<8 where !first.isHittable { app.swipeDown() }
+        XCTAssertTrue(first.isHittable && source.exists, "Rows not visible at the same time")
+        snapshot(app, "11-before")
+        source.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+            .press(forDuration: 1.2, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)))
+        let moved = expectation(for: NSPredicate { _, _ in
+            let s = app.buttons["page-\(pageId)"]
+            let f = app.buttons[firstId]
+            return s.exists && f.exists && s.frame.minY < f.frame.minY
+        }, evaluatedWith: nil)
+        wait(for: [moved], timeout: 15)
+        snapshot(app, "11-after")
+    }
+
+    /// Insert a table and add a row below via the table bar above it.
+    func test8_TableInsertRow() {
+        let app = launchPage()
+        appendBlock(app, labels: ["Table", "Tabelle"], missing: "Table menu item missing", editable: "First cell doesn't become editable")
+        let insert = app.buttons["table-insert-row-below"]
+        XCTAssertTrue(insert.waitForExistence(timeout: 8), "Table bar missing")
+        app.typeText("Zelle\(stamp)")
+        Thread.sleep(forTimeInterval: 0.6)
+        insert.tap()
+        activeEditor(app, timeout: 10, "New row doesn't become editable")
+        snapshot(app, "8-table")
+        finishEditing(app)
+    }
+
+    /// Tap cells in different table rows: each time the editor is centered between navigation bar and keyboard
+    /// (measurable only while the software keyboard is visible).
+    func test13_TableRowsCentered() {
+        let app = launchPage()
+        for (index, cell) in ["ZeileEins", "ZeileDrei", "ZeileVier"].enumerated() {
+            let editor = edit(app, blockContaining: cell)
+            Thread.sleep(forTimeInterval: 1.5)
+            snapshot(app, "13-row-\(index)")
+            // Visible area: navigation bar bottom to keyboard toolbar top.
+            let done = app.buttons["editor-done"]
+            XCTAssertTrue(done.waitForExistence(timeout: 5), "Toolbar missing")
+            let center = (app.navigationBars.firstMatch.frame.maxY + done.frame.minY) / 2
+            let offset = editor.frame.midY - center
+            XCTAssertLessThan(abs(offset), 60, "“\(cell)” not centered: editor center is \(Int(offset)) pt off center")
+            finishEditing(app)
+        }
+    }
+
+    /// Keyboard toolbar buttons except bold (test1) and comment, in a separate paragraph at the page end: formats as
+    /// typing attributes, line break, link, undo/redo of text and block type, insert, code block, duplicate, delete.
+    /// The script checks the server state ("Toolbar: …").
+    func test15_ToolbarActions() {
+        let app = launchPage()
+        var editor = appendBlock(app, editable: "New paragraph doesn't become editable")
+        XCTAssertTrue(app.buttons["format-italic"].waitForExistence(timeout: 8), "Toolbar missing")
+        editor.typeText("Leiste\(stamp)")
+        // Typing attributes: toggle on, type a word, toggle off.
+        for (id, word) in [("format-italic", "Kursiv"), ("format-underline", "Unter"), ("format-strike", "Durch"),
+                           ("format-highlight", "Mark")] {
+            editor.typeText(" ")
+            tapToolbarButton(app, id)
+            editor.typeText("\(word)\(stamp)")
+            tapToolbarButton(app, id)
+        }
+        // As on the web, inline code ("</>") sits with the formats; the code block has its own button.
+        editor.typeText(" ")
+        tapToolbarButton(app, "format-code")
+        editor.typeText("Kode\(stamp)")
+        tapToolbarButton(app, "format-code")
+        tapToolbarButton(app, "format-linebreak")
+        editor.typeText("Umbruch\(stamp)")
+        snapshot(app, "15-formats")
+
+        // Link without a selection: the address is appended as linked text and editing continues.
+        tapToolbarButton(app, "format-link")
+        let address = app.textFields["link-address"]
+        XCTAssertTrue(address.waitForExistence(timeout: 5), "Link sheet missing")
+        address.tap()
+        address.typeText("https://example.com/\(stamp)")
+        snapshot(app, "15-link-sheet")
+        app.buttons.matching(NSPredicate(format: "identifier == 'link-apply' OR label IN %@", ["Apply", "Übernehmen"])).firstMatch.tap()
+        editor = activeEditor(app, timeout: 5, "Paragraph is no longer being edited after the link")
+        XCTAssertTrue(waitForText(editor, contains: "example.com/\(stamp)"), "Link address missing in the paragraph")
+        snapshot(app, "15-link")
+        // Typing right after the link continues outside it, as on the web. Short, no stamp: if the line wrapped, the
+        // block center that "Duplicate" taps below would land on the link.
+        editor = editorAfterSheet(app, closing: address)
+        editor.typeText(" Danach")
+
+        // Link to a page: as on the web, the whole result row takes the tap, even the empty middle between the short
+        // title and the space. Cancel leaves the paragraph unchanged.
+        tapToolbarButton(app, "format-link")
+        XCTAssertTrue(address.waitForExistence(timeout: 5), "Link sheet missing")
+        let pageSearch = app.textFields.matching(NSPredicate(format: "placeholderValue IN %@", ["Search pages", "Seiten suchen"])).firstMatch
+        pageSearch.tap()
+        // The test page itself: always there with this title, unlike the sample pages a person may rename.
+        let target = environment["DOCMOST_UITEST_PAGE_TITLE"] ?? "Editor-Test"
+        pageSearch.typeText(target)
+        let pageResult = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", target + ",")).firstMatch
+        XCTAssertTrue(pageResult.waitForExistence(timeout: 10), "Page search doesn't find “\(target)”")
+        pageResult.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(waitForText(address, contains: "/p/"), "Tap in the middle of the page row doesn't take its link")
+        snapshot(app, "15-link-page")
+        button(app, labels: ["Cancel", "Abbrechen"]).tap()
+        editor = editorAfterSheet(app, closing: pageSearch)
+
+        Thread.sleep(forTimeInterval: 1.2)
+        editor.typeText(" Rueck\(stamp)")
+        Thread.sleep(forTimeInterval: 1.2)
+        tapToolbarButton(app, "editor-undo")
+        XCTAssertTrue(waitForText(editor, contains: "Rueck\(stamp)", expected: false), "Undo doesn't remove the typed word")
+        tapToolbarButton(app, "editor-redo")
+        XCTAssertTrue(waitForText(editor, contains: "Rueck\(stamp)"), "Redo doesn't restore the word")
+        tapToolbarButton(app, "editor-undo")
+        XCTAssertTrue(waitForText(editor, contains: "Rueck\(stamp)", expected: false), "Second undo doesn't remove the word")
+
+        // Block type: heading 2, undo, redo (result: heading 2).
+        tapToolbarButton(app, "editor-block-type")
+        app.buttons["type-heading2"].tap()
+        activeEditor(app, "No editor after the conversion")
+        Thread.sleep(forTimeInterval: 1.2)
+        tapToolbarButton(app, "editor-undo")
+        Thread.sleep(forTimeInterval: 1.0)
+        snapshot(app, "15-heading-undone")
+        tapToolbarButton(app, "editor-redo")
+        Thread.sleep(forTimeInterval: 1.0)
+        snapshot(app, "15-heading")
+
+        // Insert via "+": insert menu below the block, new paragraph after it.
+        tapToolbarButton(app, "editor-insert")
+        let insertParagraph = app.buttons["slash-block-paragraph"]
+        XCTAssertTrue(insertParagraph.waitForExistence(timeout: 5), "“+” doesn't show the insert list")
+        insertParagraph.tap()
+        editor = activeEditor(app, "Inserted paragraph doesn't become editable")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Eingefuegt\(stamp)")
+        snapshot(app, "15-inserted")
+        // The toolbar's code block button (main row) turns the paragraph into a code block, like "/code".
+        Thread.sleep(forTimeInterval: 0.6)
+        tapToolbarButton(app, "editor-code-block")
+        Thread.sleep(forTimeInterval: 1.5)
+        snapshot(app, "15-codeblock")
+
+        let marker = "Leiste\(stamp)"
+        _ = edit(app, blockContaining: marker)
+        tapToolbarButton(app, "editor-duplicate")
+        XCTAssertTrue(waitForCount(app, of: marker, equals: 2), "Duplicate doesn't create a copy")
+        snapshot(app, "15-duplicated")
+        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", marker)).element(boundBy: 1).tap()
+        activeEditor(app, "Copy doesn't become editable")
+        tapToolbarButton(app, "editor-delete")
+        let confirm = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Delete confirmation missing")
+        confirm.tap()
+        XCTAssertTrue(waitForCount(app, of: marker, equals: 1), "Delete doesn't remove the copy")
+        snapshot(app, "15-deleted")
+    }
+
+    /// Taps a toolbar button left of "Done". On a wide iPhone a button can stick out of its scrolling row, and a tap on
+    /// its center then lands on "Done" and closes the editor; a button hidden further right is left to XCUITest.
+    private func tapToolbarButton(_ app: XCUIApplication, _ id: String) {
+        let button = app.buttons[id], done = app.buttons["editor-done"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "Toolbar button “\(id)” missing")
+        let frame = button.frame, edge = done.exists ? done.frame.minX - 6 : .infinity
+        guard frame.maxX > edge, edge - frame.minX >= 12 else { return button.tap() }
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: (frame.minX + edge) / 2, dy: frame.midY)).tap()
+    }
+
+    /// Waits until exactly `count` text blocks contain the fragment.
+    private func waitForCount(_ app: XCUIApplication, of fragment: String, equals count: Int, timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", fragment)).count == count { return true }
+            Thread.sleep(forTimeInterval: 0.3)
+        }
+        return false
+    }
+
+    /// Waits until the editor's text contains the fragment, or with `expected: false` no longer does.
+    private func waitForText(_ editor: XCUIElement, contains fragment: String, expected: Bool = true, timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if ((editor.value as? String) ?? "").contains(fragment) == expected { return true }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        return ((editor.value as? String) ?? "").contains(fragment) == expected
+    }
+
+    /// A tap at the start of a paragraph puts the caret there, as on the web; it used to go to the end. The script
+    /// checks that "Anfang<stamp>" starts the paragraph after the table.
+    /// A server newer than the app's editor (Docmost 0.97 via the debug override): the page opens read-only with a
+    /// notice, and tapping its text starts no editing.
+    func test58_NewerServerOpensPagesReadOnly() {
+        var extra = environment.filter { ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"].contains($0.key) }
+        extra["DOCMOST_DEBUG_SERVER_VERSION"] = "0.97.0"
+        let app = launchApp(extraEnvironment: extra)
+        let pill = element(app, "page-status")
+        XCTAssertTrue(pill.waitForExistence(timeout: 40), "Page didn't load")
+        XCTAssertTrue(["Read only", "Nur lesen"].contains(pill.label), "Status is “\(pill.label)”")
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Docmost 0.97.0")).firstMatch
+        XCTAssertTrue(notice.exists, "No notice about the server version")
+        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Erster Absatz")).firstMatch.tap()
+        XCTAssertFalse(app.buttons["format-bold"].waitForExistence(timeout: 3), "Editing started on a newer server")
+        snapshot(app, "58-newer-server")
+    }
+
+    func test52_TapPlacesCaret() {
+        let app = launchPage()
+        let block = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nach der Tabelle")).firstMatch
+        XCTAssertTrue(scrollTo(block, in: app, anchor: CGVector(dx: 0, dy: 0)), "Paragraph after the table not found")
+        // Left end of the first line, before the middle of the first letter.
+        block.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 1, dy: 10)).tap()
+        let editor = activeEditor(app, "Tap doesn't open the editor")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Anfang\(stamp)")
+        snapshot(app, "52-typed")
+        finishEditing(app)
+    }
+
+    /// A table cell grows with its content: Return in a cell adds a paragraph there, and the next row starts below it
+    /// instead of covering it (rows used to share one height). The script checks both paragraphs in the cell.
+    func test53_TableCellGrows() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "b1")
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor in the cell's new paragraph")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Zweite\(stamp)")
+        snapshot(app, "53-editing")
+        finishEditing(app)
+        let second = app.staticTexts["Zweite\(stamp)"]
+        let nextRow = app.staticTexts["ZeileZwei"]
+        XCTAssertTrue(second.waitForExistence(timeout: 5) && nextRow.exists, "Cell texts missing")
+        snapshot(app, "53-grown")
+        XCTAssertLessThanOrEqual(second.frame.maxY, nextRow.frame.minY, "The next row covers the cell's second paragraph")
+    }
+
+    /// Return on an empty item in the middle of a list splits the list, as on the web: the new paragraph sits between
+    /// "Punkt eins" and "Punkt zwei". The script checks the order on the server.
+    func test54_EmptyItemSplitsList() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Punkt eins")
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor in the new item")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor after leaving the empty item")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Mitte\(stamp)")
+        snapshot(app, "54-split")
+        finishEditing(app)
+    }
+
+    /// "/Überschrift" in a list item's only line takes the line out of the list as the heading, as on the web. Its own
+    /// list at the page end, so the other tests' lists stay. The script checks the heading and that no list holds it.
+    func test55_HeadingLeavesList() {
+        let app = launchPage()
+        _ = appendBlock(app, editable: "New paragraph doesn't become editable")
+        slash(app, "aufz", pick: "block-bulletList")
+        let editor = activeEditor(app, "No editor in the new list")
+        Thread.sleep(forTimeInterval: 0.6)
+        // "/" opens the menu only after a space, as on the web.
+        editor.typeText("Kopf\(stamp) ")
+        slash(app, "über", pick: "block-heading2")
+        activeEditor(app, "No editor in the heading")
+        snapshot(app, "55-heading")
+        finishEditing(app)
+    }
+
+    /// Return on an empty line in a quote leaves the quote, as on the web; it used to add lines to it forever. The
+    /// script checks that the quote holds only its line and "Draussen<stamp>" follows it.
+    func test56_EmptyLineLeavesQuote() {
+        let app = launchPage()
+        _ = appendBlock(app, editable: "New paragraph doesn't become editable")
+        slash(app, "zit", pick: "block-quote")
+        var editor = activeEditor(app, "No editor in the quote")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Innen\(stamp)\n")
+        editor = activeEditor(app, "No editor on the quote's second line")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor after leaving the quote")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Draussen\(stamp)")
+        snapshot(app, "56-left-quote")
+        finishEditing(app)
+    }
+
+    /// Long text in the last paragraph: while typing, the caret line stays visible above the keyboard.
+    func test14_LongTypingKeepsCaretVisible() {
+        let app = launchPage()
+        let editor = edit(app, blockContaining: "Nach der Tabelle")
+        let done = app.buttons["editor-done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5), "Toolbar missing")
+        assertOnScreenKeyboard(app)
+        Thread.sleep(forTimeInterval: 1.0)
+        editor.typeText(String(repeating: " Lange Zeile zum Testen des Cursors.", count: 14))
+        Thread.sleep(forTimeInterval: 1.0)
+        snapshot(app, "14-long")
+        // The caret is at the editor's end, so the editor's bottom edge must lie between navigation bar and toolbar.
+        XCTAssertLessThanOrEqual(editor.frame.maxY, done.frame.minY + 4, "Caret line disappears behind the keyboard")
+        XCTAssertGreaterThan(editor.frame.maxY, app.navigationBars.firstMatch.frame.maxY + 20, "Caret line is hidden under the navigation bar")
+        finishEditing(app)
+    }
+
+    /// The on-screen keyboard is up. After hardware key events (`typeKey`) earlier in the same run the simulator
+    /// treats a hardware keyboard as connected and hides it; the keyboard checks would then check nothing.
+    private func assertOnScreenKeyboard(_ app: XCUIApplication) {
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5),
+                      "No on-screen keyboard: an earlier test in this run sent hardware key events (typeKey)")
+    }
+
+    /// How often the keyboard has fully hidden so far (debug counter of the page view).
+    private func keyboardHides(_ app: XCUIApplication) -> Int {
+        assertOnScreenKeyboard(app)
+        let counter = app.staticTexts["debug-keyboard-hides"]
+        XCTAssertTrue(counter.waitForExistence(timeout: 5), "Keyboard counter missing")
+        return Int(counter.label) ?? -1
+    }
+
+    /// Return on an empty task item leaves the list: the item disappears and a paragraph after the list takes the
+    /// cursor, without the keyboard hiding.
+    func test16_ExitListKeepsKeyboard() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Aufgabe erledigt")
+        Thread.sleep(forTimeInterval: 1.0)
+        let hides = keyboardHides(app)
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor in the new task item")
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor after leaving the list")
+        editor.typeText("Ausstieg\(stamp)")
+        snapshot(app, "16-exit-list")
+        XCTAssertEqual(keyboardHides(app), hides, "Keyboard hid when leaving the list")
+        finishEditing(app)
+    }
+
+    /// Backspace in an empty paragraph right after a table: the paragraph disappears and the cursor jumps to the end
+    /// of the last cell, without the keyboard hiding.
+    func test17_BackspaceAfterTableKeepsKeyboard() {
+        let app = launchPage()
+        _ = edit(app, blockContaining: "b4")
+        app.buttons["editor-insert"].tap()
+        let paragraph = app.buttons["slash-block-paragraph"]
+        XCTAssertTrue(paragraph.waitForExistence(timeout: 5), "“Insert paragraph” missing")
+        paragraph.tap()
+        var editor = activeEditor(app, "No editor in the new paragraph after the table")
+        Thread.sleep(forTimeInterval: 1.2)
+        let hides = keyboardHides(app)
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the last cell")
+        editor.typeText("Zellende\(stamp)")
+        snapshot(app, "17-backspace-table")
+        XCTAssertEqual(keyboardHides(app), hides, "Keyboard hid on Backspace after the table")
+        finishEditing(app)
+    }
+
+    /// Find on page via the "…" menu: bottom bar with "n of m", up/down, "Aa" for match case, matches in table cells
+    /// and code too. On iPhone the page hides the app's tab bar.
+    func test32_FindOnPage() {
+        let app = launchPage()
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let spacesTab = app.buttons.matching(NSPredicate(format: "label == 'Spaces'")).firstMatch
+            XCTAssertFalse(spacesTab.exists && spacesTab.isHittable, "Bottom bar is still visible on the page")
+        }
+        app.buttons["page-more"].tap()
+        let item = button(app, labels: ["Find on Page", "Auf der Seite suchen"])
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "“Find on Page” missing from the menu")
+        item.tap()
+        let field = app.textFields["page-find-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "Find bar doesn't appear")
+        let matchCase = app.buttons["page-find-case"]
+        if matchCase.isSelected { matchCase.tap() }
+        let count = app.staticTexts["page-find-count"]
+
+        // Lowercase "absatz" finds "Absatz", at least in "Erster Absatz" and "Letzter Absatz".
+        field.typeText("absatz")
+        XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) \\d+$"), "No first match for “absatz”: \(count.label)")
+        let total = Int(count.label.split(separator: " ").last ?? "") ?? 0
+        XCTAssertGreaterThanOrEqual(total, 2, "Too few matches for “absatz”")
+        snapshot(app, "32-find-first")
+        app.buttons["page-find-next"].tap()
+        XCTAssertTrue(waitForLabel(count, matching: "^2 (von|of) \(total)$"), "“Next” doesn't go to the second match: \(count.label)")
+        app.buttons["page-find-previous"].tap()
+        XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) \(total)$"), "“Previous” doesn't go to the first match: \(count.label)")
+
+        matchCase.tap()
+        XCTAssertTrue(waitForLabel(count, matching: "^(Keine Treffer|No matches)$"), "“Aa” doesn't match case: \(count.label)")
+        matchCase.tap()
+        XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) \(total)$"), "Matches don't come back without “Aa”")
+
+        // A table cell match scrolls into view between the navigation bar and the find bar.
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 10) + "ZeileVier")
+        XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) 1$"), "“ZeileVier” not found in the table: \(count.label)")
+        Thread.sleep(forTimeInterval: 1.0)
+        let cell = app.staticTexts.matching(NSPredicate(format: "label == 'ZeileVier'")).firstMatch
+        XCTAssertTrue(cell.exists, "Table cell missing")
+        XCTAssertGreaterThanOrEqual(cell.frame.minY, app.navigationBars.firstMatch.frame.maxY - 1, "Match is under the navigation bar")
+        XCTAssertLessThanOrEqual(cell.frame.maxY, field.frame.minY, "Match is behind the find bar")
+        snapshot(app, "32-find-table")
+
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 12) + "let x")
+        XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) 1$"), "“let x” not found in the code: \(count.label)")
+
+        app.buttons["page-find-done"].tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 5), "Find bar stays open after “Done”")
+    }
+
+    /// Comments button at the top: write, edit, resolve, reopen and delete a page comment. Then comment on a selected
+    /// word via the selection menu (the script checks it and its mark); tapping the marked text opens the comment.
+    func test33_Comments() {
+        let app = launchPage()
+        let commentsButton = app.buttons["page-comments"]
+        XCTAssertTrue(commentsButton.waitForExistence(timeout: 10), "Comments button missing")
+        commentsButton.tap()
+        let composer = element(app, "comments-composer")
+        XCTAssertTrue(composer.waitForExistence(timeout: 10), "Comments sheet doesn't open")
+
+        // Test-Kollegin's reply (seed-notifications.py): as a space admin the admin may delete it, as on the web, but
+        // not edit it. The menu is only looked at, then closed.
+        let reply = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'comment-'"))
+            .containing(NSPredicate(format: "label == 'Nachtrag der Kollegin'")).firstMatch
+        XCTAssertTrue(reply.waitForExistence(timeout: 10), "Test-Kollegin's reply missing")
+        let replyMenu = app.buttons["comment-menu-\(reply.identifier.dropFirst("comment-".count))"]
+        XCTAssertTrue(replyMenu.waitForExistence(timeout: 5), "A space admin gets no “…” on someone else's reply")
+        replyMenu.tap()
+        XCTAssertTrue(button(app, labels: ["Delete", "Löschen"]).waitForExistence(timeout: 5), "No “Delete” for a space admin")
+        XCTAssertFalse(button(app, labels: ["Edit", "Bearbeiten"]).exists, "Someone else's reply offers “Edit”")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        XCTAssertTrue(button(app, labels: ["Delete", "Löschen"]).waitForNonExistence(timeout: 5), "The menu doesn't close")
+
+        let text = "Seitenkommentar\(stamp)"
+        composer.tap()
+        composer.typeText(text)
+        app.buttons["comments-send"].tap()
+        let written = app.staticTexts.matching(NSPredicate(format: "label == %@", text)).firstMatch
+        XCTAssertTrue(written.waitForExistence(timeout: 10), "New comment doesn't appear")
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'comment-'"))
+            .containing(NSPredicate(format: "label == %@", text)).firstMatch
+        let commentId = String(row.identifier.dropFirst("comment-".count))
+        let menu = app.buttons["comment-menu-\(commentId)"]
+        func choose(_ labels: [String]) {
+            XCTAssertTrue(menu.waitForExistence(timeout: 5), "Comment menu missing")
+            menu.tap()
+            let item = button(app, labels: labels)
+            XCTAssertTrue(item.waitForExistence(timeout: 5), "“\(labels.last ?? "")” missing from the comment menu")
+            item.tap()
+        }
+
+        choose(["Edit", "Bearbeiten"])
+        composer.typeText(" geändert")
+        app.buttons["comments-send"].tap()
+        let edited = app.staticTexts.matching(NSPredicate(format: "label == %@", text + " geändert")).firstMatch
+        XCTAssertTrue(edited.waitForExistence(timeout: 10), "Edited comment doesn't appear")
+        snapshot(app, "33-comment-edited")
+
+        choose(["Resolve", "Als erledigt markieren"])
+        XCTAssertTrue(edited.waitForNonExistence(timeout: 10), "Resolved comment stays under “Open”")
+        let resolvedTab = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Erledigt' OR label BEGINSWITH 'Resolved'")).firstMatch
+        resolvedTab.tap()
+        XCTAssertTrue(edited.waitForExistence(timeout: 5), "Comment missing under “Resolved”")
+        snapshot(app, "33-comment-resolved")
+        choose(["Reopen", "Wieder öffnen"])
+        let openTab = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Offen' OR label BEGINSWITH 'Open'")).firstMatch
+        openTab.tap()
+        XCTAssertTrue(edited.waitForExistence(timeout: 10), "Reopened comment missing under “Open”")
+
+        let menuFrame = menu.frame
+        choose(["Delete", "Löschen"])
+        assertPopover(app, at: menuFrame)
+        let confirm = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Delete confirmation missing")
+        confirm.tap()
+        XCTAssertTrue(edited.waitForNonExistence(timeout: 10), "Deleted comment remains")
+        app.buttons["comments-done"].tap()
+
+        // Inline comment: double-tap the first word on the first line (earlier tests make the paragraph wrap).
+        let editor = edit(app, blockContaining: "Erster Absatz")
+        editor.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 14, dy: 12)).doubleTap()
+        let commentItem = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Comment", "Kommentieren"])).firstMatch
+        XCTAssertTrue(commentItem.waitForExistence(timeout: 5), "“Comment” missing from the selection menu")
+        snapshot(app, "33-selection-menu")
+        commentItem.tap()
+        let inlineText = element(app, "inline-comment-text")
+        XCTAssertTrue(inlineText.waitForExistence(timeout: 5), "Sheet for the inline comment doesn't open")
+        let quote = app.staticTexts["inline-comment-quote"].label
+        XCTAssertFalse(quote.isEmpty, "Sheet doesn't show the selected passage")
+        inlineText.typeText("Inline\(stamp)")
+        app.buttons["inline-comment-send"].tap()
+        XCTAssertTrue(inlineText.waitForNonExistence(timeout: 10), "Sheet doesn't close after sending")
+        finishEditing(app)
+
+        let marked = app.links.matching(NSPredicate(format: "label == %@", quote)).firstMatch
+        XCTAssertTrue(marked.waitForExistence(timeout: 10), "Marked passage isn't tappable")
+        marked.tap()
+        let inlineComment = app.staticTexts.matching(NSPredicate(format: "label == %@", "Inline\(stamp)")).firstMatch
+        XCTAssertTrue(inlineComment.waitForExistence(timeout: 10), "Tapping the passage doesn't open its comment")
+        snapshot(app, "33-inline-comment")
+        app.buttons["comments-done"].tap()
+    }
+
+    /// A version opened from "Page History" loads its media like the page itself: the image of "Fixture: Media"
+    /// (Tools/seed-fixtures.py, which leaves a version with the image) appears instead of a spinner.
+    func test49_HistoryVersionShowsImage() throws {
+        let app = launch(openPage: false)
+        let slug = environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo"
+        let space = app.buttons["space-\(slug)"]
+        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card “\(slug)” not on the home screen")
+        space.tap()
+        let search = app.textFields["space-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 20), "Search field in the space not found")
+        search.tap()
+        search.typeText("Fixture: Media")
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'search-result-' AND label CONTAINS %@", "Fixture: Media")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 20), "“Fixture: Media” missing (Tools/seed-fixtures.py)")
+        result.tap()
+        waitForSync(app)
+        app.buttons["page-more"].tap()
+        let history = button(app, labels: ["Page History", "Seitenverlauf"])
+        XCTAssertTrue(history.waitForExistence(timeout: 5), "Page menu shows no “Page History”")
+        history.tap()
+        // The page behind the sheet has no list rows.
+        let version = app.cells.firstMatch
+        // A fresh dev instance: the server saves the first version about 5 minutes after Tools/seed-fixtures.py.
+        guard version.waitForExistence(timeout: 20) else {
+            throw XCTSkip("“Fixture: Media” has no version yet; the server saves one about 5 minutes after seeding")
+        }
+        version.tap()
+        // Only inside the version: the page behind the sheet shows the same image.
+        let header = NSPredicate(format: "label BEGINSWITH 'Version from' OR label BEGINSWITH 'Version vom'")
+        let image = app.scrollViews.containing(header).images["Gradient test image"]
+        let loaded = image.waitForExistence(timeout: 20)
+        snapshot(app, "49-version")
+        XCTAssertTrue(loaded, "Image in the version doesn't load")
+    }
+
+    // MARK: - Insert ("/" and "+")
+
+    /// New block at the page end via the floating "+", where it doesn't disturb the other tests.
+    @discardableResult
+    private func appendBlock(_ app: XCUIApplication, labels: [String] = ["Paragraph", "Absatz"],
+                             missing: String = "Menu item “Paragraph” missing", editable: String = "No active editor") -> XCUIElement {
+        let add = app.buttons["page-add-block"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "“+” button missing")
+        add.tap()
+        let item = button(app, labels: labels)
+        XCTAssertTrue(item.waitForExistence(timeout: 5), missing)
+        item.tap()
+        return activeEditor(app, timeout: 10, editable)
+    }
+
+    /// Empty paragraph at the page end via the floating "+".
+    private func appendParagraph(_ app: XCUIApplication) -> XCUIElement {
+        let editor = appendBlock(app)
+        Thread.sleep(forTimeInterval: 0.6)
+        return editor
+    }
+
+    @discardableResult
+    private func activeEditor(_ app: XCUIApplication, timeout: TimeInterval = 8, _ message: String = "No active editor") -> XCUIElement {
+        let editor = app.textViews["active-editor"].firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: timeout), message)
+        return editor
+    }
+
+    /// Types "/<query>" in the active paragraph and picks the entry.
+    private func slash(_ app: XCUIApplication, _ query: String, pick id: String) {
+        activeEditor(app).typeText("/" + query)
+        let item = app.buttons["slash-\(id)"]
+        XCTAssertTrue(item.waitForExistence(timeout: 8), "Slash menu doesn't show “\(id)” for “/\(query)”")
+        item.tap()
+    }
+
+    /// Waits until the sheet closes and the editor has the keyboard again (slow on a real device).
+    private func editorAfterSheet(_ app: XCUIApplication, closing field: XCUIElement) -> XCUIElement {
+        XCTAssertTrue(field.waitForNonExistence(timeout: 8), "Sheet doesn't close")
+        return focusedEditor(app)
+    }
+
+    /// The active editor, once it has keyboard focus.
+    private func focusedEditor(_ app: XCUIApplication) -> XCUIElement {
+        let editor = activeEditor(app)
+        let focused = NSPredicate { _, _ in (editor.value(forKey: "hasKeyboardFocus") as? Bool) == true }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: focused, object: nil)], timeout: 5), .completed,
+                       "Editor doesn't get the keyboard back")
+        return editor
+    }
+
+    /// Element with one of the labels (German or English UI).
+    private func labeled(_ app: XCUIApplication, _ labels: [String]) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", labels)).firstMatch
+    }
+
+    /// "/" lists every web editor entry (scrollable, including diagrams and embeds) and filters while typing; Return
+    /// picks the first match: "/trenn" + Return inserts a divider, then typing continues in a new paragraph.
+    func test34_InsertMenuListsWebCommands() {
+        let app = launchPage()
+        let editor = appendParagraph(app)
+        editor.typeText("/")
+        let first = app.buttons["slash-block-paragraph"]
+        XCTAssertTrue(first.waitForExistence(timeout: 8), "Slash menu doesn't appear")
+        for id in ["block-divider", "page-break", "subpages", "footnote", "synced-block", "columns-5", "math-block", "mermaid",
+                   "drawio", "excalidraw", "status", "emoji", "date", "embed-youtube", "embed-gsheets"] {
+            XCTAssertTrue(app.buttons["slash-\(id)"].exists, "Slash menu doesn't contain “\(id)”")
+        }
+        snapshot(app, "34-menu")
+        // The list scrolls to its last entry (Google Sheets).
+        let last = app.buttons["slash-embed-gsheets"]
+        // Drag up inside the list along a fixed path just below where the first row started.
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let start = origin.withOffset(CGVector(dx: first.frame.midX, dy: first.frame.maxY + 120))
+        let end = origin.withOffset(CGVector(dx: first.frame.midX, dy: first.frame.maxY + 10))
+        for _ in 0..<15 where !last.isHittable {
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(last.isHittable, "End of the list isn't reachable")
+        snapshot(app, "34-menu-end")
+
+        editor.typeText("trenn")
+        XCTAssertTrue(app.buttons["slash-block-divider"].waitForExistence(timeout: 5), "“/trenn” doesn't find the divider")
+        XCTAssertFalse(app.buttons["slash-block-paragraph"].exists, "Filter keeps “Paragraph”")
+        editor.typeText("\n")
+        let next = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        next.typeText("NachTrenn\(stamp)")
+        snapshot(app, "34-divider")
+        finishEditing(app)
+    }
+
+    /// Inline entries mid-text: date, time, status (sheet), inline math (sheet), emoji (emoji keyboard) and footnote;
+    /// then edit the footnote text via its number and the status color by tapping the status.
+    func test35_InlineCommands() {
+        let app = launchPage()
+        var editor = appendParagraph(app)
+        editor.typeText("Inline\(stamp) ")
+        slash(app, "datum", pick: "date")
+        activeEditor(app).typeText(" ")
+        slash(app, "uhrzeit", pick: "time")
+        activeEditor(app).typeText(" ")
+
+        slash(app, "status", pick: "status")
+        let statusText = app.textFields["status-text"]
+        XCTAssertTrue(statusText.waitForExistence(timeout: 5), "Status sheet doesn't open")
+        statusText.typeText("Offen\(stamp)")
+        app.buttons["status-color-green"].tap()
+        snapshot(app, "35-status-sheet")
+        app.buttons["status-apply"].tap()
+        editor = editorAfterSheet(app, closing: statusText)
+        editor.typeText(" ")
+
+        slash(app, "mathi", pick: "math-inline")
+        let latex = element(app, "math-latex")
+        XCTAssertTrue(latex.waitForExistence(timeout: 5), "Math sheet doesn't open")
+        latex.typeText("x^2")
+        app.buttons["math-apply"].tap()
+        editor = editorAfterSheet(app, closing: latex)
+        editor.typeText(" ")
+
+        slash(app, "emoji", pick: "emoji")
+        let emojiField = app.textFields["insert-emoji-field"]
+        XCTAssertTrue(emojiField.waitForExistence(timeout: 5), "Emoji keyboard doesn't open")
+        Thread.sleep(forTimeInterval: 1.0)
+        emojiField.typeText("🎉")
+        editor = focusedEditor(app)
+        editor.typeText("Fest\(stamp) ")
+
+        slash(app, "fussn", pick: "footnote")
+        Thread.sleep(forTimeInterval: 0.6)
+        activeEditor(app).typeText(" Ende\(stamp)")
+        snapshot(app, "35-inline")
+        finishEditing(app)
+
+        // Tapping the footnote number jumps to its text at the page end.
+        let reference = app.links.matching(NSPredicate(format: "label CONTAINS '[1]'")).firstMatch
+        XCTAssertTrue(reference.waitForExistence(timeout: 10), "Footnote reference missing")
+        reference.tap()
+        editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Quelle\(stamp)")
+        XCTAssertTrue(app.buttons["editor-delete"].exists, "Toolbar missing")
+        XCTAssertFalse(app.buttons["editor-code-block"].exists, "Footnote text offers a code block")
+        snapshot(app, "35-footnote")
+        finishEditing(app)
+
+        let status = app.links.matching(NSPredicate(format: "label CONTAINS %@", "Offen\(stamp)")).firstMatch
+        XCTAssertTrue(scrollTo(status, in: app), "Status isn't tappable")
+        status.tap()
+        XCTAssertTrue(app.textFields["status-text"].waitForExistence(timeout: 5), "Tapping the status doesn't open a sheet")
+        app.buttons["status-color-red"].tap()
+        app.buttons["status-apply"].tap()
+        Thread.sleep(forTimeInterval: 1.0)
+    }
+
+    /// Blocks via "/": subpages, page break, math block (sheet), Draw.io placeholder, YouTube embed (an invalid link is
+    /// rejected as on the web) and Mermaid as a code block.
+    func test36_BlockCommands() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "unterseit", pick: "subpages")
+        _ = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        slash(app, "seitenum", pick: "page-break")
+        _ = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+
+        slash(app, "matheb", pick: "math-block")
+        let latex = element(app, "math-latex")
+        XCTAssertTrue(latex.waitForExistence(timeout: 5), "Math sheet doesn't open")
+        latex.typeText("a^2+b^2=c^2")
+        app.buttons["math-apply"].tap()
+        _ = editorAfterSheet(app, closing: latex)
+
+        slash(app, "drawio", pick: "drawio")
+        XCTAssertTrue(app.buttons["diagram-placeholder"].waitForExistence(timeout: 8), "Draw.io placeholder missing")
+        _ = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+
+        slash(app, "youtube", pick: "embed-youtube")
+        let link = app.textFields["embed-link"]
+        XCTAssertTrue(link.waitForExistence(timeout: 5), "Embed link sheet doesn't open")
+        link.typeText("https://example.com/video")
+        app.buttons["embed-apply"].tap()
+        let invalid = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'YouTube' AND (label CONTAINS 'Ungültig' OR label CONTAINS 'Invalid')")).firstMatch
+        XCTAssertTrue(invalid.waitForExistence(timeout: 5), "Invalid YouTube link isn't rejected")
+        snapshot(app, "36-embed-invalid")
+        link.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 30) + "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        app.buttons["embed-apply"].tap()
+        _ = editorAfterSheet(app, closing: link)
+
+        slash(app, "mermaid", pick: "mermaid")
+        Thread.sleep(forTimeInterval: 1.0)
+        snapshot(app, "36-mermaid")
+        app.buttons["editor-done"].tap()
+        Thread.sleep(forTimeInterval: 1.0)
+
+        let editor = appendParagraph(app)
+        editor.typeText("NachBloecken\(stamp)")
+        snapshot(app, "36-blocks")
+        finishEditing(app)
+    }
+
+    /// "/spalten": two columns, cursor in the first; the column bar switches to three; tap and type in the second.
+    func test37_Columns() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "spalten", pick: "columns-2")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Links\(stamp)")
+        let three = app.buttons["columns-count-3"]
+        XCTAssertTrue(three.waitForExistence(timeout: 5), "Column bar missing")
+        snapshot(app, "37-two-columns")
+        three.tap()
+        let legend = labeled(app, ["Spalte 2 von 3", "Column 2 of 3"])
+        XCTAssertTrue(legend.waitForExistence(timeout: 8), "Third column isn't added")
+        snapshot(app, "37-three-columns")
+        legend.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 0, dy: 24)).tap()
+        editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Mitte\(stamp)")
+        snapshot(app, "37-second-column")
+        finishEditing(app)
+    }
+
+    /// Synced block: create and fill it, copy it, embed it in another paragraph via "Paste" and via "/"; also turn a
+    /// paragraph into a synced block via "Text ▾".
+    func test38_SyncedBlocks() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "synchron", pick: "synced-block")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Sync\(stamp)")
+        finishEditing(app)
+        Thread.sleep(forTimeInterval: 1.0)
+
+        let menu = app.buttons["synced-block-menu"].firstMatch
+        XCTAssertTrue(scrollTo(menu, in: app), "Synced block menu missing")
+        menu.tap()
+        let copy = labeled(app, ["Copy Synced Block", "Synchronisierten Block kopieren"])
+        XCTAssertTrue(copy.waitForExistence(timeout: 5), "“Copy” missing from the menu")
+        copy.tap()
+        Thread.sleep(forTimeInterval: 1.0)
+
+        editor = appendParagraph(app)
+        // Tapping the cursor shows the edit menu; otherwise ⌘V (both trigger the same paste).
+        editor.tap()
+        let paste = labeled(app, ["Paste", "Einsetzen"])
+        if paste.waitForExistence(timeout: 3) {
+            paste.tap()
+        } else {
+            editor.typeKey("v", modifierFlags: .command)
+        }
+        let reference = app.buttons["synced-reference-menu"].firstMatch
+        XCTAssertTrue(reference.waitForExistence(timeout: 10), "Pasted synced block doesn't appear")
+        snapshot(app, "38-pasted")
+        Thread.sleep(forTimeInterval: 0.8)
+        if app.textViews["active-editor"].exists { finishEditing(app) }
+
+        _ = appendParagraph(app)
+        slash(app, "einsetz", pick: "paste-synced-block")
+        let references = app.buttons.matching(identifier: "synced-reference-menu")
+        let two = expectation(for: NSPredicate(format: "count >= 2"), evaluatedWith: references)
+        wait(for: [two], timeout: 10)
+        if app.textViews["active-editor"].exists { finishEditing(app) }
+
+        editor = appendParagraph(app)
+        editor.typeText("Wrap\(stamp)")
+        app.buttons["editor-block-type"].tap()
+        let wrap = app.buttons["type-synced-block"]
+        XCTAssertTrue(wrap.waitForExistence(timeout: 5), "“Synced block” missing under “Text”")
+        wrap.tap()
+        editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText(" weiter")
+        snapshot(app, "38-wrapped")
+        finishEditing(app)
+    }
+
+    /// "+" in the keyboard toolbar opens the insert menu below the block (heading after it); the floating "+" groups
+    /// all entries (date under "In the Text", database).
+    func test39_PlusMenusAndDatabase() {
+        let app = launchPage()
+        var editor = appendParagraph(app)
+        editor.typeText("Plus\(stamp)")
+        app.buttons["editor-insert"].tap()
+        let heading = app.buttons["slash-block-heading2"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 5), "“+” doesn't show the insert list")
+        snapshot(app, "39-plus-list")
+        heading.tap()
+        editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("PlusH2\(stamp)")
+        finishEditing(app)
+
+        // Floating "+" → In the Text → Date: a new paragraph with the date at the page end.
+        app.buttons["page-add-block"].tap()
+        let inText = labeled(app, ["In the Text", "Im Text"])
+        XCTAssertTrue(inText.waitForExistence(timeout: 5), "Group “In the Text” missing")
+        inText.tap()
+        let date = labeled(app, ["Date", "Datum"])
+        XCTAssertTrue(date.waitForExistence(timeout: 5), "“Date” missing")
+        date.tap()
+        editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText(" FabDatum\(stamp)")
+        finishEditing(app)
+
+        app.buttons["page-add-block"].tap()
+        let more = labeled(app, ["More Blocks", "Weitere Blöcke"])
+        XCTAssertTrue(more.waitForExistence(timeout: 5), "Group “More Blocks” missing")
+        more.tap()
+        let database = labeled(app, ["Database (inline)", "Datenbank (inline)"])
+        XCTAssertTrue(database.waitForExistence(timeout: 5), "“Database (inline)” missing")
+        database.tap()
+        let card = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'base-embed-' AND identifier != 'base-embed-'")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 20), "Embedded database doesn't appear")
+        snapshot(app, "39-database")
+        if app.textViews["active-editor"].exists { finishEditing(app) }
+    }
+
+    /// "/code", pick "swift" in the language bar, type: the script checks that committing the text keeps the language.
+    func test40_CodeBlockLanguage() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "code", pick: "block-codeBlock")
+        let swift = app.buttons["swift"]
+        XCTAssertTrue(swift.waitForExistence(timeout: 8), "Language bar missing")
+        swift.tap()
+        Thread.sleep(forTimeInterval: 0.6)
+        app.typeText("Sprache\(stamp)")
+        Thread.sleep(forTimeInterval: 1.2)
+        snapshot(app, "40-code-language")
+        finishEditing(app)
+    }
+
+    /// Toggle via "/toggle": type a title, tap into the content below it and keep typing past the sync. The editor
+    /// stays open; the script checks that the text is in the toggle's content, not in its title.
+    func test41_ToggleContent() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "toggle", pick: "block-toggle")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Klapp\(stamp)")
+        finishEditing(app)
+        let title = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Klapp\(stamp)")).firstMatch
+        XCTAssertTrue(scrollTo(title, in: app), "Toggle title missing")
+        // The empty content paragraph sits right below the title.
+        title.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 0, dy: 30)).tap()
+        editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Inhalt\(stamp)")
+        // Past the commit (400 ms) and the engine's document update.
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertTrue(editor.exists, "Editor closes after the sync")
+        editor.typeText(" weiter")
+        snapshot(app, "41-toggle-content")
+        finishEditing(app)
+    }
+
+    /// Leave the page without closing it (the space chip pushes the space on top), go back and type: the page
+    /// reconnects ("Saved") and the script finds "Erneut<stamp>" on the server.
+    func test42_EditAfterReturningToPage() {
+        let app = launchPage()
+        let space = app.buttons["page-space"]
+        XCTAssertTrue(space.waitForExistence(timeout: 10), "Space chip missing")
+        space.tap()
+        XCTAssertTrue(app.textFields["space-search"].waitForExistence(timeout: 20), "Space doesn't open from the page")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        waitForSync(app)
+        let editor = edit(app, blockContaining: "Punkt eins")
+        editor.typeText(" Erneut\(stamp)")
+        snapshot(app, "42-typed")
+        finishEditing(app)
+        let shown = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Erneut\(stamp)")).firstMatch
+        XCTAssertTrue(shown.waitForExistence(timeout: 5), "Reader doesn't show the typed text after going back")
+    }
+
+    /// The toggle title's toolbar offers no block type or Duplicate (both would split the toggle). Return after the
+    /// title moves to the content, keeping the keyboard; the script expects one toggle with "Zeile<stamp>" as content.
+    func test43_ReturnInToggleTitle() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "toggle", pick: "block-toggle")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Titel\(stamp)")
+        XCTAssertTrue(app.buttons["editor-delete"].exists, "Toolbar missing")
+        XCTAssertFalse(app.buttons["editor-block-type"].exists, "Toggle title offers block types")
+        XCTAssertFalse(app.buttons["editor-duplicate"].exists, "Toggle title offers Duplicate")
+        let hides = keyboardHides(app)
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor after Return in the toggle title")
+        editor.typeText("Zeile\(stamp)")
+        snapshot(app, "43-toggle-return")
+        XCTAssertEqual(keyboardHides(app), hides, "Keyboard hid after Return in the toggle title")
+        finishEditing(app)
+    }
+
+    /// Bullet list via "/bullet" with two items: Backspace at the start of the second joins it into the first; the
+    /// script checks that the list holds only "Oben<stamp>Unten<stamp>".
+    func test44_BackspaceJoinsListItems() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "bullet", pick: "block-bulletList")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Oben\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the second item")
+        let second = "Unten\(stamp)"
+        editor.typeText(second)
+        for _ in second { editor.typeKey(.leftArrow, modifierFlags: []) }
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        Thread.sleep(forTimeInterval: 1.2)
+        snapshot(app, "44-list-join")
+        finishEditing(app)
+        XCTAssertTrue(app.staticTexts["Oben\(stamp)\(second)"].waitForExistence(timeout: 5), "Items aren't joined")
+    }
+
+    /// Toggle via "/toggle" with a line in its content: collapsing it while that line is edited ends editing and hides
+    /// the line; the script checks that the toggle is stored closed (`open: false`), as on the web.
+    func test45_CollapseToggle() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "toggle", pick: "block-toggle")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Zu\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the toggle's content")
+        editor.typeText("Versteckt\(stamp)")
+        let title = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Zu\(stamp)")).firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "Toggle title missing")
+        // The chevron in the title's row (toggles of other tests may be on the page too).
+        let row = title.frame.midY
+        guard let chevron = app.buttons.matching(NSPredicate(format: "label IN %@", ["Collapse", "Einklappen"])).allElementsBoundByIndex
+            .min(by: { abs($0.frame.midY - row) < abs($1.frame.midY - row) })
+        else { return XCTFail("Collapse button missing") }
+        chevron.tap()
+        XCTAssertTrue(editor.waitForNonExistence(timeout: 5), "Editor stays after collapsing")
+        let line = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Versteckt\(stamp)")).firstMatch
+        XCTAssertTrue(line.waitForNonExistence(timeout: 5), "Content still shown after collapsing")
+        XCTAssertTrue(app.buttons["page-add-block"].waitForExistence(timeout: 5), "Line stays active after collapsing")
+        snapshot(app, "45-toggle-collapsed")
+    }
+
+    /// Embed via "/iframe": its card opens Safari; after closing Safari, the first tap on a paragraph starts editing.
+    func test46_EditAfterOpeningEmbed() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "iframe", pick: "embed-iframe")
+        let link = app.textFields["embed-link"]
+        XCTAssertTrue(link.waitForExistence(timeout: 5), "Embed link sheet doesn't open")
+        link.typeText("https://example.com/embed")
+        app.buttons["embed-apply"].tap()
+        editorAfterSheet(app, closing: link).typeText("NachEinbettung\(stamp)")
+        finishEditing(app)
+        let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'example.com'")).firstMatch
+        XCTAssertTrue(scrollTo(card, in: app), "Embed card missing")
+        card.tap()
+        let close = button(app, labels: ["Close", "Schließen"])
+        let opened = close.waitForExistence(timeout: 10)
+        snapshot(app, "46-safari")
+        XCTAssertTrue(opened, "Tapping the embed card doesn't open Safari")
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 5), "Safari doesn't close")
+        _ = edit(app, blockContaining: "NachEinbettung\(stamp)")
+        snapshot(app, "46-editing")
+        finishEditing(app)
+    }
+
+    /// Waits until the label matches the regular expression.
+    private func waitForLabel(_ element: XCUIElement, matching pattern: String, timeout: TimeInterval = 5) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label MATCHES %@", pattern), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+}

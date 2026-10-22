@@ -1,0 +1,47 @@
+{
+  "title": "Fixture: Blocks",
+  "icon": "🧱",
+  "content": {
+    "type": "doc",
+    "content": [
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Blockquote"}]},
+      {"type": "blockquote", "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "A quote with "}, {"type": "text", "text": "emphasis", "marks": [{"type": "italic"}]}, {"type": "text", "text": " spanning"}]},
+        {"type": "paragraph", "content": [{"type": "text", "text": "two paragraphs, and a nested list:"}]},
+        {"type": "bulletList", "content": [
+          {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "quoted bullet"}]}]}
+        ]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Code blocks"}]},
+      {"type": "codeBlock", "attrs": {"language": "swift"}, "content": [{"type": "text", "text": "struct Greeter {\n    let name: String\n\n    func greet() -> String {\n        \"Hello, \\(name)! This line is intentionally long enough to require horizontal scrolling on a phone screen.\"\n    }\n}"}]},
+      {"type": "codeBlock", "attrs": {"language": "json"}, "content": [{"type": "text", "text": "{\n  \"type\": \"doc\",\n  \"content\": []\n}"}]},
+      {"type": "codeBlock", "content": [{"type": "text", "text": "plain code block without language\n\twith a tab and trailing spaces   "}]},
+      {"type": "codeBlock", "attrs": {"language": "mermaid"}, "content": [{"type": "text", "text": "graph TD;\n    A[Start] --> B{Decision};\n    B -->|Yes| C[Done];\n    B -->|No| A;"}]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Horizontal rule"}]},
+      {"type": "paragraph", "content": [{"type": "text", "text": "Above the rule."}]},
+      {"type": "horizontalRule"},
+      {"type": "paragraph", "content": [{"type": "text", "text": "Below the rule."}]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Callouts"}]},
+      {"type": "callout", "attrs": {"type": "default", "icon": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Default callout."}]}]},
+      {"type": "callout", "attrs": {"type": "info", "icon": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Info callout with "}, {"type": "text", "text": "bold", "marks": [{"type": "bold"}]}, {"type": "text", "text": " text."}]}]},
+      {"type": "callout", "attrs": {"type": "note", "icon": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Note callout."}]}]},
+      {"type": "callout", "attrs": {"type": "success", "icon": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Success callout."}]}]},
+      {"type": "callout", "attrs": {"type": "warning", "icon": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Warning callout with a list:"}]}, {"type": "bulletList", "content": [{"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "inside the callout"}]}]}]}]},
+      {"type": "callout", "attrs": {"type": "danger", "icon": "🔥"}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Danger callout with a custom icon."}]}]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Toggle (details)"}]},
+      {"type": "details", "attrs": {"open": true}, "content": [
+        {"type": "detailsSummary", "content": [{"type": "text", "text": "Open toggle summary"}]},
+        {"type": "detailsContent", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Visible content of the open toggle."}]}]}
+      ]},
+      {"type": "details", "attrs": {"open": false}, "content": [
+        {"type": "detailsSummary", "content": [{"type": "text", "text": "Closed toggle summary"}]},
+        {"type": "detailsContent", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Hidden until expanded."}]}, {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "code inside toggle"}]}]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Math block"}]},
+      {"type": "mathBlock", "attrs": {"text": "\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}"}},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Page break"}]},
+      {"type": "pageBreak"},
+      {"type": "paragraph", "content": [{"type": "text", "text": "After the page break."}]}
+    ]
+  }
+}

@@ -1,0 +1,160 @@
+# Diderot
+
+A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0. Diderot is an independent project, not affiliated with Docmost.
+
+## Features
+
+- Sign-in with a password, in the embedded browser (SSO, MFA) or via LDAP; manage device sessions. Passkeys at the identity provider work only in part, see [Sign-in](#sign-in).
+- Several servers: add more instances from the workspace menu or the settings and switch between them there. Each sign-in stays, cache and history are kept per server, and links to another saved server switch to it.
+- Tab bar app (Spaces, Favorites and search; a sidebar on the iPad):
+  - Home with recently opened pages and spaces as cards or tiles (menu via "…" or a long press).
+  - A bell with the unread count that opens notifications in a popover (swipe left marks them read, "Unread only" like on the web).
+  - Search from the magnifier, with the search field in the tab bar and the home screen behind it (results replace the content as in a space).
+  - A space view with search within the space, the page tree and recently changed pages.
+  - The workspace menu: members, profile, appearance, web settings, servers.
+- Page actions: copy link, favorite, export (Markdown or HTML, share sheet), duplicate, move or copy to another space, trash. Reorder the page tree or nest pages by holding and dragging (positions by fractional indexing, like the web client). A trash per space to restore or delete for good. Deep links: `diderot://open?url=…`.
+- A native reader for every Docmost content type (text, lists, code, callouts, tables, images, math, Mermaid, diagrams, video, PDF, attachments, subpages, synced blocks, footnotes), with the web layout as a fallback.
+- Comments like on the web:
+  - A button with the number of open comments, tabs for open and resolved ones.
+  - Reply, edit, resolve and reopen, delete.
+  - Comment on a text passage with "Comment" in the editor's selection menu; marked passages open their comment.
+- Find on page ("…" menu or ⌘F) with matches in text, tables and code, and "Aa" for case sensitivity.
+- Page history, new pages, title and icon, append notes, trash, web editor.
+- Databases (Docmost "bases"):
+  - **Views:** views as tabs. The table is a grid as in Notion or Airtable: it scrolls freely, column headers stay, and the view sets the columns, their order and widths.
+  - **Kanban:** columns you swipe sideways, which snap to the middle so both neighbors peek out. The view sets grouping, column order, "No value" and card fields.
+  - **Values:** every property type including formulas and colors as on the web, with the view's filter and sort, loading more while scrolling, readable offline.
+  - **Editing in the detail sheet:** tapping a cell jumps to its field. This covers every writable type (the app adds `https://` to links without a scheme, the server takes only full URLs), new select options, people, page references and files.
+  - **Rows and cards:** create and delete rows, and move cards by dragging (between and within columns) or with "Move to" in their menu.
+  - Writing needs a Docmost license with databases (Business and up), as on the web; otherwise everything is read-only. Embedded databases appear as a card. Properties, views and filters are edited on the web.
+- The document view is the editor. Pages are editable directly, without a mode:
+  - Tapping a text block turns it into an editor. It moves to the middle of the space above the keyboard as the keyboard comes in, also for table cells and list items.
+  - While typing, the line with the cursor stays visible, and the slash and mention menus move above the keyboard when needed. Switching blocks (tap, Return, Backspace, leaving a list) keeps the keyboard.
+  - Backspace in an empty paragraph after a table, image or divider jumps to the end of the text before it (in a table, to its last cell). A tap below the last block puts the cursor at the end; Return makes a new block, Backspace at the start joins.
+  - A toolbar above the keyboard shows the active formats:
+    - block type, including "Synced block" like "Turn into" on the web
+    - "+" for the insert list below the block
+    - bold, italic, underline, strikethrough, inline code, highlight, link, code block
+    - line break, undo and redo through the Yjs history like the web editor, duplicate, delete
+  - Formats stay while typing on and are visible in the editor.
+  - Move blocks by holding and dragging. The title is inline, the icon comes from the emoji keyboard; status pill and collaborator avatars.
+  - Everything is live through an invisible TipTap/Yjs engine (`Engine/`).
+- Every slash command of the web editor: "/" at the start of a block or after a space opens a scrollable list in the web's order. Search works in English and German; Return picks the first match. It includes:
+  - text blocks, divider, page break, subpages, table
+  - columns (2–5; stacked when narrow, as on the web and in Notion; a bar for count, layout and deleting)
+  - toggle, callout, code, Mermaid (a code block, the page shows the diagram), Draw.io and Excalidraw (a placeholder; drawing happens in the app's web editor)
+  - math block and inline math (LaTeX with a preview), status (text and color), date, time, emoji (emoji keyboard)
+  - footnotes (text at the end of the page, tapping the number jumps there)
+  - database and Kanban (a new database as a subpage; needs the license)
+  - image or video from the library, camera, audio, PDF or file attachments from the Files app (several at once)
+  - synced blocks: edit, copy and paste into other pages (also from the web), unsync, open the original
+  - 11 embeds: the link is checked, and the embed shows as a card that opens in the browser
+
+  Status and math open their editor with a tap. The floating "+" offers the same entries in groups.
+- @-mentions of pages and people; links on the selection, on existing links or to pages; callout type and code language from a bar; tables with rows, columns, header row and header column.
+- Offline reading from the cache; German and English interface.
+
+## Sign-in
+
+- **Email and password** work with every Docmost instance, also without a license. **LDAP** and **SSO** (OIDC, SAML) need a Docmost license from Business up.
+- **SSO** runs in an in-app browser: signing in at the identity provider works as on the web, then the app takes over the Docmost session. It doesn't matter which identity provider is behind it.
+- **Passkeys** at the identity provider aren't supported for now. In the in-app browser they would only work if its domain were associated with the app (an AASA file at the identity provider and an entry in the app). Accounts with another method such as TOTP choose that one when signing in. Accounts that can only sign in with a passkey can't get into the app. Google blocks sign-ins in embedded browsers altogether.
+
+Details, background and decisions: [Docs/SignIn.md](Docs/SignIn.md).
+
+## Structure
+
+| Path | Contents |
+|---|---|
+| `project.yml` | XcodeGen spec. Run `xcodegen generate` after changing it; `Diderot.xcodeproj` is checked in. |
+| `Config/` | `Info.plist` (among others `NSAllowsLocalNetworking` for the dev instance and the `diderot://` URL scheme), build settings, and `Local.xcconfig.example` for your signing team. |
+| `Diderot/` | The app target (SwiftUI). A synced folder: new files are part of the project automatically. `App/MainTabView` is the frame (one navigation stack per tab); `Features/` holds home, spaces, reader, editor, search, favorites, notifications and settings. |
+| `Diderot/Resources/Localizable.xcstrings` | String catalog (English as the base, German translated). |
+| `Diderot/Resources/Islands/` | KaTeX and Mermaid for the web view islands. |
+| `Diderot/Resources/Engine/engine.js` | The bundled editor engine (TipTap, Yjs and the Hocuspocus provider with Docmost's document format), built from `Engine/` and checked in. |
+| `Engine/` | The editor engine's sources (TypeScript, pnpm, esbuild), with its own extensions for Docmost's document format: [Engine/FORMAT.md](Engine/FORMAT.md). |
+| `Packages/DocmostKit/` | The platform-neutral core: API client, models, content format, auth, cache. `swift test` runs it directly on the Mac. |
+| `DiderotTests/` | App tests (Swift Testing). |
+| `DiderotUITests/` | UI tests (XCTest) against the dev instance, in their own scheme `DiderotUI`. |
+| `Design/` | The icon's source, `diderot_icon.png`; `Tools/icon/prepare-icon.swift` makes the app icon from it. |
+| `Docs/` | Background documentation, e.g. [sign-in and authentication](Docs/SignIn.md). |
+| `Tools/` | Scripts for the simulator, devices, dev content, the app icon and the third-party notices. |
+| `BACKLOG.md` | Open points for later. |
+
+## Development
+
+You need:
+
+- **Xcode 27**, and **XcodeGen** if you change `project.yml`.
+- **For devices:** a signing team. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and enter your Apple team ID. The simulator doesn't need it.
+- **A local Docmost 0.96 instance** at `http://localhost:3000` for debug builds, UI tests and seed scripts:
+  1. Run it with Docker as described in [Docmost's installation guide](https://docmost.com/docs/installation), using the image `docmost/docmost:0.96.0`.
+  2. Create the workspace and its admin.
+  3. Copy `.env.example` to `.env` and enter that admin's email and password.
+
+  For tests on an iPhone, the instance must be reachable on the network: set its `APP_URL` to `http://<your-mac>.local:3000`. The database tests need a Docmost license with databases.
+- **Node 24 with Corepack**, only to rebuild the editor engine.
+
+```sh
+# Test the core package (fast, without a simulator)
+swift test --package-path Packages/DocmostKit --skip Live
+
+# Build and test the app
+xcodebuild -project Diderot.xcodeproj -scheme Diderot \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' test -only-testing:DiderotTests
+
+# Start the app in the simulator, signed in to the dev instance automatically, and take a screenshot
+Tools/run-sim.sh
+DEVICE="iPad Pro 11-inch (M5)" APPEARANCE=dark Tools/run-sim.sh
+LAUNCH_ARGS='-AppleLanguages (de) -AppleLocale de_DE' Tools/run-sim.sh   # German interface
+
+# Jump straight into a space, a page or a view (debug builds only)
+DOCMOST_DEBUG_SPACE=demo DOCMOST_DEBUG_EXPAND=1 Tools/run-sim.sh
+DOCMOST_DEBUG_PAGE=<pageId|slugId> DOCMOST_DEBUG_ROUTE=comments Tools/run-sim.sh   # also: history, webeditor, search, favorites, recent, notifications (bell popover)
+DOCMOST_DEBUG_ROUTE=search DOCMOST_DEBUG_QUERY=Tabelle Tools/run-sim.sh            # search tab with a query
+DOCMOST_DEBUG_BROWSER_LOGIN=1 RESET_KEYCHAIN=1 Tools/run-sim.sh   # test the browser sign-in
+
+# Open a page and check the write path live (focus block 3, list item 1, append text; append a paragraph)
+DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_FOCUS=3#1 DOCMOST_DEBUG_TYPE=" (bearbeitet)" Tools/run-sim.sh
+DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_EDIT="Neuer Absatz" Tools/run-sim.sh
+
+# UI tests with real taps in the document view (simulator, or UDID=<udid> for an iPhone). The page is reset before and
+# checked through the API afterwards; screenshots go to Tools/.cache/uitests-attachments/. The server switch test signs
+# in to the dev instance under a second address (127.0.0.1, or the Mac's LAN address: DOCMOST_UITEST_ALT_SERVER).
+# For the bell tests the script first creates two mentions of the admin (Tools/seed-notifications.py), for the database
+# tests the test database and a page embedding it (Tools/seed-bases.py).
+Tools/run-uitests.sh <pageId>
+ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests only
+AREA=schnell Tools/run-uitests.sh <pageId>   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
+
+# Check the editor engine against Docmost's format and rebuild it
+Tools/build-engine.sh
+
+# Install on the connected iPhone (developer mode, Apple ID in Xcode)
+AUTOLOGIN=1 Tools/run-device.sh
+
+# Create demo content in the dev instance
+Tools/seed-dev.sh                 # the space "Demo" with nested pages (--reset recreates it)
+Tools/seed-fixtures.py            # fixture pages with every node type (--reset recreates them)
+Tools/seed-notifications.py <pageId> [--count 3]   # "Test-Kollegin" mentions the admin in comments (notifications)
+Tools/seed-bases.py <pageId>      # databases "Kanban-Test" (three cards) and "Datenbank-Test" (every property type, 30 rows, table and board), page "Datenbank-Einbettung" (needs the license)
+DOCMOST_DEBUG_PAGE=<baseId> DOCMOST_DEBUG_BASE_VIEW=Board Tools/run-sim.sh   # open a database in a given view
+
+# Rewrite THIRD_PARTY_NOTICES.md and the app's licenses page after changing bundled libraries
+node Tools/third-party-notices.mjs
+```
+
+The kit's live tests against the dev instance run only with `DOCMOST_LIVE_URL`, `DOCMOST_LIVE_EMAIL` and `DOCMOST_LIVE_PASSWORD` set. They cache the token, because the server allows 10 sign-ins per minute.
+
+Debug builds and tests talk to the dev instance (`http://localhost:3000`, from an iPhone `http://<mac>.local:3000`). A debug launch with `DOCMOST_DEBUG_SERVER` (scripts, UI tests) picks that server on start, even if another saved server was active in the app, and returns to it after signing out, so tests never reach another server.
+
+## Notes on the Docmost API
+
+- The sign-in token comes only as the HttpOnly cookie `authToken`; the app sends it as `Authorization: Bearer`. A cookie sent along would take precedence, so the API client stores no cookies.
+- `POST` calls without parameters need `{}` as their body.
+- "Append note" (`pages/update` with `operation: append`) needs Redis sync enabled on the server (`COLLAB_DISABLE_REDIS` not set).
+- The web client's page view crashes while `localStorage.currentUser` is missing, so the web editor loads the home page first.
+
+## License
+
+Diderot is licensed under the [MIT license](LICENSE). The third-party code it ships and its licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); the app shows them under Settings › About › Licenses.

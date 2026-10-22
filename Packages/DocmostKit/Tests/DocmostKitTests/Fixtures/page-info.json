@@ -1,0 +1,251 @@
+{
+    "data": {
+        "id": "01a11ad8-2e09-718d-820a-da24be7aa8e5",
+        "slugId": "wyhHGDDk6f",
+        "title": "Handbuch \u2013 Abschnitt 1.1",
+        "icon": "\ud83d\udd39",
+        "coverPhoto": null,
+        "position": "a0BcS",
+        "parentPageId": "01a11ad8-2dc4-708f-8921-5db0eacf9d59",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "isLocked": false,
+        "isBase": false,
+        "createdAt": "2026-10-08T09:28:57.608Z",
+        "updatedAt": "2026-10-08T09:28:57.608Z",
+        "deletedAt": null,
+        "contributorIds": [],
+        "content": {
+            "type": "doc",
+            "attrs": {
+                "dir": "auto"
+            },
+            "content": [
+                {
+                    "type": "heading",
+                    "attrs": {
+                        "id": "snsmuxjtbagy",
+                        "dir": "auto",
+                        "level": 1,
+                        "indent": 0,
+                        "textAlign": null
+                    },
+                    "content": [
+                        {
+                            "text": "Handbuch \u2013 Abschnitt 1.1",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "id": "ifkedjfkipic",
+                        "dir": "auto",
+                        "indent": 0,
+                        "textAlign": null
+                    },
+                    "content": [
+                        {
+                            "text": "Diese Seite geh\u00f6rt zu den Beispielinhalten der Dev-Instanz. Sie wurde per ",
+                            "type": "text"
+                        },
+                        {
+                            "text": "pages/create",
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "code"
+                                }
+                            ]
+                        },
+                        {
+                            "text": " mit Markdown angelegt.",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "heading",
+                    "attrs": {
+                        "id": "nabcvqgtgina",
+                        "dir": "auto",
+                        "level": 2,
+                        "indent": 0,
+                        "textAlign": null
+                    },
+                    "content": [
+                        {
+                            "text": "Inhalt",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "bulletList",
+                    "attrs": {
+                        "dir": "auto"
+                    },
+                    "content": [
+                        {
+                            "type": "listItem",
+                            "attrs": {
+                                "dir": "auto"
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "mmcyzcwqvase",
+                                        "dir": "auto",
+                                        "indent": 0,
+                                        "textAlign": null
+                                    },
+                                    "content": [
+                                        {
+                                            "text": "Erster Punkt",
+                                            "type": "text"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "listItem",
+                            "attrs": {
+                                "dir": "auto"
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "bvcgqvlbqdpz",
+                                        "dir": "auto",
+                                        "indent": 0,
+                                        "textAlign": null
+                                    },
+                                    "content": [
+                                        {
+                                            "text": "Zweiter Punkt mit ",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "text": "fett",
+                                            "type": "text",
+                                            "marks": [
+                                                {
+                                                    "type": "bold"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "text": " und ",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "text": "kursiv",
+                                            "type": "text",
+                                            "marks": [
+                                                {
+                                                    "type": "italic"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "type": "listItem",
+                            "attrs": {
+                                "dir": "auto"
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "attrs": {
+                                        "id": "buzupyhtvkkt",
+                                        "dir": "auto",
+                                        "indent": 0,
+                                        "textAlign": null
+                                    },
+                                    "content": [
+                                        {
+                                            "text": "Dritter Punkt mit einem ",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "text": "Link",
+                                            "type": "text",
+                                            "marks": [
+                                                {
+                                                    "type": "link",
+                                                    "attrs": {
+                                                        "rel": "noopener noreferrer nofollow",
+                                                        "href": "https://docmost.com",
+                                                        "class": null,
+                                                        "title": null,
+                                                        "target": "_blank",
+                                                        "internal": false
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "blockquote",
+                    "attrs": {
+                        "dir": "auto"
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "id": "ccfminkxznvd",
+                                "dir": "auto",
+                                "indent": 0,
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "text": "Ein Zitat zum Abschluss.",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "creator": {
+            "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+            "name": "Dev Admin",
+            "avatarUrl": null
+        },
+        "lastUpdatedBy": {
+            "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+            "name": "Dev Admin",
+            "avatarUrl": null
+        },
+        "contributors": [],
+        "deletedBy": null,
+        "space": {
+            "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+            "name": "Demo",
+            "slug": "demo"
+        },
+        "permissions": {
+            "canEdit": true,
+            "hasRestriction": false
+        }
+    },
+    "success": true,
+    "status": 200
+}

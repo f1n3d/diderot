@@ -1,0 +1,6929 @@
+{
+ "docmost": "v0.96.0",
+ "blockIds": {
+  "lengths": [
+   12
+  ],
+  "alphabet": "abcdefghijklmnopqrstuvwxyz"
+ },
+ "results": {
+  "trailing: heading last": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "H"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: code block last": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "codeBlock",
+    "attrs": {
+     "dir": "auto",
+     "language": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "x"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: blockquote last": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "blockquote",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "id": null,
+       "indent": 0,
+       "dir": "auto",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "q"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: image last": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "image",
+    "attrs": {
+     "dir": "auto",
+     "src": "/x.png",
+     "width": null,
+     "height": null,
+     "align": "center",
+     "size": null,
+     "aspectRatio": null,
+     "placeholder": null
+    }
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: table last": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "table",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tableRow",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "c"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: paragraph last": [
+   {
+    "type": "heading",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "H"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   }
+  ],
+  "trailing: empty paragraph last": [
+   {
+    "type": "heading",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "Hx"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: heading before footnotes": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "H"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "trailing: remote change": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "H"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: meta only": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "H"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: no change": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "H"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "ids: new paragraph": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "keep",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "ids: duplicate inserted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "same",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "same",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "ids: kinds": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "keep",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "H"
+     }
+    ]
+   },
+   {
+    "type": "blockquote",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "id": "id2",
+       "indent": 0,
+       "dir": "auto",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "q"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "transclusionSource",
+    "attrs": {
+     "id": "id3",
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "id": "id4",
+       "indent": 0,
+       "dir": "auto",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "codeBlock",
+    "attrs": {
+     "dir": "auto",
+     "language": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "c"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id5",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "ids: remote change": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "keep",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "indent: 9 edited": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 9,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   }
+  ],
+  "indent: 9 elsewhere": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 9,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "indent: negative": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": -2,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   }
+  ],
+  "indent: fraction": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 2.5,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   }
+  ],
+  "indent: string": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": "3",
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   }
+  ],
+  "indent: heading": [
+   {
+    "type": "heading",
+    "attrs": {
+     "id": "id1",
+     "indent": 3,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "Hx"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in list": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in task list": [
+   {
+    "type": "taskList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "taskItem",
+      "attrs": {
+       "dir": "auto",
+       "checked": false
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in blockquote": [
+   {
+    "type": "blockquote",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "id": "id1",
+       "indent": 2,
+       "dir": "auto",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "ax"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in callout": [
+   {
+    "type": "callout",
+    "attrs": {
+     "dir": "auto",
+     "type": "info",
+     "icon": null
+    },
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "id": "id1",
+       "indent": 2,
+       "dir": "auto",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "ax"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in table": [
+   {
+    "type": "table",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tableRow",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "ax"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in details": [
+   {
+    "type": "details",
+    "attrs": {
+     "dir": "auto",
+     "open": false
+    },
+    "content": [
+     {
+      "type": "detailsSummary",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "s"
+       }
+      ]
+     },
+     {
+      "type": "detailsContent",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 2,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in column": [
+   {
+    "type": "columns",
+    "attrs": {
+     "dir": "auto",
+     "layout": "two_equal",
+     "widthMode": "normal"
+    },
+    "content": [
+     {
+      "type": "column",
+      "attrs": {
+       "dir": "auto",
+       "width": null
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 2,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "column",
+      "attrs": {
+       "dir": "auto",
+       "width": null
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in footnote": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 2,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "nx"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "indent: into list": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: list untouched": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "indent: list no change": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "indent: heading in table": [
+   {
+    "type": "table",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tableRow",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "heading",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null,
+           "level": 2
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "Hx"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: table header": [
+   {
+    "type": "table",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tableRow",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tableHeader",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "ax"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: blockquote in list": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "a"
+         }
+        ]
+       },
+       {
+        "type": "blockquote",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "qx"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: list in blockquote": [
+   {
+    "type": "blockquote",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "bulletList",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "ax"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: ordered list": [
+   {
+    "type": "orderedList",
+    "attrs": {
+     "dir": "auto",
+     "start": 1,
+     "type": null
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: second paragraph in list item": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       },
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: remote into list": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: negative in list": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": -2,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: string in list": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: null in list": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": null,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "ax"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: in synced block": [
+   {
+    "type": "transclusionSource",
+    "attrs": {
+     "id": "id1",
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "id": "id2",
+       "indent": 2,
+       "dir": "auto",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "ax"
+       }
+      ]
+     },
+     {
+      "type": "heading",
+      "attrs": {
+       "id": null,
+       "indent": 1,
+       "dir": "auto",
+       "textAlign": null,
+       "level": 2
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "H"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: list in synced block": [
+   {
+    "type": "transclusionSource",
+    "attrs": {
+     "id": "id1",
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "bulletList",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "listItem",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "ax"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: meta only": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "indent: remote change": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 9,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   }
+  ],
+  "footnotes: reference without footnote": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   }
+  ],
+  "footnotes: footnote without reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f9",
+       "data-id": "f9"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: order": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "x "
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: empty list": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    }
+   }
+  ],
+  "footnotes: delete the reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   }
+  ],
+  "footnotes: delete one of two references": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: same reference twice": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "x "
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: stale numbers": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "7",
+       "href": "#x"
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:7",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: delete the list": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   }
+  ],
+  "footnotes: delete a footnote": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    }
+   }
+  ],
+  "footnotes: edit a footnote": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "nx"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: empty a footnote": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: insert a reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f5",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f5"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: insert a reference without list": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f5",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f5"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: reference in a footnote": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "1",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         },
+         {
+          "type": "footnoteReference",
+          "attrs": {
+           "dir": "auto",
+           "class": "footnote-ref",
+           "data-id": "f2",
+           "referenceNumber": "2",
+           "href": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: references in containers": [
+   {
+    "type": "table",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tableRow",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "footnoteReference",
+            "attrs": {
+             "dir": "auto",
+             "class": "footnote-ref",
+             "data-id": "f3",
+             "referenceNumber": null,
+             "href": null
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "Hx"
+     }
+    ]
+   },
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "footnoteReference",
+          "attrs": {
+           "dir": "auto",
+           "class": "footnote-ref",
+           "data-id": "f2",
+           "referenceNumber": null,
+           "href": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 1
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f3",
+       "data-id": "f3"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "three"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: select the section": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: select a footnote": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: select the section while editing": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes: remote change": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "x "
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: text at the start": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "xab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: text before a reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "abx"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: text after a reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "xcd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: delete before a reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: delete after a reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "d"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: no change before a reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: no change at the start": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: same paragraph replaced": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: references swapped": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id3",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: alignment": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": "center"
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: other paragraph": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "zx"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: inside a footnote": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "oxne"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: text inside a reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": null,
+       "href": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "x"
+       }
+      ]
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": null,
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "f2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: delete across two references": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: paragraph with a reference inserted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "new"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f3",
+       "referenceNumber": "3",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id3",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:3",
+       "data-id": "f3"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id4",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: paragraph with a reference deleted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     }
+    ]
+   }
+  ],
+  "footnotes trigger: remote reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "z"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f3",
+       "referenceNumber": "3",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:3",
+       "data-id": "f3"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id3",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: stale numbers and links": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "1",
+       "href": "#x"
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "n"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: matched by id": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "1",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: same reference twice": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": " "
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "3",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:3",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id3",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: reference without id": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": null,
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": null
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        }
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: block ids kept": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "pc",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "pa",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       },
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "pb",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": "right"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "more"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: in order already": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pp",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "2",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "pa",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "pb",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: whole document": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: remote whole document": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ab"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "cd"
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     },
+     {
+      "type": "text",
+      "text": "ef"
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: block moved": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "p2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f2",
+       "referenceNumber": "1",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "p1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f2"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "pb",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "two"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "pa",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: two footnotes for one reference": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "1",
+       "href": null
+      }
+     },
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "2",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "second"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:2",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id2",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "second"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "footnotes rebuilt: footnote ids missing": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "footnoteReference",
+      "attrs": {
+       "dir": "auto",
+       "class": "footnote-ref",
+       "data-id": "f1",
+       "referenceNumber": "1",
+       "href": null
+      }
+     }
+    ]
+   },
+   {
+    "type": "footnotes",
+    "attrs": {
+     "dir": "auto",
+     "class": "footnotes"
+    },
+    "content": [
+     {
+      "type": "footnote",
+      "attrs": {
+       "dir": "auto",
+       "id": "fn:1",
+       "data-id": "f1"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "one"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "indent: remote whole document": [
+   {
+    "type": "bulletList",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "listItem",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": "id1",
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "a"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "trailing: remote whole document": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "heading",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null,
+     "level": 2
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "H"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "ids: remote whole document": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "keep",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "links: remote whole document": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "see https://example.com "
+     }
+    ]
+   }
+  ],
+  "links: typed url": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "see "
+     },
+     {
+      "type": "text",
+      "marks": [
+       {
+        "type": "link",
+        "attrs": {
+         "href": "https://example.com",
+         "target": "_blank",
+         "rel": "noopener noreferrer nofollow",
+         "class": null,
+         "title": null,
+         "internal": false
+        }
+       }
+      ],
+      "text": "https://example.com"
+     },
+     {
+      "type": "text",
+      "text": " "
+     }
+    ]
+   }
+  ],
+  "links: replaced paragraph": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "visit https://example.com now"
+     }
+    ]
+   }
+  ],
+  "links: bare domain": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "see "
+     },
+     {
+      "type": "text",
+      "marks": [
+       {
+        "type": "link",
+        "attrs": {
+         "href": "http://example.com",
+         "target": "_blank",
+         "rel": "noopener noreferrer nofollow",
+         "class": null,
+         "title": null,
+         "internal": false
+        }
+       }
+      ],
+      "text": "example.com"
+     },
+     {
+      "type": "text",
+      "text": " "
+     }
+    ]
+   }
+  ],
+  "links: replaced paragraph ending in url": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "visit "
+     },
+     {
+      "type": "text",
+      "marks": [
+       {
+        "type": "link",
+        "attrs": {
+         "href": "https://example.com",
+         "target": "_blank",
+         "rel": "noopener noreferrer nofollow",
+         "class": null,
+         "title": null,
+         "internal": false
+        }
+       }
+      ],
+      "text": "https://example.com"
+     },
+     {
+      "type": "text",
+      "text": " "
+     }
+    ]
+   }
+  ],
+  "links: inserted paragraph": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "marks": [
+       {
+        "type": "link",
+        "attrs": {
+         "href": "https://example.com",
+         "target": "_blank",
+         "rel": "noopener noreferrer nofollow",
+         "class": null,
+         "title": null,
+         "internal": false
+        }
+       }
+      ],
+      "text": "https://example.com"
+     },
+     {
+      "type": "text",
+      "text": " "
+     }
+    ]
+   }
+  ],
+  "links: internal path": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "see /s/abc/p/def "
+     }
+    ]
+   }
+  ],
+  "links: email": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "see "
+     },
+     {
+      "type": "text",
+      "marks": [
+       {
+        "type": "link",
+        "attrs": {
+         "href": "mailto:mail@example.com",
+         "target": "_blank",
+         "rel": "noopener noreferrer nofollow",
+         "class": null,
+         "title": null,
+         "internal": false
+        }
+       }
+      ],
+      "text": "mail@example.com"
+     },
+     {
+      "type": "text",
+      "text": " "
+     }
+    ]
+   }
+  ],
+  "links: url with path": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "see "
+     },
+     {
+      "type": "text",
+      "marks": [
+       {
+        "type": "link",
+        "attrs": {
+         "href": "https://example.com/a?b=c#d",
+         "target": "_blank",
+         "rel": "noopener noreferrer nofollow",
+         "class": null,
+         "title": null,
+         "internal": false
+        }
+       }
+      ],
+      "text": "https://example.com/a?b=c#d"
+     },
+     {
+      "type": "text",
+      "text": " "
+     }
+    ]
+   }
+  ],
+  "links: url then text": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "see https://example.com and"
+     }
+    ]
+   }
+  ],
+  "links: remote change": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "see "
+     },
+     {
+      "type": "text",
+      "marks": [
+       {
+        "type": "link",
+        "attrs": {
+         "href": "https://example.com",
+         "target": "_blank",
+         "rel": "noopener noreferrer nofollow",
+         "class": null,
+         "title": null,
+         "internal": false
+        }
+       }
+      ],
+      "text": "https://example.com"
+     },
+     {
+      "type": "text",
+      "text": " "
+     }
+    ]
+   }
+  ],
+  "tables: missing cell": [
+   {
+    "type": "table",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tableRow",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "ax"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "b"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tableRow",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "c"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ]
+ }
+}

@@ -1,0 +1,108 @@
+{
+  "data": {
+    "id": "01a12164-d30a-7e7b-abf6-598651e1ca6c",
+    "slugId": "cLpV9ImTnF",
+    "title": "Kanban-Test",
+    "icon": null,
+    "isBase": true,
+    "baseSchemaVersion": 0,
+    "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+    "parentPageId": null,
+    "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+    "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+    "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+    "position": "a9BvC",
+    "isLocked": false,
+    "coverPhoto": null,
+    "contributorIds": [],
+    "createdAt": "2026-10-09T16:00:18.185Z",
+    "updatedAt": "2026-10-09T16:00:18.185Z",
+    "deletedAt": null,
+    "deletedById": null,
+    "properties": [
+      {
+        "id": "prprssn5lttp",
+        "pageId": "01a12164-d30a-7e7b-abf6-598651e1ca6c",
+        "name": "Title",
+        "type": "text",
+        "position": "a01s3",
+        "typeOptions": null,
+        "pendingType": null,
+        "pendingTypeOptions": null,
+        "pendingToken": null,
+        "isPrimary": true,
+        "schemaVersion": 1,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-10-09T16:00:18.185484+00:00",
+        "updatedAt": "2026-10-09T16:00:18.185484+00:00",
+        "deletedAt": null
+      },
+      {
+        "id": "prp5vvmfjb13",
+        "pageId": "01a12164-d30a-7e7b-abf6-598651e1ca6c",
+        "name": "Status",
+        "type": "status",
+        "position": "a18tJ",
+        "typeOptions": {
+          "choices": [
+            {
+              "id": "optujyqkzfae",
+              "name": "Not started",
+              "color": "gray",
+              "category": "todo"
+            },
+            {
+              "id": "optf0x57v3zu",
+              "name": "In progress",
+              "color": "blue",
+              "category": "inProgress"
+            },
+            {
+              "id": "optwg4rc46h3",
+              "name": "Done",
+              "color": "green",
+              "category": "complete"
+            }
+          ],
+          "choiceOrder": [
+            "optujyqkzfae",
+            "optf0x57v3zu",
+            "optwg4rc46h3"
+          ],
+          "defaultValue": "optujyqkzfae"
+        },
+        "pendingType": null,
+        "pendingTypeOptions": null,
+        "pendingToken": null,
+        "isPrimary": false,
+        "schemaVersion": 1,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-10-09T16:00:18.185484+00:00",
+        "updatedAt": "2026-10-09T16:00:18.185484+00:00",
+        "deletedAt": null
+      }
+    ],
+    "views": [
+      {
+        "id": "01a12164-d30e-7968-af89-0ff84dfe90f5",
+        "pageId": "01a12164-d30a-7e7b-abf6-598651e1ca6c",
+        "name": "Kanban",
+        "type": "kanban",
+        "position": "a01s3",
+        "config": {
+          "groupByPropertyId": "prp5vvmfjb13"
+        },
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "createdAt": "2026-10-09T16:00:18.185484+00:00",
+        "updatedAt": "2026-10-09T16:00:18.185484+00:00"
+      }
+    ],
+    "permissions": {
+      "canEdit": true,
+      "hasRestriction": false
+    }
+  },
+  "success": true,
+  "status": 200
+}

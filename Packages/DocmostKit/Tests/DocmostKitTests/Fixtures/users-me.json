@@ -1,0 +1,50 @@
+{
+    "data": {
+        "user": {
+            "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+            "email": "admin@docmost.local",
+            "name": "Dev Admin",
+            "emailVerifiedAt": "2026-10-08T08:11:10.268Z",
+            "avatarUrl": null,
+            "role": "owner",
+            "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+            "locale": "en-US",
+            "timezone": null,
+            "settings": null,
+            "lastLoginAt": "2026-10-08T09:12:27.046Z",
+            "deactivatedAt": null,
+            "createdAt": "2026-10-08T08:11:10.268Z",
+            "updatedAt": "2026-10-08T08:11:30.426Z",
+            "deletedAt": null,
+            "hasGeneratedPassword": false
+        },
+        "workspace": {
+            "id": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+            "name": "Docmost Dev",
+            "description": null,
+            "logo": null,
+            "hostname": null,
+            "customDomain": null,
+            "settings": null,
+            "defaultRole": "member",
+            "emailDomains": [],
+            "defaultSpaceId": "01a11a90-f720-7025-9a8e-dfd2231a5906",
+            "createdAt": "2026-10-08T08:11:10.268Z",
+            "updatedAt": "2026-10-08T08:11:10.496Z",
+            "deletedAt": null,
+            "stripeCustomerId": null,
+            "status": null,
+            "plan": null,
+            "billingEmail": null,
+            "trialEndAt": null,
+            "enforceSso": false,
+            "enforceMfa": false,
+            "auditRetentionDays": null,
+            "trashRetentionDays": null,
+            "isScimEnabled": false,
+            "memberCount": 1
+        }
+    },
+    "success": true,
+    "status": 200
+}

@@ -1,0 +1,28 @@
+{
+    "data": {
+        "id": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "name": "Docmost Dev",
+        "description": null,
+        "logo": null,
+        "hostname": null,
+        "customDomain": null,
+        "settings": null,
+        "defaultRole": "member",
+        "emailDomains": [],
+        "defaultSpaceId": "01a11a90-f720-7025-9a8e-dfd2231a5906",
+        "createdAt": "2026-10-08T08:11:10.268Z",
+        "updatedAt": "2026-10-08T08:11:10.496Z",
+        "deletedAt": null,
+        "stripeCustomerId": null,
+        "status": null,
+        "billingEmail": null,
+        "trialEndAt": null,
+        "enforceSso": false,
+        "plan": null,
+        "enforceMfa": false,
+        "trashRetentionDays": null,
+        "isScimEnabled": false
+    },
+    "success": true,
+    "status": 200
+}

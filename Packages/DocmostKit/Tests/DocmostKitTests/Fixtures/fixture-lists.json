@@ -1,0 +1,74 @@
+{
+  "title": "Fixture: Lists",
+  "icon": "📋",
+  "content": {
+    "type": "doc",
+    "content": [
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Bullet list"}]},
+      {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "First item"}]}]},
+        {"type": "listItem", "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "Second item with nested list"}]},
+          {"type": "bulletList", "content": [
+            {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Nested level 2"}]}]},
+            {"type": "listItem", "content": [
+              {"type": "paragraph", "content": [{"type": "text", "text": "Nested level 2 with level 3"}]},
+              {"type": "bulletList", "content": [
+                {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Nested level 3"}]}]}
+              ]}
+            ]}
+          ]}
+        ]},
+        {"type": "listItem", "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "Third item with two paragraphs"}]},
+          {"type": "paragraph", "content": [{"type": "text", "text": "Second paragraph of the third item."}]}
+        ]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Ordered list"}]},
+      {"type": "orderedList", "attrs": {"start": 1}, "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Step one"}]}]},
+        {"type": "listItem", "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "Step two with sub-steps"}]},
+          {"type": "orderedList", "attrs": {"start": 1}, "content": [
+            {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Sub-step"}]}]},
+            {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Another sub-step"}]}]}
+          ]}
+        ]},
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Step three"}]}]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Ordered list starting at 10"}]},
+      {"type": "orderedList", "attrs": {"start": 10}, "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Ten"}]}]},
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Eleven"}]}]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Task list"}]},
+      {"type": "taskList", "content": [
+        {"type": "taskItem", "attrs": {"checked": true}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Done task"}]}]},
+        {"type": "taskItem", "attrs": {"checked": false}, "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "Open task with nested tasks"}]},
+          {"type": "taskList", "content": [
+            {"type": "taskItem", "attrs": {"checked": false}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Nested open"}]}]},
+            {"type": "taskItem", "attrs": {"checked": true}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Nested done"}]}]}
+          ]}
+        ]},
+        {"type": "taskItem", "attrs": {"checked": false}, "content": [{"type": "paragraph", "content": [
+          {"type": "text", "text": "Task with "},
+          {"type": "text", "text": "formatting", "marks": [{"type": "bold"}]},
+          {"type": "text", "text": " and a "},
+          {"type": "text", "text": "link", "marks": [{"type": "link", "attrs": {"href": "https://example.com"}}]}
+        ]}]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Mixed nesting"}]},
+      {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "Bullet containing an ordered list"}]},
+          {"type": "orderedList", "attrs": {"start": 1}, "content": [
+            {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Ordered inside bullet"}]}]}
+          ]},
+          {"type": "blockquote", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Quote inside a list item."}]}]},
+          {"type": "codeBlock", "attrs": {"language": "bash"}, "content": [{"type": "text", "text": "echo \"code inside a list item\""}]}
+        ]}
+      ]}
+    ]
+  }
+}

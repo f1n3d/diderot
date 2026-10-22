@@ -1,0 +1,30 @@
+{
+  "title": "Fixture: Media",
+  "icon": "🖼️",
+  "content": {
+    "type": "doc",
+    "content": [
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Images"}]},
+      {"type": "paragraph", "content": [{"type": "text", "text": "Full width (no width attribute):"}]},
+      {"type": "image", "attrs": {"src": "{{IMAGE_SRC}}", "attachmentId": "{{IMAGE_ID}}", "size": "{{IMAGE_SIZE}}", "alt": "Gradient test image", "align": "center"}},
+      {"type": "paragraph", "content": [{"type": "text", "text": "Width 240 points, aligned left:"}]},
+      {"type": "image", "attrs": {"src": "{{IMAGE_SRC}}", "attachmentId": "{{IMAGE_ID}}", "size": "{{IMAGE_SIZE}}", "width": 240, "align": "left", "aspectRatio": 1.5}},
+      {"type": "paragraph", "content": [{"type": "text", "text": "Width 50 %, aligned right:"}]},
+      {"type": "image", "attrs": {"src": "{{IMAGE_SRC}}", "attachmentId": "{{IMAGE_ID}}", "size": "{{IMAGE_SIZE}}", "width": "50%", "align": "right", "aspectRatio": 1.5}},
+      {"type": "paragraph", "content": [{"type": "text", "text": "Broken image source:"}]},
+      {"type": "image", "attrs": {"src": "/api/files/00000000-0000-0000-0000-000000000000/missing.png", "width": 200, "aspectRatio": 1}},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Attachment"}]},
+      {"type": "attachment", "attrs": {"url": "{{FILE_URL}}", "name": "notes.txt", "mime": "text/plain", "size": "{{FILE_SIZE}}", "attachmentId": "{{FILE_ID}}"}},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Embeds"}]},
+      {"type": "embed", "attrs": {"src": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "provider": "youtube", "align": "center", "width": 640, "height": 480}},
+      {"type": "youtube", "attrs": {"src": "https://www.youtube.com/embed/dQw4w9WgXcQ", "start": 0, "width": 640, "height": 480}},
+      {"type": "embed", "attrs": {"src": "https://www.figma.com/file/abc/Example", "provider": "figma", "align": "center", "width": 800, "height": 600}},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Video, audio, PDF, diagrams"}]},
+      {"type": "video", "attrs": {"src": "/api/files/00000000-0000-0000-0000-000000000001/clip.mp4", "attachmentId": "00000000-0000-0000-0000-000000000001", "width": 640, "align": "center"}},
+      {"type": "audio", "attrs": {"src": "/api/files/00000000-0000-0000-0000-000000000002/track.mp3", "attachmentId": "00000000-0000-0000-0000-000000000002"}},
+      {"type": "pdf", "attrs": {"src": "/api/files/00000000-0000-0000-0000-000000000003/manual.pdf", "name": "manual.pdf", "attachmentId": "00000000-0000-0000-0000-000000000003", "width": 800, "height": 600}},
+      {"type": "drawio", "attrs": {"src": "/api/files/00000000-0000-0000-0000-000000000004/diagram.drawio.svg?t=1", "title": "Architecture", "attachmentId": "00000000-0000-0000-0000-000000000004", "width": 640, "align": "center"}},
+      {"type": "excalidraw", "attrs": {"src": "/api/files/00000000-0000-0000-0000-000000000005/diagram.excalidraw.svg?t=1", "title": "Sketch", "attachmentId": "00000000-0000-0000-0000-000000000005", "width": 640, "align": "center"}}
+    ]
+  }
+}

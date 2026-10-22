@@ -1,0 +1,88 @@
+{
+    "data": {
+        "sessions": [
+            {
+                "id": "01a11ad8-2ce2-7702-94d7-e647f4802479",
+                "deviceName": null,
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T10:17:11.950Z",
+                "createdAt": "2026-10-08T09:28:57.314Z",
+                "isCurrentDevice": true
+            },
+            {
+                "id": "01a11b0a-a6d2-77d3-ae1a-a069fd415b5d",
+                "deviceName": "iPhone",
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T10:24:05.378Z",
+                "createdAt": "2026-10-08T10:24:05.329Z",
+                "isCurrentDevice": false
+            },
+            {
+                "id": "01a11add-80ac-74e5-837d-963314616ca6",
+                "deviceName": "iPhone",
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T10:20:47.479Z",
+                "createdAt": "2026-10-08T09:34:46.443Z",
+                "isCurrentDevice": false
+            },
+            {
+                "id": "01a11b04-3839-7cf6-ab06-aaf35ac53e8b",
+                "deviceName": "iPhone",
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T10:17:03.814Z",
+                "createdAt": "2026-10-08T10:17:03.800Z",
+                "isCurrentDevice": false
+            },
+            {
+                "id": "01a11adf-3bb0-7a0c-ac06-1576ec347fe5",
+                "deviceName": "iPad",
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T09:36:40.433Z",
+                "createdAt": "2026-10-08T09:36:39.855Z",
+                "isCurrentDevice": false
+            },
+            {
+                "id": "01a11acf-ba67-7bdb-8fd8-b9655a1a88e8",
+                "deviceName": "iPhone",
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T09:19:44.021Z",
+                "createdAt": "2026-10-08T09:19:43.717Z",
+                "isCurrentDevice": false
+            },
+            {
+                "id": "01a11acd-d1c8-705a-8c2f-cabf202390ad",
+                "deviceName": null,
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T09:17:38.640Z",
+                "createdAt": "2026-10-08T09:17:38.631Z",
+                "isCurrentDevice": false
+            },
+            {
+                "id": "01a11a91-44e1-79d3-9b96-5f1500db5c02",
+                "deviceName": null,
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T08:11:30.426Z",
+                "createdAt": "2026-10-08T08:11:30.401Z",
+                "isCurrentDevice": false
+            },
+            {
+                "id": "01a11a91-1c4c-7ec5-a8b8-9e44dbaf1d33",
+                "deviceName": null,
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T08:11:20.083Z",
+                "createdAt": "2026-10-08T08:11:20.012Z",
+                "isCurrentDevice": false
+            },
+            {
+                "id": "01a11a90-f722-7ed1-b266-e5da60c2bf0a",
+                "deviceName": null,
+                "geoLocation": null,
+                "lastActiveAt": "2026-10-08T08:11:10.498Z",
+                "createdAt": "2026-10-08T08:11:10.498Z",
+                "isCurrentDevice": false
+            }
+        ]
+    },
+    "success": true,
+    "status": 200
+}

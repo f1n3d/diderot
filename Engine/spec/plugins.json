@@ -1,0 +1,45 @@
+{
+ "docmost": "v0.96.0",
+ "plugins": [
+  {
+   "key": "uniqueID",
+   "appends": true,
+   "filters": false
+  },
+  {
+   "key": "footnoteRules",
+   "appends": true,
+   "filters": true
+  },
+  {
+   "key": "autolink",
+   "appends": true,
+   "filters": false
+  },
+  {
+   "key": "indentNormalizer",
+   "appends": true,
+   "filters": false
+  },
+  {
+   "key": "selectingCells",
+   "appends": true,
+   "filters": false
+  },
+  {
+   "key": "trailingNode",
+   "appends": true,
+   "filters": false
+  },
+  {
+   "key": "clearDocument",
+   "appends": true,
+   "filters": false
+  }
+ ],
+ "hooks": [
+  "uniqueID.onCreate",
+  "link.onCreate",
+  "delete.onUpdate"
+ ]
+}

@@ -1,0 +1,71 @@
+# Checks the editor engine against Docmost's document format, builds the app and runs the DocmostKit and app unit tests
+# for every pull request to main and every push to main.
+# The UI tests need the local dev Docmost instance, so they stay local (Tools/run-uitests.sh).
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push to the same branch or pull request cancels the check still running for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Build and unit tests
+    runs-on: xcode-27
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode 27.1
+        run: |
+          # The image defaults to Xcode 27.0; development uses 27.1.
+          xcode=$(ls -d /Applications/Xcode_27.1*.app 2>/dev/null | head -1)
+          if [ -n "$xcode" ]; then sudo xcode-select --switch "$xcode"; fi
+          xcodebuild -version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Engine format check
+        # The engine's own extensions must match Docmost's document format (Engine/FORMAT.md).
+        working-directory: Engine
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+        run: |
+          corepack pnpm@12.10.1 install --frozen-lockfile
+          corepack pnpm@12.10.1 run check
+
+      - name: DocmostKit tests
+        # The live tests need a Docmost server.
+        run: swift test --package-path Packages/DocmostKit --skip Live
+
+      - name: App unit tests
+        # No certificate on the runner: ad-hoc signing ("Sign to Run Locally") is enough for the simulator.
+        run: >
+          xcodebuild test
+          -project Diderot.xcodeproj
+          -scheme Diderot
+          -destination "platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0"
+          -only-testing:DiderotTests
+          -parallel-testing-enabled NO
+          -resultBundlePath TestResults.xcresult
+          CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
+
+      - name: Keep the test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: TestResults.xcresult
+          retention-days: 7

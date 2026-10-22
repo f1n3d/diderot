@@ -1,0 +1,54 @@
+{
+  "title": "Fixture: Tables & Columns",
+  "icon": "📊",
+  "content": {
+    "type": "doc",
+    "content": [
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Simple table"}]},
+      {"type": "table", "content": [
+        {"type": "tableRow", "content": [
+          {"type": "tableHeader", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Name"}]}]},
+          {"type": "tableHeader", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Role"}]}]},
+          {"type": "tableHeader", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Status"}]}]}
+        ]},
+        {"type": "tableRow", "content": [
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Alice"}]}]},
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Engineer"}]}]},
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null, "backgroundColor": "#d3f9d8", "backgroundColorName": "green"}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Active"}]}]}
+        ]},
+        {"type": "tableRow", "content": [
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Bob"}]}]},
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Designer with a very long role description that wraps"}]}]},
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": null, "backgroundColor": "#ffe3e3", "backgroundColorName": "red"}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "On leave"}]}]}
+        ]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Merged cells and widths"}]},
+      {"type": "table", "content": [
+        {"type": "tableRow", "content": [
+          {"type": "tableHeader", "attrs": {"colspan": 2, "rowspan": 1, "colwidth": [150, 150]}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Spans two columns"}]}]},
+          {"type": "tableHeader", "attrs": {"colspan": 1, "rowspan": 2, "colwidth": [100]}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Spans two rows"}]}]}
+        ]},
+        {"type": "tableRow", "content": [
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [150]}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "A"}]}]},
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [150]}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "B"}]}]}
+        ]},
+        {"type": "tableRow", "content": [
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [150]}, "content": [{"type": "bulletList", "content": [{"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "list in cell"}]}]}]}]},
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [150]}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "C"}]}]},
+          {"type": "tableCell", "attrs": {"colspan": 1, "rowspan": 1, "colwidth": [100]}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "D"}]}]}
+        ]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Two equal columns"}]},
+      {"type": "columns", "attrs": {"layout": "two_equal", "widthMode": "normal"}, "content": [
+        {"type": "column", "attrs": {"width": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Left column text."}]}, {"type": "bulletList", "content": [{"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "left bullet"}]}]}]}]},
+        {"type": "column", "attrs": {"width": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Right column text."}]}, {"type": "callout", "attrs": {"type": "info", "icon": null}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "callout in column"}]}]}]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Three columns, left wide"}]},
+      {"type": "columns", "attrs": {"layout": "three_left_wide", "widthMode": "wide"}, "content": [
+        {"type": "column", "attrs": {"width": 2}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Wide left."}]}]},
+        {"type": "column", "attrs": {"width": 1}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Middle."}]}]},
+        {"type": "column", "attrs": {"width": 1}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Right."}]}]}
+      ]}
+    ]
+  }
+}

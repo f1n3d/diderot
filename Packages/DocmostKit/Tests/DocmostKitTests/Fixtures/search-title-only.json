@@ -1,0 +1,65 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a11ad8-2e92-79e7-82d0-dbfdfdba20d7",
+                "slugId": "rNIRRLQ6ic",
+                "title": "Handbuch \u2013 Kapitel 2",
+                "icon": "\ud83d\udcc4",
+                "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.746Z",
+                "updatedAt": "2026-10-08T09:28:57.746Z",
+                "rank": 1,
+                "highlight": "",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": []
+            },
+            {
+                "id": "01a11ad8-2f48-75be-8a2d-ed6bc1c27771",
+                "slugId": "c01L0wmeps",
+                "title": "Projekte \u2013 Kapitel 1",
+                "icon": "\ud83d\udcc4",
+                "parentPageId": "01a11ad8-2f0c-746f-998a-1f083578135f",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.928Z",
+                "updatedAt": "2026-10-08T09:28:57.928Z",
+                "rank": 1,
+                "highlight": "",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": []
+            },
+            {
+                "id": "01a11ad8-2dc4-708f-8921-5db0eacf9d59",
+                "slugId": "zkPQaC7Hum",
+                "title": "Handbuch \u2013 Kapitel 1",
+                "icon": "\ud83d\udcc4",
+                "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.539Z",
+                "updatedAt": "2026-10-08T09:28:57.539Z",
+                "rank": 1,
+                "highlight": "",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": []
+            }
+        ]
+    },
+    "success": true,
+    "status": 200
+}

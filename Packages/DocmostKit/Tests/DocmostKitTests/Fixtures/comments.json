@@ -1,0 +1,135 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a11b06-2e8e-79b6-865f-ec8bd9b47ffd",
+                "content": {
+                    "type": "doc",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "text": "First page-level comment with ",
+                                    "type": "text"
+                                },
+                                {
+                                    "text": "bold",
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "selection": null,
+                "type": "page",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "pageId": "01a11aeb-fa78-7b54-b3ca-f9d15f1e2981",
+                "parentCommentId": null,
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "resolvedAt": null,
+                "createdAt": "2026-10-08T10:19:12.398Z",
+                "editedAt": null,
+                "deletedAt": null,
+                "lastEditedById": null,
+                "resolvedById": null,
+                "updatedAt": "2026-10-08T10:19:12.398Z",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "creator": {
+                    "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                    "name": "Dev Admin",
+                    "avatarUrl": null
+                },
+                "resolvedBy": null
+            },
+            {
+                "id": "01a11b06-2eab-70f2-82c7-94f6ab76b35c",
+                "content": {
+                    "type": "doc",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "text": "A reply to the first comment.",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "selection": null,
+                "type": "page",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "pageId": "01a11aeb-fa78-7b54-b3ca-f9d15f1e2981",
+                "parentCommentId": "01a11b06-2e8e-79b6-865f-ec8bd9b47ffd",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "resolvedAt": null,
+                "createdAt": "2026-10-08T10:19:12.426Z",
+                "editedAt": null,
+                "deletedAt": null,
+                "lastEditedById": null,
+                "resolvedById": null,
+                "updatedAt": "2026-10-08T10:19:12.426Z",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "creator": {
+                    "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                    "name": "Dev Admin",
+                    "avatarUrl": null
+                },
+                "resolvedBy": null
+            },
+            {
+                "id": "01a11b06-2eba-79cf-95cc-8430755d33ec",
+                "content": {
+                    "type": "doc",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "text": "Inline comment about the first sentence.",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "selection": "Plain text with bold",
+                "type": "inline",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "pageId": "01a11aeb-fa78-7b54-b3ca-f9d15f1e2981",
+                "parentCommentId": null,
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "resolvedAt": null,
+                "createdAt": "2026-10-08T10:19:12.442Z",
+                "editedAt": null,
+                "deletedAt": null,
+                "lastEditedById": null,
+                "resolvedById": null,
+                "updatedAt": "2026-10-08T10:19:12.442Z",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "creator": {
+                    "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                    "name": "Dev Admin",
+                    "avatarUrl": null
+                },
+                "resolvedBy": null
+            }
+        ],
+        "meta": {
+            "limit": 20,
+            "hasNextPage": false,
+            "hasPrevPage": false,
+            "nextCursor": null,
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}

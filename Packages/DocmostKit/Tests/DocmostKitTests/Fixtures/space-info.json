@@ -1,0 +1,44 @@
+{
+    "data": {
+        "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+        "name": "Demo",
+        "description": "Beispielinhalte f\u00fcr die iOS-App",
+        "slug": "demo",
+        "logo": null,
+        "visibility": "private",
+        "defaultRole": "writer",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-10-08T09:28:57.360Z",
+        "updatedAt": "2026-10-08T09:28:57.360Z",
+        "deletedAt": null,
+        "settings": null,
+        "isPersonal": false,
+        "memberCount": 1,
+        "isPublished": false,
+        "membership": {
+            "userId": "01a11a90-f71c-707b-ba76-800020050b3d",
+            "role": "admin",
+            "permissions": [
+                {
+                    "action": "manage",
+                    "subject": "settings"
+                },
+                {
+                    "action": "manage",
+                    "subject": "member"
+                },
+                {
+                    "action": "manage",
+                    "subject": "page"
+                },
+                {
+                    "action": "manage",
+                    "subject": "share"
+                }
+            ]
+        }
+    },
+    "success": true,
+    "status": 200
+}

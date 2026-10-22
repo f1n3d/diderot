@@ -1,0 +1,36 @@
+{
+    "data": {
+        "items": [
+            {
+                "sourcePageId": "01a11aeb-f9a1-78cd-974c-d87e91d73d40",
+                "transclusionId": "fixturesyncsrc",
+                "content": {
+                    "type": "doc",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "dir": "auto",
+                                "indent": 0
+                            },
+                            "content": [
+                                {
+                                    "text": "This paragraph is a synced block source.",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "sourceUpdatedAt": "2026-10-08T09:50:34.927Z"
+            },
+            {
+                "sourcePageId": "01a11aeb-f9a1-78cd-974c-d87e91d73d40",
+                "transclusionId": "doesnotexist",
+                "status": "not_found"
+            }
+        ]
+    },
+    "success": true,
+    "status": 200
+}

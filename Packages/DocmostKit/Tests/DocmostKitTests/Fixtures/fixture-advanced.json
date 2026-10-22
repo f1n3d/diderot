@@ -1,0 +1,38 @@
+{
+  "title": "Fixture: Advanced",
+  "icon": "🧪",
+  "content": {
+    "type": "doc",
+    "content": [
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Footnotes"}]},
+      {"type": "paragraph", "content": [
+        {"type": "text", "text": "A statement with a footnote"},
+        {"type": "footnoteReference", "attrs": {"class": "footnote-ref", "data-id": "fixturefnone", "referenceNumber": "1", "href": "#fn:1"}},
+        {"type": "text", "text": " and another one"},
+        {"type": "footnoteReference", "attrs": {"class": "footnote-ref", "data-id": "fixturefntwo", "referenceNumber": "2", "href": "#fn:2"}},
+        {"type": "text", "text": "."}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Subpages block"}]},
+      {"type": "subpages"},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Synced block (source)"}]},
+      {"type": "transclusionSource", "attrs": {"id": "fixturesyncsrc"}, "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "This paragraph is a synced block source."}]}
+      ]},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Synced block (reference)"}]},
+      {"type": "transclusionReference", "attrs": {"sourcePageId": "{{SELF_ID}}", "transclusionId": "fixturesyncsrc"}},
+      {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Unknown node"}]},
+      {"type": "fancyWidget", "attrs": {"mode": "x"}, "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "Children of an unknown block type should still render."}]}
+      ]},
+      {"type": "paragraph", "content": [
+        {"type": "text", "text": "Unknown inline atom here: "},
+        {"type": "sparkle", "attrs": {"level": 3}},
+        {"type": "text", "text": " end."}
+      ]},
+      {"type": "footnotes", "attrs": {"class": "footnotes"}, "content": [
+        {"type": "footnote", "attrs": {"id": "fn:1", "data-id": "fixturefnone"}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "First footnote text."}]}]},
+        {"type": "footnote", "attrs": {"id": "fn:2", "data-id": "fixturefntwo"}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Second footnote with a "}, {"type": "text", "text": "link", "marks": [{"type": "link", "attrs": {"href": "https://example.com"}}]}, {"type": "text", "text": "."}]}]}
+      ]}
+    ]
+  }
+}

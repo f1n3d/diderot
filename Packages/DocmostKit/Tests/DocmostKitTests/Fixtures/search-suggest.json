@@ -1,0 +1,16 @@
+{
+    "data": {
+        "users": [
+            {
+                "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "name": "Dev Admin",
+                "email": "admin@docmost.local",
+                "avatarUrl": null
+            }
+        ],
+        "groups": [],
+        "pages": []
+    },
+    "success": true,
+    "status": 200
+}

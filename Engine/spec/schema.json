@@ -1,0 +1,994 @@
+{
+ "docmost": "v0.96.0",
+ "topNode": "doc",
+ "nodes": [
+  {
+   "name": "paragraph",
+   "content": "inline*",
+   "group": "block",
+   "attrs": {
+    "id": {
+     "default": null
+    },
+    "indent": {
+     "default": 0
+    },
+    "dir": {
+     "default": "auto"
+    },
+    "textAlign": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "codeBlock",
+   "content": "text*",
+   "marks": "",
+   "group": "block",
+   "selectable": true,
+   "code": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "language": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "mention",
+   "group": "inline",
+   "inline": true,
+   "atom": true,
+   "selectable": true,
+   "draggable": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "id": {
+     "default": null
+    },
+    "label": {
+     "default": null
+    },
+    "entityType": {
+     "default": null
+    },
+    "entityId": {
+     "default": null
+    },
+    "slugId": {
+     "default": null
+    },
+    "creatorId": {
+     "default": null
+    },
+    "anchorId": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "blockquote",
+   "content": "block+",
+   "group": "block",
+   "defining": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "bulletList",
+   "content": "listItem+",
+   "group": "block list",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "hardBreak",
+   "group": "inline",
+   "inline": true,
+   "selectable": false,
+   "linebreakReplacement": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "horizontalRule",
+   "group": "block",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "listItem",
+   "content": "paragraph block*",
+   "defining": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "orderedList",
+   "content": "listItem+",
+   "group": "block list",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "start": {
+     "default": 1
+    },
+    "type": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "text",
+   "group": "inline",
+   "attrs": {},
+   "leafText": false
+  },
+  {
+   "name": "doc",
+   "content": "block+ footnotes?",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "heading",
+   "content": "inline*",
+   "group": "block",
+   "defining": true,
+   "attrs": {
+    "id": {
+     "default": null
+    },
+    "indent": {
+     "default": 0
+    },
+    "dir": {
+     "default": "auto"
+    },
+    "textAlign": {
+     "default": null
+    },
+    "level": {
+     "default": 1
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "taskList",
+   "content": "taskItem+",
+   "group": "block list",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "taskItem",
+   "content": "paragraph block*",
+   "defining": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "checked": {
+     "default": false
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "mathInline",
+   "group": "inline",
+   "inline": true,
+   "atom": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "text": {
+     "default": ""
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "mathBlock",
+   "group": "block",
+   "atom": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "text": {
+     "default": ""
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "details",
+   "content": "detailsSummary detailsContent",
+   "group": "block",
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "open": {
+     "default": false
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "detailsContent",
+   "content": "block*",
+   "group": "block",
+   "selectable": false,
+   "defining": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "detailsSummary",
+   "content": "inline*",
+   "group": "block",
+   "selectable": false,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "table",
+   "content": "tableRow+",
+   "group": "block",
+   "isolating": true,
+   "tableRole": "table",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "tableCell",
+   "content": "(paragraph | heading | bulletList | orderedList | taskList | blockquote | callout | image | video | audio | subpages | attachment | mathBlock | details | codeBlock)+",
+   "isolating": true,
+   "tableRole": "cell",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "colspan": {
+     "default": 1
+    },
+    "rowspan": {
+     "default": 1
+    },
+    "colwidth": {
+     "default": null
+    },
+    "align": {
+     "default": null
+    },
+    "backgroundColor": {
+     "default": null
+    },
+    "backgroundColorName": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "tableRow",
+   "content": "(tableCell | tableHeader)*",
+   "tableRole": "row",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "tableHeader",
+   "content": "(paragraph | heading | bulletList | orderedList | taskList | blockquote | callout | image | video | audio | subpages | attachment | mathBlock | details | codeBlock)+",
+   "isolating": true,
+   "tableRole": "header_cell",
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "colspan": {
+     "default": 1
+    },
+    "rowspan": {
+     "default": 1
+    },
+    "colwidth": {
+     "default": null
+    },
+    "align": {
+     "default": null
+    },
+    "backgroundColor": {
+     "default": null
+    },
+    "backgroundColorName": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "youtube",
+   "group": "block",
+   "inline": false,
+   "draggable": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "src": {
+     "default": null
+    },
+    "start": {
+     "default": 0
+    },
+    "width": {
+     "default": 640
+    },
+    "height": {
+     "default": 480
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "image",
+   "group": "block",
+   "inline": false,
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "src": {
+     "default": ""
+    },
+    "width": {
+     "default": null
+    },
+    "height": {
+     "default": null
+    },
+    "align": {
+     "default": "center"
+    },
+    "alt": {
+     "default": "(undefined)"
+    },
+    "attachmentId": {
+     "default": "(undefined)"
+    },
+    "size": {
+     "default": null
+    },
+    "aspectRatio": {
+     "default": null
+    },
+    "placeholder": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "video",
+   "group": "block",
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "src": {
+     "default": ""
+    },
+    "alt": {
+     "default": "(undefined)"
+    },
+    "attachmentId": {
+     "default": "(undefined)"
+    },
+    "width": {
+     "default": null
+    },
+    "height": {
+     "default": null
+    },
+    "size": {
+     "default": null
+    },
+    "align": {
+     "default": "center"
+    },
+    "aspectRatio": {
+     "default": null
+    },
+    "placeholder": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "audio",
+   "group": "block",
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "src": {
+     "default": ""
+    },
+    "attachmentId": {
+     "default": "(undefined)"
+    },
+    "size": {
+     "default": null
+    },
+    "placeholder": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "pdf",
+   "group": "block",
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "src": {
+     "default": ""
+    },
+    "name": {
+     "default": "(undefined)"
+    },
+    "attachmentId": {
+     "default": "(undefined)"
+    },
+    "size": {
+     "default": null
+    },
+    "width": {
+     "default": 800
+    },
+    "height": {
+     "default": 600
+    },
+    "placeholder": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "pageBreak",
+   "group": "block",
+   "atom": true,
+   "selectable": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "callout",
+   "content": "block+",
+   "group": "block",
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "type": {
+     "default": "info"
+    },
+    "icon": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "attachment",
+   "group": "block",
+   "inline": false,
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "url": {
+     "default": ""
+    },
+    "name": {
+     "default": "(undefined)"
+    },
+    "mime": {
+     "default": "(undefined)"
+    },
+    "size": {
+     "default": null
+    },
+    "attachmentId": {
+     "default": "(undefined)"
+    },
+    "placeholder": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "drawio",
+   "group": "block",
+   "inline": false,
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "src": {
+     "default": ""
+    },
+    "title": {
+     "default": "(undefined)"
+    },
+    "alt": {
+     "default": "(undefined)"
+    },
+    "width": {
+     "default": null
+    },
+    "height": {
+     "default": null
+    },
+    "size": {
+     "default": null
+    },
+    "aspectRatio": {
+     "default": null
+    },
+    "align": {
+     "default": "center"
+    },
+    "attachmentId": {
+     "default": "(undefined)"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "excalidraw",
+   "group": "block",
+   "inline": false,
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "src": {
+     "default": ""
+    },
+    "title": {
+     "default": "(undefined)"
+    },
+    "alt": {
+     "default": "(undefined)"
+    },
+    "width": {
+     "default": null
+    },
+    "height": {
+     "default": null
+    },
+    "size": {
+     "default": null
+    },
+    "aspectRatio": {
+     "default": null
+    },
+    "align": {
+     "default": "center"
+    },
+    "attachmentId": {
+     "default": "(undefined)"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "embed",
+   "group": "block",
+   "inline": false,
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "src": {
+     "default": ""
+    },
+    "provider": {
+     "default": ""
+    },
+    "align": {
+     "default": "center"
+    },
+    "width": {
+     "default": 800
+    },
+    "height": {
+     "default": 600
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "subpages",
+   "group": "block",
+   "atom": true,
+   "draggable": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "columns",
+   "content": "column+",
+   "group": "block",
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "layout": {
+     "default": "two_equal"
+    },
+    "widthMode": {
+     "default": "normal"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "column",
+   "content": "block+",
+   "group": "block",
+   "selectable": false,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "width": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "status",
+   "group": "inline",
+   "inline": true,
+   "atom": true,
+   "selectable": true,
+   "draggable": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "text": {
+     "default": ""
+    },
+    "color": {
+     "default": "gray"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "transclusionSource",
+   "content": "(paragraph | heading | blockquote | codeBlock | horizontalRule | bulletList | orderedList | taskList | image | video | audio | attachment | callout | details | embed | mathBlock | table | drawio | excalidraw | pdf | subpages | columns | youtube)+",
+   "group": "block",
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "id": {
+     "default": null
+    },
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "transclusionReference",
+   "group": "block",
+   "atom": true,
+   "selectable": true,
+   "draggable": false,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "sourcePageId": {
+     "default": null
+    },
+    "transclusionId": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "base",
+   "group": "block",
+   "atom": true,
+   "selectable": true,
+   "draggable": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "pageId": {
+     "default": null
+    },
+    "pendingKey": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "footnotes",
+   "content": "footnote*",
+   "group": "",
+   "draggable": false,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "class": {
+     "default": "footnotes"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "footnote",
+   "content": "paragraph+",
+   "draggable": false,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "id": {
+     "required": true
+    },
+    "data-id": {
+     "required": true
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "footnoteReference",
+   "content": "text*",
+   "group": "inline",
+   "inline": true,
+   "atom": true,
+   "draggable": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "class": {
+     "default": "footnote-ref"
+    },
+    "data-id": {
+     "default": null
+    },
+    "referenceNumber": {
+     "default": null
+    },
+    "href": {
+     "default": null
+    }
+   },
+   "leafText": false
+  }
+ ],
+ "marks": [
+  {
+   "name": "link",
+   "inclusive": false,
+   "attrs": {
+    "href": {
+     "default": null
+    },
+    "target": {
+     "default": "_blank"
+    },
+    "rel": {
+     "default": "noopener noreferrer nofollow"
+    },
+    "class": {
+     "default": null
+    },
+    "title": {
+     "default": null
+    },
+    "internal": {
+     "default": false
+    }
+   }
+  },
+  {
+   "name": "textStyle",
+   "attrs": {
+    "color": {
+     "default": null
+    }
+   }
+  },
+  {
+   "name": "bold",
+   "attrs": {}
+  },
+  {
+   "name": "code",
+   "excludes": "_",
+   "code": true,
+   "attrs": {}
+  },
+  {
+   "name": "italic",
+   "attrs": {}
+  },
+  {
+   "name": "strike",
+   "attrs": {}
+  },
+  {
+   "name": "underline",
+   "attrs": {}
+  },
+  {
+   "name": "comment",
+   "inclusive": false,
+   "attrs": {
+    "commentId": {
+     "default": null
+    },
+    "resolved": {
+     "default": false
+    }
+   }
+  },
+  {
+   "name": "superscript",
+   "attrs": {}
+  },
+  {
+   "name": "subscript",
+   "attrs": {}
+  },
+  {
+   "name": "highlight",
+   "attrs": {
+    "color": {
+     "default": null
+    },
+    "colorName": {
+     "default": null
+    }
+   }
+  }
+ ]
+}

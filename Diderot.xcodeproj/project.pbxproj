@@ -1,0 +1,604 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 90;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B63D87047A7A258FC47A002E /* DocmostKit in Frameworks */ = {isa = PBXBuildFile; productRef = 698FBCEB9A6CEE1367CD94F8 /* DocmostKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0F5B1DBAD48FD314C2298D86 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE79D8EF4F436B6F9A3F4100 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DB0BE37924EA27863F43D7F1;
+			remoteInfo = Diderot;
+		};
+		51AA499E26B0123DD993991C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE79D8EF4F436B6F9A3F4100 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DB0BE37924EA27863F43D7F1;
+			remoteInfo = Diderot;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		27BE87AAC99999397BED0E10 /* Diderot.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Diderot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6BFF267D5C78D2C16FC56E55 /* Project.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Project.xcconfig; sourceTree = "<group>"; };
+		98E18A7959252AF5CEFACCEE /* DiderotTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DiderotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A7CF2BCE2D8023D5D47DC499 /* DocmostKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = DocmostKit; path = Packages/DocmostKit; sourceTree = SOURCE_ROOT; };
+		DD6A0B88A96F62C3BD72A464 /* DiderotUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DiderotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		7A1C7477BC1266B4D24ABE55 /* DiderotUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = DiderotUITests;
+			sourceTree = "<group>";
+		};
+		A14D3196DCA661CF82CDF619 /* Diderot */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = Diderot;
+			sourceTree = "<group>";
+		};
+		F2352E12C664583059C6FD99 /* DiderotTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = DiderotTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		658C921649E9E33A51E16CC4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B63D87047A7A258FC47A002E /* DocmostKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		58F9D641378F167AE4F8156A = {
+			isa = PBXGroup;
+			children = (
+				DC8336600C26263EF1A35FC2 /* Config */,
+				A14D3196DCA661CF82CDF619 /* Diderot */,
+				F2352E12C664583059C6FD99 /* DiderotTests */,
+				7A1C7477BC1266B4D24ABE55 /* DiderotUITests */,
+				854FBDEF37BC4C114FC6FFF8 /* Packages */,
+				9B9B4E9D7379901EA3062BFC /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		854FBDEF37BC4C114FC6FFF8 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				A7CF2BCE2D8023D5D47DC499 /* DocmostKit */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		9B9B4E9D7379901EA3062BFC /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				27BE87AAC99999397BED0E10 /* Diderot.app */,
+				98E18A7959252AF5CEFACCEE /* DiderotTests.xctest */,
+				DD6A0B88A96F62C3BD72A464 /* DiderotUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		DC8336600C26263EF1A35FC2 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				6BFF267D5C78D2C16FC56E55 /* Project.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8926AA669EE847FAE2639BCF /* DiderotUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 52805CDA2B079BAE5328FCC4 /* Build configuration list for PBXNativeTarget "DiderotUITests" */;
+			buildPhases = (
+				B6D1939089E20BC9D12F379F /* Sources */,
+				5C9D7506A30BB8B30DD728AF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				48FB92190CE975F94785762F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7A1C7477BC1266B4D24ABE55 /* DiderotUITests */,
+			);
+			name = DiderotUITests;
+			packageProductDependencies = (
+			);
+			productName = DiderotUITests;
+			productReference = DD6A0B88A96F62C3BD72A464 /* DiderotUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		ADE18EF1B943F5889BCEF7FD /* DiderotTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1AFE7530E161150FDB7709A8 /* Build configuration list for PBXNativeTarget "DiderotTests" */;
+			buildPhases = (
+				B58727AE909A1D99D7CB8701 /* Sources */,
+				0BB6D578CAA19B203C58B009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0019EE596221CDFB6732C2EC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				F2352E12C664583059C6FD99 /* DiderotTests */,
+			);
+			name = DiderotTests;
+			packageProductDependencies = (
+			);
+			productName = DiderotTests;
+			productReference = 98E18A7959252AF5CEFACCEE /* DiderotTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		DB0BE37924EA27863F43D7F1 /* Diderot */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4701241BD88AF304C4E6F11E /* Build configuration list for PBXNativeTarget "Diderot" */;
+			buildPhases = (
+				61864327BAEBDFBA9397EC62 /* Sources */,
+				5E4925945676E2D8D10F98A2 /* Resources */,
+				658C921649E9E33A51E16CC4 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A14D3196DCA661CF82CDF619 /* Diderot */,
+			);
+			name = Diderot;
+			packageProductDependencies = (
+				698FBCEB9A6CEE1367CD94F8 /* DocmostKit */,
+			);
+			productName = Diderot;
+			productReference = 27BE87AAC99999397BED0E10 /* Diderot.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DE79D8EF4F436B6F9A3F4100 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					8926AA669EE847FAE2639BCF = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = DB0BE37924EA27863F43D7F1;
+					};
+					ADE18EF1B943F5889BCEF7FD = {
+						ProvisioningStyle = Automatic;
+					};
+					DB0BE37924EA27863F43D7F1 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = A2108F89F04DE01E56024881 /* Build configuration list for PBXProject "Diderot" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 58F9D641378F167AE4F8156A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E458DFE1EC3405D4F05F3B65 /* XCLocalSwiftPackageReference "Packages/DocmostKit" */,
+			);
+			preferredProjectObjectVersion = 90;
+			productRefGroup = 9B9B4E9D7379901EA3062BFC /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				DB0BE37924EA27863F43D7F1 /* Diderot */,
+				ADE18EF1B943F5889BCEF7FD /* DiderotTests */,
+				8926AA669EE847FAE2639BCF /* DiderotUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0BB6D578CAA19B203C58B009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C9D7506A30BB8B30DD728AF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E4925945676E2D8D10F98A2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		61864327BAEBDFBA9397EC62 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B58727AE909A1D99D7CB8701 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6D1939089E20BC9D12F379F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0019EE596221CDFB6732C2EC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DB0BE37924EA27863F43D7F1 /* Diderot */;
+			targetProxy = 51AA499E26B0123DD993991C /* PBXContainerItemProxy */;
+		};
+		48FB92190CE975F94785762F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DB0BE37924EA27863F43D7F1 /* Diderot */;
+			targetProxy = 0F5B1DBAD48FD314C2298D86 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		00ACE0E7EA8B4A0EA9CCC9BB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.f1n3d.diderot.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Diderot;
+			};
+			name = Release;
+		};
+		5711EFE1423E6E70F087D55D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.f1n3d.diderot.tests;
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Diderot.app/Diderot";
+			};
+			name = Debug;
+		};
+		5E8691DFE73721D444343E3B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.f1n3d.diderot;
+				PRODUCT_NAME = Diderot;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		797AF740B958FF752144D904 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6BFF267D5C78D2C16FC56E55 /* Project.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 11;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.6.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		8D54D5361684348AFFBB1F48 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6BFF267D5C78D2C16FC56E55 /* Project.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 11;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.6.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		9A638FDD21212751A5105574 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.f1n3d.diderot.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Diderot;
+			};
+			name = Debug;
+		};
+		9C5181A046589DF696479416 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.f1n3d.diderot.tests;
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Diderot.app/Diderot";
+			};
+			name = Release;
+		};
+		FCC6B14F6984209DA7643D52 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.f1n3d.diderot;
+				PRODUCT_NAME = Diderot;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1AFE7530E161150FDB7709A8 /* Build configuration list for PBXNativeTarget "DiderotTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5711EFE1423E6E70F087D55D /* Debug */,
+				9C5181A046589DF696479416 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4701241BD88AF304C4E6F11E /* Build configuration list for PBXNativeTarget "Diderot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E8691DFE73721D444343E3B /* Debug */,
+				FCC6B14F6984209DA7643D52 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		52805CDA2B079BAE5328FCC4 /* Build configuration list for PBXNativeTarget "DiderotUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A638FDD21212751A5105574 /* Debug */,
+				00ACE0E7EA8B4A0EA9CCC9BB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A2108F89F04DE01E56024881 /* Build configuration list for PBXProject "Diderot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8D54D5361684348AFFBB1F48 /* Debug */,
+				797AF740B958FF752144D904 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		E458DFE1EC3405D4F05F3B65 /* XCLocalSwiftPackageReference "Packages/DocmostKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/DocmostKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		698FBCEB9A6CEE1367CD94F8 /* DocmostKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DocmostKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = DE79D8EF4F436B6F9A3F4100 /* Project object */;
+}

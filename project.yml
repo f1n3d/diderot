@@ -1,0 +1,112 @@
+# XcodeGen spec. After changes run `xcodegen generate` (Diderot.xcodeproj is committed).
+name: Diderot
+
+options:
+  deploymentTarget:
+    iOS: "27.0"
+  xcodeVersion: "27.0"
+  projectFormat: xcode16_3
+
+# The signing team comes from Config/Local.xcconfig, which isn't checked in (see Config/Local.xcconfig.example).
+configFiles:
+  Debug: Config/Project.xcconfig
+  Release: Config/Project.xcconfig
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    CODE_SIGN_STYLE: Automatic
+    SUPPORTS_MACCATALYST: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+    CURRENT_PROJECT_VERSION: 11
+    MARKETING_VERSION: 0.6.0
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+
+packages:
+  DocmostKit:
+    path: Packages/DocmostKit
+
+targets:
+  Diderot:
+    type: application
+    platform: iOS
+    sources:
+      - path: Diderot
+        type: syncedFolder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.f1n3d.diderot
+        PRODUCT_NAME: Diderot
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        INFOPLIST_FILE: Config/Info.plist
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        ENABLE_PREVIEWS: YES
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+    dependencies:
+      - package: DocmostKit
+
+  DiderotTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: DiderotTests
+        type: syncedFolder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.f1n3d.diderot.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    dependencies:
+      - target: Diderot
+
+  # UI tests against the dev instance (taps, keyboard); separate scheme because they are slow and need the server.
+  DiderotUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: DiderotUITests
+        type: syncedFolder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.f1n3d.diderot.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Diderot
+    dependencies:
+      - target: Diderot
+
+schemes:
+  DiderotUI:
+    build:
+      targets:
+        Diderot: all
+        DiderotUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - name: DiderotUITests
+
+  Diderot:
+    build:
+      targets:
+        Diderot: all
+        DiderotTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      # German, so the text tests check the catalog's translations on any simulator (also an English one in CI).
+      language: de
+      region: DE
+      targets:
+        - name: DiderotTests
+          parallelizable: true
+          randomExecutionOrder: true
+    archive:
+      config: Release

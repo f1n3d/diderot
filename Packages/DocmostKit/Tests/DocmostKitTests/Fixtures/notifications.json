@@ -1,0 +1,14 @@
+{
+    "data": {
+        "items": [],
+        "meta": {
+            "limit": 20,
+            "hasNextPage": false,
+            "hasPrevPage": false,
+            "nextCursor": null,
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}

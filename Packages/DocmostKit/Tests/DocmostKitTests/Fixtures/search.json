@@ -1,0 +1,155 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "slugId": "8scNdSalJ7",
+                "title": "Handbuch",
+                "icon": "\ud83d\udcd8",
+                "parentPageId": null,
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.461Z",
+                "updatedAt": "2026-10-08T09:28:57.461Z",
+                "rank": 0.66871977,
+                "highlight": "<b>Handbuch</b> Diese Seite geh\u00f6rt zu den Beispielinhalten der Dev-Instanz",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": [
+                    "Handbuch"
+                ]
+            },
+            {
+                "id": "01a11ad8-2dc4-708f-8921-5db0eacf9d59",
+                "slugId": "zkPQaC7Hum",
+                "title": "Handbuch \u2013 Kapitel 1",
+                "icon": "\ud83d\udcc4",
+                "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.539Z",
+                "updatedAt": "2026-10-08T09:28:57.539Z",
+                "rank": 0.66871977,
+                "highlight": "<b>Handbuch</b> \u2013 Kapitel 1 Diese Seite geh\u00f6rt zu den Beispielinhalten",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": [
+                    "Handbuch"
+                ]
+            },
+            {
+                "id": "01a11ad8-2e09-718d-820a-da24be7aa8e5",
+                "slugId": "wyhHGDDk6f",
+                "title": "Handbuch \u2013 Abschnitt 1.1",
+                "icon": "\ud83d\udd39",
+                "parentPageId": "01a11ad8-2dc4-708f-8921-5db0eacf9d59",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.608Z",
+                "updatedAt": "2026-10-08T09:28:57.608Z",
+                "rank": 0.66871977,
+                "highlight": "<b>Handbuch</b> \u2013 Abschnitt 1.1 Diese Seite geh\u00f6rt zu den Beispielinhalten",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": [
+                    "Handbuch"
+                ]
+            },
+            {
+                "id": "01a11ad8-2e51-7996-bc13-0d38b9cdedbb",
+                "slugId": "zLneg1Wht0",
+                "title": "Handbuch \u2013 Abschnitt 1.2",
+                "icon": "\ud83d\udd39",
+                "parentPageId": "01a11ad8-2dc4-708f-8921-5db0eacf9d59",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.681Z",
+                "updatedAt": "2026-10-08T09:28:57.681Z",
+                "rank": 0.66871977,
+                "highlight": "<b>Handbuch</b> \u2013 Abschnitt 1.2 Diese Seite geh\u00f6rt zu den Beispielinhalten",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": [
+                    "Handbuch"
+                ]
+            },
+            {
+                "id": "01a11ad8-2e92-79e7-82d0-dbfdfdba20d7",
+                "slugId": "rNIRRLQ6ic",
+                "title": "Handbuch \u2013 Kapitel 2",
+                "icon": "\ud83d\udcc4",
+                "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.746Z",
+                "updatedAt": "2026-10-08T09:28:57.746Z",
+                "rank": 0.66871977,
+                "highlight": "<b>Handbuch</b> \u2013 Kapitel 2 Diese Seite geh\u00f6rt zu den Beispielinhalten",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": [
+                    "Handbuch"
+                ]
+            },
+            {
+                "id": "01a11ad8-2ecf-753b-8bc7-903050ef01b4",
+                "slugId": "IBRntT15PS",
+                "title": "Handbuch \u2013 Kapitel 3",
+                "icon": "\ud83d\udcc4",
+                "parentPageId": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:28:57.807Z",
+                "updatedAt": "2026-10-08T09:28:57.807Z",
+                "rank": 0.66871977,
+                "highlight": "<b>Handbuch</b> \u2013 Kapitel 3 Diese Seite geh\u00f6rt zu den Beispielinhalten",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": [
+                    "Handbuch"
+                ]
+            },
+            {
+                "id": "01a11aeb-fa78-7b54-b3ca-f9d15f1e2981",
+                "slugId": "2LOKBMGvRj",
+                "title": "Fixture: Text & Marks",
+                "icon": "\u270d\ufe0f",
+                "parentPageId": "01a11aeb-f99a-7e00-9485-287dc74d01a9",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-08T09:50:35.128Z",
+                "updatedAt": "2026-10-08T09:50:35.143Z",
+                "rank": 0.30396354,
+                "highlight": "link: docmost.com. Internal link: <b>Handbuch</b>. Anchor link: jump to heading ... Admin and page @<b>Handbuch</b>. Status: . Inline math: . Line one line",
+                "space": {
+                    "id": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                    "name": "Demo",
+                    "slug": "demo"
+                },
+                "wholeWord": true,
+                "matchedText": [
+                    "Handbuch"
+                ]
+            }
+        ]
+    },
+    "success": true,
+    "status": 200
+}

@@ -1,0 +1,3 @@
+// Settings that differ per developer: the signing team comes from Local.xcconfig, which isn't checked in. Copy
+// Local.xcconfig.example to Local.xcconfig and enter your Apple team ID.
+#include? "Local.xcconfig"

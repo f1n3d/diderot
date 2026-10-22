@@ -1,0 +1,12 @@
+{
+    "data": {
+        "id": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "name": "Docmost Dev",
+        "logo": null,
+        "hostname": null,
+        "enforceSso": false,
+        "authProviders": []
+    },
+    "success": true,
+    "status": 200
+}

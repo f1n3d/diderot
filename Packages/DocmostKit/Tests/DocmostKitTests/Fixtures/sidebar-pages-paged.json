@@ -1,0 +1,43 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a11ad8-2d76-71e3-a70a-8a06f1c85095",
+                "slugId": "8scNdSalJ7",
+                "title": "Handbuch",
+                "icon": "\ud83d\udcd8",
+                "position": "a041v",
+                "parentPageId": null,
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "isBase": false,
+                "deletedAt": null,
+                "hasChildren": true,
+                "canEdit": true
+            },
+            {
+                "id": "01a11ad8-2f0c-746f-998a-1f083578135f",
+                "slugId": "Qz37HL79IC",
+                "title": "Projekte",
+                "icon": "\ud83d\ude80",
+                "position": "a18Tn",
+                "parentPageId": null,
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "isBase": false,
+                "deletedAt": null,
+                "hasChildren": true,
+                "canEdit": true
+            }
+        ],
+        "meta": {
+            "limit": 2,
+            "hasNextPage": true,
+            "hasPrevPage": false,
+            "nextCursor": "cG9zaXRpb249YTE4VG4maWQ9MDFhMTFhZDgtMmYwYy03NDZmLTk5OGEtMWYwODM1NzgxMzVm",
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}
