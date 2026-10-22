@@ -62,6 +62,10 @@ A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https:
 
 Details, background and decisions: [Docs/SignIn.md](Docs/SignIn.md).
 
+## Reporting bugs
+
+Please report bugs as a [GitHub issue](https://github.com/f1n3d/diderot/issues/new/choose); the form asks for what helps, such as the app version (Settings › About). Report security problems privately instead, as [SECURITY.md](SECURITY.md) describes.
+
 ## Structure
 
 | Path | Contents |
