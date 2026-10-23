@@ -1353,6 +1353,9 @@
         }
       }
     },
+    "Diderot": {
+      "shouldTranslate": false
+    },
     "Direct": {
       "localizations": {
         "de": {
@@ -1372,9 +1375,6 @@
           }
         }
       }
-    },
-    "Diderot": {
-      "shouldTranslate": false
     },
     "Done": {
       "localizations": {
@@ -1510,6 +1510,7 @@
       "shouldTranslate": false
     },
     "Editor engine": {
+      "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -2834,6 +2835,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht in deiner Lizenz enthalten"
+          }
+        }
+      }
+    },
+    "Not sent yet: the title goes to the server once it can be reached.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht gesendet: Der Titel geht an den Server, sobald er erreichbar ist."
           }
         }
       }
@@ -4311,6 +4322,16 @@
         }
       }
     },
+    "The title goes to the server once it can be reached.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Titel geht an den Server, sobald er erreichbar ist."
+          }
+        }
+      }
+    },
     "The trash is empty": {
       "localizations": {
         "de": {
@@ -5000,8 +5021,6 @@
       "shouldTranslate": false
     },
     "https://…": {},
-    "pending": {},
-    "synced": {},
     "wiki.example.com": {
       "shouldTranslate": false
     },

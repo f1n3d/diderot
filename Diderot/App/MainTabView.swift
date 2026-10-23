@@ -56,7 +56,11 @@ struct MainTabView: View {
             OfflineNotice(isOffline: offline.isOffline)
         }
         .onChange(of: offline.isOffline) { _, isOffline in
-            if !isOffline { Task { await session.reconnectIfNeeded() } }
+            guard !isOffline else { return }
+            Task {
+                await session.reconnectIfNeeded()
+                await sendUnsentTitles()
+            }
         }
         .onChange(of: appNavigation.pendingSelection, initial: true) { _, pending in
             guard let pending else { return }
@@ -67,6 +71,9 @@ struct MainTabView: View {
         // Polls while the scene is active; SwiftUI cancels it when a server switch or sign-out removes the view.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            // Page titles kept while the server was away go out once it may be back: here (app active, or this view new
+            // after a sign-in or switch) and when the network returns (above).
+            await sendUnsentTitles()
             while !Task.isCancelled {
                 await notifications.refreshUnreadCount()
                 try? await Task.sleep(for: NotificationsStore.pollInterval)
@@ -79,6 +86,10 @@ struct MainTabView: View {
         }
         // Here, not in HomeView: a tab switch or a page opened at launch hides Home and would cancel the first load.
         .task { await spaces.loadIfNeeded() }
+    }
+
+    private func sendUnsentTitles() async {
+        for spaceId in await session.sendUnsentTitles() { changes.pageChanged(in: spaceId) }
     }
 
     /// A tab's navigation stack with every destination reachable from any view.

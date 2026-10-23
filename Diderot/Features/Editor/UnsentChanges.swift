@@ -31,3 +31,18 @@ enum UnsentChanges {
         try? url.setResourceValues(values)
     }
 }
+
+/// A page title the server didn't get (offline or unreachable when saving), kept in `UnsentChanges`' store under
+/// `CacheKey.unsentTitles` until `AppSession.sendUnsentTitles` gets it through. The last save wins, as on the web.
+nonisolated struct UnsentTitle: Codable, Sendable {
+    var title: String
+    var spaceId: String?
+
+    /// Errors after which the title can never be saved (page deleted, access gone, title refused): it isn't kept.
+    static func isFinal(_ error: Error) -> Bool {
+        guard let error = error as? APIError else { return false }
+        if error.isGone { return true }
+        if case .validation = error { return true }
+        return false
+    }
+}

@@ -55,6 +55,8 @@ enum CacheKey {
     static func unsentChanges(_ pageId: String) -> String { "unsent/\(pageId)" }
     /// The document with them, shown while offline.
     static func unsentDocument(_ pageId: String) -> String { "unsentDocument/\(pageId)" }
+    /// Page titles the server didn't get, by page id (`UnsentTitle`).
+    static let unsentTitles = "unsentTitles"
     static func breadcrumbs(_ pageId: String) -> String { "breadcrumbs/\(pageId)" }
     static func base(_ pageId: String) -> String { "base/\(pageId)" }
     static func baseView(_ pageId: String, viewId: String) -> String { "base/\(pageId)/view/\(viewId)" }
@@ -361,6 +363,64 @@ final class AppSession {
         } else {
             state = .signedOut(session.server)
         }
+    }
+
+    // MARK: - Unsent page titles
+
+    @ObservationIgnored private var isSendingTitles = false
+
+    /// Keeps a page title the server didn't get; `sendUnsentTitles` sends it once the server answers.
+    func keepUnsentTitle(_ title: String, pageId: String, spaceId: String?) async {
+        guard let store = ready?.unsentChanges else { return }
+        var titles = await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles) ?? [:]
+        titles[pageId] = UnsentTitle(title: title, spaceId: spaceId)
+        await store.write(titles, key: CacheKey.unsentTitles)
+    }
+
+    /// The page's kept title, if it still waits for the server.
+    func unsentTitle(pageId: String) async -> String? {
+        await ready?.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?[pageId]?.title
+    }
+
+    /// Drops the page's kept title: a newer one reached the server.
+    func forgetUnsentTitle(pageId: String) async {
+        guard let store = ready?.unsentChanges,
+              var titles = await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles), titles[pageId] != nil
+        else { return }
+        titles[pageId] = nil
+        await store.write(titles, key: CacheKey.unsentTitles)
+    }
+
+    /// Sends the kept titles and returns the spaces whose pages got theirs. One that can never go (`UnsentTitle.isFinal`)
+    /// is dropped; after another error the rest waits for the next try (going online, back in the app, opening a page).
+    func sendUnsentTitles() async -> [String] {
+        guard !isSendingTitles, let session = ready else { return [] }
+        isSendingTitles = true
+        defer { isSendingTitles = false }
+        let store = session.unsentChanges
+        let titles = await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles) ?? [:]
+        var spaces: [String] = []
+        for (pageId, kept) in titles {
+            // Another account's pages don't exist on its server.
+            guard isStillCurrent(session) else { break }
+            // A newer title saved meanwhile replaced or dropped this one.
+            guard await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?[pageId]?.title == kept.title else { continue }
+            var sent = false
+            do {
+                _ = try await perform { try await session.client.send(Endpoints.Pages.update(pageId: pageId, title: kept.title)) }
+                sent = true
+            } catch let error where !UnsentTitle.isFinal(error) {
+                break
+            } catch {
+                AppLog.session.error("Kept title dropped: \(error.userMessage, privacy: .public)")
+            }
+            // Read again: a title kept for the page meanwhile must stay.
+            var current = await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles) ?? [:]
+            if current[pageId]?.title == kept.title { current[pageId] = nil }
+            await store.write(current, key: CacheKey.unsentTitles)
+            if sent, let spaceId = kept.spaceId { spaces.append(spaceId) }
+        }
+        return spaces
     }
 
     /// Runs an API call and ends its session on 401. All data loaders use it.
