@@ -51,7 +51,6 @@ struct ServerVersionTests {
 /// deleted one back; a second window must not restore the session again. Serialized: the tests share `StubURLProtocol`.
 @Suite(.serialized)
 struct AppSessionRaceTests {
-    // Both under example.com: signing out keeps that domain's web data, which `WebEditorViewTests` may be using.
     // shortcut: sign-out also deletes the downloads, which can rarely break `TempFileTests` in a parallel Xcode run,
     // give both suites one serialized parent suite if it does.
     private let a = URL(string: "https://a.example.com")!, b = URL(string: "https://b.example.com")!
