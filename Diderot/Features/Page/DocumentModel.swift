@@ -268,7 +268,12 @@ final class DocumentModel {
     var activeSelection = AttributedTextSelection()
     /// Font the active text block draws with (set by its `TextNodeView`); saving compares system bold against it.
     @ObservationIgnored var activeFont = Font.body
-    var activeCode = ""
+    /// The active code block's text. It lives in `activeText` (without formatting), so the page's one editor edits
+    /// code like text and stays the same view from a code block to a text block and back.
+    var activeCode: String {
+        get { String(activeText.characters) }
+        set { activeText = AttributedString(newValue) }
+    }
     var cursorRequest: CursorRequest?
     /// Coordinate space of the scroll content; the active editor is measured in it.
     nonisolated static let documentSpace = "document"
@@ -282,12 +287,6 @@ final class DocumentModel {
     var editorStyle = EditorStyle(font: .body, leading: 0, alignment: .leading)
     /// The page text editor's text view, for Backspace at the text's start (`TextInputHooks`).
     @ObservationIgnored weak var editorTextView: UITextView?
-    /// Previously active code block: its own editor stays with its last state until the next editor takes focus
-    /// directly from it, else the keyboard would briefly hide and reappear. Text blocks share the page's one editor,
-    /// which keeps focus.
-    private(set) var handoff: NodeRef?
-    private(set) var handoffCode = ""
-    @ObservationIgnored private var handoffTask: Task<Void, Never>?
     /// Text after "/" before the cursor (at block start or after whitespace, web parity); `nil` = no slash menu.
     private(set) var slashQuery: String?
     /// Character offset of the "/" in the active text.
@@ -557,10 +556,7 @@ final class DocumentModel {
     func activate(_ ref: NodeRef, node: PMNode, cursor: CursorRequest = .end) {
         guard isEditable else { return }
         if active?.ref == ref { return }
-        if let previous = active {
-            commitPendingNow()
-            if previous.type == "codeBlock" { beginHandoff(from: previous.ref) }
-        }
+        if active != nil { commitPendingNow() }
         let itemPath = enclosingItemPath(ref.path)
         activeBlockFrame = .zero
         activatedByTyping = typingSwitches > 0
@@ -569,9 +565,9 @@ final class DocumentModel {
             activeCode = node.plainText
         } else {
             activeText = Self.editorText(from: node.children)
-            // The page's one editor keeps its selection from block to block; the old indices don't fit this text.
-            activeSelection = AttributedTextSelection(insertionPoint: activeText.endIndex)
         }
+        // The page's one editor keeps its selection from block to block; the old indices don't fit this text.
+        activeSelection = AttributedTextSelection(insertionPoint: activeText.endIndex)
         slashQuery = nil
         showsPlusMenu = false
         mentionQuery = nil
@@ -597,8 +593,6 @@ final class DocumentModel {
                 guard let self, self.active?.ref == ref, self.focusedEditor == nil, !self.editsInSheet else { return }
                 self.deactivate()
             }
-        } else if handoff == ref {
-            endHandoff()
         }
     }
 
@@ -606,29 +600,10 @@ final class DocumentModel {
         guard active != nil else { return }
         commitPendingNow()
         active = nil
-        endHandoff()
         slashQuery = nil
         showsPlusMenu = false
         mentionQuery = nil
         mentionSuggestions = []
-    }
-
-    /// The new editor has taken focus (or the handoff is obsolete): the old one turns back into text.
-    func endHandoff() {
-        handoffTask?.cancel()
-        handoff = nil
-    }
-
-    private func beginHandoff(from ref: NodeRef) {
-        handoff = ref
-        handoffCode = activeCode
-        handoffTask?.cancel()
-        // If the new editor never takes focus (e.g. it doesn't appear), don't leave the old one in place.
-        handoffTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            self?.handoff = nil
-        }
     }
 
     /// Tap below the last block: cursor to its end if it is text, else a new paragraph at the end.
@@ -1647,8 +1622,7 @@ final class DocumentModel {
     /// `containerPath`, at its child `index`. A child that goes (an item, a quote's line) is replaced before the
     /// container if it's the first, else after; one that stays (an item keeping its first line, a toggle's content) gets
     /// it after itself. In between, the container is split after the child. `removing` (a path in the old document)
-    /// goes once the replacement has focus, so the keyboard stays up, taking the container along if it was its only
-    /// child.
+    /// goes once the replacement is active, taking the container along if it was its only child.
     private func lift(at containerPath: [Int], index: Int, replacement: PMNode, cursor: CursorRequest, removing: [Int]) async {
         guard let engine, let previous = active, let container = node(at: containerPath) else { return }
         commitTask?.cancel()
@@ -1665,7 +1639,6 @@ final class DocumentModel {
                                               position: before ? .before : .after))
         else { return }
         await focusAfterOperation(targetPath, cursor)
-        await waitForFocusHandoff(from: previous.ref)
         // A collaborator may have moved things meanwhile: only the block that still holds the old line goes. No emptiness
         // check: the engine can still hold text deleted just before Return (its save was dropped).
         let removingNow = containerNowPath + removing.dropFirst(containerPath.count)
@@ -1676,14 +1649,6 @@ final class DocumentModel {
             _ = await engine.deleteBlock(.path(containerNowPath, type: containerNow.type))
         } else {
             _ = await engine.deleteBlock(.path(removingNow, type: gone.type))
-        }
-    }
-
-    /// Waits until another block is active and its editor has taken focus from the previous one (at most 1 s).
-    private func waitForFocusHandoff(from ref: NodeRef) async {
-        for _ in 0..<50 {
-            if active?.ref != ref, handoff != ref { return }
-            try? await Task.sleep(for: .milliseconds(20))
         }
     }
 
@@ -1721,16 +1686,14 @@ final class DocumentModel {
                 deactivate()
                 return
             }
-            await waitForFocusHandoff(from: active.ref)
             await deleteMergedBlock(active)
         } else if currentInlines.isEmpty {
             // Empty paragraph after an image, table, divider …: continue at the end of the text before it (a table's
-            // last cell), removing the paragraph once that has focus. With no text before it, the keyboard closes.
+            // last cell), removing the paragraph. With no text before it, the keyboard closes.
             commitTask?.cancel()
             overrides[active.ref.identity] = nil
             if let target = lastTextBlock(before: path), let targetNode = node(at: target.path) {
                 activate(target, node: targetNode, cursor: .end)
-                await waitForFocusHandoff(from: active.ref)
             } else {
                 deactivate()
             }
@@ -2101,4 +2064,6 @@ struct EditorStyle: Equatable {
     var font: Font
     var leading: CGFloat
     var alignment: TextAlignment
+    /// A code block: no autocorrection or capitalization.
+    var isCode = false
 }
