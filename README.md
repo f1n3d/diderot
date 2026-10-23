@@ -160,6 +160,8 @@ Tools/seed-fixtures.py            # fixture pages with every node type (--reset 
 Tools/seed-notifications.py <pageId> [--count 3]   # "Test-Kollegin" mentions the admin in comments (notifications)
 Tools/seed-bases.py <pageId>      # databases "Kanban-Test" (three cards) and "Datenbank-Test" (every property type, 30 rows, table and board), page "Datenbank-Einbettung" (needs the license)
 DOCMOST_DEBUG_PAGE=<baseId> DOCMOST_DEBUG_BASE_VIEW=Board Tools/run-sim.sh   # open a database in a given view
+Tools/seed-demo.py [--language de] [--reset]   # space "Product Team" by the demo people Alex and Sam: pages, tasks, comments (screenshots)
+Tools/seed-demo.py --env .env.demo              # the same on the demo instance for Apple's App Review (settings in .env.demo, see the script)
 
 # Rewrite THIRD_PARTY_NOTICES.md and the app's licenses page after changing bundled libraries
 node Tools/third-party-notices.mjs

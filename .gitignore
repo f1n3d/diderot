@@ -21,6 +21,7 @@ Packages/*/.swiftpm/
 Tools/.cache/
 Tools/screenshots/
 .env
+.env.demo
 Config/Local.xcconfig
 
 # macOS
