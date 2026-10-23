@@ -600,13 +600,11 @@ final class AppSession {
     }
 
     /// Removes what the offline cache doesn't cover: downloads, the system URL cache (files of older builds,
-    /// `AsyncImage` logos and avatars) and the web editor's data, except other saved servers'.
+    /// `AsyncImage` logos and avatars) and the server's web editor data.
     private func removeLocalData(for serverURL: URL) async {
         TempFile.removeAll()
         URLCache.shared.removeAllCachedResponses()
-        let keptHosts = accounts.filter { $0.id != StoredAccounts.key(for: serverURL) }
-            .compactMap { $0.serverURL.host()?.lowercased() }
-        await WebEditorView.removeData(keepingHosts: keptHosts)
+        await WebEditorStores.remove(for: serverURL)
     }
 
     /// The current network path; a monitor reports it right after starting.

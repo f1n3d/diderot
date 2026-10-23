@@ -20,34 +20,13 @@ struct WebEditorView: View {
         self.serverURL = serverURL
         self.token = token
         self.onClose = onClose
-        // Dedicated persistent store: the web editor needs IndexedDB (Yjs offline cache), which a non-persistent
-        // store lacks. The auth cookie is removed on close.
-        let dataStore = WKWebsiteDataStore(forIdentifier: Self.storeIdentifier)
+        // A persistent store of this server's own: the web editor needs IndexedDB (Yjs offline cache), which a
+        // non-persistent store lacks. The auth cookie is removed on close.
+        let dataStore = WKWebsiteDataStore(forIdentifier: WebEditorStores.identifier(for: serverURL))
         var configuration = WebPage.Configuration()
         configuration.websiteDataStore = dataStore
         self._dataStore = State(initialValue: dataStore)
         self._webPage = State(initialValue: WebPage(configuration: configuration))
-    }
-
-    /// Fixed identifier so the editor keeps its cache across sessions.
-    static let storeIdentifier = UUID(uuidString: "6E2F3C1A-5B7D-4E8F-9A0B-1C2D3E4F5A6B")!
-
-    /// Removes the editor's website data except that of `keptHosts`. WebKit names records by domain ("example.com" for
-    /// "wiki.example.com") and lists none for hosts without a public suffix (`docmost.local`), so only removing
-    /// everything reaches those.
-    static func removeData(keepingHosts keptHosts: [String]) async {
-        let store = WKWebsiteDataStore(forIdentifier: storeIdentifier)
-        let types = WKWebsiteDataStore.allWebsiteDataTypes()
-        guard !keptHosts.isEmpty else {
-            await store.removeData(ofTypes: types, modifiedSince: .distantPast)
-            return
-        }
-        // shortcut: a removed host keeps its data if it has no public suffix or shares its domain with a saved server,
-        // give each server its own store if that matters.
-        let records = await store.dataRecords(ofTypes: types).filter { record in
-            !keptHosts.contains { $0 == record.displayName || $0.hasSuffix("." + record.displayName) }
-        }
-        await store.removeData(ofTypes: types, for: records)
     }
 
     var body: some View {
@@ -117,4 +96,50 @@ struct WebEditorView: View {
     }
     return true;
     """
+}
+
+/// The web editor's website data (the auth cookie, the web client's storage and its Yjs offline cache in IndexedDB) in
+/// one WebKit data store per server, so signing out removes exactly that server's, all of it. Before, the servers shared
+/// one store, from which a server's data couldn't always be told apart.
+enum WebEditorStores {
+    /// The store all servers shared until October 2026. The first server to open the web editor afterwards takes it
+    /// over, with edits it may hold that didn't reach the server yet (the web client syncs them when it opens the page).
+    private static let shared = UUID(uuidString: "6E2F3C1A-5B7D-4E8F-9A0B-1C2D3E4F5A6B")!
+    private static let key = "webEditorStores"
+
+    /// The server's store, the same across launches.
+    static func identifier(for server: URL, defaults: UserDefaults = .standard) -> UUID {
+        var stores = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
+        let serverKey = StoredAccounts.key(for: server)
+        if let identifier = stores[serverKey].flatMap(UUID.init(uuidString:)) { return identifier }
+        let identifier = stores.values.contains(shared.uuidString) ? UUID() : shared
+        stores[serverKey] = identifier.uuidString
+        defaults.set(stores, forKey: key)
+        return identifier
+    }
+
+    /// Removes the server's store and everything in it (sign-out, another user signed in there).
+    static func remove(for server: URL, defaults: UserDefaults = .standard) async {
+        var stores = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
+        guard let identifier = stores.removeValue(forKey: StoredAccounts.key(for: server)).flatMap(UUID.init(uuidString:)) else { return }
+        defaults.set(stores, forKey: key)
+        do {
+            try await WKWebsiteDataStore.remove(forIdentifier: identifier)
+        } catch {
+            // In use (an editor still open): empty it instead; the store itself goes with the next sign-out there.
+            let store = WKWebsiteDataStore(forIdentifier: identifier)
+            await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+        }
+    }
+
+    /// Auth cookies an editor left when the app ended while it was open (they're removed on close otherwise).
+    static func removeLeftoverAuthCookies(defaults: UserDefaults = .standard) async {
+        let stores = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
+        for identifier in stores.values.compactMap(UUID.init(uuidString:)) {
+            let cookies = WKWebsiteDataStore(forIdentifier: identifier).httpCookieStore
+            for cookie in await cookies.allCookies() where cookie.name == "authToken" {
+                await cookies.deleteCookie(cookie)
+            }
+        }
+    }
 }
