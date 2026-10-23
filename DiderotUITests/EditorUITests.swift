@@ -717,6 +717,40 @@ import XCTest
         finishEditing(app)
     }
 
+    /// With VoiceOver the text is edited in its block, so VoiceOver meets the editor in reading order: after the heading,
+    /// before the next block (`DOCMOST_DEBUG_IN_BLOCK` stands in, VoiceOver doesn't run in the simulator). Return and
+    /// Backspace work there too; Backspace joins the new item back, so the page keeps its content.
+    func test61_VoiceOverEditsInTheBlock() {
+        var environment = environment.filter { ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"].contains($0.key) }
+        environment["DOCMOST_DEBUG_IN_BLOCK"] = "1"
+        let app = launchApp(extraEnvironment: environment)
+        waitForSync(app)
+        var editor = edit(app, blockContaining: "Punkt eins")
+        Thread.sleep(forTimeInterval: 1.0)
+        // Earlier tests in the run add to this item.
+        let original = editor.value as? String
+        let tree = app.debugDescription
+        let editorAt = tree.range(of: "'active-editor'")?.lowerBound
+        let headingAt = tree.range(of: "label: 'Überschrift'")?.lowerBound
+        let nextAt = tree.range(of: "label: 'Checkliste'")?.lowerBound
+        XCTAssertTrue(editorAt != nil && headingAt != nil && nextAt != nil, "Editor, heading or checklist missing")
+        if let editorAt, let headingAt, let nextAt {
+            XCTAssertTrue(headingAt < editorAt && editorAt < nextAt, "The editor isn't in reading order")
+        }
+
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor in the new item")
+        Thread.sleep(forTimeInterval: 0.8)
+        let word = "Block\(stamp)"
+        editor.typeText(word)
+        XCTAssertEqual(editor.value as? String, word)
+        editor.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: word.count + 1))
+        Thread.sleep(forTimeInterval: 1.0)
+        editor = activeEditor(app, "No editor after joining the item back")
+        XCTAssertEqual(editor.value as? String, original)
+        finishEditing(app)
+    }
+
     /// Backspace in an empty paragraph right after a table: the paragraph disappears and the cursor jumps to the end
     /// of the last cell, without the keyboard hiding.
     func test17_BackspaceAfterTableKeepsKeyboard() {
