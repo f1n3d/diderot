@@ -1,5 +1,7 @@
 # Diderot
 
+<img src="Docs/icon.png" width="96" height="96" align="right" alt="Diderot app icon">
+
 A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0. Diderot is an independent project, not affiliated with Docmost.
 
 ## Goals
@@ -94,8 +96,8 @@ Please report bugs as a [GitHub issue](https://github.com/f1n3d/diderot/issues/n
 | `Packages/DocmostKit/` | The platform-neutral core: API client, models, content format, auth, cache. `swift test` runs it directly on the Mac. |
 | `DiderotTests/` | App tests (Swift Testing). |
 | `DiderotUITests/` | UI tests (XCTest) against the dev instance, in their own scheme `DiderotUI`. |
-| `Design/` | The icon's source, `diderot_icon.png`; `Tools/icon/prepare-icon.swift` makes the app icon from it. |
-| `Docs/` | Background documentation, e.g. [sign-in and authentication](Docs/SignIn.md). |
+| `Design/` | The icon's source, `diderot_icon.png`; `Tools/icon/prepare-icon.swift` makes the app icon and the images for GitHub from it. |
+| `Docs/` | Background documentation, e.g. [sign-in and authentication](Docs/SignIn.md), and the images for GitHub: the icon above and the link preview (`social-preview.png`, uploaded by hand under Settings › General › Social preview). |
 | `Tools/` | Scripts for the simulator, devices, dev content, the app icon and the third-party notices. |
 | `BACKLOG.md` | Open points for later. |
 
