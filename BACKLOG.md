@@ -74,6 +74,8 @@ Deliberately not yet like the web (found in the code review on October 13, 2026)
 
 ## Other
 
+- iPhone Duo (October 23, 2026): the app should run well on it, as a later step. Its simulator (Xcode 27.1) has two built-in displays and resizable scenes. To check: the layout on both displays and when moving between them (the open page, the caret and the keyboard stay), which size classes the large display reports (the iPad layout with its sidebar?), and whether App Store Connect asks for its own screenshots.
+
 - Inline comment, once on the iPhone (October 22, 2026, full UI run, test33): the comment was created and the app showed the marked passage as a link, but the mark never reached the server (not in the version history either). Three targeted repetitions on the iPhone (test33 alone, with test34/35, with test1 before) and two simulator runs were green; the store for unsent changes was empty. Cause open. If it happens again: check whether the engine refused the save ("The change could not be applied.") or the connection was briefly gone.
 - UI tests: two flaky spots, to investigate if they come back:
   - The check "New paragraph: Taste… bold from Cmd-B" (test2) sometimes misses ⌘B: the word stays selected but not bold. Rarer since pauses around ⌘B; once in four runs on October 21, 2026; on October 22, 2026, after many runs twice in a row, and green again after restarting the simulator. So rather the simulator's state than the app.
