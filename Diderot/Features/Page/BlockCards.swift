@@ -115,6 +115,7 @@ struct TextNodeView: View {
     @Environment(\.pageFind) private var find
     @Environment(\.paragraphFont) private var paragraphFont
     @Environment(\.fontResolutionContext) private var fontContext
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     private var fontLeading: CGFloat { CTFontGetLeading(font.resolve(in: fontContext).ctFont) }
 
@@ -134,23 +135,28 @@ struct TextNodeView: View {
         if isEditing {
             let isActive = model.active?.ref == ref
             VStack(alignment: .leading, spacing: 6) {
-                // The page's one editor (`PageEditor`) lies on this text: hidden, it keeps the block's place and size
-                // as the reader would show the text (the editor draws it the same), and tells the editor where to lie.
-                // An empty text gets a space's height, as in the reader.
-                Text(model.activeText.characters.isEmpty ? AttributedString(" ") : model.activeText)
-                    .font(font)
-                    .multilineTextAlignment(align.textAlignment)
-                    .frame(maxWidth: .infinity, alignment: align.frameAlignment)
-                    .hidden()
-                    .accessibilityHidden(true)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
-                        if model.active?.ref == ref { model.editorFrame = (ref, frame) }
-                    }
-                    .onChange(of: EditorStyle(font: font, leading: fontLeading, alignment: align.textAlignment), initial: true) { _, style in
-                        guard model.active?.ref == ref else { return }
-                        model.editorStyle = style
-                        model.activeFont = style.font
-                    }
+                if PageEditor.editsInBlock(voiceOver: voiceOver) {
+                    ActiveTextEditor(model: model, ref: ref, font: font)
+                        // Its own height, not the row's: beside a checkbox it took the checkbox's.
+                        .fixedSize(horizontal: false, vertical: true)
+                        // The text view puts the font's leading below every line, the reader only between lines:
+                        // without the last one the editor is as tall as the reader's text, so the blocks below don't move.
+                        .padding(.bottom, -fontLeading)
+                        .multilineTextAlignment(align.textAlignment)
+                } else {
+                    // The page's one editor (`PageEditor`) lies on this text: hidden, it keeps the block's place and
+                    // size as the reader would show the text (the editor draws it the same), and tells the editor where
+                    // to lie. An empty text gets a space's height, as in the reader.
+                    Text(model.activeText.characters.isEmpty ? AttributedString(" ") : model.activeText)
+                        .font(font)
+                        .multilineTextAlignment(align.textAlignment)
+                        .frame(maxWidth: .infinity, alignment: align.frameAlignment)
+                        .hidden()
+                        .accessibilityHidden(true)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
+                            if model.active?.ref == ref { model.editorFrame = (ref, frame) }
+                        }
+                }
                 if isActive, model.showsInsertMenu {
                     InsertMenuView(model: model)
                 } else if isActive, model.mentionQuery != nil {
@@ -161,6 +167,11 @@ struct TextNodeView: View {
             .padding(.top, headingTop)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
                 if model.active?.ref == ref { model.activeBlockFrame = frame }
+            }
+            .onChange(of: EditorStyle(font: font, leading: fontLeading, alignment: align.textAlignment), initial: true) { _, style in
+                guard model.active?.ref == ref else { return }
+                model.editorStyle = style
+                model.activeFont = style.font
             }
         } else {
             let inlines = ContentParser.inlines(of: node)
@@ -231,9 +242,17 @@ struct TextNodeView: View {
 /// own editor) is active, it stays hidden at its last place.
 struct PageEditor: View {
     let model: DocumentModel
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+
+    /// With VoiceOver the text is edited in its block instead (`TextNodeView`): VoiceOver reads the page in order,
+    /// and this editor lies outside it, so it came before the page's heading. On Return the keyboard then briefly
+    /// hides, as focus moves to the next block's editor.
+    static func editsInBlock(voiceOver: Bool) -> Bool {
+        voiceOver || DebugLaunch.editsInBlock
+    }
 
     var body: some View {
-        if let active = model.active, let place = model.editorFrame {
+        if !Self.editsInBlock(voiceOver: voiceOver), let active = model.active, let place = model.editorFrame {
             let isText = active.type != "codeBlock"
             ActiveTextEditor(model: model, ref: isText ? active.ref : place.ref, font: model.editorStyle.font)
                 // Its own height, not the row's: beside a checkbox it took the checkbox's.

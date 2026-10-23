@@ -55,6 +55,8 @@ Decided on October 22, 2026, for later:
   - Blocks can be dragged while the editor isn't connected, but then dropped nowhere. A long press on text keeps selecting text meanwhile (checked on the iPhone on October 22, 2026).
 - iPad with two windows: "Comment" in the selection menu always belongs to the page that appeared last; in the other window the entry is missing or opens the sheet in the wrong window (review finding on P21, October 15, 2026).
 
+- iPad with a hardware keyboard (checked on October 23, 2026, simulator only): the editor's UI tests pass there except test10 and test14, which expect the on-screen keyboard (also before the page's one editor). Return and Backspace from a hardware keyboard couldn't be checked reliably in the simulator; to try on a real iPad with a keyboard.
+
 ## Databases
 
 As of stage 2 (editing, creating, deleting, moving). Deliberately still on the web:

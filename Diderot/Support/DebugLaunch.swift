@@ -9,6 +9,8 @@ nonisolated enum DebugLaunch {
     /// Block the reader scrolls to after loading, as `NodeRef.anchorId`: UniqueID, else index path (`12` = 13th block).
     static var scrollBlockId: String? { value("DOCMOST_DEBUG_SCROLL") }
     static var webLayout: Bool { value("DOCMOST_DEBUG_WEB") == "1" }
+    /// Text edited in its block, as with VoiceOver (which doesn't run in the simulator), for UI tests.
+    static var editsInBlock: Bool { value("DOCMOST_DEBUG_IN_BLOCK") == "1" }
     /// Start route: `search`, `favorites`, `recent` (MainTabView), `notifications` (HomeView); together with
     /// `DOCMOST_DEBUG_PAGE` also `comments`, `history`, `webeditor` (PageView).
     static var route: String? { value("DOCMOST_DEBUG_ROUTE") }
