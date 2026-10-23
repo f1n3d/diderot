@@ -2,7 +2,7 @@
 """Creates notifications for the dev admin: a second user ("Test-Kollegin") mentions them in a comment
 on the test page. She is created via invitation if needed and added to the page's space; her older
 comments on the page are deleted first so nothing piles up. She also replies to her last comment without
-a mention, which notifies nobody (someone else's reply for EditorUITests test33). Dev instance only.
+a mention, which notifies nobody (someone else's reply for EditorUITests test33, its link for test64). Dev instance only.
 
     Tools/seed-notifications.py <pageId>              # one comment with a mention
     Tools/seed-notifications.py <pageId> --count 3    # several (e.g. for screenshots)
@@ -105,7 +105,11 @@ def main():
             {"type": "text", "text": "Hallo "}, mention, {"type": "text", "text": f", schau dir bitte die Tabelle an ({number + 1})."},
         ]}]}
         thread, _ = call("comments/create", {"pageId": args.page_id, "content": json.dumps(doc), "type": "page"}, tester)
-    reply = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Nachtrag der Kollegin"}]}]}
+    source = {"type": "link", "attrs": {"href": "https://example.com/diderot-uitest-quelle", "target": "_blank", "internal": False}}
+    reply = {"type": "doc", "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "Nachtrag der Kollegin"}]},
+        {"type": "paragraph", "content": [{"type": "text", "text": "Siehe "}, {"type": "text", "text": "Quelle", "marks": [source]}]},
+    ]}
     call("comments/create", {"pageId": args.page_id, "content": json.dumps(reply), "parentCommentId": thread["id"]}, tester)
     # The server creates notifications through a queue, so poll briefly until they exist.
     for _ in range(20):

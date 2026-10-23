@@ -75,6 +75,32 @@ struct ContentLinkRouterTests {
         #expect(ContentLinkRouter.normalizedLink("hello world") == nil)
     }
 
+    /// The link sheet takes what the web's link menu takes (TipTap's `isAllowedUri`): no scripts, data or other apps.
+    @Test func linksOnlyWhatTheWebLinks() throws {
+        for text in ["https://x.com", "docmost.com", "/p/abc", "#heading", "mailto:a@b.c", "tel:+491234", "SMS:+491234", "ftp://f.example.com"] {
+            #expect(ContentLinkRouter.isLinkable(try #require(ContentLinkRouter.normalizedLink(text))), "\(text)")
+        }
+        for text in ["javascript:alert(1)", "JavaScript:alert(1)", "data:text/html,x", "file:///etc/hosts", "shortcuts://run-shortcut?name=x"] {
+            #expect(!ContentLinkRouter.isLinkable(try #require(ContentLinkRouter.normalizedLink(text))), "\(text)")
+        }
+    }
+
+    /// Links leave the app as from the web client in a browser: web pages in the in-app browser, mail, phone and
+    /// messages through the system, other apps after asking, scripts, data, files and the app's own schemes never.
+    @Test func opensLinksLikeTheBrowser() throws {
+        let cases: [(String, ContentLinkRouter.Opening)] = [
+            ("https://example.com", .browser), ("HTTP://example.com", .browser),
+            ("mailto:a@b.c", .system), ("tel:+491234", .system), ("sms:+491234", .system),
+            ("shortcuts://run-shortcut?name=x", .askFirst), ("zoommtg://zoom.us/join", .askFirst), ("ftp://f.example.com", .askFirst),
+            ("javascript:alert(1)", .never), ("JavaScript:alert(1)", .never), ("data:text/html,x", .never),
+            ("vbscript:x", .never), ("file:///etc/hosts", .never), ("relative/path", .never),
+            ("docmost-internal://user/u1", .never), ("docmost-comment://c1", .never), ("docmost-atom://edit?block=b", .never),
+        ]
+        for (text, opening) in cases {
+            #expect(ContentLinkRouter.opening(for: try #require(URL(string: text))) == opening, "\(text)")
+        }
+    }
+
     @Test func internalSchemeRoundTrips() throws {
         let page = ContentLinkRouter.pageURL(slugId: "Ab12Cd34Ef", anchor: "top")
         #expect(ContentLinkRouter.destination(for: page, serverURL: server) == .page(slugId: "Ab12Cd34Ef", anchor: "top"))

@@ -189,6 +189,27 @@ import XCTest
         snapshot(app, "24-detail-arrows")
     }
 
+    /// A link field opens in the in-app browser over the entry, as a link on a page does ("Aufgabe 06" has one,
+    /// Tools/seed-bases.py).
+    func test65_LinkFieldOpensInTheApp() {
+        let app = launch(page: environment["DOCMOST_UITEST_BASE_FULL"])
+        openView(app, "Tabelle")
+        let row = button(app, labelContains: "Aufgabe 06")
+        XCTAssertTrue(row.waitForExistence(timeout: 15), "Row “Aufgabe 06” missing")
+        row.tap()
+        let detail = element(app, "base-row-detail")
+        XCTAssertTrue(detail.waitForExistence(timeout: 10), "Detail sheet doesn't open")
+        let openLink = app.links.matching(NSPredicate(format: "label IN %@", ["Open Link", "Link öffnen"])).firstMatch
+        for _ in 0..<5 where !openLink.isHittable { app.swipeUp() }
+        openLink.tap()
+        let close = button(app, labels: ["Close", "Schließen"])
+        XCTAssertTrue(close.waitForExistence(timeout: 10), "The link field doesn't open the in-app browser")
+        snapshot(app, "65-link-field")
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 5), "The in-app browser doesn't close")
+        XCTAssertTrue(detail.exists, "The entry closes with the browser")
+    }
+
     /// A web link to an entry (`?row=…&rowBase=…`) opens its database and the entry, also one the view doesn't show:
     /// "Aufgabe 27" is done, and the board hides "Erledigt".
     func test57_EntryLinkOpensTheEntry() throws {

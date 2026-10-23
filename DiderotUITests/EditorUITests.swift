@@ -937,6 +937,53 @@ import XCTest
         app.buttons["comments-done"].tap()
     }
 
+    /// Links leave the app as from the web client in a browser (the last paragraph of Tools/editor-test-page.json): a
+    /// web page in the in-app browser, another app only after asking (none opens this one, which the app says), a
+    /// script never. "Open in Browser" from the page menu and a link in Test-Kollegin's reply (seed-notifications.py)
+    /// open in the in-app browser too, the latter over the comments.
+    func test64_LinksLeaveTheAppAsInABrowser() {
+        let app = launchPage()
+        let close = button(app, labels: ["Close", "Schließen"])
+        app.buttons["page-more"].tap()
+        let openInBrowser = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label IN %@", ["Open in Browser", "Im Browser öffnen"])).firstMatch
+        XCTAssertTrue(openInBrowser.waitForExistence(timeout: 5), "“Open in Browser” missing from the page menu")
+        openInBrowser.tap()
+        XCTAssertTrue(close.waitForExistence(timeout: 10), "“Open in Browser” doesn't open the in-app browser")
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 5), "The in-app browser doesn't close")
+
+        let web = app.links["Beispielseite"]
+        XCTAssertTrue(scrollTo(web, in: app), "Web link missing")
+        web.tap()
+        XCTAssertTrue(close.waitForExistence(timeout: 10), "The web link doesn't open the in-app browser")
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 5), "The in-app browser doesn't close")
+
+        app.links["Fremde App"].tap()
+        let question = app.alerts.firstMatch
+        XCTAssertTrue(question.waitForExistence(timeout: 5), "A link to another app opens without asking")
+        XCTAssertTrue(question.staticTexts["diderot-uitest://open"].exists, "The question doesn't show the address")
+        snapshot(app, "64-other-app")
+        question.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "Öffnen"])).firstMatch.tap()
+        let notice = app.staticTexts.matching(NSPredicate(format: "label IN %@", ["No app can open this link.", "Keine App kann diesen Link öffnen."])).firstMatch
+        XCTAssertTrue(notice.waitForExistence(timeout: 5), "Nothing says that no app could open the link")
+
+        app.links["Skript"].tap()
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2), "A script link offers to open")
+        XCTAssertFalse(close.exists, "A script link opens the in-app browser")
+
+        app.buttons["page-comments"].tap()
+        let source = app.links["Quelle"]
+        XCTAssertTrue(source.waitForExistence(timeout: 10), "Link in Test-Kollegin's reply missing")
+        source.tap()
+        XCTAssertTrue(close.waitForExistence(timeout: 10), "A web link in a comment doesn't open the in-app browser")
+        snapshot(app, "64-comment-link")
+        close.tap()
+        XCTAssertTrue(element(app, "comments-composer").waitForExistence(timeout: 5), "The comments close with the browser")
+        app.buttons["comments-done"].tap()
+    }
+
     /// A version opened from "Page History" loads its media like the page itself: the image of "Fixture: Media"
     /// (Tools/seed-fixtures.py, which leaves a version with the image) appears instead of a spinner.
     func test49_HistoryVersionShowsImage() throws {

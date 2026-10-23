@@ -488,6 +488,73 @@
      "type": "text"
     }
    ]
+  },
+  {
+   "type": "paragraph",
+   "attrs": {
+    "dir": "auto",
+    "indent": 0
+   },
+   "content": [
+    {
+     "text": "Verweise: ",
+     "type": "text"
+    },
+    {
+     "text": "Beispielseite",
+     "type": "text",
+     "marks": [
+      {
+       "type": "link",
+       "attrs": {
+        "href": "https://example.com/diderot-uitest",
+        "target": "_blank",
+        "internal": false
+       }
+      }
+     ]
+    },
+    {
+     "text": ", ",
+     "type": "text"
+    },
+    {
+     "text": "Fremde App",
+     "type": "text",
+     "marks": [
+      {
+       "type": "link",
+       "attrs": {
+        "href": "diderot-uitest://open",
+        "target": "_blank",
+        "internal": false
+       }
+      }
+     ]
+    },
+    {
+     "text": ", ",
+     "type": "text"
+    },
+    {
+     "text": "Skript",
+     "type": "text",
+     "marks": [
+      {
+       "type": "link",
+       "attrs": {
+        "href": "javascript:void(0)",
+        "target": "_blank",
+        "internal": false
+       }
+      }
+     ]
+    },
+    {
+     "text": ".",
+     "type": "text"
+    }
+   ]
   }
  ]
 }

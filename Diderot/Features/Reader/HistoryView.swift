@@ -84,7 +84,6 @@ private struct HistoryDetailView: View {
     let entry: PageHistoryEntry
     @State private var state: LoadState<ContentDocument> = .idle
     @State private var anchor: String?
-    @State private var externalURL: URL?
 
     var body: some View {
         AsyncContentView(state: state, retry: load) { document in
@@ -123,22 +122,17 @@ private struct HistoryDetailView: View {
         .navigationTitle("Version")
         .navigationBarTitleDisplayMode(.inline)
         // Links as on a page: pages and database entries open there (the history closes), anchors scroll within the
-        // version, web links in the in-app browser.
-        .environment(\.openURL, OpenURLAction { url in
+        // version, the rest leaves the app as from a page.
+        .handlesLinks { url, outside in
             switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
             case .page(let slugId, _): navigation.open(PageSelection(pageId: slugId))
             case .databaseEntry(let basePageId, let rowId): navigation.open(PageSelection(pageId: basePageId, rowId: rowId))
             case .anchor(let target): anchor = target
             case .user: break
-            case .external(let external):
-                guard let scheme = external.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return .systemAction }
-                externalURL = external
+            case .external(let external): outside(external)
             }
-            return .handled
-        })
-        .sheet(item: $externalURL) { url in
-            SafariView(url: url).ignoresSafeArea()
         }
+        .opensExternalLinks()
         .task { if state.value == nil { await load() } }
     }
 

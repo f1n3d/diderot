@@ -24,7 +24,6 @@ struct PageView: View {
     @State private var model: DocumentModel?
     @State private var breadcrumbs: [Breadcrumb] = []
     @State private var position = ScrollPosition(edge: .top)
-    @State private var externalURL: URL?
     @State private var toast: String?
     /// A title the server didn't get yet (`UnsentTitle`): shown with a note until it goes out.
     @State private var unsentTitle: String?
@@ -194,9 +193,7 @@ struct PageView: View {
     /// The page's sheets, full-screen covers and pickers.
     private var presentations: some View {
         chrome
-        .sheet(item: $externalURL) { url in
-            SafariView(url: url).ignoresSafeArea()
-        }
+        .opensExternalLinks()
         .sheet(isPresented: $showsComments, onDismiss: { commentsFocusId = nil }) {
             if let page = state.value, let comments {
                 CommentsView(page: page, comments: comments, canComment: canComment(on: page),
@@ -204,6 +201,17 @@ struct PageView: View {
                              focusId: commentsFocusId) { comment in
                     showInPage(comment)
                 }
+                .handlesLinks { url, outside in
+                    // Pages and anchors open on the page, so the comments make way; web links open over them.
+                    switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
+                    case .page, .databaseEntry, .anchor:
+                        showsComments = false
+                        handle(url, outside: outside)
+                    case .user: break
+                    case .external(let external): outside(external)
+                    }
+                }
+                .opensExternalLinks()
             }
         }
         .sheet(isPresented: Binding(get: { model?.editsComment ?? false }, set: { model?.editsComment = $0 })) {
@@ -494,10 +502,7 @@ struct PageView: View {
                 model?.resume()
             }
         }
-        .environment(\.openURL, OpenURLAction { url in
-            handle(url)
-            return .handled
-        })
+        .handlesLinks(handle)
         .onTapGesture {
             // Tap on empty space: unfocus the title; an active block editor stays active.
             titleFocused = false
@@ -841,7 +846,7 @@ struct PageView: View {
         }
         if let url = webURL {
             Divider()
-            Button("Open in Browser", systemImage: "safari") { externalURL = url }
+            Link(destination: url) { Label("Open in Browser", systemImage: "safari") }
             ShareLink(item: url) {
                 Label("Share Link", systemImage: "square.and.arrow.up")
             }
@@ -871,7 +876,7 @@ struct PageView: View {
         Toggle("Web Layout", systemImage: "globe", isOn: $showsWebLayout)
         Button("Copy as Markdown", systemImage: "doc.on.doc") { Task { await copyMarkdown() } }
         if let url = webURL {
-            Button("Open in Browser", systemImage: "safari") { externalURL = url }
+            Link(destination: url) { Label("Open in Browser", systemImage: "safari") }
             ShareLink(item: url) {
                 Label("Share Link", systemImage: "square.and.arrow.up")
             }
@@ -1241,7 +1246,8 @@ struct PageView: View {
 
     // MARK: - Links
 
-    private func handle(_ url: URL) {
+    /// A tapped link: pages, anchors, comments and atoms open here; links that leave the app go `outside`.
+    private func handle(_ url: URL, outside: OpenURLAction) {
         if let commentId = CommentLink.commentId(from: url) {
             openComments(focus: commentId)
             return
@@ -1267,11 +1273,7 @@ struct PageView: View {
         case .user:
             break
         case .external(let external):
-            if let scheme = external.scheme?.lowercased(), scheme == "http" || scheme == "https" {
-                externalURL = external
-            } else {
-                UIApplication.shared.open(external)
-            }
+            outside(external)
         }
     }
 
