@@ -36,10 +36,6 @@ function describe(dir) {
     const url = repository.replace(/^git\+/, "").replace(/^git:/, "https:").replace(/\.git$/, "");
     text = `The source code of ${manifest.name} ${manifest.version} is available under ${license} at ${url}.\n\n${text}`;
   }
-  // Mermaid's minified build drops the copyright header of elkjs's source files, which EPL-2.0 asks to keep.
-  if (manifest.name === "elkjs") {
-    text = `Copyright (c) 2017 Kiel University and others.\n\nelkjs is generated from the Eclipse Layout Kernel (ELK), whose source code is at https://github.com/eclipse-elk/elk.\n\n${text}`;
-  }
   return { name: manifest.name, version: manifest.version, license, text };
 }
 
@@ -89,7 +85,8 @@ if (!fs.existsSync(path.join(modules, "mermaid/package.json"))) {
 }
 const mermaidDependencies = fs.readdirSync(modules)
   .flatMap((name) => (name.startsWith("@") ? fs.readdirSync(path.join(modules, name)).map((sub) => `${name}/${sub}`) : [name]))
-  .filter((name) => !name.startsWith(".") && !name.startsWith("@types/") && name !== "mermaid")
+  // Tools/build-islands.mjs leaves elkjs out of the bundle.
+  .filter((name) => !name.startsWith(".") && !name.startsWith("@types/") && name !== "mermaid" && name !== "elkjs")
   .map((name) => describe(path.join(modules, name)));
 
 const island = (name) => ({
