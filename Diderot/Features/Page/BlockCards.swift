@@ -61,7 +61,7 @@ struct NodeView: View {
         case "detailsContent":
             NodeListView(model: model, nodes: node.children, parentPath: ref.path)
         case "codeBlock":
-            if node.string("language") == "mermaid", model.active?.ref != ref, model.handoff != ref {
+            if node.string("language") == "mermaid", model.active?.ref != ref {
                 ReaderNodeView(node: node)
                     .onTapGesture { if model.isEditable { model.activate(ref, node: node) } }
             } else {
@@ -236,10 +236,9 @@ struct TextNodeView: View {
     }
 }
 
-/// The page's one text editor, lying on the active text block (paragraph, heading, toggle title; `TextNodeView` keeps its
-/// place). It stays the same view while the active block changes, so focus, the keyboard and its state stay and the
-/// caret moves at once; one editor per block made iOS hand focus over at every Return. While a code block (with its
-/// own editor) is active, it stays hidden at its last place.
+/// The page's one text editor, lying on the active block's text (paragraph, heading, toggle title, code; the block keeps
+/// its place with a hidden copy). It stays the same view while the active block changes, so focus, the keyboard and its
+/// state stay and the caret moves at once; one editor per block made iOS hand focus over at every Return.
 struct PageEditor: View {
     let model: DocumentModel
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
@@ -253,8 +252,7 @@ struct PageEditor: View {
 
     var body: some View {
         if !Self.editsInBlock(voiceOver: voiceOver), let active = model.active, let place = model.editorFrame {
-            let isText = active.type != "codeBlock"
-            ActiveTextEditor(model: model, ref: isText ? active.ref : place.ref, font: model.editorStyle.font)
+            ActiveTextEditor(model: model, ref: active.ref, font: model.editorStyle.font, isCode: model.editorStyle.isCode)
                 // Its own height, not the row's: beside a checkbox it took the checkbox's.
                 .fixedSize(horizontal: false, vertical: true)
                 // The text view puts the font's leading below every line, the reader only between lines: without the
@@ -263,8 +261,7 @@ struct PageEditor: View {
                 .multilineTextAlignment(model.editorStyle.alignment)
                 .frame(width: place.frame.width, alignment: .topLeading)
                 // Until the new block reports its place, the editor would show the new text at the old one.
-                .opacity(isText && place.ref == active.ref ? 1 : 0)
-                .allowsHitTesting(isText)
+                .opacity(place.ref == active.ref ? 1 : 0)
                 .offset(x: place.frame.minX, y: place.frame.minY)
         }
     }
@@ -275,12 +272,15 @@ struct ActiveTextEditor: View {
     @Bindable var model: DocumentModel
     let ref: NodeRef
     let font: Font
+    var isCode = false
 
     private var isActive: Bool { model.active?.ref == ref }
 
     var body: some View {
         TextEditor(text: text, selection: selection)
             .font(font)
+            .autocorrectionDisabled(isCode)
+            .textInputAutocapitalization(isCode ? .never : .sentences)
             // No caret until `applyCursor` places it: focus comes first, and the caret would show at the end and jump.
             .tint(isActive && model.cursorRequest != nil ? Color.clear : Color.accentColor)
             .scrollDisabled(true)
@@ -306,8 +306,17 @@ struct ActiveTextEditor: View {
             }))
             .onAppear { if isActive { applyCursor() } }
             .onChange(of: model.cursorRequest) { _, _ in if isActive { applyCursor() } }
-            .onChange(of: model.activeText) { _, _ in if isActive { model.activeTextChanged() } }
+            .onChange(of: model.activeText) { _, _ in
+                guard isActive else { return }
+                // Each answers only for its kind of block.
+                model.activeTextChanged()
+                model.activeCodeChanged()
+            }
             .onChange(of: model.activeSelection) { _, _ in if isActive { model.activeSelectionChanged() } }
+            .onChange(of: isCode) { _, _ in
+                // The keyboard takes changed traits (autocorrection, capitalization) only after a reload.
+                DispatchQueue.main.async { FirstResponder.current?.reloadInputViews() }
+            }
     }
 
     private var text: Binding<AttributedString> {
@@ -384,11 +393,6 @@ private struct EditorFocus: ViewModifier {
             .onChange(of: focused) { _, isFocused in
                 if isFocused { onFocus() }
                 model.editorFocusChanged(isFocused, instance: instance, ref: ref)
-            }
-            // The page's editor stays in the window when a code block takes over; back in a text block it takes focus
-            // from the code block's editor directly.
-            .onChange(of: isActive) { _, active in
-                if active, !focused, !model.editsInSheet { focused = true }
             }
             .onChange(of: model.editsInSheet) { _, editing in
                 // After the link, comment or insert sheet (or emoji keyboard), editing continues in the same block.
@@ -772,12 +776,13 @@ struct CodeNodeView: View {
     let node: PMNode
     let ref: NodeRef
     @Environment(\.pageFind) private var find
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @Environment(\.fontResolutionContext) private var fontContext
     @State private var copied = false
 
+    private static let codeFont = Font.system(.callout, design: .monospaced)
     private var isActive: Bool { model.active?.ref == ref }
-    /// Active, or still showing its editor after a block switch until the new one has focus.
-    private var isEditing: Bool { isActive || model.handoff == ref }
-    private var code: String { isActive ? model.activeCode : model.handoff == ref ? model.handoffCode : node.plainText }
+    private var code: String { isActive ? model.activeCode : node.plainText }
 
     /// Code as in the reader, with find matches highlighted.
     private var displayedCode: AttributedString {
@@ -788,7 +793,7 @@ struct CodeNodeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if isEditing {
+            if isActive {
                 CodeLanguageBar(model: model, path: ref.path, current: node.string("language"))
                     .padding(.horizontal, 8)
                     .padding(.top, 8)
@@ -814,17 +819,33 @@ struct CodeNodeView: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
-            if isEditing {
+            if isActive {
                 VStack(alignment: .leading, spacing: 0) {
-                    TextEditor(text: isActive ? $model.activeCode : Binding(get: { model.handoffCode }, set: { _ in }))
-                        .font(.system(.callout, design: .monospaced))
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .scrollDisabled(true)
-                        .modifier(EditorFocus(model: model, ref: ref))
-                        .frame(minHeight: 60)
-                        .padding(8)
-                        .onChange(of: model.activeCode) { _, _ in if isActive { model.activeCodeChanged() } }
+                    Group {
+                        if PageEditor.editsInBlock(voiceOver: voiceOver) {
+                            ActiveTextEditor(model: model, ref: ref, font: Self.codeFont, isCode: true)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            // The page's one editor lies on this code, as on a text block's text (`TextNodeView`).
+                            Text(code.isEmpty ? " " : code)
+                                .font(Self.codeFont)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .hidden()
+                                .accessibilityHidden(true)
+                                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
+                                    if isActive { model.editorFrame = (ref, frame) }
+                                }
+                        }
+                    }
+                    // Where the code block's own editor drew the code: inside its 8 pt padding and its text view's
+                    // insets (8 pt vertical, 5 pt horizontal), at least 60 pt tall with them.
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 16)
+                    .onChange(of: EditorStyle(font: Self.codeFont, leading: CTFontGetLeading(Self.codeFont.resolve(in: fontContext).ctFont),
+                                              alignment: .leading, isCode: true), initial: true) { _, style in
+                        if isActive { model.editorStyle = style }
+                    }
                     // "+" from the keyboard toolbar: insert menu below the code (inserts after the block).
                     if isActive, model.showsPlusMenu {
                         InsertMenuView(model: model)

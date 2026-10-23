@@ -748,6 +748,13 @@ import XCTest
         Thread.sleep(forTimeInterval: 1.0)
         editor = activeEditor(app, "No editor after joining the item back")
         XCTAssertEqual(editor.value as? String, original)
+        // A code block has its own editor in the block then, too.
+        let code = app.staticTexts["let x = 1"].firstMatch
+        XCTAssertTrue(scrollTo(code, in: app), "Code block not found")
+        code.tap()
+        Thread.sleep(forTimeInterval: 1.0)
+        editor = activeEditor(app, "No editor in the code block")
+        XCTAssertEqual(editor.value as? String, "let x = 1")
         finishEditing(app)
     }
 
@@ -1288,6 +1295,28 @@ import XCTest
         app.typeText("Sprache\(stamp)")
         Thread.sleep(forTimeInterval: 1.2)
         snapshot(app, "40-code-language")
+        finishEditing(app)
+    }
+
+    /// From text into a code block and back: the page's one editor edits both, and the keyboard stays up.
+    func test63_SwitchBetweenTextAndCode() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Letzter Absatz")
+        Thread.sleep(forTimeInterval: 1.0)
+        let hides = keyboardHides(app)
+        let code = app.staticTexts["let x = 1"].firstMatch
+        XCTAssertTrue(scrollTo(code, in: app), "Code block not found")
+        code.tap()
+        Thread.sleep(forTimeInterval: 1.0)
+        editor = activeEditor(app, "No editor in the code block")
+        XCTAssertEqual(editor.value as? String, "let x = 1")
+        let paragraph = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Letzter Absatz")).firstMatch
+        XCTAssertTrue(scrollTo(paragraph, in: app), "Paragraph not found")
+        paragraph.tap()
+        Thread.sleep(forTimeInterval: 1.0)
+        editor = activeEditor(app, "No editor back in the paragraph")
+        XCTAssertTrue((editor.value as? String)?.contains("Letzter Absatz") == true, "The editor doesn't show the paragraph")
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid between text and code")
         finishEditing(app)
     }
 
