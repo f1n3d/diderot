@@ -80,6 +80,8 @@ struct StatusPill: View {
             Image(systemName: item.symbol)
             if !compact { Text(item.text) }
         }
+        // The toolbar would cut the text short ("Sav…") rather than make room.
+        .fixedSize()
         .font(.caption.weight(.medium))
         .foregroundStyle(item.tint)
         .padding(.horizontal, 8)
