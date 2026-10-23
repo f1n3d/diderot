@@ -145,7 +145,8 @@ final class WebDocumentEngine: DocumentEngine {
         configuration.userContentController.addScriptMessageHandler(CollabTokenHandler { [session] in
             try? await session.send(Endpoints.Auth.collabToken).token
         }, contentWorld: .page, name: "collabToken")
-        let page = WebPage(configuration: configuration)
+        // Its own page only: no frames either (TipTap renders YouTube embeds as iframes), so nothing else hears of it.
+        let page = WebPage(configuration: configuration, navigationDecider: WebNavigationLimit(home: ready.server.url))
         self.page = page
         self.unsentStore = unsentStore
         processWatch = Task { [weak self] in
@@ -395,7 +396,7 @@ final class EngineMessageHandler: NSObject, WKScriptMessageHandler {
 
     /// Already on the main actor (`WK_SWIFT_UI_ACTOR`); still forwards via a new main-actor task to keep event order.
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        // Only the engine page posts; embedded frames (e.g. YouTube iframes in the hidden editor) could fake events.
+        // Only the engine page posts (`WebNavigationLimit` keeps frames out; this check stays as a second line).
         guard message.frameInfo.isMainFrame, let text = message.body as? String else { return }
         let callback = onMessage
         Task { @MainActor in callback(text) }
@@ -411,7 +412,7 @@ final class CollabTokenHandler: NSObject, WKScriptMessageHandlerWithReply {
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) async -> (Any?, String?) {
-        // Embedded frames (e.g. YouTube iframes in the hidden editor) must not get a token.
+        // Frames must not get a token (`WebNavigationLimit` keeps them out; this check stays as a second line).
         guard message.frameInfo.isMainFrame else { return (nil, nil) }
         return (await fetch(), nil)
     }

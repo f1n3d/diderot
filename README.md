@@ -30,7 +30,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - The workspace menu: members, profile, appearance, web settings, servers.
 - Page actions: copy link, favorite, export (Markdown or HTML, share sheet), duplicate, move or copy to another space, trash. Reorder the page tree or nest pages by holding and dragging (positions by fractional indexing, like the web client). A trash per space to restore or delete for good. Deep links: `diderot://open?url=…`.
 - A native reader for every Docmost content type (text, lists, code, callouts, tables, images, math, Mermaid, diagrams, video, PDF, attachments, subpages, synced blocks, footnotes), with the web layout as a fallback.
-- Links open as from the web in a browser: pages and database entries in the app, web pages in the in-app browser, mail, phone and messages through the system, another app only after asking, scripts and files never. Links in comments, versions, database fields and PDFs leave the app the same way.
+- Links open as from the web in a browser: pages and database entries in the app, web pages in the in-app browser, mail, phone and messages through the system, another app only after asking, scripts and files never. Links in comments, versions, database fields, PDFs, the web layout and the web editor leave the app the same way; the web editor itself stays on the server.
 - Comments like on the web:
   - A button with the number of open comments, tabs for open and resolved ones.
   - Reply, edit, resolve and reopen, delete.
@@ -55,7 +55,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
     - line break, undo and redo through the Yjs history like the web editor, duplicate, delete
   - Formats stay while typing on and are visible in the editor.
   - Move blocks by holding and dragging. The title is inline, the icon comes from the emoji keyboard; status pill and collaborator avatars.
-  - Everything is live through an invisible TipTap/Yjs engine (`Engine/`).
+  - Everything is live through an invisible TipTap/Yjs engine (`Engine/`). It loads its own page only, no frames: a YouTube embed there contacts nobody.
 - Every slash command of the web editor: "/" at the start of a block or after a space opens a scrollable list in the web's order. Search works in English and German; Return picks the first match. It includes:
   - text blocks, divider, page break, subpages, table
   - columns (2–5; stacked when narrow, as on the web and in Notion; a bar for count, layout and deleting)

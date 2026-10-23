@@ -7,7 +7,7 @@ struct WebIslandView: View {
     let html: String
     var minHeight: CGFloat = 44
 
-    @State private var page = WebPage()
+    @State private var page = WebPage(navigationDecider: WebNavigationLimit(home: IslandHTML.baseURL))
     @State private var height: CGFloat?
     /// What is shown at the measured height; back in view, it isn't rendered again unless the web process ended (iOS
     /// reclaimed its memory, a crash) and left the page blank, without a URL.
@@ -51,7 +51,7 @@ struct WebIslandView: View {
         guard rendered != look || page.url == nil else { return }
         rendered = nil
         height = nil
-        page.load(html: look.html, baseURL: Bundle.main.resourceURL ?? Bundle.main.bundleURL)
+        page.load(html: look.html, baseURL: IslandHTML.baseURL)
         do {
             // Page-wide events, not the load's: those stop the load on task cancel, then callJavaScript never returns.
             for try await event in page.navigations {
@@ -75,9 +75,15 @@ struct WebIslandView: View {
 }
 
 /// HTML templates for the islands. Text is embedded as JSON and diagram SVGs as `<img>`, where their scripts don't run.
+/// The bundled scripts and fonts load; nothing from the network, so not even a flaw in KaTeX or Mermaid could send
+/// content anywhere.
 nonisolated enum IslandHTML {
+    /// The app bundle, where the scripts and fonts are.
+    static let baseURL = Bundle.main.resourceURL ?? Bundle.main.bundleURL
+
     private static let baseStyle = """
     <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file: 'unsafe-inline'; style-src file: 'unsafe-inline'; font-src file:; img-src file: data:">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <meta name="color-scheme" content="light dark">
     <style>

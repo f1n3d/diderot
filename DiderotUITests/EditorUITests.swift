@@ -984,6 +984,53 @@ import XCTest
         app.buttons["comments-done"].tap()
     }
 
+    /// The web layout shows the page's HTML and stays on it: a link there opens as on the page (a web page in the
+    /// in-app browser), not inside the web view.
+    func test66_WebLayoutStaysOnThePage() {
+        let app = launchPage()
+        func toggleWebLayout() {
+            app.buttons["page-more"].tap()
+            let toggle = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Web Layout", "Web-Layout"])).firstMatch
+            XCTAssertTrue(toggle.waitForExistence(timeout: 5), "“Web Layout” missing from the page menu")
+            toggle.tap()
+        }
+        toggleWebLayout()
+        let link = app.webViews.links["Beispielseite"]
+        XCTAssertTrue(link.waitForExistence(timeout: 20), "The web layout doesn't show the page's links")
+        for _ in 0..<6 where !link.isHittable { app.webViews.firstMatch.swipeUp() }
+        snapshot(app, "66-web-layout")
+        link.tap()
+        let close = button(app, labels: ["Close", "Schließen"])
+        XCTAssertTrue(close.waitForExistence(timeout: 10), "A link in the web layout doesn't open the in-app browser")
+        close.tap()
+        XCTAssertTrue(link.waitForExistence(timeout: 5), "The web layout left the page")
+        toggleWebLayout()
+    }
+
+    /// The web editor loads Docmost's editor from the server and stays there: opening a link from its popover goes
+    /// to the in-app browser over the editor, not into it.
+    func test67_WebEditorStaysOnTheServer() {
+        let app = launchPage()
+        app.buttons["page-more"].tap()
+        let edit = button(app, labels: ["Edit in Web Editor", "Im Web-Editor bearbeiten"])
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "“Edit in Web Editor” missing from the page menu")
+        edit.tap()
+        let link = app.webViews.links["Beispielseite"]
+        XCTAssertTrue(link.waitForExistence(timeout: 40), "The web editor doesn't show the page")
+        for _ in 0..<8 where !link.isHittable { app.webViews.firstMatch.swipeUp() }
+        link.tap()
+        // The popover's link shows its address (twice in the tree: the link and its text).
+        let open = app.webViews.links["https://example.com/diderot-uitest"].firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 5), "The link's popover doesn't open in the web editor")
+        snapshot(app, "67-web-editor-link")
+        open.tap()
+        let close = button(app, labels: ["Close", "Schließen"])
+        XCTAssertTrue(close.waitForExistence(timeout: 10), "A link opened in the web editor doesn't use the in-app browser")
+        close.tap()
+        XCTAssertTrue(link.waitForExistence(timeout: 5), "The web editor left the page")
+        button(app, labels: ["Done", "Fertig"]).tap()
+    }
+
     /// A version opened from "Page History" loads its media like the page itself: the image of "Fixture: Media"
     /// (Tools/seed-fixtures.py, which leaves a version with the image) appears instead of a spinner.
     func test49_HistoryVersionShowsImage() throws {

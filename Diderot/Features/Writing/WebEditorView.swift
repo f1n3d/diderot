@@ -3,15 +3,18 @@ import WebKit
 import DocmostKit
 
 /// The real Docmost editor in a WebView: loads `/p/<slugId>` with the `authToken` cookie so live collaboration,
-/// history and permissions come from the web client. CSS trims the app shell (sidebars).
+/// history and permissions come from the web client. CSS trims the app shell (sidebars). It stays on the server: links
+/// elsewhere open as from a page, never in the editor without an address bar.
 struct WebEditorView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     let page: Page
     let serverURL: URL
     let token: String
     var onClose: () -> Void = {}
 
     @State private var dataStore: WKWebsiteDataStore
+    @State private var limit: WebNavigationLimit
     @State private var webPage: WebPage
     @State private var isReady = false
 
@@ -25,8 +28,12 @@ struct WebEditorView: View {
         let dataStore = WKWebsiteDataStore(forIdentifier: WebEditorStores.identifier(for: serverURL))
         var configuration = WebPage.Configuration()
         configuration.websiteDataStore = dataStore
+        // Frames: embeds and the draw.io editor.
+        let limit = WebNavigationLimit(home: serverURL, acrossOrigin: true, frames: true)
+        limit.catchesWindowOpen(in: &configuration)
         self._dataStore = State(initialValue: dataStore)
-        self._webPage = State(initialValue: WebPage(configuration: configuration))
+        self._limit = State(initialValue: limit)
+        self._webPage = State(initialValue: WebPage(configuration: configuration, navigationDecider: limit))
     }
 
     var body: some View {
@@ -43,7 +50,10 @@ struct WebEditorView: View {
                         }
                     }
                 }
-                .task { try? await load() }
+                .task {
+                    limit.openOutside = { [openURL] in openURL($0) }
+                    try? await load()
+                }
         }
         .onDisappear {
             Task { await removeCookies() }
