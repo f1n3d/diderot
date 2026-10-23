@@ -2,15 +2,17 @@ import SwiftUI
 import WebKit
 
 /// Fallback "Web Layout": `pages/info format: html` in a WebView. API images and attachments load via the `authToken`
-/// cookie in a non-persistent data store.
+/// cookie in a non-persistent data store. Links open as on the page, embeds play as on the web.
 struct WebLayoutView: View {
     let html: String
     let title: String
     let serverURL: URL
     let token: String?
     @State private var dataStore: WKWebsiteDataStore
+    @State private var limit: WebNavigationLimit
     @State private var page: WebPage
     @State private var isReady = false
+    @Environment(\.openURL) private var openURL
 
     init(html: String, title: String, serverURL: URL, token: String?) {
         self.html = html
@@ -20,8 +22,10 @@ struct WebLayoutView: View {
         let dataStore = WKWebsiteDataStore.nonPersistent()
         var configuration = WebPage.Configuration()
         configuration.websiteDataStore = dataStore
+        let limit = WebNavigationLimit(home: serverURL, frames: true)
         self._dataStore = State(initialValue: dataStore)
-        self._page = State(initialValue: WebPage(configuration: configuration))
+        self._limit = State(initialValue: limit)
+        self._page = State(initialValue: WebPage(configuration: configuration, navigationDecider: limit))
     }
 
     var body: some View {
@@ -31,6 +35,7 @@ struct WebLayoutView: View {
                 if !isReady { ProgressView() }
             }
             .task(id: html) {
+                limit.openOutside = { [openURL] in openURL($0) }
                 await installCookie()
                 page.load(html: Self.wrap(html, title: title), baseURL: serverURL)
                 isReady = true

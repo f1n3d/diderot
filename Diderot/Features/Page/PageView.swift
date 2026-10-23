@@ -117,6 +117,7 @@ struct PageView: View {
                 baseDocument(page)
             } else if showsWebLayout, let webHTML, let serverURL = session.server?.url {
                 WebLayoutView(html: webHTML, title: page.displayTitle, serverURL: serverURL, token: session.ready?.token)
+                    .handlesLinks(handle)
             } else {
                 document(page)
             }
@@ -240,6 +241,7 @@ struct PageView: View {
                     Task { await load(force: true) }
                     changes.pageChanged(in: page.spaceId)
                 }
+                .opensExternalLinks()
             }
         }
         .photosPicker(isPresented: $showsPhotoPicker, selection: $photoItems, maxSelectionCount: nil,
