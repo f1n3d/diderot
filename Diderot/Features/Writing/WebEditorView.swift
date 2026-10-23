@@ -133,9 +133,9 @@ enum WebEditorStores {
         var stores = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
         guard let identifier = stores.removeValue(forKey: StoredAccounts.key(for: server)).flatMap(UUID.init(uuidString:)) else { return }
         defaults.set(stores, forKey: key)
-        // WebKit sets itself up with its first object. Removing a store before one exists in this launch (another
-        // user signing in right at launch, before any web view) crashed inside WebKit.
-        _ = WKWebsiteDataStore.nonPersistent()
+        // Removing a store doesn't set WebKit up, getting the default one does. Without that, removing before any web
+        // view existed in this launch (another user signing in right at launch) crashed inside WebKit.
+        _ = WKWebsiteDataStore.default()
         do {
             try await WKWebsiteDataStore.remove(forIdentifier: identifier)
         } catch {
