@@ -547,6 +547,20 @@ import XCTest
         snapshot(app, "58-newer-server")
     }
 
+    /// A page opened offline is read-only ("Offline"); once the network is back it becomes editable by itself. The app
+    /// pretends to be offline for its first seconds (`DOCMOST_DEBUG_OFFLINE_SECONDS`).
+    func test62_PageEditableWhenBackOnline() {
+        var environment = environment.filter { ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"].contains($0.key) }
+        environment["DOCMOST_DEBUG_OFFLINE_SECONDS"] = "15"
+        let app = launchApp(extraEnvironment: environment)
+        let pill = element(app, "page-status")
+        XCTAssertTrue(pill.waitForExistence(timeout: 30), "Page didn't load")
+        XCTAssertEqual(pill.label, "Offline", "The page didn't open read-only while offline")
+        waitForSync(app)
+        _ = edit(app, blockContaining: "Punkt eins")
+        finishEditing(app)
+    }
+
     func test52_TapPlacesCaret() {
         let app = launchPage()
         let block = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nach der Tabelle")).firstMatch
