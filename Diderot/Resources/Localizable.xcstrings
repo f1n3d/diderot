@@ -906,6 +906,16 @@
         }
       }
     },
+    "Connect Anyway": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trotzdem verbinden"
+          }
+        }
+      }
+    },
     "Connecting": {
       "localizations": {
         "de": {
@@ -4482,6 +4492,16 @@
         }
       }
     },
+    "This server uses HTTP: your password and your session travel over the network unencrypted. Only continue in a network you trust, such as your own.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Server nutzt HTTP: Dein Passwort und deine Sitzung gehen unverschlüsselt durchs Netz. Fahre nur in einem Netz fort, dem du vertraust, etwa deinem eigenen."
+          }
+        }
+      }
+    },
     "This version is empty.": {
       "localizations": {
         "de": {
@@ -4619,6 +4639,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Widerrufen"
+          }
+        }
+      }
+    },
+    "Unencrypted connection": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unverschlüsselte Verbindung"
+          }
+        }
+      }
+    },
+    "Unencrypted connection: your password and your session travel unprotected.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unverschlüsselte Verbindung: Dein Passwort und deine Sitzung gehen ungeschützt durchs Netz."
           }
         }
       }

@@ -66,8 +66,13 @@ import XCTest
         address.tap()
         address.typeText(alternate)
         app.buttons["server-continue"].tap()
+        // The dev instance runs on plain HTTP: the app asks before the password travels unencrypted, and says so then.
+        let anyway = button(app, labels: ["Connect Anyway", "Trotzdem verbinden"])
+        XCTAssertTrue(anyway.waitForExistence(timeout: 5), "No warning before connecting over HTTP")
+        anyway.tap()
         let email = app.textFields["login-email"]
         XCTAssertTrue(email.waitForExistence(timeout: 20), "Login for the second server doesn't appear")
+        XCTAssertTrue(element(app, "login-unencrypted").exists, "The sign-in doesn't say the connection is unencrypted")
         email.tap()
         email.typeText(environment["DOCMOST_DEBUG_EMAIL"]!)
         let password = app.secureTextFields["login-password"]

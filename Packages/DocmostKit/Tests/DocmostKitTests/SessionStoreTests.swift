@@ -64,6 +64,19 @@ struct SessionStoreTests {
         #expect(session(wiki).displayName == "wiki.example.com")
         #expect(session(wiki, workspace: "Wiki").displayName == "Wiki")
     }
+
+    /// Sign-outs that wait for their server keep their tokens apart from the sign-ins; an empty list leaves nothing.
+    @Test func pendingLogoutsRoundTrip() throws {
+        let secrets = MemorySecretStore()
+        let store = SessionStore(keychain: secrets)
+        try store.save(session(wiki))
+        try store.setPendingLogouts([session(docs, token: "gone")])
+        #expect(try store.pendingLogouts().map(\.token) == ["gone"])
+        #expect(try store.loadAccounts().sessions.map(\.serverURL) == [wiki])
+        try store.setPendingLogouts([])
+        #expect(try store.pendingLogouts().isEmpty)
+        #expect(try secrets.load(account: "pendingLogouts") == nil)
+    }
 }
 
 /// In-memory stand-in for the keychain.

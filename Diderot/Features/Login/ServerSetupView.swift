@@ -6,6 +6,7 @@ struct ServerSetupView: View {
     @State private var address = ""
     @State private var isConnecting = false
     @State private var errorMessage: String?
+    @State private var warnsUnencrypted = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -41,7 +42,7 @@ struct ServerSetupView: View {
                 Section("Development") {
                     Button("Use local dev server (localhost:3000)") {
                         address = "http://localhost:3000"
-                        connect()
+                        performConnect()
                     }
                 }
                 #endif
@@ -58,10 +59,26 @@ struct ServerSetupView: View {
                 }
             }
             .onAppear { isFocused = true }
+            .alert("Unencrypted connection", isPresented: $warnsUnencrypted) {
+                Button("Connect Anyway", role: .destructive) { performConnect() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This server uses HTTP: your password and your session travel over the network unencrypted. Only continue in a network you trust, such as your own.")
+            }
         }
     }
 
+    /// Plain HTTP (iOS allows it only in the local network) asks first: the password would travel readable.
     private func connect() {
+        guard !isConnecting else { return }
+        if ServerURLNormalizer.normalize(address)?.scheme == "http" {
+            warnsUnencrypted = true
+        } else {
+            performConnect()
+        }
+    }
+
+    private func performConnect() {
         guard !isConnecting else { return }
         isConnecting = true
         errorMessage = nil
