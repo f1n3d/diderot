@@ -145,4 +145,21 @@ public struct SessionStore: Sendable {
         try saveAccounts(accounts)
         return accounts.current
     }
+
+    private static let pendingLogoutsKey = "pendingLogouts"
+
+    /// Sign-ins signed out while their server was out of reach: the tokens wait here, as secret as the sign-ins, until
+    /// the server ends their sessions.
+    public func pendingLogouts() throws -> [StoredSession] {
+        guard let data = try store.load(account: Self.pendingLogoutsKey) else { return [] }
+        return try JSONDecoder().decode([StoredSession].self, from: data)
+    }
+
+    public func setPendingLogouts(_ sessions: [StoredSession]) throws {
+        if sessions.isEmpty {
+            try store.delete(account: Self.pendingLogoutsKey)
+        } else {
+            try store.save(JSONEncoder().encode(sessions), account: Self.pendingLogoutsKey)
+        }
+    }
 }

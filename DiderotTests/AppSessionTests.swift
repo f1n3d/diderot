@@ -718,6 +718,43 @@ struct AppSessionRaceTests {
     }
 
     /// Signed in to a, with b saved as well.
+    // MARK: - Sign-outs the server didn't get
+
+    /// Signed out offline: the server session would stay valid, so its token waits and the next try ends it.
+    @Test func signOutOfflineEndsTheSessionLater() async throws {
+        let session = try await sessionOnA()
+        StubURLProtocol.offline.withLock { $0 = true }
+        await session.signOut()
+        StubURLProtocol.offline.withLock { $0 = false }
+        #expect(try store.pendingLogouts().map(\.serverURL) == [a])
+        await session.sendPendingLogouts()
+        #expect(try store.pendingLogouts().isEmpty)
+        await removeCaches()
+    }
+
+    /// A waiting sign-out whose token expired, or that the server no longer knows (401), is dropped.
+    @Test(arguments: [false, true]) func waitingSignOutIsDroppedWhenItCanEnd(expired: Bool) async throws {
+        let session = try await sessionOnA()
+        // A token that expired in 1970 (only its claims count here).
+        let payload = Data(#"{"type":"access","exp":1000}"#.utf8).base64EncodedString()
+            .replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+        try store.setPendingLogouts([StoredSession(serverURL: a, token: expired ? "e30.\(payload).sig" : "stale")])
+        if !expired {
+            StubURLProtocol.status.withLock { $0 = 401 }
+            StubURLProtocol.body.withLock { $0 = #"{"statusCode": 401, "message": "Unauthorized"}"# }
+        } else {
+            StubURLProtocol.offline.withLock { $0 = true }  // dropped without asking the server
+        }
+        defer {
+            StubURLProtocol.status.withLock { $0 = 200 }
+            StubURLProtocol.body.withLock { $0 = nil }
+            StubURLProtocol.offline.withLock { $0 = false }
+        }
+        await session.sendPendingLogouts()
+        #expect(try store.pendingLogouts().isEmpty)
+        await removeCaches()
+    }
+
     // MARK: - Unsent page titles
 
     /// A title the server didn't get waits on the device and goes out with the first try that reaches the server.

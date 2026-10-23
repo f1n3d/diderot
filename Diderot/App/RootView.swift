@@ -29,10 +29,14 @@ struct RootView: View {
         .preferredColorScheme(appearance.colorScheme)
         .task {
             await session.restoreAtLaunch()
+            await session.sendPendingLogouts()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
-            Task { await session.refreshCurrentUser() }
+            Task {
+                await session.refreshCurrentUser()
+                await session.sendPendingLogouts()
+            }
         }
         .onOpenURL { url in
             // `diderot://open?url=…`; the selection is applied once the main view exists.

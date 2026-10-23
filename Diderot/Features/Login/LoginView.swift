@@ -33,6 +33,12 @@ struct LoginView: View {
             Form {
                 Section {
                     WorkspaceHeader(server: server)
+                } footer: {
+                    if server.url.scheme == "http" {
+                        Label("Unencrypted connection: your password and your session travel unprotected.", systemImage: "lock.open")
+                            .foregroundStyle(.orange)
+                            .accessibilityIdentifier("login-unencrypted")
+                    }
                 }
 
                 if !requiresSso {

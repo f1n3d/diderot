@@ -60,6 +60,7 @@ struct MainTabView: View {
             Task {
                 await session.reconnectIfNeeded()
                 await sendUnsentTitles()
+                await session.sendPendingLogouts()
             }
         }
         .onChange(of: appNavigation.pendingSelection, initial: true) { _, pending in

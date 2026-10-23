@@ -265,11 +265,10 @@ final class AppSession {
         await restore()
     }
 
-    /// Removes another saved sign-in: ends its server session (best effort) and deletes its cache and unsent changes.
+    /// Removes another saved sign-in: ends its server session and deletes its cache and unsent changes.
     func removeAccount(_ account: StoredSession) async {
         guard !isCurrent(account) else { return }
-        let client = makeClient(for: account.serverURL, token: account.token)
-        _ = try? await client.send(Endpoints.Auth.logout)
+        await endServerSession(account, client: makeClient(for: account.serverURL, token: account.token))
         keychain("remove") { try sessionStore.remove(serverURL: account.serverURL) }
         await makeCache(for: account.serverURL).removeAll()
         UnsentChanges.removeAll(server: account.serverURL)
@@ -350,7 +349,7 @@ final class AppSession {
     /// Signs out of the current server and continues with another saved one, if any.
     func signOut() async {
         guard case .ready(let session) = state else { return }
-        _ = try? await session.client.send(Endpoints.Auth.logout)
+        await endServerSession(StoredSession(serverURL: session.server.url, token: session.token), client: session.client)
         await removeLocalData(for: session.server.url)
         // After the last await: while the state still shows this session, a finishing reconnect would save it again.
         keychain("remove") { try sessionStore.remove(serverURL: session.server.url) }
@@ -362,6 +361,57 @@ final class AppSession {
             await switchTo(next)
         } else {
             state = .signedOut(session.server)
+        }
+    }
+
+    // MARK: - Sign-outs the server didn't get
+
+    @ObservationIgnored private var isSendingLogouts = false
+
+    /// Ends the session on its server. Out of reach, it would stay valid there until it expires, so it waits for
+    /// `sendPendingLogouts`; a 401 means the server ended it already.
+    private func endServerSession(_ session: StoredSession, client: APIClient) async {
+        do {
+            _ = try await client.send(Endpoints.Auth.logout)
+        } catch let error as APIError where error.isSessionExpired {
+        } catch {
+            keepPendingLogout(session)
+        }
+    }
+
+    private func keepPendingLogout(_ session: StoredSession) {
+        keychain("keep the sign-out") {
+            var pending = try sessionStore.pendingLogouts()
+            pending.removeAll { StoredAccounts.key(for: $0.serverURL) == StoredAccounts.key(for: session.serverURL) && $0.token == session.token }
+            pending.append(session)
+            try sessionStore.setPendingLogouts(pending)
+        }
+    }
+
+    /// Ends the sessions signed out while their server was out of reach (`signOut`): at launch, back in the app and when
+    /// the network returns. A token that expired meanwhile, or that the server no longer knows (401), is dropped.
+    func sendPendingLogouts() async {
+        guard !isSendingLogouts, let pending = try? sessionStore.pendingLogouts(), !pending.isEmpty else { return }
+        isSendingLogouts = true
+        defer { isSendingLogouts = false }
+        var done: [StoredSession] = []
+        for entry in pending {
+            if let expiresAt = entry.claims?.expiresAt, expiresAt < .now {
+                done.append(entry)
+                continue
+            }
+            do {
+                _ = try await makeClient(for: entry.serverURL, token: entry.token).send(Endpoints.Auth.logout)
+                done.append(entry)
+            } catch let error as APIError where error.isSessionExpired {
+                done.append(entry)
+            } catch {
+                AppLog.session.notice("Sign-out still waits for its server: \(error.userMessage, privacy: .public)")
+            }
+        }
+        // Read again: a sign-out meanwhile added its own.
+        keychain("update the waiting sign-outs") {
+            try sessionStore.setPendingLogouts(try sessionStore.pendingLogouts().filter { !done.contains($0) })
         }
     }
 
