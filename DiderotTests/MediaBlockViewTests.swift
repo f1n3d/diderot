@@ -192,8 +192,9 @@ struct MediaBlockViewTests {
         #expect(await poll { Set(labels(in: window)).isSuperset(of: expected) }, "\(labels(in: window))")
     }
 
-    /// Polls `condition` while SwiftUI lays out (`tries` × 50 ms, 5 s by default).
-    private func poll(tries: Int = 100, _ condition: () -> Bool) async -> Bool {
+    /// Polls `condition` while SwiftUI lays out (`tries` × 50 ms, 20 s by default: GitHub's runners start web processes
+    /// far slower than a Mac, and a met condition ends the wait at once).
+    private func poll(tries: Int = 400, _ condition: () -> Bool) async -> Bool {
         for _ in 0..<tries {
             if condition() { return true }
             try? await Task.sleep(for: .milliseconds(50))
