@@ -19,7 +19,6 @@ Decided on October 22, 2026, for later:
 - Free, with voluntary tips as in-app purchases (as Swift Paperless does), a privacy policy, a support address, and a test server with an account for Apple's reviewers.
 - A personal developer account (a sole proprietorship isn't a legal entity, so the own name appears as the seller); classify the trader status under the Digital Services Act.
 - The name "Diderot" has no current trademark entries in the EU and Germany (TMview, October 22, 2026); look at the few entries elsewhere before (countries, classes, goods). App Store Connect can leave out countries.
-- elkjs (EPL-2.0, bundled in Mermaid) may only be passed on under a license agreement that meets section 3 of the EPL: it disclaims warranties and liability for all contributors and leaves the recipients' rights to the source code untouched. Check Apple's standard license agreement against that, or give the app its own agreement in App Store Connect.
 
 ## Editor
 
@@ -29,6 +28,7 @@ Decided on October 22, 2026, for later:
   - The web's ":" shortcut for emoji is missing (in the app: "/Emoji" with the emoji keyboard).
   - Status and math can only be changed with a tap outside editing, not from the active editor.
   - Subpages: Docmost gets a sort order after 0.96 (`sortBy`); the app will still show the default order then.
+- Mermaid diagrams that ask for the ELK layout (`layout: elk`, `flowchart-elk`) are laid out with dagre, Mermaid's default, so they look different from the web (October 23, 2026). The app's Mermaid leaves ELK out (`Tools/build-islands.mjs`): elkjs is EPL-2.0, which Apple's standard license agreement doesn't meet, and takes 1.6 MB.
 - Long press while editing (October 22, 2026): many people long-press to move the cursor with the magnifier, but in the app a long press starts dragging the block. Proposal: while a block is being edited, the long press belongs to the text (cursor with the magnifier, selection); only when nothing is being edited does it move the block. Decide by focus, not by the on-screen keyboard: on an iPad with a hardware keyboard there is none while editing. While editing, blocks still move through "Arrange blocks", perhaps also a handle at the active block (as in Notion or Craft). To check: how the block drag and the text view's magnifier gesture coexist. Until then, long-pressing the space bar turns the keyboard into a trackpad for the cursor.
 - One text editor for the whole page since October 23, 2026 (before, each block had its own, and every Return handed focus to a new one: the caret lagged about 150 ms, and an invisible start character cost capitalization and suggestions at a block's start). Left open:
   - Backspace at a block's start comes from a hook on the editor's text view class (SwiftUI's TextEditor doesn't report it). Should Apple build TextEditor differently, Backspace there would stop joining blocks (UI tests test5 and test44 notice it); an own UIKit text view would avoid the hook.
