@@ -63,7 +63,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - math block and inline math (LaTeX with a preview), status (text and color), date, time, emoji (emoji keyboard)
   - footnotes (text at the end of the page, tapping the number jumps there)
   - database and Kanban (a new database as a subpage; needs the license)
-  - image or video from the library, camera, audio, PDF or file attachments from the Files app (several at once)
+  - image or video from the library, camera, audio, PDF or file attachments from the Files app (several at once); photos and videos upload without their location, which the photo picker otherwise passes on
   - synced blocks: edit, copy and paste into other pages (also from the web), unsync, open the original
   - 11 embeds: the link is checked, and the embed shows as a card that opens in the browser
 

@@ -1,3 +1,5 @@
+import AVFoundation
+import ImageIO
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -9,7 +11,9 @@ nonisolated struct UploadFile: Sendable {
     let fileName: String
     let mimeType: String
 
-    /// Library photo or video. Images other than JPEG, PNG and GIF upload as JPEG: the web client can't show HEIC/HEIF.
+    /// Library photo or video, without its location: the photo picker hands it over "with location" unless that is
+    /// switched off, and everyone who can read the page could download it. Images other than JPEG, PNG and GIF upload
+    /// as JPEG: the web client can't show HEIC/HEIF.
     @concurrent static func photo(_ item: PhotosPickerItem) async throws -> UploadFile? {
         guard var data = try await item.loadTransferable(type: Data.self) else { return nil }
         let type = item.supportedContentTypes.first
@@ -18,12 +22,79 @@ nonisolated struct UploadFile: Sendable {
         if let type, type.conforms(to: .image), !type.conforms(to: .jpeg), !type.conforms(to: .png), !type.conforms(to: .gif),
            let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.9)
         {
+            // Encoded anew, it keeps no metadata, the location included.
             data = jpeg
             ext = "jpg"
             mime = "image/jpeg"
+        } else if let type, type.conforms(to: .movie) {
+            data = try await withoutLocation(video: data, type: type)
+        } else {
+            data = try withoutLocation(image: data)
         }
         let name = type?.conforms(to: .movie) == true ? "Video" : "Bild"
         return UploadFile(data: data, fileName: "\(name)-\(stamp()).\(ext)", mimeType: mime)
+    }
+
+    /// The image without its location; one without a location stays as it is. A JPEG keeps its encoding (only its
+    /// metadata is written anew), other formats are encoded anew with the rest of their metadata (PNG losslessly).
+    /// ImageIO's own "exclude GPS" option misses PNG's and drops a JPEG's other metadata.
+    static func withoutLocation(image data: Data) throws -> Data {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), let type = CGImageSourceGetType(source),
+              hasLocation(source)
+        else { return data }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, type, CGImageSourceGetCount(source), nil) else {
+            throw LocationNotRemoved()
+        }
+        if (type as String) == UTType.jpeg.identifier, let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil),
+           let kept = CGImageMetadataCreateMutableCopy(metadata)
+        {
+            CGImageMetadataEnumerateTagsUsingBlock(metadata, nil, [kCGImageMetadataEnumerateRecursively: true] as CFDictionary) { path, tag in
+                if (CGImageMetadataTagCopyName(tag) as String?)?.hasPrefix("GPS") == true { CGImageMetadataRemoveTagWithPath(kept, nil, path) }
+                return true
+            }
+            let options = [kCGImageDestinationMetadata: kept, kCGImageDestinationMergeMetadata: false] as CFDictionary
+            guard CGImageDestinationCopyImageSource(destination, source, options, nil) else { throw LocationNotRemoved() }
+        } else {
+            for index in 0..<CGImageSourceGetCount(source) {
+                CGImageDestinationAddImageFromSource(destination, source, index, [kCGImagePropertyGPSDictionary: kCFNull] as CFDictionary)
+            }
+            guard CGImageDestinationFinalize(destination) else { throw LocationNotRemoved() }
+        }
+        // Checked, not trusted: rather no upload than one with the location.
+        guard let result = CGImageSourceCreateWithData(output, nil), !hasLocation(result) else { throw LocationNotRemoved() }
+        return output as Data
+    }
+
+    private static func hasLocation(_ source: CGImageSource) -> Bool {
+        (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])?[kCGImagePropertyGPSDictionary] != nil
+    }
+
+    /// The video without its location and other personal metadata (what sharing keeps), not encoded anew. If that
+    /// fails, it doesn't upload rather than with the location.
+    @concurrent static func withoutLocation(video data: Data, type: UTType) async throws -> Data {
+        let fileType: AVFileType = type.conforms(to: .mpeg4Movie) ? .mp4 : .mov
+        let directory = FileManager.default.temporaryDirectory.appending(path: "upload-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let input = directory.appending(path: "original.\(type.preferredFilenameExtension ?? "mov")")
+        let output = directory.appending(path: "shared.\(fileType == .mp4 ? "mp4" : "mov")")
+        do {
+            try data.write(to: input, options: .completeFileProtection)
+            guard let export = AVAssetExportSession(asset: AVURLAsset(url: input), presetName: AVAssetExportPresetPassthrough) else {
+                throw LocationNotRemoved()
+            }
+            export.metadataItemFilter = .forSharing()
+            try await export.export(to: output, as: fileType)
+            return try Data(contentsOf: output)
+        } catch {
+            AppLog.ui.error("Video location not removed: \(error.localizedDescription, privacy: .public)")
+            throw LocationNotRemoved()
+        }
+    }
+
+    struct LocationNotRemoved: LocalizedError {
+        var errorDescription: String? { String(localized: "The location couldn't be removed from the photo or video, so it wasn't uploaded.") }
     }
 
     /// JPEG from the camera.

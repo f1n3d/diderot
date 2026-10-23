@@ -4300,6 +4300,16 @@
         }
       }
     },
+    "The location couldn't be removed from the photo or video, so it wasn't uploaded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Aufnahmeort ließ sich aus dem Foto oder Video nicht entfernen, deshalb wurde es nicht hochgeladen."
+          }
+        }
+      }
+    },
     "The note is added at the end of the page. Other people's edits are not affected.": {
       "localizations": {
         "de": {
