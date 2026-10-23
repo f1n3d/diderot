@@ -9,7 +9,8 @@ nonisolated enum TempFile {
         // `standardized` is lexical; `standardizedFileURL` drops `/private` only from existing paths: fails on devices.
         guard file.standardized.deletingLastPathComponent() == directory.standardized else { throw CocoaError(.fileWriteInvalidFileName) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try data.write(to: file, options: .atomic)
+        // Readable only while the device is unlocked, like the offline cache.
+        try data.write(to: file, options: [.atomic, .completeFileProtection])
         return file
     }
 

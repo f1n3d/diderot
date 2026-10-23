@@ -3,14 +3,25 @@ import Foundation
 /// Per-server key → data file cache for offline reading. No database on purpose: every access is by key (space list,
 /// page tree level, page, image).
 public actor DiskCache {
+    /// When its files can be read (iOS data protection).
+    public enum Protection: Sendable {
+        /// Only while the device is unlocked: the offline cache, so a locked device doesn't give away its pages.
+        case whileUnlocked
+        /// From the first unlock after a restart on: what the app must still write when it goes to the background
+        /// and the device locks, such as unsent changes.
+        case afterFirstUnlock
+    }
+
     public nonisolated let directory: URL
+    private let protection: Protection
     private let decoder = JSONDecoding.makeDecoder()
     private let encoder = JSONDecoding.makeEncoder()
 
     /// - Parameter scope: e.g. a hash of the server URL, keeping servers apart.
-    public init(scope: String, baseDirectory: URL? = nil) {
+    public init(scope: String, baseDirectory: URL? = nil, protection: Protection = .whileUnlocked) {
         let base = baseDirectory ?? URL.cachesDirectory
         directory = base.appending(path: "docmost-cache/\(Self.safeName(scope))")
+        self.protection = protection
     }
 
     // MARK: - Codable values
@@ -76,7 +87,11 @@ public actor DiskCache {
 
     private func store(_ data: Data, at url: URL) {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
+        let protection: Data.WritingOptions = switch self.protection {
+        case .whileUnlocked: .completeFileProtection
+        case .afterFirstUnlock: .completeFileProtectionUntilFirstUserAuthentication
+        }
+        try? data.write(to: url, options: [.atomic, protection])
     }
 
     private func fileURL(for key: String, kind: String) -> URL {

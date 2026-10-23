@@ -16,7 +16,7 @@ nonisolated enum LogExporter {
         }
 
         let url = FileManager.default.temporaryDirectory.appending(path: "docmost-logs.txt")
-        try text.write(to: url, atomically: true, encoding: .utf8)
+        try Data(text.utf8).write(to: url, options: [.atomic, .completeFileProtection])
         return url
     }
 }
