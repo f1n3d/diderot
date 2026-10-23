@@ -315,6 +315,11 @@ struct PageView: View {
         .onChange(of: titleFocused) { _, focused in
             if !focused { commitTitle() }
         }
+        // Back online: a page opened offline (read-only) becomes editable by itself; before, it stayed read-only until
+        // pulled down or opened again.
+        .onChange(of: offline.isOffline) { _, isOffline in
+            if !isOffline, model?.readOnlyReason == .offline { Task { await load(force: true) } }
+        }
         .onChange(of: title) { _, value in
             if value.contains("\n") {
                 title = value.replacingOccurrences(of: "\n", with: " ")

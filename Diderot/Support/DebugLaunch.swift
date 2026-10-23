@@ -34,6 +34,8 @@ nonisolated enum DebugLaunch {
     static var server: String? { raw("DOCMOST_DEBUG_SERVER") }
     /// In place of the server's version, e.g. `0.97.0` for read-only pages (`ReadySession.newerServerVersion`).
     static var serverVersion: String? { value("DOCMOST_DEBUG_SERVER_VERSION") }
+    /// The app reports offline for its first seconds, then the real state (UI tests of going back online).
+    static var offlineSeconds: Double? { value("DOCMOST_DEBUG_OFFLINE_SECONDS").flatMap(Double.init) }
     static var email: String? { raw("DOCMOST_DEBUG_EMAIL") }
     static var password: String? { raw("DOCMOST_DEBUG_PASSWORD") }
 
