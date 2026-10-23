@@ -2,7 +2,7 @@
 
 <img src="Docs/icon.png" width="96" height="96" align="right" alt="Diderot app icon">
 
-A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0. Diderot is an independent project, not affiliated with Docmost.
+A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0. Diderot is an independent project, not affiliated with Docmost. It collects no data: see the [privacy policy](Docs/Privacy.md).
 
 ## Goals
 
@@ -98,7 +98,7 @@ Please report bugs as a [GitHub issue](https://github.com/f1n3d/diderot/issues/n
 | `DiderotTests/` | App tests (Swift Testing). |
 | `DiderotUITests/` | UI tests (XCTest) against the dev instance, in their own scheme `DiderotUI`. |
 | `Design/` | The icon's source, `diderot_icon.png`; `Tools/icon/prepare-icon.swift` makes the app icon and the images for GitHub from it. |
-| `Docs/` | Background documentation, e.g. [sign-in and authentication](Docs/SignIn.md), and the images for GitHub: the icon above and the link preview (`social-preview.png`, uploaded by hand under Settings › General › Social preview). |
+| `Docs/` | Background documentation, e.g. [sign-in and authentication](Docs/SignIn.md); the [privacy policy](Docs/Privacy.md) and the [App Store texts](Docs/AppStore.md); and the images for GitHub: the icon above and the link preview (`social-preview.png`, uploaded by hand under Settings › General › Social preview). |
 | `Tools/` | Scripts for the simulator, devices, dev content, the app icon and the third-party notices. |
 | `BACKLOG.md` | Open points for later. |
 
@@ -162,6 +162,7 @@ Tools/seed-bases.py <pageId>      # databases "Kanban-Test" (three cards) and "D
 DOCMOST_DEBUG_PAGE=<baseId> DOCMOST_DEBUG_BASE_VIEW=Board Tools/run-sim.sh   # open a database in a given view
 Tools/seed-demo.py [--language de] [--reset]   # space "Product Team" by the demo people Alex and Sam: pages, tasks, comments (screenshots)
 Tools/seed-demo.py --env .env.demo              # the same on the demo instance for Apple's App Review (settings in .env.demo, see the script)
+Tools/screenshots.sh                            # App Store screenshots of the demo space, iPhone 18 Pro Max and iPad Pro 13-inch, English and German, in Tools/screenshots/
 
 # Rebuild Mermaid for the islands (without ELK), then the notices
 node Tools/build-islands.mjs
