@@ -718,6 +718,43 @@ struct AppSessionRaceTests {
     }
 
     /// Signed in to a, with b saved as well.
+    // MARK: - Unsent page titles
+
+    /// A title the server didn't get waits on the device and goes out with the first try that reaches the server.
+    @Test func keptTitleGoesOutOnceTheServerAnswers() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: "s1")
+
+        StubURLProtocol.offline.withLock { $0 = true }
+        #expect(await session.sendUnsentTitles().isEmpty)
+        StubURLProtocol.offline.withLock { $0 = false }
+        #expect(await session.unsentTitle(pageId: "p1") == "Neu")
+
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Neu"}}"# }
+        defer { StubURLProtocol.body.withLock { $0 = nil } }
+        #expect(await session.sendUnsentTitles() == ["s1"])
+        #expect(await session.unsentTitle(pageId: "p1") == nil)
+        await removeCaches()
+    }
+
+    /// A title for a page deleted (or out of reach) meanwhile can never go: it doesn't wait forever.
+    @Test func keptTitleOfAGonePageIsDropped() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: "s1")
+
+        StubURLProtocol.status.withLock { $0 = 404 }
+        StubURLProtocol.body.withLock { $0 = #"{"statusCode": 404, "message": "Page not found"}"# }
+        defer {
+            StubURLProtocol.status.withLock { $0 = 200 }
+            StubURLProtocol.body.withLock { $0 = nil }
+        }
+        #expect(await session.sendUnsentTitles().isEmpty)
+        #expect(await session.unsentTitle(pageId: "p1") == nil)
+        await removeCaches()
+    }
+
     private func sessionOnA() async throws -> AppSession {
         try store.save(StoredSession(serverURL: b, token: "b"))
         try store.save(StoredSession(serverURL: a, token: "a"))

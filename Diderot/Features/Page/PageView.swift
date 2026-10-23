@@ -26,6 +26,8 @@ struct PageView: View {
     @State private var position = ScrollPosition(edge: .top)
     @State private var externalURL: URL?
     @State private var toast: String?
+    /// A title the server didn't get yet (`UnsentTitle`): shown with a note until it goes out.
+    @State private var unsentTitle: String?
     @State private var title = ""
     @FocusState private var titleFocused: Bool
     /// Title whose save is running: a focus loss right after leaving the page would send it a second time.
@@ -297,6 +299,7 @@ struct PageView: View {
         // Refreshes on every appearance, as the web does: coming back to a page deleted or unshared meanwhile shows that
         // instead of its old content, and a refresh cancelled by opening a subpage runs again.
         .task(id: selection.pageId) { await load(force: state.value != nil) }
+        .task(id: state.value?.id) { await showUnsentTitle() }
         .onChange(of: model?.engine?.document) { _, _ in
             model?.syncFromEngine()
             #if DEBUG
@@ -762,11 +765,17 @@ struct PageView: View {
                         .submitLabel(.done)
                         .accessibilityIdentifier("page-title")
                 } else {
-                    Text(page.displayTitle)
+                    Text(unsentTitle ?? page.displayTitle)
                         .font(.largeTitle.bold())
                         .textSelection(.enabled)
                         .accessibilityAddTraits(.isHeader)
                 }
+            }
+            if unsentTitle != nil {
+                Label("Not sent yet: the title goes to the server once it can be reached.", systemImage: "icloud.and.arrow.up")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("page-title-unsent")
             }
             HStack(spacing: 8) {
                 if let space = page.space {
@@ -865,8 +874,9 @@ struct PageView: View {
     }
 
     /// Title and icon go through REST and need no engine.
+    /// Offline the title and icon are read-only, like the text: a change couldn't be saved.
     private func canEditMeta(_ page: Page) -> Bool {
-        page.canEdit && !page.isInTrash
+        page.canEdit && !page.isInTrash && !offline.isOffline
     }
 
     private var webURL: URL? {
@@ -950,7 +960,7 @@ struct PageView: View {
     private func apply(page: Page, unsent: PMNode? = nil) {
         let isFirst = state.value == nil
         state = .loaded(page)
-        if !titleFocused { title = page.title ?? "" }
+        if !titleFocused { title = unsentTitle ?? page.title ?? "" }
         if isFirst, selection.focusTitle, canEditMeta(page) {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(350))
@@ -1065,23 +1075,46 @@ struct PageView: View {
 
     // MARK: - Actions
 
-    /// Saves an edited title; reads the view's values before the task starts, so it also works from `onDisappear`.
+    /// Saves an edited title; reads the view's values before the task starts, so it also works from `onDisappear`. One
+    /// the server doesn't get (offline, unreachable) stays on the device and goes out later (`AppSession.sendUnsentTitles`).
     private func commitTitle() {
         guard let page = state.value, session.client != nil else { return }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed != (page.title ?? ""), trimmed != savingTitle else { return }
         savingTitle = trimmed
         Task {
+            // First: an older kept title going out meanwhile would overwrite this one.
+            await session.forgetUnsentTitle(pageId: page.id)
             do {
                 // The response lacks permissions and space info, so reload instead of replacing the page.
                 _ = try await session.send(Endpoints.Pages.update(pageId: page.id, title: trimmed))
+                unsentTitle = nil
                 changes.pageChanged(in: page.spaceId)
                 await load(force: true)
-            } catch {
+            } catch where UnsentTitle.isFinal(error) {
                 toast = error.userMessage
+            } catch {
+                await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId)
+                unsentTitle = trimmed
+                toast = String(localized: "The title goes to the server once it can be reached.")
             }
             savingTitle = nil
         }
+    }
+
+    /// Shows the page's kept title, and sends it right away if the server answers again.
+    private func showUnsentTitle() async {
+        guard let page = state.value, let kept = await session.unsentTitle(pageId: page.id) else {
+            unsentTitle = nil
+            return
+        }
+        unsentTitle = kept
+        if !titleFocused { title = kept }
+        guard !offline.isOffline else { return }
+        for spaceId in await session.sendUnsentTitles() { changes.pageChanged(in: spaceId) }
+        guard await session.unsentTitle(pageId: page.id) == nil else { return }
+        unsentTitle = nil
+        await load(force: true)
     }
 
     private func setIcon(_ emoji: String?) async {

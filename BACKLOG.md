@@ -41,7 +41,6 @@ Decided on October 22, 2026, for later:
 - Toggling, callout type, code language and columns reach blocks by their position. If a collaborator moves blocks above in the roughly 150 ms before the tap, the change hits the wrong block. Very rare; to be solved for all of these places together (review finding on F45, October 14, 2026).
 - The app shows justified text left-aligned when reading and editing; the web justifies it (review note on F46, October 14, 2026). Checked on October 21, 2026: SwiftUI's Text and TextEditor can't justify, also in iOS 27.1 (only left, center, right). It would take a UIKit text view for such paragraphs, rebuilding links, comments, search and text selection, so it's postponed. Justification is kept when saving.
 - Page titles (review findings on N18, October 15, 2026):
-  - If saving fails when leaving (offline), the change is lost without a notice. A change that already failed when the title lost focus isn't sent again when leaving.
   - Returning to a page whose title had the focus when a subpage opened gives it the focus again, and the keyboard appears.
   - A page opened offline, whose title you change and leave with "Back" after the network returns, briefly opens a live connection in the background (web users see you as present for about 15 s). Other late reloads follow the same pattern.
 - Editing at the same time (review findings on F8 and F10, October 15, 2026):
