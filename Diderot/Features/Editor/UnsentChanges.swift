@@ -10,7 +10,8 @@ enum UnsentChanges {
 
     static func store(server: URL, userId: String) -> DiskCache {
         excludeFromBackup()
-        return DiskCache(scope: userId, baseDirectory: directory(of: server))
+        // Written as the app goes to the background, when the device may lock any moment: readable after the first unlock.
+        return DiskCache(scope: userId, baseDirectory: directory(of: server), protection: .afterFirstUnlock)
     }
 
     /// All users' changes for the server.
