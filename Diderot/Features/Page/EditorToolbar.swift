@@ -266,6 +266,11 @@ struct LinkSheet: View {
         return model.activeText[range].runs.first?.link
     }
 
+    /// The address as it gets linked: nil while empty, with spaces, or of a kind the web doesn't link either.
+    private var link: URL? {
+        ContentLinkRouter.normalizedLink(address).flatMap { ContentLinkRouter.isLinkable($0) ? $0 : nil }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -277,7 +282,11 @@ struct LinkSheet: View {
                         .onSubmit(apply)
                         .accessibilityIdentifier("link-address")
                 } footer: {
-                    Text(targetRange != nil ? "The link is applied to the selected text." : "Select text first to turn it into a link; otherwise the address is inserted as text.")
+                    if let typed = ContentLinkRouter.normalizedLink(address), !ContentLinkRouter.isLinkable(typed) {
+                        Text("Only web, mail and phone addresses can be linked.")
+                    } else {
+                        Text(targetRange != nil ? "The link is applied to the selected text." : "Select text first to turn it into a link; otherwise the address is inserted as text.")
+                    }
                 }
                 Section("Link to a page") {
                     TextField("Search pages", text: $pageQuery)
@@ -315,7 +324,7 @@ struct LinkSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Apply", action: apply)
-                        .disabled(ContentLinkRouter.normalizedLink(address) == nil)
+                        .disabled(link == nil)
                         .accessibilityIdentifier("link-apply")
                 }
             }
@@ -340,7 +349,7 @@ struct LinkSheet: View {
     }
 
     private func apply() {
-        guard let url = ContentLinkRouter.normalizedLink(address) else { return }
+        guard let url = link else { return }
         if let range = targetRange {
             model.activeText[range].link = url
         } else {

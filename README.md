@@ -30,6 +30,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - The workspace menu: members, profile, appearance, web settings, servers.
 - Page actions: copy link, favorite, export (Markdown or HTML, share sheet), duplicate, move or copy to another space, trash. Reorder the page tree or nest pages by holding and dragging (positions by fractional indexing, like the web client). A trash per space to restore or delete for good. Deep links: `diderot://open?url=…`.
 - A native reader for every Docmost content type (text, lists, code, callouts, tables, images, math, Mermaid, diagrams, video, PDF, attachments, subpages, synced blocks, footnotes), with the web layout as a fallback.
+- Links open as from the web in a browser: pages and database entries in the app, web pages in the in-app browser, mail, phone and messages through the system, another app only after asking, scripts and files never. Links in comments, versions, database fields and PDFs leave the app the same way.
 - Comments like on the web:
   - A button with the number of open comments, tabs for open and resolved ones.
   - Reply, edit, resolve and reopen, delete.

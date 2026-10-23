@@ -125,7 +125,8 @@ struct PDFBlockView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let document {
-                PDFKitView(document: document)
+                // A tap opens the full-screen view, also on a link: links open there.
+                PDFKitView(document: document, followsLinks: false)
                     .frame(height: 360)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(.separator)))
@@ -150,6 +151,7 @@ struct PDFBlockView: View {
                         .navigationTitle(media.name ?? "PDF")
                         .navigationBarTitleDisplayMode(.inline)
                 }
+                .opensExternalLinks()
             }
         }
     }
@@ -171,19 +173,33 @@ struct PDFBlockView: View {
     }
 }
 
+/// A PDF whose links open like those on the page (PDFKit would hand any of them to the system itself).
 struct PDFKitView: UIViewRepresentable {
     let document: PDFDocument
+    var followsLinks = true
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> PDFView {
         let view = PDFView()
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.document = document
+        view.delegate = context.coordinator
         return view
     }
 
     func updateUIView(_ view: PDFView, context: Context) {
         if view.document !== document { view.document = document }
+        context.coordinator.openURL = followsLinks ? context.environment.openURL : nil
+    }
+
+    final class Coordinator: NSObject, PDFViewDelegate {
+        var openURL: OpenURLAction?
+
+        func pdfViewWillClick(onLink sender: PDFView, with url: URL) {
+            openURL?(url)
+        }
     }
 }
 

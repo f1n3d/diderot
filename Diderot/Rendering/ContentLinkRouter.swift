@@ -45,6 +45,33 @@ nonisolated enum ContentLinkRouter {
         return URL(string: keep ? trimmed : "https://" + trimmed)
     }
 
+    /// Schemes the web editor links (TipTap's `isAllowedUri`); a relative link has none. Not scripts, data or other
+    /// apps.
+    static func isLinkable(_ url: URL) -> Bool {
+        url.scheme.map { ["http", "https", "ftp", "ftps", "mailto", "tel", "callto", "sms", "cid", "xmpp"].contains($0.lowercased()) } ?? true
+    }
+
+    /// How a link that leaves the app opens: as the web client in a browser opens it.
+    enum Opening: Equatable {
+        /// A web page: in the in-app browser.
+        case browser
+        /// Mail, phone, messages: the system shows its own sheet before anything happens.
+        case system
+        /// Another app: only after asking, as the browser asks.
+        case askFirst
+        /// Scripts, data, files (the web's `sanitizeUrl` drops the first ones) and the app's own schemes.
+        case never
+    }
+
+    static func opening(for url: URL) -> Opening {
+        switch url.scheme?.lowercased() {
+        case "http", "https": .browser
+        case "mailto", "tel", "sms": .system
+        case nil, "javascript", "data", "vbscript", "file", internalScheme, CommentLink.scheme, AtomLink.scheme: .never
+        default: .askFirst
+        }
+    }
+
     static func pageURL(slugId: String, anchor: String? = nil) -> URL {
         var text = "\(internalScheme)://page/\(slugId)"
         if let anchor, !anchor.isEmpty {

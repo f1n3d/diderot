@@ -1,16 +1,5 @@
 import SwiftUI
-import SafariServices
 import DocmostKit
-
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
-}
 
 struct BreadcrumbsView: View {
     let crumbs: [Breadcrumb]

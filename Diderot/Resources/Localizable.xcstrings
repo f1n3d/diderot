@@ -2598,6 +2598,16 @@
         }
       }
     },
+    "No app can open this link.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine App kann diesen Link öffnen."
+          }
+        }
+      }
+    },
     "No entries": {
       "localizations": {
         "de": {
@@ -2933,6 +2943,16 @@
         }
       }
     },
+    "Only web, mail and phone addresses can be linked.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Web-, Mail- und Telefonadressen lassen sich verlinken."
+          }
+        }
+      }
+    },
     "Open": {
       "localizations": {
         "de": {
@@ -2979,6 +2999,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Seite öffnen"
+          }
+        }
+      }
+    },
+    "Open in Another App?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In anderer App öffnen?"
           }
         }
       }
