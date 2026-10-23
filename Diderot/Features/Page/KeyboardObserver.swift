@@ -89,3 +89,34 @@ private extension UIResponder {
         FirstResponder.found = self
     }
 }
+
+/// Backspace at the start of the page editor's text, which SwiftUI's `TextEditor` doesn't report (the text doesn't
+/// change). The editor used to put an invisible character there for Backspace to delete, but iOS then saw a letter
+/// before the cursor: no capital letter and no sentence-start suggestions at a block's start. Hooks `deleteBackward`
+/// of the editor's text view class once; other text views of that class pass through (the handler answers `false`).
+/// The Return key stays with the text view: hooking `insertText` too left the keyboard at a sentence start while typing.
+@MainActor
+enum TextInputHooks {
+    static var onBackspaceAtStart: ((UITextView) -> Bool)?
+    private static var hooked: Set<ObjectIdentifier> = []
+
+    static func install(on view: UITextView) {
+        guard let cls = object_getClass(view), hooked.insert(ObjectIdentifier(cls)).inserted else { return }
+        let selector = #selector(UITextView.deleteBackward)
+        guard let method = class_getInstanceMethod(cls, selector) else { return }
+        typealias Function = @convention(c) (AnyObject, Selector) -> Void
+        let original = unsafeBitCast(method_getImplementation(method), to: Function.self)
+        let block: @convention(block) (AnyObject) -> Void = { object in
+            let handled = MainActor.assumeIsolated {
+                guard let view = object as? UITextView, view.selectedRange == NSRange(location: 0, length: 0) else { return false }
+                return onBackspaceAtStart?(view) ?? false
+            }
+            if !handled { original(object, selector) }
+        }
+        let implementation = imp_implementationWithBlock(block)
+        // An inherited method gets an override on this class only, so other subclasses of its superclass stay as they are.
+        if !class_addMethod(cls, selector, implementation, method_getTypeEncoding(method)) {
+            method_setImplementation(method, implementation)
+        }
+    }
+}

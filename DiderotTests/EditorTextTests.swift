@@ -13,14 +13,14 @@ struct EditorTextTests {
         }
     }
 
-    /// "Select All" in a fully bold paragraph also selects the invisible start character and its mentions: it still
-    /// reads as bold, and as not bold once a plain word is selected too. A mention alone reads as bold once it is.
+    /// "Select All" in a fully bold paragraph also selects its mentions: it still reads as bold, and as not bold once a
+    /// plain word is selected too. A mention alone reads as bold once it is.
     @Test func selectAllInBoldParagraphReadsBold() {
         var bold = AttributedString("Fett")
         bold.inlinePresentationIntent = .stronglyEmphasized
         var mention = AttributedString("@Ann")
         mention.docmost.inlineNode = #"{"type":"mention"}"#
-        let text = DocumentModel.withSentinel(bold + mention + bold)
+        let text = bold + mention + bold
         let isBold: (AttributeContainer) -> Bool = { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true }
 
         #expect(EditorText.allFormatted(text, in: RangeSet(text.startIndex..<text.endIndex), isBold))
@@ -183,13 +183,13 @@ struct EditorTextTests {
         }
         // Opens the inlines in the editor, selects all, applies the Bold button's change (if any) and saves.
         func saved(_ inlines: [PMNode], bold: Bool? = nil) -> [PMNode] {
-            var text = DocumentModel.withSentinel(DocumentModel.editorText(from: inlines))
+            var text = DocumentModel.editorText(from: inlines)
             var selection = AttributedTextSelection(range: text.startIndex..<text.endIndex)
             if let bold {
                 EditorText.transformRuns(of: &text, in: &selection) { EditorText.setIntent(.stronglyEmphasized, bold, in: &$0, base: .body) }
                 #expect(selection.indices(in: text) == .ranges(RangeSet(text.startIndex..<text.endIndex)), "selection kept")
             }
-            return DocumentModel.inlines(from: DocumentModel.stripped(text), base: .body)
+            return DocumentModel.inlines(from: text, base: .body)
         }
         #expect(saved(plain, bold: true) == saved(allBold))
         #expect(saved(allBold, bold: false) == saved(plain))

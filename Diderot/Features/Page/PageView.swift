@@ -443,6 +443,9 @@ struct PageView: View {
                     }
                     .accessibilityHidden(true)
             }
+            .overlay(alignment: .topLeading) {
+                if let model { PageEditor(model: model) }
+            }
             .coordinateSpace(.named(DocumentModel.documentSpace))
         }
         .scrollPosition($position, anchor: .top)

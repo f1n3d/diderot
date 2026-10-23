@@ -52,7 +52,7 @@ struct DocumentModelTests {
         engine.heldSave?.resume()
         await switching.value
         #expect(model.active?.ref.path == [0, 0, 0])
-        #expect(String(DocumentModel.stripped(model.activeText).characters) == "Eins!")
+        #expect(String(model.activeText.characters) == "Eins!")
 
         engine.document = PMNode(type: "doc", content: [list("orderedList", "Eins! Zwei")])  // a collaborator's edit
         model.syncFromEngine()
@@ -73,13 +73,11 @@ struct DocumentModelTests {
         model.syncFromEngine()
         model.activate(NodeRef(path: [0, 0], node: title), node: title)
 
-        model.activeText.insert(AttributedString("\n"), at: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 3))
+        model.activeText.insert(AttributedString("\n"), at: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 2))
         model.activeTextChanged()
         while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
 
         #expect(engine.saved.map(\.plainText) == ["TiTel"])
-        // Focus moved on; until the new editor takes it, the title's editor shows the title.
-        #expect(String(DocumentModel.stripped(model.handoffText).characters) == "TiTel")
         let insert = try #require(engine.inserted.first)
         #expect(insert.node == PMNode(type: "paragraph") && insert.target == .path([0, 1, 0]) && insert.position == .before)
     }
@@ -97,8 +95,7 @@ struct DocumentModelTests {
 
         if backspace {
             model.activate(NodeRef(path: [1], node: line), node: line)
-            model.activeText = AttributedString()  // the sentinel deleted
-            model.activeTextChanged()
+            #expect(model.backspaceAtStart())
             while model.active?.ref.path == [1] { try await Task.sleep(for: .milliseconds(10)) }
             #expect(model.active?.ref.path == [0, 0])
         } else {
@@ -292,7 +289,7 @@ struct DocumentModelTests {
         #expect(engine.replaced.isEmpty)
         if template == .paragraph {
             #expect(engine.inserted.isEmpty)
-            #expect(String(DocumentModel.stripped(model.activeText).characters) == "Kollege")
+            #expect(String(model.activeText.characters) == "Kollege")
         } else {
             let insert = try #require(engine.inserted.first)
             #expect(insert.target == .id("b") && insert.position == .before)
@@ -380,8 +377,7 @@ struct DocumentModelTests {
         model.activate(NodeRef(path: [0, 0, 0], node: line), node: line)
 
         if backspace {
-            model.activeText = AttributedString()  // the sentinel deleted
-            model.activeTextChanged()
+            #expect(model.backspaceAtStart())
             try await Task.sleep(for: .milliseconds(50))
             #expect(engine.inserted.isEmpty)
         } else {
@@ -443,7 +439,7 @@ struct DocumentModelTests {
         try await Task.sleep(for: .milliseconds(600))  // longer than an inline command waits for the editor's focus
 
         #expect(model.active?.ref == NodeRef(path: [1], id: "b"))
-        #expect(String(DocumentModel.stripped(model.activeText).characters).isEmpty)
+        #expect(String(model.activeText.characters).isEmpty)
         #expect(engine.saved.map(\.plainText) == ["Eins"])
     }
 
@@ -636,7 +632,7 @@ struct DocumentModelTests {
         model.syncFromEngine()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
 
-        let beforeMention = model.activeText.characters.index(model.activeText.startIndex, offsetBy: 5)  // sentinel, "see "
+        let beforeMention = model.activeText.characters.index(model.activeText.startIndex, offsetBy: 4)  // "see "
         model.activeText.insert(AttributedString(mark), at: beforeMention)
         model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
         model.activeTextChanged()
@@ -659,18 +655,18 @@ struct DocumentModelTests {
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         let opened = model.activeText
 
-        // Types "X" at a character offset (0 is the sentinel) and returns the marks it is saved with.
+        // Types "X" at a character offset and returns the marks it is saved with.
         func marks(typingAt offset: Int) throws -> [String] {
             model.activeText = opened
             model.activeSelection = AttributedTextSelection(insertionPoint: opened.characters.index(opened.startIndex, offsetBy: offset))
             model.activeSelectionChanged()
             model.activeText.replaceSelection(&model.activeSelection, withCharacters: "X")
-            let saved = DocumentModel.inlines(from: DocumentModel.stripped(model.activeText), base: .body)
+            let saved = DocumentModel.inlines(from: model.activeText, base: .body)
             return try #require(saved.first { $0.text?.contains("X") == true }).marks?.map(\.type) ?? []
         }
-        #expect(try marks(typingAt: 3) == ["bold", "link"])  // inside the link
-        #expect(try marks(typingAt: 5) == ["bold"])  // at its end, before more text
-        #expect(try marks(typingAt: 12) == [])  // at its end, at the end of the paragraph
+        #expect(try marks(typingAt: 2) == ["bold", "link"])  // inside the link
+        #expect(try marks(typingAt: 4) == ["bold"])  // at its end, before more text
+        #expect(try marks(typingAt: 11) == [])  // at its end, at the end of the paragraph
     }
 
     /// No `type` (the server snapshot lacks schema defaults) or one the app doesn't know (newer server): both show as
@@ -687,7 +683,7 @@ struct DocumentModelTests {
         #expect(kind(["type": "default"]) == .default)
     }
 
-    /// The heading's editor hands its bold font to the model: Cmd-I there (heading font plus italic, as probed in the
+    /// The heading hands its bold font to the model: Cmd-I in its editor (heading font plus italic, as probed in the
     /// editor) saves italic without a bold mark.
     @Test(.timeLimit(.minutes(1))) func headingItalicSavesNoBold() async throws {
         let heading = PMNode(type: "heading", attrs: ["level": 1], content: [PMNode(type: "text", text: "Titel")])
@@ -750,8 +746,7 @@ struct DocumentModelTests {
             model.syncFromEngine()
         }
 
-        model.activeText = DocumentModel.stripped(model.activeText)  // Backspace at the start deletes the sentinel
-        model.activeTextChanged()
+        #expect(model.backspaceAtStart())
         while engine.saved.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(200))
 
@@ -759,8 +754,8 @@ struct DocumentModelTests {
         #expect(engine.deleted == [.id("b")])
     }
 
-    /// Return in an empty list item continues after the list and removes the item once the cursor has moved. A
-    /// collaborator's list arriving above meanwhile sits at the list's old path and must stay.
+    /// Return in an empty list item continues after the list and removes the item (here its whole list) once the cursor
+    /// has moved, which with the page's one editor is right away. A collaborator's list arriving above afterwards stays.
     @Test(.timeLimit(.minutes(1))) func leftListIsRemovedOnlyWhereItWas() async throws {
         func list(_ id: String) -> PMNode {
             PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [PMNode(type: "paragraph", attrs: ["id": .string(id)])])])
@@ -777,11 +772,12 @@ struct DocumentModelTests {
         model.activeText.append(AttributedString("\n"))
         model.activeTextChanged()
         while model.active?.ref.id != "b" { try await Task.sleep(for: .milliseconds(10)) }
-        engine.document = PMNode(type: "doc", content: [list("x"), list("a"), after])
+        while engine.deleted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        engine.document = PMNode(type: "doc", content: [list("x"), after])
         model.syncFromEngine()
         try await Task.sleep(for: .milliseconds(200))
 
-        #expect(engine.deleted.isEmpty)
+        #expect(engine.deleted == [.path([0], type: "bulletList")])
     }
 
     /// Return in an empty item in the middle of a list splits the list there, as the web does: the paragraph goes
@@ -819,11 +815,11 @@ struct DocumentModelTests {
         }
 
         if backspace {
-            model.activeText = AttributedString()  // the sentinel deleted
+            #expect(model.backspaceAtStart())
         } else {
             model.activeText.append(AttributedString("\n"))
+            model.activeTextChanged()
         }
-        model.activeTextChanged()
         while engine.deleted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
 
         #expect(engine.splitAfter.isEmpty)

@@ -85,13 +85,13 @@ nonisolated enum EditorText {
         attributes.inlinePresentationIntent = intents.isEmpty ? nil : intents
     }
 
-    /// Whether the selected text all passes `check`. The invisible start character doesn't count, and an inline node
-    /// (mention, status, formula) only where it has the format itself, as on the web: "Select All" on a bold paragraph
-    /// reads as bold, and so does a mention (or part of one) made bold.
+    /// Whether the selected text all passes `check`. An inline node (mention, status, formula) counts only where it has
+    /// the format itself, as on the web: "Select All" on a bold paragraph reads as bold, and so does a mention (or part
+    /// of one) made bold.
     static func allFormatted(_ text: AttributedString, in ranges: RangeSet<AttributedString.Index>,
                              _ check: (AttributeContainer) -> Bool) -> Bool {
         let runs = text[ranges].runs.filter { run in
-            text[run.range].characters.contains { $0 != DocumentModel.sentinel } && (run.docmost.inlineNode == nil || check(run.attributes))
+            !text[run.range].characters.isEmpty && (run.docmost.inlineNode == nil || check(run.attributes))
         }
         return !runs.isEmpty && runs.allSatisfy { check($0.attributes) }
     }
