@@ -53,7 +53,7 @@ struct NodeView: View {
         case "taskList":
             TaskListNodeView(model: model, node: node, ref: ref)
         case "blockquote":
-            BlockquoteView { NodeListView(model: model, nodes: node.children, parentPath: ref.path) }
+            BlockquoteView { NodeListView(model: model, nodes: node.children, parentPath: ref.path).clearOfBlockActions() }
         case "callout":
             CalloutNodeView(model: model, node: node, ref: ref)
         case "details":
@@ -511,6 +511,7 @@ struct CalloutNodeView: View {
                         .foregroundStyle(kind.tint)
                 }
                 NodeListView(model: model, nodes: node.children, parentPath: ref.path)
+                    .clearOfBlockActions(inset: 12)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -747,6 +748,7 @@ struct ToggleNodeView: View {
                 .accessibilityLabel(isExpanded ? "Collapse" : "Expand")
                 if let summary = node.children.first {
                     NodeView(model: model, node: summary, ref: NodeRef(path: ref.path + [0], node: summary))
+                        .clearOfBlockActions()
                 }
             }
             if isExpanded {
@@ -939,6 +941,34 @@ struct TableNodeView: View {
     }
 }
 
+extension EnvironmentValues {
+    /// The page shows the block's "…" (`BlockActionsButton`) at its top right, over the block.
+    @Entry var showsBlockActions = false
+}
+
+extension View {
+    /// Keeps text inside a block clear of the block's "…" at its top right, where the page shows one. `inset`: room
+    /// the block already has there (a callout's padding); `applies`: whether this part sits at the top right.
+    func clearOfBlockActions(inset: CGFloat = 0, applies: Bool = true) -> some View {
+        modifier(ClearOfBlockActions(inset: inset, applies: applies))
+    }
+}
+
+private struct ClearOfBlockActions: ViewModifier {
+    let inset: CGFloat
+    let applies: Bool
+    @Environment(\.showsBlockActions) private var showsBlockActions
+    /// The button's width: a `.title3` symbol with 6 points on each side, growing with the text size as it does.
+    @ScaledMetric(relativeTo: .title3) private var buttonWidth: CGFloat = 34
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.trailing, showsBlockActions && applies ? max(buttonWidth - inset, 0) : 0)
+            // Blocks inside have a button of their own, or none.
+            .environment(\.showsBlockActions, false)
+    }
+}
+
 /// The "…" that opens a block's actions.
 struct BlockActionsButton: View {
     let action: () -> Void
@@ -1056,6 +1086,7 @@ private struct BlockDragModifier: ViewModifier {
         // would rebuild every block (formulas re-render, media reload).
         if model.engine != nil {
             content
+                .environment(\.showsBlockActions, model.isEditable && showsMenuButton)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
                 .overlay(alignment: insertBefore ? .top : .bottom) {
                     if isTargeted {

@@ -64,6 +64,8 @@ struct ColumnsNodeView: View {
     private func column(for entry: NodeEntry, count: Int) -> some View {
         let index = entry.ref.path.last ?? 0
         return NodeListView(model: model, nodes: entry.node.children, parentPath: entry.ref.path)
+            // Side by side, the last column has the top right corner; stacked, the first.
+            .clearOfBlockActions(applies: sideBySide ? index == count - 1 : index == 0)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .overlay {
                 if isActive {
