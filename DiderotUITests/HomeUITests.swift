@@ -62,7 +62,7 @@ import XCTest
         snapshot(app, "19-search-results")
         result.tap()
         waitForPage(app, "Page from the result doesn't open")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        backButton(app).tap()
         XCTAssertTrue(result.waitForExistence(timeout: 10), "Results missing after “Back”")
     }
 
@@ -134,7 +134,7 @@ import XCTest
             Thread.sleep(forTimeInterval: 0.8)
             app.typeText(text + "\n")
             XCTAssertTrue(app.navigationBars[saved].waitForExistence(timeout: 15), "Title “\(saved)” wasn't saved")
-            app.navigationBars.buttons.element(boundBy: 0).tap()
+            backButton(app).tap()
         }
         editTitle(original, typing: suffix, saved: renamed)
         let shown = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", renamed)).firstMatch.waitForExistence(timeout: 10)
@@ -159,7 +159,7 @@ import XCTest
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.9)).tap()
         Thread.sleep(forTimeInterval: 0.8)
         app.typeText(suffix)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        backButton(app).tap()
         XCTAssertTrue(row.waitForExistence(timeout: 10), "Recently Updated doesn't show after “Back”")
         row.tap()
         let saved = app.navigationBars[renamed].waitForExistence(timeout: 15)
@@ -180,7 +180,7 @@ import XCTest
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'All'")).firstMatch.tap()
         let original = "Datenbank-Einbettung", suffix = " \(stamp)", renamed = original + suffix
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", original)).firstMatch
-        let field = app.textFields["page-title"], back = app.navigationBars.buttons.element(boundBy: 0)
+        let field = app.textFields["page-title"]
         // Opens the page from the list and waits for its title.
         func open(_ title: String) {
             XCTAssertTrue(row.waitForExistence(timeout: 20), "“\(original)” missing from the list")
@@ -203,17 +203,17 @@ import XCTest
         }
         open(original)
         pageMenu(["Add to Favorites", "Zu Favoriten hinzufügen"])
-        back.tap()
+        backButton(app).tap()
         button(app, labels: ["Favorites", "Favoriten"]).tap()
         open(original)
         edit(typing: suffix, saved: renamed)
-        back.tap()
+        backButton(app).tap()
         let shown = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", renamed)).firstMatch.waitForExistence(timeout: 10)
         snapshot(app, "48-after-back")
         open(renamed)
         edit(typing: String(repeating: XCUIKeyboardKey.delete.rawValue, count: suffix.count), saved: original)
         pageMenu(["Remove from Favorites", "Aus Favoriten entfernen"])
-        back.tap()
+        backButton(app).tap()
         // Also waits for the removal to reach the server before the app ends.
         let removed = row.waitForNonExistence(timeout: 10)
         XCTAssertTrue(shown, "Favorites still show the old title after “Back”")

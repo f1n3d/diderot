@@ -13,7 +13,7 @@ import XCTest
 
     private func closeDetailIfOpen(_ app: XCUIApplication) {
         guard element(app, "base-row-detail").exists else { return }
-        element(app, "base-detail-done").tap()
+        tapSheetBarButton(element(app, "base-detail-done"), in: element(app, "base-row-detail"))
         XCTAssertTrue(element(app, "base-row-detail").waitForNonExistence(timeout: 8), "Detail sheet doesn't close")
     }
 
@@ -202,7 +202,7 @@ import XCTest
         let openLink = app.links.matching(NSPredicate(format: "label IN %@", ["Open Link", "Link öffnen"])).firstMatch
         for _ in 0..<5 where !openLink.isHittable { app.swipeUp() }
         openLink.tap()
-        let close = button(app, labels: ["Close", "Schließen"])
+        let close = browserCloseButton(app)
         XCTAssertTrue(close.waitForExistence(timeout: 10), "The link field doesn't open the in-app browser")
         snapshot(app, "65-link-field")
         close.tap()
@@ -306,7 +306,7 @@ import XCTest
         XCTAssertTrue(option.waitForExistence(timeout: 10), "New option doesn't appear")
         XCTAssertTrue(option.isSelected, "New option isn't selected")
         snapshot(app, "26-tags")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        backButton(app).tap()
         XCTAssertTrue(waitForLabel(element(app, "base-field-\(tagsId)"), contains: "UITest-Option\(stamp)"), "Tag missing from the detail sheet")
 
         // Number: Aufwand (effort) 4.5; the server computes formula "Doppelt" as 9, checked below.
@@ -342,7 +342,7 @@ import XCTest
         snapshot(app, "26-detail-edited")
 
         // Close: the row shows in the table. A tap on its status cell jumps to the status field.
-        element(app, "base-detail-done").tap()
+        tapSheetBarButton(element(app, "base-detail-done"), in: element(app, "base-row-detail"))
         let titleCell = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "base-cell-\(titleId)", title)).firstMatch
         XCTAssertTrue(titleCell.waitForExistence(timeout: 10), "New entry missing from the table")
         snapshot(app, "26-table")
@@ -356,16 +356,17 @@ import XCTest
         // scrolled-away list cells count as hittable while inside the window.
         let bar = app.navigationBars[title].frame
         XCTAssertLessThan(status.frame.minY - bar.maxY, 60, "Detail sheet doesn't jump to the tapped field")
-        XCTAssertLessThanOrEqual(titleField.frame.maxY, bar.maxY + 1, "Title still in view")
+        // Gone from the tree counts too: on short displays (iPhone Duo) the list drops it.
+        XCTAssertTrue(!titleField.exists || titleField.frame.maxY <= bar.maxY + 1, "Title still in view")
         // Scroll a bit further, open a picker list and go back: the sheet stays put and doesn't jump to status again.
         let tags = element(app, "base-field-\(tagsId)")
         let statusTop = status.frame.minY
         dragDetail(app, by: 120)
-        XCTAssertGreaterThan(statusTop - status.frame.minY, 60, "Dragging doesn't scroll the detail sheet")
+        XCTAssertTrue(!status.exists || statusTop - status.frame.minY > 60, "Dragging doesn't scroll the detail sheet")
         let before = tags.frame.minY
         tags.tap()
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "Tag list doesn't open")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        backButton(app).tap()
         XCTAssertTrue(tags.waitForExistence(timeout: 5), "Detail sheet missing after the tag list")
         Thread.sleep(forTimeInterval: 1.0)
         XCTAssertLessThan(abs(tags.frame.minY - before), 40, "Detail sheet jumps back to status after the picker list")
