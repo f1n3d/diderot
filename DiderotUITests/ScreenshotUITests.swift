@@ -24,6 +24,13 @@ import XCTest
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", language == "de" ? german : english)).firstMatch
     }
 
+    /// Waits until the page's engine has synced and its status says so.
+    private func waitForSaved(_ app: XCUIApplication) {
+        let pill = element(app, "page-status")
+        XCTAssertTrue(pill.waitForExistence(timeout: 40), "Page didn't load")
+        wait(for: [expectation(for: NSPredicate(format: "label IN %@", ["Saved", "Gespeichert"]), evaluatedWith: pill)], timeout: 30)
+    }
+
     /// The whole screen, status bar included, as `<name>.png` in the script's folder.
     private func shoot(_ name: String, settle: TimeInterval = 1.5) {
         Thread.sleep(forTimeInterval: settle)
@@ -55,9 +62,7 @@ import XCTest
         let item = text(app, "Decisions", "Entscheidungen")
         XCTAssertTrue(item.waitForExistence(timeout: 30), "Weekly Sync missing")
         // Editable once the engine has synced, as the editor tests wait for it.
-        let pill = element(app, "page-status")
-        XCTAssertTrue(pill.waitForExistence(timeout: 40), "Page didn't load")
-        wait(for: [expectation(for: NSPredicate(format: "label IN %@", ["Saved", "Gespeichert"]), evaluatedWith: pill)], timeout: 30)
+        waitForSaved(app)
         // At the end of the line, as the editor tests tap.
         item.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.85)).withOffset(CGVector(dx: -2, dy: 0)).tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "Editing doesn't start (on-screen keyboard off?)")
@@ -70,6 +75,8 @@ import XCTest
     func test4_Comments() {
         let app = launch(page: "sync", ["DOCMOST_DEBUG_ROUTE": "comments"])
         XCTAssertTrue(text(app, "Tuesday it is", "dann Dienstag").waitForExistence(timeout: 30), "Comments missing")
+        // On the iPad the page shows behind the comments, its status too.
+        waitForSaved(app)
         shoot("4-comments")
     }
 
