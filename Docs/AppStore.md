@@ -45,7 +45,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Changes made offline go out once you're back online
 >
 > DATABASES, SEARCH, ACTIVITY
-> • Tables and boards of Docmost databases, with editing and new entries
+> • Tables and boards of Docmost databases, with editing and new entries (needs a Docmost license with databases, Business and up)
 > • Search across your spaces, favorites, recently opened pages, and the trash
 > • The activity feed with mentions and comments
 >
@@ -89,7 +89,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Offline gemachte Änderungen gehen raus, sobald du wieder online bist
 >
 > DATENBANKEN, SUCHE, AKTIVITÄT
-> • Tabellen und Boards von Docmost-Datenbanken, mit Bearbeiten und neuen Einträgen
+> • Tabellen und Boards von Docmost-Datenbanken, mit Bearbeiten und neuen Einträgen (braucht eine Docmost-Lizenz mit Datenbanken, ab Business)
 > • Suche über deine Bereiche, Favoriten, zuletzt geöffnete Seiten und der Papierkorb
 > • Die Aktivität mit Erwähnungen und Kommentaren
 >
@@ -112,6 +112,8 @@ Notes for Apple's reviewers (English). The demo account's email and password go 
 >
 > 1. Open the app and enter the server address: <DEMO_URL>
 > 2. Sign in with the demo account below (email and password).
-> 3. The space "Product Team" has sample pages, a task database and a comment thread. Everything can be edited.
+> 3. The space "Product Team" has sample pages and a comment thread. Everything can be edited.
+>
+> Docmost's databases (tables and boards) need a Docmost license with databases (Business and up) on the server, which the demo server doesn't have. The attached video shows them on a licensed server.
 >
 > The app sends data only to the Docmost server the user signs in to; it collects nothing itself.
