@@ -15,6 +15,8 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 | Privacy policy URL | https://github.com/f1n3d/diderot/blob/main/Docs/Privacy.md |
 | App privacy | Data Not Collected |
 | License agreement | Apple's standard agreement |
+| Availability | All countries and regions except China mainland, which needs an ICP filing; new ones automatically |
+| Copyright | 2026 f1n3d |
 
 ## English
 
