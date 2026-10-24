@@ -240,7 +240,7 @@ def pages(t, member, colleague):
                         "Wohin sich die App dieses Jahr entwickelt. Jedes Quartal hat ein Ziel, das alle kennen.")),
             table((t("Quarter", "Quartal"), t("Goal", "Ziel"), "Status"),
                   ("Q1", t("Offline editing", "Offline bearbeiten"), (status(t("Done", "Erledigt"), "green"),)),
-                  ("Q2", t("Shared databases", "Gemeinsame Datenbanken"), (status(t("In progress", "In Arbeit"), "blue"),)),
+                  ("Q2", t("Shared databases", "Team-Datenbanken"), (status(t("In progress", "In Arbeit"), "blue"),)),
                   ("Q3", t("Faster search", "Schnellere Suche"), (status(t("Planned", "Geplant"), "gray"),)),
                   ("Q4", t("iPad multitasking", "iPad-Multitasking"), (status(t("Planned", "Geplant"), "gray"),))),
             heading(2, t("How a release ships", "So geht ein Release raus")),
