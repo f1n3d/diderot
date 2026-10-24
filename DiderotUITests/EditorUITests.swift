@@ -252,7 +252,7 @@ import XCTest
 
         // Delete it permanently from the space's trash, so runs leave no pages behind; that confirmation shows at the
         // swiped row.
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        backButton(app).tap()
         let spaceTrash = app.buttons["space-trash"]
         XCTAssertTrue(spaceTrash.waitForExistence(timeout: 10), "Space trash button missing")
         spaceTrash.tap()
@@ -910,7 +910,7 @@ import XCTest
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Delete confirmation missing")
         confirm.tap()
         XCTAssertTrue(edited.waitForNonExistence(timeout: 10), "Deleted comment remains")
-        app.buttons["comments-done"].tap()
+        tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
 
         // Inline comment: double-tap the first word on the first line (earlier tests make the paragraph wrap).
         let editor = edit(app, blockContaining: "Erster Absatz")
@@ -934,7 +934,7 @@ import XCTest
         let inlineComment = app.staticTexts.matching(NSPredicate(format: "label == %@", "Inline\(stamp)")).firstMatch
         XCTAssertTrue(inlineComment.waitForExistence(timeout: 10), "Tapping the passage doesn't open its comment")
         snapshot(app, "33-inline-comment")
-        app.buttons["comments-done"].tap()
+        tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
     }
 
     /// Links leave the app as from the web client in a browser (the last paragraph of Tools/editor-test-page.json): a
@@ -943,7 +943,7 @@ import XCTest
     /// open in the in-app browser too, the latter over the comments.
     func test64_LinksLeaveTheAppAsInABrowser() {
         let app = launchPage()
-        let close = button(app, labels: ["Close", "Schließen"])
+        let close = browserCloseButton(app)
         app.buttons["page-more"].tap()
         let openInBrowser = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label IN %@", ["Open in Browser", "Im Browser öffnen"])).firstMatch
@@ -981,7 +981,7 @@ import XCTest
         snapshot(app, "64-comment-link")
         close.tap()
         XCTAssertTrue(element(app, "comments-composer").waitForExistence(timeout: 5), "The comments close with the browser")
-        app.buttons["comments-done"].tap()
+        tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
     }
 
     /// The web layout shows the page's HTML and stays on it: a link there opens as on the page (a web page in the
@@ -1000,7 +1000,7 @@ import XCTest
         for _ in 0..<6 where !link.isHittable { app.webViews.firstMatch.swipeUp() }
         snapshot(app, "66-web-layout")
         link.tap()
-        let close = button(app, labels: ["Close", "Schließen"])
+        let close = browserCloseButton(app)
         XCTAssertTrue(close.waitForExistence(timeout: 10), "A link in the web layout doesn't open the in-app browser")
         close.tap()
         XCTAssertTrue(link.waitForExistence(timeout: 5), "The web layout left the page")
@@ -1018,17 +1018,24 @@ import XCTest
         let link = app.webViews.links["Beispielseite"]
         XCTAssertTrue(link.waitForExistence(timeout: 40), "The web editor doesn't show the page")
         for _ in 0..<8 where !link.isHittable { app.webViews.firstMatch.swipeUp() }
+        // Its popover opens below it: lift it into the upper half, clear of WebKit's bar above the keyboard.
+        let middle = app.windows.firstMatch.frame.midY
+        if link.frame.midY > middle {
+            let start = app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let shift = max(-300, middle * 0.6 - link.frame.midY)
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: shift)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
         link.tap()
         // The popover's link shows its address (twice in the tree: the link and its text).
         let open = app.webViews.links["https://example.com/diderot-uitest"].firstMatch
         XCTAssertTrue(open.waitForExistence(timeout: 5), "The link's popover doesn't open in the web editor")
         snapshot(app, "67-web-editor-link")
         open.tap()
-        let close = button(app, labels: ["Close", "Schließen"])
+        let close = browserCloseButton(app)
         XCTAssertTrue(close.waitForExistence(timeout: 10), "A link opened in the web editor doesn't use the in-app browser")
         close.tap()
         XCTAssertTrue(link.waitForExistence(timeout: 5), "The web editor left the page")
-        button(app, labels: ["Done", "Fertig"]).tap()
+        tapSheetBarButton(button(app, labels: ["Done", "Fertig"]), in: app.webViews.firstMatch)
     }
 
     /// A version opened from "Page History" loads its media like the page itself: the image of "Fixture: Media"
@@ -1461,7 +1468,7 @@ import XCTest
         XCTAssertTrue(space.waitForExistence(timeout: 10), "Space chip missing")
         space.tap()
         XCTAssertTrue(app.textFields["space-search"].waitForExistence(timeout: 20), "Space doesn't open from the page")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        backButton(app).tap()
         waitForSync(app)
         let editor = edit(app, blockContaining: "Punkt eins")
         editor.typeText(" Erneut\(stamp)")
@@ -1555,7 +1562,7 @@ import XCTest
         let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'example.com'")).firstMatch
         XCTAssertTrue(scrollTo(card, in: app), "Embed card missing")
         card.tap()
-        let close = button(app, labels: ["Close", "Schließen"])
+        let close = browserCloseButton(app)
         let opened = close.waitForExistence(timeout: 10)
         snapshot(app, "46-safari")
         XCTAssertTrue(opened, "Tapping the embed card doesn't open Safari")

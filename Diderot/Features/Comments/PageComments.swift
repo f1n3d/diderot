@@ -47,7 +47,8 @@ final class PageComments {
     }
 
     /// Page comment or reply.
-    func create(text: String, replyTo: PageComment?) async throws {
+    @discardableResult
+    func create(text: String, replyTo: PageComment?) async throws -> PageComment {
         try await change(Endpoints.Comments.create(pageId: pageId, text: text, parentCommentId: replyTo?.id))
     }
 

@@ -31,6 +31,8 @@ struct CommentsView: View {
     @State private var isSending = false
     @State private var errorMessage: String?
     @State private var highlighted: String?
+    /// Thread just written in (a new one, or the one replied to), scrolled to above the composer.
+    @State private var revealId: String?
     @State private var confirmsDelete: PageComment?
     @FocusState private var composerFocused: Bool
 
@@ -110,6 +112,14 @@ struct CommentsView: View {
                 }
                 try? await Task.sleep(for: .seconds(1.6))
                 withAnimation(.easeOut(duration: 0.6)) { highlighted = nil }
+            }
+            .task(id: revealId) {
+                // On a short screen or with many threads, the new comment would land below the visible part or
+                // under the composer.
+                guard let revealId else { return }
+                try? await Task.sleep(for: .milliseconds(250))
+                withAnimation { proxy.scrollTo(revealId, anchor: .bottom) }
+                self.revealId = nil
             }
         }
     }
@@ -226,8 +236,10 @@ struct CommentsView: View {
             defer { isSending = false }
             do {
                 switch mode {
-                case .new: try await comments.create(text: text, replyTo: nil)
-                case .reply(let comment): try await comments.create(text: text, replyTo: comment)
+                case .new: revealId = try await comments.create(text: text, replyTo: nil).id
+                case .reply(let comment):
+                    try await comments.create(text: text, replyTo: comment)
+                    revealId = comment.parentCommentId ?? comment.id
                 case .edit(let comment): try await comments.update(comment, text: text)
                 }
                 compose(.new, text: "")

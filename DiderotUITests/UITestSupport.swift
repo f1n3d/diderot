@@ -48,6 +48,29 @@ import XCTest
         app.buttons.matching(NSPredicate(format: "label IN %@", labels)).firstMatch
     }
 
+    /// Taps a sheet's bar button such as Done. On the iPhone Duo's outer display the sheet's bar hides while its
+    /// content is scrolled down, so this first drags the content back, slowly from the left edge.
+    func tapSheetBarButton(_ button: XCUIElement, in sheet: XCUIElement) {
+        for _ in 0..<8 where !button.exists {
+            let start = sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.3))
+            start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 150)), withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        button.tap()
+    }
+
+    /// The in-app browser's close button: "Close", or "Cancel" on the iPhone Duo's outer display.
+    func browserCloseButton(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label IN %@ OR identifier == 'CancelBarItemButton'", ["Close", "Schließen"])).firstMatch
+    }
+
+    /// The back button that can be tapped, by its identifier: on the iPhone Duo's outer display the bar's buttons sit
+    /// in a column beside the status bar, outside the navigation bar's element. Under a sheet, the page's stays in
+    /// the tree but can't be tapped.
+    func backButton(_ app: XCUIApplication) -> XCUIElement {
+        let buttons = app.buttons.matching(identifier: "BackButton")
+        return buttons.allElementsBoundByIndex.first(where: \.isHittable) ?? buttons.firstMatch
+    }
+
     /// Asserts that the open confirmation shows as a popover at `anchor`, the frame of the view that opened it (read
     /// before tapping: a toolbar button hides while its popover shows). Attached to a whole screen, it would show at a
     /// fixed spot at the top.
@@ -55,9 +78,10 @@ import XCTest
         let popover = app.popovers.firstMatch
         XCTAssertTrue(popover.waitForExistence(timeout: 5), "Confirmation doesn't show as a popover")
         let frame = popover.frame
-        // Widest gap between the two frames; zero or less when they touch or overlap.
+        // Widest gap between the two frames; zero or less when they touch or overlap. Up to 24 points: on the iPhone
+        // Duo's outer display the popover can sit beside the view, its arrow in between.
         let gap = max(frame.minX - anchor.maxX, anchor.minX - frame.maxX, frame.minY - anchor.maxY, anchor.minY - frame.maxY)
-        XCTAssertLessThanOrEqual(gap, 4, "Confirmation \(frame) doesn't show at the view that opened it \(anchor)")
+        XCTAssertLessThanOrEqual(gap, 24, "Confirmation \(frame) doesn't show at the view that opened it \(anchor)")
     }
 
     /// Closes the open popover without choosing anything: taps the middle of the larger free band above or below it
