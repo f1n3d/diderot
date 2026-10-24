@@ -244,8 +244,8 @@ def pages(t, member, colleague):
                   ("Q3", t("Faster search", "Schnellere Suche"), (status(t("Planned", "Geplant"), "gray"),)),
                   ("Q4", t("iPad multitasking", "iPad-Multitasking"), (status(t("Planned", "Geplant"), "gray"),))),
             heading(2, t("How a release ships", "So geht ein Release raus")),
-            code("mermaid", t("flowchart LR\n  Idea --> Spec --> Build --> Review --> Release\n  Review -- changes --> Build",
-                              "flowchart LR\n  Idee --> Konzept --> Umsetzung --> Review --> Release\n  Review -- Änderungen --> Umsetzung")),
+            code("mermaid", t("flowchart TD\n  Idea --> Spec --> Build --> Review --> Release\n  Review -- changes --> Build",
+                              "flowchart TD\n  Idee --> Konzept --> Umsetzung --> Review --> Release\n  Review -- Änderungen --> Umsetzung")),
         )),
         (t("Weekly Sync", "Wöchentliche Abstimmung"), "📝", doc(
             paragraph(text(t("Attendees: ", "Dabei: "), "bold"), mention(member, member), ", ", mention(colleague, member)),
