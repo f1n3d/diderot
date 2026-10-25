@@ -32,14 +32,26 @@ struct ReadySession: Sendable {
     /// This user's changes the server hasn't confirmed yet.
     var unsentChanges: DiskCache { UnsentChanges.store(server: server.url, userId: currentUser.user.id) }
 
-    /// The server's version if it is newer than the bundled editor's (Docmost 0.96, `Engine/`), which could damage
+    /// The server's version if it is newer than the bundled editor's (Docmost 0.97, `Engine/`), which could damage
     /// content it doesn't know: pages there open read-only. An unknown version counts as supported.
     var newerServerVersion: String? { Self.isNewerThanEditor(serverVersion) ? serverVersion : nil }
 
+    /// Docmost 0.97 or newer: tabs, integration links and sorted sub-pages can be added. An unknown version doesn't
+    /// count: on an older server they would get lost.
+    var hasDocmost097Features: Bool { Self.supportsDocmost097(serverVersion) }
+
+    static func supportsDocmost097(_ version: String?) -> Bool {
+        majorMinor(version).map { $0 >= (0, 97) } ?? false
+    }
+
     static func isNewerThanEditor(_ version: String?) -> Bool {
+        majorMinor(version).map { $0 > (0, 97) } ?? false
+    }
+
+    private static func majorMinor(_ version: String?) -> (Int, Int)? {
         let parts = version?.trimmingPrefix("v").split(separator: ".").prefix(2).map { Int($0.prefix(while: \.isNumber)) }
-        guard let parts, parts.count == 2, let major = parts[0], let minor = parts[1] else { return false }
-        return (major, minor) > (0, 96)
+        guard let parts, parts.count == 2, let major = parts[0], let minor = parts[1] else { return nil }
+        return (major, minor)
     }
 }
 
@@ -103,6 +115,21 @@ final class AppSession {
     }
 
     var hasAccounts: Bool { !accounts.isEmpty }
+
+    /// Link previews of the signed-in session, made for its token; a new sign-in (or sign-out) starts afresh.
+    @ObservationIgnored private var previewStore: (token: String, store: LinkPreviewStore)?
+
+    /// The current server's link previews (Docmost 0.97 integration cards and mentions); nil before sign-in.
+    var linkPreviews: LinkPreviewStore? {
+        guard let ready else {
+            previewStore = nil
+            return nil
+        }
+        if let previewStore, previewStore.token == ready.token { return previewStore.store }
+        let store = LinkPreviewStore(client: ready.client, cache: ready.cache)
+        previewStore = (ready.token, store)
+        return store
+    }
 
     func isCurrent(_ account: StoredSession) -> Bool {
         guard let current = server?.url else { return false }

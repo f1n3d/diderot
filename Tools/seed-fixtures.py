@@ -5,6 +5,11 @@
     Tools/seed-fixtures.py            # creates the root node "Fixtures" if it is missing
     Tools/seed-fixtures.py --reset    # deletes the root node first (including subpages)
 
+Fixtures named `fixture-docmost-097*.json` hold content Docmost 0.97 introduced (tabs, integration links) and are
+left out on older servers, which would drop it; they get three child pages (Banana, apple, Cherry) for sorting.
+
+    DOCMOST_SEED_URL=http://localhost:3001 Tools/seed-fixtures.py --reset    # the 0.97 dev instance
+
 Placeholders in the JSON files: {{USER_ID}}, {{USER_NAME}}, {{PAGE_ID}}, {{PAGE_SLUGID}}, {{PAGE_SLUG}},
 {{PAGE_TITLE}} (page "Handbuch"), {{SELF_ID}} (the fixture page itself), {{IMAGE_*}} and {{FILE_*}}
 (uploaded files). The login token is cached in Tools/.cache (server limit: 10 logins/min).
@@ -123,6 +128,9 @@ def main():
         print("Fixtures already exist. Use --reset to recreate them.")
         return
 
+    version = api.post("version").get("currentVersion") or "0.0"
+    docmost_097 = tuple(int(part) for part in version.lstrip("v").split(".")[:2]) >= (0, 97)
+
     target = next((p for p in root_pages if p["title"] == "Handbuch"), root_pages[0])
     target_page = api.post("pages/info", {"pageId": target["id"]})
     root = api.post("pages/create", {"spaceId": space["id"], "title": ROOT_TITLE, "icon": "🧪",
@@ -131,6 +139,9 @@ def main():
     print(f"Root page \"{ROOT_TITLE}\" created ({root['id']}).")
 
     for path in sorted(FIXTURES.glob("fixture-*.json")):
+        if path.name.startswith("fixture-docmost-097") and not docmost_097:
+            print(f"  {path.name} left out: Docmost {version} is older than 0.97")
+            continue
         text = path.read_text()
         spec = json.loads(text)
         page = api.post("pages/create", {"spaceId": space["id"], "parentPageId": root["id"], "title": spec["title"], "icon": spec.get("icon")})
@@ -156,6 +167,10 @@ def main():
         content = json.loads(text)["content"]
         api.post("pages/update", {"pageId": page["id"], "content": content, "operation": "replace", "format": "json"})
         print(f"  {spec['title']} → {page['slugId']}")
+        if path.name.startswith("fixture-docmost-097"):
+            # Out of alphabetical order, so the sub-pages block's A–Z shows: apple, Banana, Cherry.
+            for title in ("Banana", "apple", "Cherry"):
+                api.post("pages/create", {"spaceId": space["id"], "parentPageId": page["id"], "title": title})
 
     # Long page for performance tests.
     blocks = []

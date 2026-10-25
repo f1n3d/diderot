@@ -12,6 +12,16 @@ import XCTest
         }
     }
 
+    /// Skips a test of content Docmost 0.97 introduced unless the dev server runs 0.97 or newer
+    /// (`PORT=3001 Tools/run-uitests.sh`; the script passes the server's version).
+    nonisolated func requireDocmost097() throws {
+        let version = environment["DOCMOST_SERVER_VERSION"] ?? ""
+        let parts = version.split(separator: ".").prefix(2).compactMap { Int($0) }
+        guard parts.count == 2, (parts[0], parts[1]) >= (0, 97) else {
+            throw XCTSkip("Needs Docmost 0.97 or newer, the server runs \(version.isEmpty ? "an unknown version" : version)")
+        }
+    }
+
     /// Launches the app signed in to the dev server. Spaces show as a list, or as tiles with `gridLayout`; that and
     /// `arguments` go to the argument domain, so they override the device setting for this launch only.
     func launchApp(extraEnvironment: [String: String] = [:], gridLayout: Bool = false, arguments: [String] = []) -> XCUIApplication {

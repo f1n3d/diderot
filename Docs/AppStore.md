@@ -56,7 +56,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Your sign-in stays in the Keychain; copies for offline reading can be read only while the device is unlocked
 > • Several servers side by side; sign in with a password, LDAP or single sign-on
 >
-> Diderot is open source (MIT) and works with Docmost 0.96. It is an independent project, not affiliated with Docmost.
+> Diderot is open source (MIT) and works with Docmost 0.96 and 0.97. It is an independent project, not affiliated with Docmost.
 
 **Keywords** (100 at most, separated by commas)
 
@@ -100,7 +100,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Deine Anmeldung bleibt im Schlüsselbund; Kopien zum Offline-Lesen sind nur bei entsperrtem Gerät lesbar
 > • Mehrere Server nebeneinander; Anmeldung per Passwort, LDAP oder Single Sign-on
 >
-> Diderot ist Open Source (MIT) und funktioniert mit Docmost 0.96. Es ist ein unabhängiges Projekt und nicht mit Docmost verbunden.
+> Diderot ist Open Source (MIT) und funktioniert mit Docmost 0.96 und 0.97. Es ist ein unabhängiges Projekt und nicht mit Docmost verbunden.
 
 **Schlüsselwörter** (höchstens 100, durch Kommas getrennt)
 

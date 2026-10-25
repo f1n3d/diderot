@@ -44,7 +44,11 @@ public struct Block: Sendable, Hashable, Identifiable {
         /// Column contents and their width shares (see `ContentParser.columnWeights(of:)`).
         case columns([[Block]], weights: [Double])
         case mathBlock(String)
-        case subpages
+        case subpages(sortBy: SubpagesSort)
+        /// Tabs: one shows at a time (Docmost 0.97).
+        case tabs([TabItem])
+        /// A link to another service shown as a card (Docmost 0.97).
+        case integrationCard(IntegrationLink)
         case transclusionSource([Block])
         case transclusionReference(sourcePageId: String?, transclusionId: String?)
         case base(pageId: String?)
@@ -84,6 +88,37 @@ public struct TaskItem: Sendable, Hashable, Identifiable {
 
 public enum CalloutKind: String, Sendable, Hashable, CaseIterable {
     case `default`, info, note, success, warning, danger
+}
+
+/// One tab of a tabs block.
+public struct TabItem: Sendable, Hashable, Identifiable {
+    /// The tab's `id`, or one from its position while the id is missing or an earlier tab has it (Docmost gives the
+    /// tab a new id with the next edit).
+    public let id: String
+    /// The label as plain text; empty if the tab has none.
+    public let label: String
+    public let blocks: [Block]
+}
+
+/// A link to an issue, pull request, design, message … in another service, which the server can describe
+/// (`Endpoints.Integrations.unfurl`).
+public struct IntegrationLink: Sendable, Hashable {
+    public let url: String
+    /// The service, e.g. `github`, `linear`, `figma`.
+    public let provider: String
+
+    public init(url: String, provider: String) {
+        self.url = url
+        self.provider = provider
+    }
+}
+
+/// The order of a sub-pages block's pages, as the web offers it.
+public enum SubpagesSort: String, Sendable, Hashable, CaseIterable {
+    /// As in the page tree.
+    case manual = "default"
+    case titleAscending = "title-asc"
+    case recent
 }
 
 /// Width/height of a media node: pixels/points or percent of the container.
@@ -168,6 +203,8 @@ public enum Inline: Sendable, Hashable {
     case mathInline(String)
     case status(text: String, color: String)
     case footnoteReference(number: String?, dataId: String?)
+    /// A link to another service shown inline (Docmost 0.97).
+    case integrationMention(IntegrationLink)
     /// An atom (mention, formula, status …) with marks: the web keeps formatting, links and comments on the whole atom.
     indirect case marked(Inline, InlineStyle)
     case unknown(type: String)
@@ -189,6 +226,13 @@ public struct InlineStyle: Sendable, Hashable {
 
 public struct Link: Sendable, Hashable {
     public let href: String
+    /// The service the web recognized the link as (Docmost 0.97), e.g. `github`.
+    public let integrationProvider: String?
+
+    public init(href: String, integrationProvider: String? = nil) {
+        self.href = href
+        self.integrationProvider = integrationProvider
+    }
 }
 
 public struct Highlight: Sendable, Hashable {

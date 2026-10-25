@@ -63,8 +63,12 @@ struct BlockView: View {
             ColumnsView(columns: columns, weights: weights)
         case .mathBlock(let latex):
             MathBlockView(latex: latex)
-        case .subpages:
-            SubpagesBlockView()
+        case .subpages(let sortBy):
+            SubpagesBlockView(sortBy: sortBy)
+        case .tabs(let tabs):
+            TabsBlockView(tabs: tabs)
+        case .integrationCard(let link):
+            IntegrationCardView(link: link)
         case .transclusionSource(let blocks):
             TransclusionSourceView(blocks: blocks)
         case .transclusionReference(let sourcePageId, let transclusionId):
@@ -86,12 +90,15 @@ struct ParagraphView: View {
     let text: TextBlock
     @Environment(\.renderContext) private var context
     @Environment(\.paragraphFont) private var paragraphFont
+    @Environment(\.linkPreviews) private var linkPreviews
 
     var body: some View {
         if text.inlines.isEmpty {
             Text(" ")
         } else {
-            Text(InlineTextBuilder(baseURL: context.baseURL, font: paragraphFont ?? .body).attributedString(for: text.inlines))
+            Text(InlineTextBuilder(baseURL: context.baseURL, font: paragraphFont ?? .body, previewTitle: { linkPreviews?.preview(for: $0)?.title })
+                .attributedString(for: text.inlines))
+                .loadsLinkPreviews(for: text.inlines)
                 .multilineTextAlignment(text.align.textAlignment)
                 .frame(maxWidth: .infinity, alignment: text.align.frameAlignment)
                 .padding(.leading, CGFloat(text.indent) * 24)
@@ -104,6 +111,7 @@ struct HeadingView: View {
     let level: Int
     let text: TextBlock
     @Environment(\.renderContext) private var context
+    @Environment(\.linkPreviews) private var linkPreviews
 
     /// Also the editor's (`TextNodeView`), so a page and its versions look the same.
     static func font(level: Int) -> Font {
@@ -119,7 +127,9 @@ struct HeadingView: View {
 
     var body: some View {
         let font = Self.font(level: level)
-        Text(InlineTextBuilder(baseURL: context.baseURL, font: font).attributedString(for: text.inlines))
+        Text(InlineTextBuilder(baseURL: context.baseURL, font: font, previewTitle: { linkPreviews?.preview(for: $0)?.title })
+            .attributedString(for: text.inlines))
+            .loadsLinkPreviews(for: text.inlines)
             .font(font)
             .multilineTextAlignment(text.align.textAlignment)
             .frame(maxWidth: .infinity, alignment: text.align.frameAlignment)
@@ -329,6 +339,7 @@ struct DetailsView: View {
     let summary: [Inline]
     let blocks: [Block]
     @Environment(\.renderContext) private var context
+    @Environment(\.linkPreviews) private var linkPreviews
     @State private var isExpanded: Bool
 
     init(initiallyOpen: Bool, summary: [Inline], blocks: [Block]) {
@@ -342,7 +353,9 @@ struct DetailsView: View {
             BlockStack(blocks: blocks)
                 .padding(.top, 6)
         } label: {
-            Text(InlineTextBuilder(baseURL: context.baseURL, font: .body.weight(.medium)).attributedString(for: summary))
+            Text(InlineTextBuilder(baseURL: context.baseURL, font: .body.weight(.medium), previewTitle: { linkPreviews?.preview(for: $0)?.title })
+                .attributedString(for: summary))
+                .loadsLinkPreviews(for: summary)
         }
         .tint(.secondary)
     }

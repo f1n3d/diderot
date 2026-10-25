@@ -38,6 +38,12 @@ public enum DocmostAttributes {
         public static let name = "docmost.commentResolved"
     }
 
+    /// The service a link points to (the link mark's `integrationProvider`, Docmost 0.97); kept while editing.
+    public enum LinkProviderAttribute: CodableAttributedStringKey {
+        public typealias Value = String
+        public static let name = "docmost.linkProvider"
+    }
+
     /// Non-editable inline node (mention, status, math …), stored as JSON text plus a key unique to the atom (see
     /// `InlineAttributedText.atomKeySeparator`).
     public enum InlineNodeAttribute: CodableAttributedStringKey {
@@ -54,6 +60,7 @@ public struct DocmostAttributeScope: AttributeScope {
     public let `subscript`: DocmostAttributes.SubscriptAttribute
     public let comment: DocmostAttributes.CommentAttribute
     public let commentResolved: DocmostAttributes.CommentResolvedAttribute
+    public let linkProvider: DocmostAttributes.LinkProviderAttribute
     public let inlineNode: DocmostAttributes.InlineNodeAttribute
     public let foundation: AttributeScopes.FoundationAttributes
 }
@@ -151,7 +158,10 @@ public enum InlineAttributedText {
             case "superscript": run.docmost.superscript = true
             case "subscript": run.docmost.subscript = true
             case "link":
-                if let href = mark.string("href"), let url = URL(string: href) { run.link = url }
+                if let href = mark.string("href"), let url = URL(string: href) {
+                    run.link = url
+                    if let provider = mark.string("integrationProvider") { run.docmost.linkProvider = provider }
+                }
             case "highlight":
                 run.docmost.highlight = mark.string("colorName") ?? mark.string("color") ?? "yellow"
             case "textStyle":
@@ -180,7 +190,9 @@ public enum InlineAttributedText {
         if let url = run.link {
             // Only relative links are internal; mailto: and tel: have no host, but the web must open them externally.
             let isInternal = url.scheme == nil
-            marks.append(PMMark(type: "link", attrs: ["href": .string(url.absoluteString), "target": "_blank", "internal": .bool(isInternal)]))
+            var attrs: [String: JSONValue] = ["href": .string(url.absoluteString), "target": "_blank", "internal": .bool(isInternal)]
+            if let provider = run.docmost.linkProvider { attrs["integrationProvider"] = .string(provider) }
+            marks.append(PMMark(type: "link", attrs: attrs))
         }
         if let highlight = run.docmost.highlight {
             if highlight.hasPrefix("#") {
@@ -216,6 +228,7 @@ public enum InlineAttributedText {
         // Empty math and status nodes (the web allows them) need a character, or they vanish while editing.
         case "mathInline", "status": return nonEmpty(node.string("text"))
         case "footnoteReference": return "[\(node.string("referenceNumber") ?? "?")]"
+        case "integrationMention": return IntegrationLinks.describe(node.string("url") ?? "").inline
         default: return "\u{FFFC}"
         }
     }

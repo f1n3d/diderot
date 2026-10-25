@@ -288,13 +288,18 @@ struct EmbedBlockView: View {
 
 // MARK: - Subpages, synced blocks
 
+/// The page's child pages under the heading "Subpages" with their number, sorted as the block says (Docmost 0.97:
+/// manual, A–Z, recent); pages with children open in place, as on the web. With `sort` (editing on Docmost 0.97), a
+/// menu changes the order once there are two pages or more.
 struct SubpagesBlockView: View {
+    var sortBy: SubpagesSort = .manual
+    var sort: ((SubpagesSort) -> Void)?
     @Environment(\.renderContext) private var context
-    @Environment(ReaderNavigation.self) private var navigation
     @State private var state: LoadState<[SidebarPage]> = .idle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            header(count: state.value?.count)
             switch state {
             case .idle, .loading:
                 ProgressView().frame(maxWidth: .infinity, minHeight: 40)
@@ -304,18 +309,8 @@ struct SubpagesBlockView: View {
                 if pages.isEmpty {
                     Text("No subpages.").font(.subheadline).foregroundStyle(.secondary)
                 } else {
-                    ForEach(pages) { page in
-                        Button {
-                            navigation.open(PageSelection(page: page))
-                        } label: {
-                            HStack(spacing: 8) {
-                                PageIconView(icon: page.icon, size: 18)
-                                Text(page.displayTitle).foregroundStyle(Color.accentColor)
-                                Spacer(minLength: 0)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                    ForEach(SubpageSorting.sorted(pages, by: sortBy)) { page in
+                        SubpageRow(page: page, sortBy: sortBy, depth: 0)
                     }
                 }
             }
@@ -324,6 +319,35 @@ struct SubpagesBlockView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
         .task(id: context.pageId) { await load() }
+    }
+
+    private func header(count: Int?) -> some View {
+        HStack(spacing: 6) {
+            Text("Subpages").font(.subheadline.weight(.semibold))
+            if let count, count > 0 {
+                Text(count, format: .number)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Color(.tertiarySystemFill), in: Capsule())
+            }
+            Spacer(minLength: 0)
+            if let sort, let count, count > 1 {
+                Menu {
+                    Picker("Sort Subpages", selection: Binding { sortBy } set: { sort($0) }) {
+                        ForEach(SubpagesSort.allCases, id: \.self) { order in
+                            Text(order.title).tag(order)
+                        }
+                    }
+                } label: {
+                    Label(sortBy.title, systemImage: "arrow.up.arrow.down")
+                        .font(.subheadline)
+                }
+                .accessibilityIdentifier("subpages-sort")
+            }
+        }
+        .clearOfBlockActions(inset: 12)
     }
 
     private func load() async {
@@ -335,6 +359,94 @@ struct SubpagesBlockView: View {
         } catch is CancellationError {
         } catch {
             if state.value == nil { state = .failed(error) }
+        }
+    }
+}
+
+/// One child page: opens it; with children of its own, a chevron shows them below, loaded when opened.
+private struct SubpageRow: View {
+    let page: SidebarPage
+    let sortBy: SubpagesSort
+    let depth: Int
+    @Environment(\.renderContext) private var context
+    @Environment(ReaderNavigation.self) private var navigation
+    @State private var isExpanded = false
+    @State private var children: LoadState<[SidebarPage]> = .idle
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                if page.mayHaveChildren {
+                    Button {
+                        withAnimation(.snappy) { isExpanded.toggle() }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded ? Text("Collapse \(page.displayTitle)") : Text("Expand \(page.displayTitle)"))
+                } else {
+                    Color.clear.frame(width: 20, height: 24)
+                }
+                Button {
+                    navigation.open(PageSelection(page: page))
+                } label: {
+                    HStack(spacing: 8) {
+                        PageIconView(icon: page.icon, size: 18)
+                        Text(page.displayTitle).foregroundStyle(Color.accentColor)
+                        Spacer(minLength: 0)
+                        if let updated = page.updatedAt {
+                            Text(updated, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.leading, CGFloat(depth) * 20)
+            if isExpanded {
+                switch children {
+                case .loaded(let pages):
+                    ForEach(SubpageSorting.sorted(pages, by: sortBy)) { child in
+                        SubpageRow(page: child, sortBy: sortBy, depth: depth + 1)
+                    }
+                case .failed(let error):
+                    Text(error.userMessage).font(.caption).foregroundStyle(.secondary).padding(.leading, CGFloat(depth + 1) * 20 + 26)
+                default:
+                    ProgressView().controlSize(.small).padding(.leading, CGFloat(depth + 1) * 20 + 26)
+                }
+            }
+        }
+        .task(id: isExpanded) {
+            guard isExpanded, children.value == nil, let client = context.client else { return }
+            children = .loading
+            do {
+                children = .loaded(try await Paginated.all { try await client.send(Endpoints.Pages.children(of: page.id, cursor: $0)) })
+            } catch is CancellationError {
+                children = .idle
+            } catch {
+                children = .failed(error)
+            }
+        }
+    }
+}
+
+/// The web's orders for sub-pages.
+enum SubpageSorting {
+    static func sorted(_ pages: [SidebarPage], by sortBy: SubpagesSort) -> [SidebarPage] {
+        switch sortBy {
+        case .manual:
+            pages
+        case .titleAscending:
+            pages.sorted { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
+        case .recent:
+            pages.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         }
     }
 }

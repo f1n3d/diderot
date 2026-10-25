@@ -32,7 +32,7 @@ nonisolated enum DebugLaunch {
     /// Paragraph appended after the page's first live sync (live test of the write path).
     static var editText: String? { raw("DOCMOST_DEBUG_EDIT") }
     static var server: String? { raw("DOCMOST_DEBUG_SERVER") }
-    /// In place of the server's version, e.g. `0.97.0` for read-only pages (`ReadySession.newerServerVersion`).
+    /// In place of the server's version, e.g. `0.98.0` for read-only pages (`ReadySession.newerServerVersion`).
     static var serverVersion: String? { value("DOCMOST_DEBUG_SERVER_VERSION") }
     /// The app reports offline for its first seconds, then the real state (UI tests of going back online).
     static var offlineSeconds: Double? { value("DOCMOST_DEBUG_OFFLINE_SECONDS").flatMap(Double.init) }

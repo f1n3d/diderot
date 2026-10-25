@@ -51,26 +51,33 @@ nonisolated enum SyncedBlockClipboard {
     }
 }
 
-/// "Paste" in the active editor embeds a copied synced block as in the web client. SwiftUI has no hook, so this proxy
-/// becomes `pasteDelegate` of the `TextEditor`'s UIKit text view and forwards the rest to the previous delegate.
-final class SyncedBlockPasteProxy: NSObject, UITextPasteDelegate {
+/// "Paste" in the active editor as in the web client: a copied synced block is embedded, and a pasted web link may
+/// become an integration card or mention or an embedded database (`DocumentModel.pasteLink`). SwiftUI has no hook, so
+/// this proxy becomes `pasteDelegate` of the `TextEditor`'s UIKit text view and forwards the rest to the previous
+/// delegate.
+final class EditorPasteProxy: NSObject, UITextPasteDelegate {
     // Also read by `responds(to:)`/`forwardingTarget(for:)`, which UIKit calls nonisolated, always on the main thread.
     private nonisolated weak let previous: (any UITextPasteDelegate)?
     private let onReference: @MainActor (SyncedBlockClipboard.Reference) -> Void
+    private let onLink: @MainActor (String) -> Bool
     private static var key: UInt8 = 0
 
-    private init(previous: (any UITextPasteDelegate)?, onReference: @escaping @MainActor (SyncedBlockClipboard.Reference) -> Void) {
+    private init(previous: (any UITextPasteDelegate)?, onReference: @escaping @MainActor (SyncedBlockClipboard.Reference) -> Void,
+                 onLink: @escaping @MainActor (String) -> Bool) {
         self.previous = previous
         self.onReference = onReference
+        self.onLink = onLink
     }
 
-    /// Attaches the proxy to the currently focused text view (once per view).
-    @MainActor static func install(onReference: @escaping @MainActor (SyncedBlockClipboard.Reference) -> Void) {
+    /// Attaches the proxy to the currently focused text view (once per view). `onLink` gets a pasted web link and
+    /// returns true if it inserts something itself (Docmost 0.97: integration links, database links).
+    @MainActor static func install(onReference: @escaping @MainActor (SyncedBlockClipboard.Reference) -> Void,
+                                   onLink: @escaping @MainActor (String) -> Bool) {
         guard let textView = FirstResponder.current as? UITextView else { return }
-        if let proxy = objc_getAssociatedObject(textView, &key) as? SyncedBlockPasteProxy, textView.pasteDelegate === proxy {
+        if let proxy = objc_getAssociatedObject(textView, &key) as? EditorPasteProxy, textView.pasteDelegate === proxy {
             return
         }
-        let proxy = SyncedBlockPasteProxy(previous: textView.pasteDelegate, onReference: onReference)
+        let proxy = EditorPasteProxy(previous: textView.pasteDelegate, onReference: onReference, onLink: onLink)
         // `pasteDelegate` is weak; the text view retains the proxy itself.
         objc_setAssociatedObject(textView, &key, proxy, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         textView.pasteDelegate = proxy
@@ -88,20 +95,27 @@ final class SyncedBlockPasteProxy: NSObject, UITextPasteDelegate {
     func textPasteConfigurationSupporting(_ supporting: any UITextPasteConfigurationSupporting, transform item: any UITextPasteItem) {
         let provider = item.itemProvider
         // Loading calls back on a background thread; finishing runs on the main thread.
-        let context = PasteContext(item: item, supporting: supporting, previous: previous, onReference: onReference)
-        let finish: @Sendable (SyncedBlockClipboard.Reference?) -> Void = { reference in
-            Task { @MainActor in context.finish(with: reference) }
+        let context = PasteContext(item: item, supporting: supporting, previous: previous, onReference: onReference, onLink: onLink)
+        let finish: @Sendable (SyncedBlockClipboard.Reference?, String?) -> Void = { reference, link in
+            Task { @MainActor in context.finish(with: reference, link: link) }
         }
         if provider.hasItemConformingToTypeIdentifier(SyncedBlockClipboard.appType) {
             _ = provider.loadDataRepresentation(forTypeIdentifier: SyncedBlockClipboard.appType) { data, _ in
-                finish(data.flatMap { try? JSONDecoder().decode(SyncedBlockClipboard.Reference.self, from: $0) })
+                finish(data.flatMap { try? JSONDecoder().decode(SyncedBlockClipboard.Reference.self, from: $0) }, nil)
+            }
+        } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier), !provider.hasItemConformingToTypeIdentifier(UTType.html.identifier) {
+            // A copied link (Safari, the share sheet): maybe an integration's or a database's. Loaded as a URL: the
+            // type's data is an archived NSURL, not the address.
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                finish(nil, url?.absoluteString)
             }
         } else if let type = [UTType.html, UTType.utf8PlainText, UTType.plainText].first(where: { provider.hasItemConformingToTypeIdentifier($0.identifier) }) {
             _ = provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in
-                finish(data.flatMap { String(data: $0, encoding: .utf8) }.flatMap(SyncedBlockClipboard.parse))
+                let text = data.flatMap { String(data: $0, encoding: .utf8) }
+                finish(text.flatMap(SyncedBlockClipboard.parse), type == .html ? nil : text)
             }
         } else {
-            context.finish(with: nil)
+            context.finish(with: nil, link: nil)
         }
     }
 }
@@ -112,19 +126,23 @@ private final class PasteContext {
     private let supporting: any UITextPasteConfigurationSupporting
     private weak var previous: (any UITextPasteDelegate)?
     private let onReference: @MainActor (SyncedBlockClipboard.Reference) -> Void
+    private let onLink: @MainActor (String) -> Bool
 
     init(item: any UITextPasteItem, supporting: any UITextPasteConfigurationSupporting, previous: (any UITextPasteDelegate)?,
-         onReference: @escaping @MainActor (SyncedBlockClipboard.Reference) -> Void) {
+         onReference: @escaping @MainActor (SyncedBlockClipboard.Reference) -> Void, onLink: @escaping @MainActor (String) -> Bool) {
         self.item = item
         self.supporting = supporting
         self.previous = previous
         self.onReference = onReference
+        self.onLink = onLink
     }
 
-    func finish(with reference: SyncedBlockClipboard.Reference?) {
+    func finish(with reference: SyncedBlockClipboard.Reference?, link: String?) {
         if let reference {
             item.setNoResult()
             onReference(reference)
+        } else if let link, onLink(link) {
+            item.setNoResult()
         } else if let previous, previous.responds(to: #selector(UITextPasteDelegate.textPasteConfigurationSupporting(_:transform:))) {
             previous.textPasteConfigurationSupporting?(supporting, transform: item)
         } else {

@@ -2,7 +2,7 @@
 
 <img src="Docs/icon.png" width="96" height="96" align="right" alt="Diderot app icon">
 
-A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0. Diderot is an independent project, not affiliated with Docmost. It collects no data: see the [privacy policy](Docs/Privacy.md).
+A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0 and v0.97.0. Diderot is an independent project, not affiliated with Docmost. It collects no data: see the [privacy policy](Docs/Privacy.md).
 
 ## Goals
 
@@ -114,6 +114,7 @@ You need:
   3. Copy `.env.example` to `.env` and enter that admin's email and password.
 
   For tests on an iPhone, the instance must be reachable on the network: set its `APP_URL` to `http://<your-mac>.local:3000`. The database tests need a Docmost license with databases.
+- **A second instance with Docmost 0.97** (the image `docmost/docmost:0.97.0`, e.g. a copy of the first one's database) at `http://localhost:3001` for the tests of content 0.97 introduced (`PORT=3001 Tools/run-uitests.sh`); on 0.96 they are skipped.
 - **Node 24 with Corepack**, only to rebuild the editor engine.
 
 ```sh
@@ -147,6 +148,7 @@ DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_EDIT="Neuer Absatz" Tools/run-sim.sh
 Tools/run-uitests.sh <pageId>
 ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests only
 AREA=schnell Tools/run-uitests.sh <pageId>   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
+PORT=3001 Tools/run-uitests.sh <pageId>      # against a second dev instance with a newer Docmost (tests of its content skip on older servers)
 
 # Check the editor engine against Docmost's format and rebuild it
 Tools/build-engine.sh
@@ -157,6 +159,7 @@ AUTOLOGIN=1 Tools/run-device.sh
 # Create demo content in the dev instance
 Tools/seed-dev.sh                 # the space "Demo" with nested pages (--reset recreates it)
 Tools/seed-fixtures.py            # fixture pages with every node type (--reset recreates them)
+DOCMOST_SEED_URL=http://localhost:3001 Tools/seed-fixtures.py --reset   # the same on the second dev instance, with the Docmost 0.97 fixture
 Tools/seed-notifications.py <pageId> [--count 3]   # "Test-Kollegin" mentions the admin in comments (notifications)
 Tools/seed-bases.py <pageId>      # databases "Kanban-Test" (three cards) and "Datenbank-Test" (every property type, 30 rows, table and board), page "Datenbank-Einbettung" (needs the license)
 DOCMOST_DEBUG_PAGE=<baseId> DOCMOST_DEBUG_BASE_VIEW=Board Tools/run-sim.sh   # open a database in a given view
@@ -172,6 +175,8 @@ node Tools/third-party-notices.mjs
 ```
 
 The kit's live tests against the dev instance run only with `DOCMOST_LIVE_URL`, `DOCMOST_LIVE_EMAIL` and `DOCMOST_LIVE_PASSWORD` set. They cache the token, because the server allows 10 sign-ins per minute.
+
+The paste test of integration links (Docmost 0.97) needs an installed GitHub integration. A stand-in without credentials is enough: add the row `insert into integrations (workspace_id, type, settings) values ('<workspace id>', 'github', '{}');` to the dev database. The server then lists it and, for a GitHub link, asks to connect an account, without contacting GitHub.
 
 Debug builds and tests talk to the dev instance (`http://localhost:3000`, from an iPhone `http://<mac>.local:3000`). A debug launch with `DOCMOST_DEBUG_SERVER` (scripts, UI tests) picks that server on start, even if another saved server was active in the app, and returns to it after signing out, so tests never reach another server.
 

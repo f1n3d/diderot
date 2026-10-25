@@ -53,6 +53,8 @@ struct ArrangeSheet: View {
         case "drawio": return String(localized: "Draw.io diagram")
         case "excalidraw": return String(localized: "Excalidraw drawing")
         case "base": return String(localized: "Database (inline)")
+        case "integrationCard": return IntegrationLinks.describe(node.string("url") ?? "").title
+        case "tabs": return String(localized: "Tabs")
         case "video": return String(localized: "Video")
         case "audio": return String(localized: "Audio")
         case "pdf", "attachment": return node.string("name") ?? String(localized: "File attachment")
@@ -90,6 +92,8 @@ struct ArrangeSheet: View {
         case "drawio": "pencil.and.outline"
         case "excalidraw": "scribble.variable"
         case "base": "tablecells.badge.ellipsis"
+        case "tabs": "rectangle.topthird.inset.filled"
+        case "integrationCard": "link"
         case "video": "video"
         case "audio": "waveform"
         case "pdf": "doc.richtext"

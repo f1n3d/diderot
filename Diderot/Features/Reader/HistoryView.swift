@@ -53,6 +53,7 @@ struct HistoryView: View {
         }
         // On the stack, not its root: pushed versions don't get values set inside the stack.
         .environment(\.renderContext, RenderContext(session: session, pageId: page.id))
+        .environment(\.linkPreviews, session.linkPreviews)
         .environment(versionNavigation)
         .onAppear {
             let pageNavigation = navigation
@@ -127,6 +128,7 @@ private struct HistoryDetailView: View {
             switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
             case .page(let slugId, _): navigation.open(PageSelection(pageId: slugId))
             case .databaseEntry(let basePageId, let rowId): navigation.open(PageSelection(pageId: basePageId, rowId: rowId))
+            case .comment(let slugId, let commentId): navigation.open(PageSelection(pageId: slugId, commentId: commentId))
             case .anchor(let target): anchor = target
             case .user: break
             case .external(let external): outside(external)

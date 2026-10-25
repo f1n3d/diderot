@@ -8,6 +8,8 @@ struct InlineTextBuilder {
     var monospacedFont: Font = .system(.callout, design: .monospaced)
     /// Block identity when status and math atoms should be tappable (editing, see `AtomLink`).
     var atomLinkBlock: String?
+    /// A link's title from the server's preview (`LinkPreviewStore`), for integration mentions.
+    var previewTitle: (String) -> String? = { _ in nil }
 
     func attributedString(for inlines: [Inline]) -> AttributedString {
         var result = AttributedString()
@@ -43,6 +45,14 @@ struct InlineTextBuilder {
             run.font = font.weight(.medium)
             run.backgroundColor = StatusPalette.background(for: color)
             run.foregroundColor = StatusPalette.foreground(for: color)
+            return run
+        case .integrationMention(let link):
+            // Tinted like a status, without the service's logo (no third-party images).
+            var run = AttributedString(" \(previewTitle(link.url) ?? IntegrationLinks.describe(link.url).title) ")
+            run.font = font.weight(.medium)
+            run.foregroundColor = .accentColor
+            run.backgroundColor = Color.accentColor.opacity(0.12)
+            if let url = URL(string: link.url) { run.link = url }
             return run
         case .footnoteReference(let number, let dataId):
             var run = AttributedString("[\(number ?? "?")]")
@@ -248,6 +258,7 @@ private extension Inline {
         switch self {
         case .status: "status"
         case .mathInline: "mathInline"
+        case .integrationMention: "integrationMention"
         case .marked(let atom, _): atom.atomType
         default: nil
         }

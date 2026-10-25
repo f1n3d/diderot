@@ -37,6 +37,8 @@ struct PageView: View {
     @State private var comments: PageComments?
     /// Comment the sheet jumps to on open (tap on a highlighted passage).
     @State private var commentsFocusId: String?
+    /// A web page in the in-app browser (an integration mention's link).
+    @State private var browsing: URL?
     /// The page's space; its settings say whether readers may comment.
     @State private var space: Space?
     @State private var showsHistory = DebugLaunch.route == "history"
@@ -123,6 +125,7 @@ struct PageView: View {
             }
         }
         .environment(\.renderContext, RenderContext(session: session, pageId: state.value?.id))
+        .environment(\.linkPreviews, session.linkPreviews)
         .navigationTitle(state.value?.displayTitle ?? selection.title ?? "")
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
@@ -195,6 +198,33 @@ struct PageView: View {
     private var presentations: some View {
         chrome
         .opensExternalLinks()
+        .confirmationDialog("Paste As", isPresented: Binding { model?.pastedLink != nil } set: { if !$0 { model?.finishPastedLink(nil) } },
+                            titleVisibility: .visible, presenting: model?.pastedLink) { link in
+            if link.base != nil {
+                Button("Inline Database") { model?.finishPastedLink(.embeddedBase) }
+                Button("Mention") { model?.finishPastedLink(.mention) }
+            } else {
+                if link.allowsBlock { Button("Card") { model?.finishPastedLink(.card) } }
+                Button("Mention") { model?.finishPastedLink(.mention) }
+                Button("URL") { model?.finishPastedLink(.link) }
+            }
+        } message: { link in
+            Text(link.url.absoluteString)
+        }
+        .sheet(item: $browsing) { url in
+            SafariView(url: url).ignoresSafeArea()
+        }
+        .confirmationDialog("Link", isPresented: Binding { model?.mentionActions != nil } set: { if !$0 { model?.mentionActions = nil } },
+                            titleVisibility: .hidden, presenting: model?.mentionActions) { target in
+            Button("Open Link") { browsing = URL(string: target.url) }
+            if model?.canShowAsCard(target) == true {
+                Button("Show as Card") { Task { await model?.showMention(target, as: .card) } }
+            }
+            Button("Show as URL") { Task { await model?.showMention(target, as: .link) } }
+            Button("Remove", role: .destructive) {
+                Task { await model?.replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index, with: nil) }
+            }
+        }
         .sheet(isPresented: $showsComments, onDismiss: { commentsFocusId = nil }) {
             if let page = state.value, let comments {
                 CommentsView(page: page, comments: comments, canComment: canComment(on: page),
@@ -205,7 +235,7 @@ struct PageView: View {
                 .handlesLinks { url, outside in
                     // Pages and anchors open on the page, so the comments make way; web links open over them.
                     switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
-                    case .page, .databaseEntry, .anchor:
+                    case .page, .databaseEntry, .anchor, .comment:
                         showsComments = false
                         handle(url, outside: outside)
                     case .user: break
@@ -979,6 +1009,13 @@ struct PageView: View {
                 titleFocused = true
             }
         }
+        // A link to a comment: show it once the page is there.
+        if isFirst, let commentId = selection.commentId, page.isBase != true {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(350))
+                openComments(focus: commentId)
+            }
+        }
         // Load comments right away for the button badge; database pages have none.
         if page.isBase != true, comments?.pageId != page.id {
             let store = PageComments(pageId: page.id, session: session)
@@ -1001,6 +1038,14 @@ struct PageView: View {
         created.currentUserId = session.ready?.currentUser.user.id
         created.canComment = canComment(on: page)
         created.canCreateBases = session.ready?.entitlements.has("bases") == true
+        created.hasDocmost097Features = session.ready?.hasDocmost097Features == true
+        created.linkPreviews = session.linkPreviews
+        if created.hasDocmost097Features, let previews = session.linkPreviews {
+            // A pasted link is recognized only with the workspace's integrations known.
+            Task { await previews.loadInstalled() }
+        }
+        created.serverURL = session.server?.url
+        created.lookUpPage = { [session] slugId in try? await session.send(Endpoints.Pages.info(pageId: slugId)) }
         let changes = changes
         created.createBase = { template in
             let base = try await session.send(Endpoints.Bases.create(parentPageId: page.id, template: template))
@@ -1268,6 +1313,12 @@ struct PageView: View {
             }
         case .databaseEntry(let basePageId, let rowId):
             navigation.open(PageSelection(pageId: basePageId, rowId: rowId))
+        case .comment(let slugId, let commentId):
+            if [state.value?.slugId, state.value?.id, selection.pageId].contains(slugId) {
+                openComments(focus: commentId)
+            } else {
+                navigation.open(PageSelection(pageId: slugId, commentId: commentId))
+            }
         case .anchor(let anchor):
             // Footnote reference while editing: jump into the footnote text, like a double-click in the web editor.
             if model?.focusFootnote(dataId: anchor) == true { return }

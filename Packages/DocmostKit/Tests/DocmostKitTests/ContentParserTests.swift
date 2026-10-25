@@ -244,6 +244,49 @@ struct ContentParserTests {
         #expect(inlineUnknown.plainText == "Unknown inline atom here:  end.")
     }
 
+    /// Docmost 0.97: tabs (ids missing or taken get one from their position), integration links, sorted sub-pages.
+    @Test func docmost097Content() {
+        func tab(_ label: String, _ id: String?, _ text: String) -> JSONValue {
+            var tab: [String: JSONValue] = ["type": "tab", "content": [
+                ["type": "tabLabel", "content": label.isEmpty ? [] : [["type": "text", "text": .string(label)]]],
+                ["type": "tabPanel", "content": [["type": "paragraph", "content": [["type": "text", "text": .string(text)]]]]],
+            ]]
+            if let id { tab["attrs"] = ["id": .string(id)] }
+            return .object(tab)
+        }
+        let github = "https://github.com/o/r/issues/1"
+        let json: JSONValue = ["type": "doc", "content": [
+            ["type": "tabs", "content": [tab("One", "ta", "first"), tab("", nil, "second"), tab("Three", "ta", "third")]],
+            ["type": "integrationCard", "attrs": ["url": .string(github), "provider": "github"]],
+            ["type": "paragraph", "content": [
+                ["type": "text", "text": "see "],
+                ["type": "integrationMention", "attrs": ["url": "https://linear.app/o/issue/A-1", "provider": "linear"], "marks": [["type": "bold"]]],
+                ["type": "text", "text": " and "],
+                ["type": "text", "text": "the issue", "marks": [["type": "link", "attrs": ["href": .string(github), "integrationProvider": "github"]]]],
+            ]],
+            ["type": "subpages", "attrs": ["sortBy": "title-asc"]],
+            ["type": "subpages"],
+            ["type": "subpages", "attrs": ["sortBy": "upside-down"]],
+        ]]
+        let doc = ContentDocument(json: json)
+        guard case .tabs(let tabs) = doc.blocks[0].kind else { Issue.record("expected tabs"); return }
+        #expect(tabs.map(\.label) == ["One", "", "Three"])
+        #expect(tabs.map(\.id) == ["ta", "t0.1", "t0.2"])
+        #expect(tabs.map { $0.blocks.first?.plainText } == ["first", "second", "third"])
+        #expect(doc.blocks[1].kind == .integrationCard(IntegrationLink(url: github, provider: "github")))
+
+        guard case .paragraph(let text) = doc.blocks[2].kind else { Issue.record("expected paragraph"); return }
+        var bold = InlineStyle()
+        bold.bold = true
+        #expect(text.inlines[1] == .marked(.integrationMention(IntegrationLink(url: "https://linear.app/o/issue/A-1", provider: "linear")), bold))
+        guard case .text(_, let style) = text.inlines[3] else { Issue.record("expected linked text"); return }
+        #expect(style.link == Link(href: github, integrationProvider: "github"))
+
+        #expect(doc.blocks[3].kind == .subpages(sortBy: .titleAscending))
+        #expect(doc.blocks[4].kind == .subpages(sortBy: .manual))
+        #expect(doc.blocks[5].kind == .subpages(sortBy: .manual))
+    }
+
     @Test func emptyAndStringContent() {
         #expect(ContentDocument(json: nil).isEmpty)
         #expect(ContentDocument(json: .string("# markdown")).isEmpty)

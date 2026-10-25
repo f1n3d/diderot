@@ -9,6 +9,7 @@ a mention, which notifies nobody (someone else's reply for EditorUITests test33,
 """
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -18,7 +19,7 @@ import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE = "http://localhost:3000"
+BASE = os.environ.get("DOCMOST_SEED_URL", "http://localhost:3000")
 TESTER_EMAIL = "kollegin@docmost.local"
 TESTER_PASSWORD = "kollegin-dev-123"
 TESTER_NAME = "Test-Kollegin"

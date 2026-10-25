@@ -33,15 +33,24 @@ struct AppSessionTests {
     }
 }
 
-/// The bundled editor follows Docmost 0.96 (`Engine/`): newer servers get read-only pages, unknown versions don't.
+/// The bundled editor follows Docmost 0.97 (`Engine/`): newer servers get read-only pages, unknown versions don't.
+/// Only known 0.97 servers and newer get the blocks 0.96 doesn't know.
 struct ServerVersionTests {
     @Test func versionsNewerThanTheEditor() {
-        let versions = [("0.96.0", false), ("0.96.4", false), ("0.95.1", false), ("v0.96.0", false), ("0.97.0", true),
-                        ("v0.97.0-beta.1", true), ("1.0.0", true), ("", false), ("next", false)]
+        let versions = [("0.96.0", false), ("0.97.0", false), ("0.97.3", false), ("v0.97.0-beta.1", false),
+                        ("0.98.0", true), ("v0.98.0-beta.1", true), ("1.0.0", true), ("", false), ("next", false)]
         for (version, newer) in versions {
             #expect(ReadySession.isNewerThanEditor(version) == newer, "\(version)")
         }
         #expect(!ReadySession.isNewerThanEditor(nil))
+    }
+
+    @Test func docmost097Features() throws {
+        let versions: [(String?, Bool)] = [("0.96.4", false), ("0.97.0", true), ("v0.97.1", true), ("0.98.0", true),
+                                           ("1.0.0", true), (nil, false), ("next", false)]
+        for (version, expected) in versions {
+            #expect(ReadySession.supportsDocmost097(version) == expected, "\(version ?? "nil")")
+        }
     }
 }
 

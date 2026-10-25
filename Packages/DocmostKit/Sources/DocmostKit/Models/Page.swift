@@ -12,11 +12,13 @@ public struct SidebarPage: Codable, Sendable, Hashable, Identifiable {
     public let isBase: Bool?
     public let hasChildren: Bool?
     public let canEdit: Bool?
+    /// Since Docmost 0.97 (sub-pages sorted by "Recent").
+    public let updatedAt: Date?
 
     public init(
         id: String, slugId: String? = nil, title: String?, icon: String? = nil, position: String? = nil,
         parentPageId: String? = nil, spaceId: String? = nil, isBase: Bool? = nil, hasChildren: Bool? = nil,
-        canEdit: Bool? = nil
+        canEdit: Bool? = nil, updatedAt: Date? = nil
     ) {
         self.id = id
         self.slugId = slugId
@@ -28,6 +30,7 @@ public struct SidebarPage: Codable, Sendable, Hashable, Identifiable {
         self.isBase = isBase
         self.hasChildren = hasChildren
         self.canEdit = canEdit
+        self.updatedAt = updatedAt
     }
 
     public var displayTitle: String { PageTitle.display(title) }

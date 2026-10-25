@@ -3,7 +3,7 @@ import DocmostKit
 
 /// Kanban board like Trello and Jira: horizontally snapping columns (`KanbanBoardLayout`), each scrolling on its own.
 /// With write permission, cards can be dragged within and between columns, moved via "Move to" and created per column.
-/// Menu and drag live on a UIKit card wrapper (`KanbanCardHost`); drops go through SwiftUI `DropDelegate`s.
+/// Menu and drag live on a UIKit card wrapper (`MenuDragHost`); drops go through SwiftUI `DropDelegate`s.
 struct BaseKanbanView: View {
     let model: BaseModel
     let base: Base
@@ -405,10 +405,11 @@ private struct KanbanCard: View {
 
     var body: some View {
         let card = Group {
-            if KanbanCardHost.showsMenu {
-                KanbanCardHost(
+            if MenuDragTesting.showsMenu("base.card") {
+                MenuDragHost(
                     content: AnyView(button.environment(session)),
-                    dragPayload: model.canEdit ? KanbanDrag.prefix + row.id : nil,
+                    dragPayload: model.canEdit && MenuDragTesting.allowsDrag("base.card") ? KanbanDrag.prefix + row.id : nil,
+                    fallbackWidth: 320,
                     menu: menu,
                     onDragBegan: { drag.draggedRowId = row.id },
                     onDragEnded: { drag.end() }
@@ -502,111 +503,6 @@ private struct KanbanCard: View {
             ]))
         }
         return UIMenu(children: children)
-    }
-}
-
-/// UIKit card wrapper (only while `showsMenu`): menu and drag on one view let iOS combine them as in Photos or Files
-/// (hold: menu, move: drag). SwiftUI puts `.contextMenu` and `.draggable` on separate layers; the menu always wins.
-private struct KanbanCardHost: UIViewControllerRepresentable {
-    let content: AnyView
-    /// Drag payload (`DragPayload`); `nil` = not draggable.
-    let dragPayload: String?
-    let menu: () -> UIMenu
-    let onDragBegan: () -> Void
-    let onDragEnded: () -> Void
-
-    func makeUIViewController(context: Context) -> UIHostingController<AnyView> {
-        let controller = UIHostingController(rootView: content)
-        controller.view.backgroundColor = .clear
-        controller.sizingOptions = [.intrinsicContentSize]
-        controller.view.addInteraction(UIContextMenuInteraction(delegate: context.coordinator))
-        controller.view.addInteraction(UIDragInteraction(delegate: context.coordinator))
-        return controller
-    }
-
-    func updateUIViewController(_ controller: UIHostingController<AnyView>, context: Context) {
-        context.coordinator.parent = self
-        controller.rootView = content
-        for case let drag as UIDragInteraction in controller.view.interactions {
-            drag.isEnabled = dragPayload != nil && Self.allowsDrag
-        }
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, uiViewController: UIHostingController<AnyView>, context: Context) -> CGSize? {
-        uiViewController.sizeThatFits(in: CGSize(width: proposal.width ?? 320, height: .greatestFiniteMagnitude))
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
-
-    /// UI tests can disable the menu (`-base.cardMenu NO`): XCUITest doesn't perform the menu-to-drag transition,
-    /// but without the menu its press-and-drag starts a real drag session.
-    static var showsMenu: Bool {
-        #if DEBUG
-        // Launch arguments arrive as strings ("NO"): `bool(forKey:)` parses them, `as? Bool` doesn't.
-        UserDefaults.standard.object(forKey: "base.cardMenu") == nil || UserDefaults.standard.bool(forKey: "base.cardMenu")
-        #else
-        true
-        #endif
-    }
-
-    /// Menu UI tests disable dragging (`-base.cardDrag NO`): while the menu is open, iOS keeps the drag armed, and
-    /// XCUITest then waits a minute per step for animations to finish.
-    private static var allowsDrag: Bool {
-        #if DEBUG
-        UserDefaults.standard.object(forKey: "base.cardDrag") == nil || UserDefaults.standard.bool(forKey: "base.cardDrag")
-        #else
-        true
-        #endif
-    }
-
-    final class Coordinator: NSObject, UIContextMenuInteractionDelegate, UIDragInteractionDelegate {
-        var parent: KanbanCardHost
-
-        init(parent: KanbanCardHost) {
-            self.parent = parent
-        }
-
-        func contextMenuInteraction(
-            _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
-        ) -> UIContextMenuConfiguration? {
-            let menu = parent.menu
-            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu() }
-        }
-
-        func contextMenuInteraction(
-            _ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
-            highlightPreviewForItemWithIdentifier identifier: any NSCopying
-        ) -> UITargetedPreview? {
-            guard let view = interaction.view else { return nil }
-            return UITargetedPreview(view: view, parameters: Self.rounded(view))
-        }
-
-        func dragInteraction(_ interaction: UIDragInteraction, itemsForBeginning session: any UIDragSession) -> [UIDragItem] {
-            guard let payload = parent.dragPayload else { return [] }
-            return [UIDragItem(itemProvider: DragPayload.provider(payload))]
-        }
-
-        func dragInteraction(
-            _ interaction: UIDragInteraction, previewForLifting item: UIDragItem, session: any UIDragSession
-        ) -> UITargetedDragPreview? {
-            guard let view = interaction.view else { return nil }
-            return UITargetedDragPreview(view: view, parameters: Self.rounded(view))
-        }
-
-        func dragInteraction(_ interaction: UIDragInteraction, sessionWillBegin session: any UIDragSession) {
-            parent.onDragBegan()
-        }
-
-        func dragInteraction(_ interaction: UIDragInteraction, session: any UIDragSession, didEndWith operation: UIDropOperation) {
-            parent.onDragEnded()
-        }
-
-        private static func rounded(_ view: UIView) -> UIDragPreviewParameters {
-            let parameters = UIDragPreviewParameters()
-            parameters.visiblePath = UIBezierPath(roundedRect: view.bounds, cornerRadius: 12)
-            parameters.backgroundColor = .clear
-            return parameters
-        }
     }
 }
 
