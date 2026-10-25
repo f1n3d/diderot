@@ -1030,7 +1030,7 @@ final class DocumentModel {
     private func insertIntoActiveText(_ run: AttributedString, offset: Int, plainAfter: Bool = false) {
         guard active != nil else { return }
         let count = activeText.characters.count
-        let position = min(max(offset, 1), count)
+        let position = min(max(offset, 0), count)
         let index = activeText.characters.index(activeText.startIndex, offsetBy: position)
         activeText.insert(run, at: index)
         let end = activeText.characters.index(activeText.startIndex, offsetBy: min(position + run.characters.count, activeText.characters.count))

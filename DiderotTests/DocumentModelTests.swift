@@ -458,6 +458,29 @@ struct DocumentModelTests {
         #expect(model.errorMessage == nil)
     }
 
+    /// An inline item lands at the cursor, also at the very start of a block: "/datum" typed before "Hallo", or the "+"
+    /// menu with the cursor there. Up to 1.0 it went after the first character, as if each text still began with the
+    /// invisible character the editor had before it became one editor for the whole page.
+    @Test(arguments: [false, true]) func inlineItemAtTheStartOfABlock(fromSlash: Bool) throws {
+        let paragraph = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Hallo")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        if fromSlash {
+            model.activeText.insert(AttributedString("/datum"), at: model.activeText.startIndex)
+            model.activeSelection = AttributedTextSelection(
+                insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 6))
+            model.activeTextChanged()
+            #expect(model.slashQuery == "datum")
+        } else {
+            model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.startIndex)
+        }
+        model.perform(.date)
+        #expect(String(model.activeText.characters) == Date.now.formatted(.dateTime.day().month(.wide).year()) + "Hallo")
+    }
+
     /// A user mention shows as "@label": with the cursor right after it (its space deleted) the mention list stays
     /// closed, so a pick can't replace the mention; a typed "@" still opens the list.
     @Test func mentionListIgnoresExistingMention() throws {
