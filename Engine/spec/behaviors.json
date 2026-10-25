@@ -1,11 +1,195 @@
 {
- "docmost": "v0.96.0",
+ "docmost": "v0.97.0",
  "blockIds": {
   "lengths": [
    12
   ],
   "alphabet": "abcdefghijklmnopqrstuvwxyz"
  },
+ "tabIds": {
+  "lengths": [
+   12
+  ],
+  "alphabet": "abcdefghijklmnopqrstuvwxyz",
+  "allDifferent": true
+ },
+ "tabsOnCreate": [
+  {
+   "type": "tabs",
+   "attrs": {
+    "dir": "auto"
+   },
+   "content": [
+    {
+     "type": "tab",
+     "attrs": {
+      "dir": "auto",
+      "id": ""
+     },
+     "content": [
+      {
+       "type": "tabLabel",
+       "attrs": {
+        "dir": "auto"
+       },
+       "content": [
+        {
+         "type": "text",
+         "text": "One"
+        }
+       ]
+      },
+      {
+       "type": "tabPanel",
+       "attrs": {
+        "dir": "auto"
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "id": null,
+          "indent": 0,
+          "dir": "auto",
+          "textAlign": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tab",
+     "attrs": {
+      "dir": "auto",
+      "id": ""
+     },
+     "content": [
+      {
+       "type": "tabLabel",
+       "attrs": {
+        "dir": "auto"
+       },
+       "content": [
+        {
+         "type": "text",
+         "text": "Two"
+        }
+       ]
+      },
+      {
+       "type": "tabPanel",
+       "attrs": {
+        "dir": "auto"
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "id": null,
+          "indent": 0,
+          "dir": "auto",
+          "textAlign": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tab",
+     "attrs": {
+      "dir": "auto",
+      "id": "t3"
+     },
+     "content": [
+      {
+       "type": "tabLabel",
+       "attrs": {
+        "dir": "auto"
+       },
+       "content": [
+        {
+         "type": "text",
+         "text": "Three"
+        }
+       ]
+      },
+      {
+       "type": "tabPanel",
+       "attrs": {
+        "dir": "auto"
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "id": null,
+          "indent": 0,
+          "dir": "auto",
+          "textAlign": null
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "tab",
+     "attrs": {
+      "dir": "auto",
+      "id": "t3"
+     },
+     "content": [
+      {
+       "type": "tabLabel",
+       "attrs": {
+        "dir": "auto"
+       },
+       "content": [
+        {
+         "type": "text",
+         "text": "Four"
+        }
+       ]
+      },
+      {
+       "type": "tabPanel",
+       "attrs": {
+        "dir": "auto"
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "attrs": {
+          "id": null,
+          "indent": 0,
+          "dir": "auto",
+          "textAlign": null
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "paragraph",
+   "attrs": {
+    "id": null,
+    "indent": 0,
+    "dir": "auto",
+    "textAlign": null
+   },
+   "content": [
+    {
+     "type": "text",
+     "text": "b"
+    }
+   ]
+  }
+ ],
  "results": {
   "trailing: heading last": [
    {
@@ -6477,7 +6661,8 @@
          "rel": "noopener noreferrer nofollow",
          "class": null,
          "title": null,
-         "internal": false
+         "internal": false,
+         "integrationProvider": null
         }
        }
       ],
@@ -6532,7 +6717,8 @@
          "rel": "noopener noreferrer nofollow",
          "class": null,
          "title": null,
-         "internal": false
+         "internal": false,
+         "integrationProvider": null
         }
        }
       ],
@@ -6570,7 +6756,8 @@
          "rel": "noopener noreferrer nofollow",
          "class": null,
          "title": null,
-         "internal": false
+         "internal": false,
+         "integrationProvider": null
         }
        }
       ],
@@ -6619,7 +6806,8 @@
          "rel": "noopener noreferrer nofollow",
          "class": null,
          "title": null,
-         "internal": false
+         "internal": false,
+         "integrationProvider": null
         }
        }
       ],
@@ -6674,7 +6862,8 @@
          "rel": "noopener noreferrer nofollow",
          "class": null,
          "title": null,
-         "internal": false
+         "internal": false,
+         "integrationProvider": null
         }
        }
       ],
@@ -6712,7 +6901,8 @@
          "rel": "noopener noreferrer nofollow",
          "class": null,
          "title": null,
-         "internal": false
+         "internal": false,
+         "integrationProvider": null
         }
        }
       ],
@@ -6767,7 +6957,8 @@
          "rel": "noopener noreferrer nofollow",
          "class": null,
          "title": null,
-         "internal": false
+         "internal": false,
+         "integrationProvider": null
         }
        }
       ],
@@ -6778,6 +6969,10080 @@
       "text": " "
      }
     ]
+   }
+  ],
+  "tabs: inserted without ids": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: inserted with ids": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: inserted with empty ids": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: duplicate ids inserted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: tab copied next to itself": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "x"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "x"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: tab with a used id elsewhere": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: existing without ids, edit elsewhere": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "tabs: existing without ids, meta only": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: edit in a panel": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "xy"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: edit a label": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two!"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: label emptied": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        }
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: tab removed": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t3"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: only tab removed": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        }
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: tabs removed": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: tab moved": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: panel emptied": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: nested without ids": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Outer"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "tabs",
+          "attrs": {
+           "dir": "auto"
+          },
+          "content": [
+           {
+            "type": "tab",
+            "attrs": {
+             "dir": "auto",
+             "id": "new2"
+            },
+            "content": [
+             {
+              "type": "tabLabel",
+              "attrs": {
+               "dir": "auto"
+              },
+              "content": [
+               {
+                "type": "text",
+                "text": "Inner"
+               }
+              ]
+             },
+             {
+              "type": "tabPanel",
+              "attrs": {
+               "dir": "auto"
+              },
+              "content": [
+               {
+                "type": "paragraph",
+                "attrs": {
+                 "id": "id1",
+                 "indent": 0,
+                 "dir": "auto",
+                 "textAlign": null
+                }
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: in a callout": [
+   {
+    "type": "callout",
+    "attrs": {
+     "dir": "auto",
+     "type": "info",
+     "icon": null
+    },
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "id": null,
+       "indent": 0,
+       "dir": "auto",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "c"
+       }
+      ]
+     },
+     {
+      "type": "tabs",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tab",
+        "attrs": {
+         "dir": "auto",
+         "id": "new1"
+        },
+        "content": [
+         {
+          "type": "tabLabel",
+          "attrs": {
+           "dir": "auto"
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "One"
+           }
+          ]
+         },
+         {
+          "type": "tabPanel",
+          "attrs": {
+           "dir": "auto"
+          },
+          "content": [
+           {
+            "type": "paragraph",
+            "attrs": {
+             "id": "id1",
+             "indent": 0,
+             "dir": "auto",
+             "textAlign": null
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: in a column": [
+   {
+    "type": "columns",
+    "attrs": {
+     "dir": "auto",
+     "layout": "two_equal",
+     "widthMode": "normal"
+    },
+    "content": [
+     {
+      "type": "column",
+      "attrs": {
+       "dir": "auto",
+       "width": null
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "a"
+         }
+        ]
+       },
+       {
+        "type": "tabs",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "tab",
+          "attrs": {
+           "dir": "auto",
+           "id": "new1"
+          },
+          "content": [
+           {
+            "type": "tabLabel",
+            "attrs": {
+             "dir": "auto"
+            },
+            "content": [
+             {
+              "type": "text",
+              "text": "One"
+             }
+            ]
+           },
+           {
+            "type": "tabPanel",
+            "attrs": {
+             "dir": "auto"
+            },
+            "content": [
+             {
+              "type": "paragraph",
+              "attrs": {
+               "id": "id1",
+               "indent": 0,
+               "dir": "auto",
+               "textAlign": null
+              }
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "column",
+      "attrs": {
+       "dir": "auto",
+       "width": null
+      },
+      "content": [
+       {
+        "type": "paragraph",
+        "attrs": {
+         "id": null,
+         "indent": 0,
+         "dir": "auto",
+         "textAlign": null
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "b"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: in a table cell": [
+   {
+    "type": "table",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tableRow",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tableCell",
+        "attrs": {
+         "dir": "auto",
+         "colspan": 1,
+         "rowspan": 1,
+         "colwidth": null,
+         "align": null,
+         "backgroundColor": null,
+         "backgroundColorName": null
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "c"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: in a synced block": [
+   {
+    "type": "transclusionSource",
+    "attrs": {
+     "id": "id1",
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "paragraph",
+      "attrs": {
+       "id": null,
+       "indent": 0,
+       "dir": "auto",
+       "textAlign": null
+      },
+      "content": [
+       {
+        "type": "text",
+        "text": "s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote without ids": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote duplicate ids": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: whole document": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: remote whole document": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: attribute of a tab": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: select a tab": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: copy inserted before the original": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Copy"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: existing duplicates, edit elsewhere": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "tabs: existing duplicates in two blocks, edit elsewhere": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "tabs: three duplicates": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id3",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id4",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: duplicate in nested tabs": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Outer"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "tabs",
+          "attrs": {
+           "dir": "auto"
+          },
+          "content": [
+           {
+            "type": "tab",
+            "attrs": {
+             "dir": "auto",
+             "id": "new1"
+            },
+            "content": [
+             {
+              "type": "tabLabel",
+              "attrs": {
+               "dir": "auto"
+              },
+              "content": [
+               {
+                "type": "text",
+                "text": "Inner"
+               }
+              ]
+             },
+             {
+              "type": "tabPanel",
+              "attrs": {
+               "dir": "auto"
+              },
+              "content": [
+               {
+                "type": "paragraph",
+                "attrs": {
+                 "id": "id1",
+                 "indent": 0,
+                 "dir": "auto",
+                 "textAlign": null
+                }
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote edit elsewhere, ids missing": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "tabs: tabs block replaced by itself": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: all blocks replaced one by one": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: whole document after an edit": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "tabs: other characters in an id": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "Tab-1 x"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "1234"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: null id": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: id emptied": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: selection with ids missing": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: label and panel only": "error: TransformError: Invalid content for node tab",
+  "tabs: remote copy after the original": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Copy"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: remote copy before the original": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Copy"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote edit of a label, id missing": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One!"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: remote edit in a panel, id missing": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "xy"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: remote id emptied": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote existing duplicates, edit elsewhere": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "tabs: edit after the whole document": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "bx"
+     }
+    ]
+   }
+  ],
+  "tabs: copy inserted before the original in the same block": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Copy"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: whole document with new tabs": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id3",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id4",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id5",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote whole document with new tabs": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote whole document with a changed id": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: whole document with a changed id": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: remote tab removed, ids missing": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: remote tab moved, duplicates": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t3"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote edit before the tabs, ids missing": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote paragraph before the tabs, ids missing": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "new"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: whole document, tabs shifted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "new"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id3",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id4",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id5",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote whole document, tabs shifted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "new"
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tabs: remote label of a tab with an id": [
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One!"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "tab id rule: typing": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: typing from another user": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: paragraph rebuilt with new attributes": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": "center"
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: paragraph rebuilt with the same attributes": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: paragraph in a panel rebuilt": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": "center"
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: paragraph rebuilt by another user": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": "right"
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: paragraph attribute step": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": "center"
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: tab id attribute step": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: tab rebuilt with an empty id": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new2"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: label replaced by itself": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: panel replaced by itself": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: tab replaced by itself": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: tab removed": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: tabs inside an inserted callout": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "callout",
+    "attrs": {
+     "dir": "auto",
+     "type": "info",
+     "icon": null
+    },
+    "content": [
+     {
+      "type": "tabs",
+      "attrs": {
+       "dir": "auto"
+      },
+      "content": [
+       {
+        "type": "tab",
+        "attrs": {
+         "dir": "auto",
+         "id": "ti"
+        },
+        "content": [
+         {
+          "type": "tabLabel",
+          "attrs": {
+           "dir": "auto"
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "Inner"
+           }
+          ]
+         },
+         {
+          "type": "tabPanel",
+          "attrs": {
+           "dir": "auto"
+          },
+          "content": [
+           {
+            "type": "paragraph",
+            "attrs": {
+             "id": "qInner",
+             "indent": 0,
+             "dir": "auto",
+             "textAlign": null
+            },
+            "content": [
+             {
+              "type": "text",
+              "text": "in Inner"
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: whole document, a label changed": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": ""
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Zwei"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qZwei",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Zwei"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: whole document, ids reordered": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: whole document, an id changed, from another user": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tz"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: tabs block split between two tabs": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: two tabs blocks joined": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "td"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Four"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qFour",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Four"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tab id rule: whole document but the first paragraph": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pa",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "ta"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qOne",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in One"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "new1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Two"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qTwo",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Two"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "tc"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "Three"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "qThree",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "in Three"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "pb",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "tabs: block ids in a panel": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "keep",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": "id1",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "x"
+           }
+          ]
+         },
+         {
+          "type": "heading",
+          "attrs": {
+           "id": "id2",
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null,
+           "level": 2
+          },
+          "content": [
+           {
+            "type": "text",
+            "text": "H"
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id3",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "trailing: tabs last": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "ax"
+     }
+    ]
+   },
+   {
+    "type": "tabs",
+    "attrs": {
+     "dir": "auto"
+    },
+    "content": [
+     {
+      "type": "tab",
+      "attrs": {
+       "dir": "auto",
+       "id": "t1"
+      },
+      "content": [
+       {
+        "type": "tabLabel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "text",
+          "text": "One"
+         }
+        ]
+       },
+       {
+        "type": "tabPanel",
+        "attrs": {
+         "dir": "auto"
+        },
+        "content": [
+         {
+          "type": "paragraph",
+          "attrs": {
+           "id": null,
+           "indent": 0,
+           "dir": "auto",
+           "textAlign": null
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id2",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "integrations: card inserted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "integrationCard",
+    "attrs": {
+     "dir": "auto",
+     "url": "https://github.com/o/r/issues/1",
+     "provider": "github"
+    }
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
+   }
+  ],
+  "integrations: mention inserted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     },
+     {
+      "type": "integrationMention",
+      "attrs": {
+       "dir": "auto",
+       "url": "https://github.com/o/r/pull/2",
+       "provider": "github"
+      }
+     },
+     {
+      "type": "text",
+      "text": "b"
+     }
+    ]
+   }
+  ],
+  "integrations: link with provider": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "marks": [
+       {
+        "type": "link",
+        "attrs": {
+         "href": "https://github.com/o/r/issues/1",
+         "target": "_blank",
+         "rel": "noopener noreferrer nofollow",
+         "class": null,
+         "title": null,
+         "internal": false,
+         "integrationProvider": "github"
+        }
+       }
+      ],
+      "text": "issue"
+     }
+    ]
+   }
+  ],
+  "integrations: subpages sorted": [
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": null,
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "a"
+     }
+    ]
+   },
+   {
+    "type": "subpages",
+    "attrs": {
+     "dir": "auto",
+     "sortBy": "title-asc"
+    }
+   },
+   {
+    "type": "paragraph",
+    "attrs": {
+     "id": "id1",
+     "indent": 0,
+     "dir": "auto",
+     "textAlign": null
+    }
    }
   ],
   "tables: missing cell": [

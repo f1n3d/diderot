@@ -1,5 +1,5 @@
 {
- "docmost": "v0.96.0",
+ "docmost": "v0.97.0",
  "topNode": "doc",
  "nodes": [
   {
@@ -281,6 +281,57 @@
    "selectable": false,
    "defining": true,
    "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "tabs",
+   "content": "tab+",
+   "group": "block",
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "tab",
+   "content": "tabLabel tabPanel",
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "id": {
+     "default": ""
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "tabLabel",
+   "content": "inline*",
+   "selectable": false,
+   "defining": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "tabPanel",
+   "content": "block+",
+   "definingAsContext": true,
    "attrs": {
     "dir": {
      "default": "auto"
@@ -727,6 +778,9 @@
    "attrs": {
     "dir": {
      "default": "auto"
+    },
+    "sortBy": {
+     "default": "default"
     }
    },
    "leafText": false
@@ -902,6 +956,47 @@
     }
    },
    "leafText": false
+  },
+  {
+   "name": "integrationCard",
+   "group": "block",
+   "inline": false,
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "url": {
+     "default": ""
+    },
+    "provider": {
+     "default": ""
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "integrationMention",
+   "group": "inline",
+   "inline": true,
+   "atom": true,
+   "selectable": true,
+   "draggable": false,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "url": {
+     "default": ""
+    },
+    "provider": {
+     "default": ""
+    }
+   },
+   "leafText": false
   }
  ],
  "marks": [
@@ -926,6 +1021,9 @@
     },
     "internal": {
      "default": false
+    },
+    "integrationProvider": {
+     "default": null
     }
    }
   },

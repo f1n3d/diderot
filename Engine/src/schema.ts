@@ -17,9 +17,9 @@ import { Table, TableRow } from "@tiptap/extension-table";
 import { UniqueID } from "@tiptap/extension-unique-id";
 import {
   Attachment, Audio, BaseEmbed, Callout, CodeBlock, Column, Columns, Comment, Details, DetailsContent, DetailsSummary,
-  Drawio, Embed, Excalidraw, Footnote, FootnoteReference, Footnotes, Highlight, Image, Indent, Link, MathBlock,
-  MathInline, Mention, PageBreak, Pdf, Status, Subpages, TableCell, TableHeader, TrailingNode, TransclusionReference,
-  TransclusionSource, Video, newBlockId,
+  Drawio, Embed, Excalidraw, Footnote, FootnoteReference, Footnotes, Highlight, Image, Indent, IntegrationCard,
+  IntegrationMention, Link, MathBlock, MathInline, Mention, PageBreak, Pdf, Status, Subpages, Tab, TabLabel, TabPanel,
+  Tabs, TableCell, TableHeader, TrailingNode, TransclusionReference, TransclusionSource, Video, newBlockId,
 } from "./extensions";
 
 export const schemaExtensions: AnyExtension[] = [
@@ -61,6 +61,10 @@ export const schemaExtensions: AnyExtension[] = [
   Details,
   DetailsContent,
   DetailsSummary,
+  Tabs,
+  Tab,
+  TabLabel,
+  TabPanel,
   Table,
   TableCell,
   TableRow,
@@ -88,4 +92,6 @@ export const schemaExtensions: AnyExtension[] = [
   Footnotes,
   Footnote,
   FootnoteReference,
+  IntegrationCard,
+  IntegrationMention,
 ];

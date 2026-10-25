@@ -41,6 +41,8 @@ import { Status } from "editor-ext/lib/status";
 import { TransclusionSource, TransclusionReference } from "editor-ext/lib/transclusion";
 import { BaseEmbed } from "editor-ext/lib/base-embed";
 import { Footnotes, Footnote, FootnoteReference } from "editor-ext/lib/footnotes";
+import { Tabs, Tab, TabLabel, TabPanel } from "editor-ext/lib/tabs";
+import { IntegrationCard, IntegrationMention } from "editor-ext/lib/integration-link";
 
 export const docmostExtensions = [
   coreExtensions.TextDirection.configure({ direction: "auto" }),
@@ -80,6 +82,10 @@ export const docmostExtensions = [
   Details,
   DetailsContent,
   DetailsSummary,
+  Tabs,
+  Tab,
+  TabLabel,
+  TabPanel,
   CustomTable,
   TableCell,
   TableRow,
@@ -108,4 +114,6 @@ export const docmostExtensions = [
   Footnotes,
   Footnote,
   FootnoteReference,
+  IntegrationCard,
+  IntegrationMention,
 ] as any[];

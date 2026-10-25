@@ -13,7 +13,11 @@ type Step =
   | { insert: [Path, JSONContent[]] }
   | { remove: Path }
   | { setAttrs: [Path, Record<string, unknown>] }
+  | { setAttribute: [Path, string, unknown] }
+  | { split: [Path, "after"] }
+  | { join: [Path] }
   | { replaceDocument: true }
+  | { replaceDocumentWith: JSONContent[] }
   | { selectNode: Path }
   | { remote: true };
 type Scenario = { name: string; doc: JSONContent[]; steps: Step[] };
@@ -30,6 +34,11 @@ const table = (...rows: JSONContent[]): JSONContent => ({ type: "table", content
 const wrap = (type: string, ...content: JSONContent[]): JSONContent => ({ type, content });
 const refs = (first: string, second: string): JSONContent => ({ type: "paragraph", content: [t("ab"), ref(first), t("cd"), ref(second), t("ef")] });
 const edit: Step = { insertText: [[0], 1, "x"] };
+const label = (text: string): JSONContent => ({ type: "tabLabel", content: text ? [t(text)] : [] });
+/** A tab with its label and panel; `id` undefined leaves the attribute out. */
+const tab = (text: string, id?: string, ...content: JSONContent[]): JSONContent =>
+  ({ type: "tab", ...(id === undefined ? {} : { attrs: { id } }), content: [label(text), { type: "tabPanel", content: content.length ? content : [p()] }] });
+const tabs = (...items: JSONContent[]): JSONContent => ({ type: "tabs", content: items });
 
 export const scenarios: Scenario[] = [
   // Trailing paragraph
@@ -154,6 +163,105 @@ export const scenarios: Scenario[] = [
   { name: "links: url then text", doc: [p("see https://example.com")], steps: [{ insertText: [[0], 23, " and"] }] },
   { name: "links: remote change", doc: [p("see ")], steps: [{ insertText: [[0], 4, "https://example.com " ] }, { remote: true }] },
 
+  // Tabs
+  { name: "tabs: inserted without ids", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("One"), tab("Two"))]] }] },
+  { name: "tabs: inserted with ids", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("One", "t1"), tab("Two", "t2"))]] }] },
+  { name: "tabs: inserted with empty ids", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("One", ""), tab("Two", ""))]] }] },
+  { name: "tabs: duplicate ids inserted", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("One", "t1"), tab("Two", "t1"))]] }] },
+  { name: "tabs: tab copied next to itself", doc: [tabs(tab("One", "t1", p("x")))], steps: [{ insert: [[0, 1], [tab("One", "t1", p("x"))]] }] },
+  { name: "tabs: tab with a used id elsewhere", doc: [tabs(tab("One", "t1")), p("b")], steps: [{ insert: [[2], [tabs(tab("Two", "t1"))]] }] },
+  { name: "tabs: existing without ids, edit elsewhere", doc: [tabs(tab("One"), tab("Two")), p("b")], steps: [{ insertText: [[1], 1, "x"] }] },
+  { name: "tabs: existing without ids, meta only", doc: [tabs(tab("One"), tab("Two")), p("b")], steps: [] },
+  { name: "tabs: edit in a panel", doc: [tabs(tab("One", "t1", p("x")), tab("Two", "t2"))], steps: [{ insertText: [[0, 0, 1, 0], 1, "y"] }] },
+  { name: "tabs: edit a label", doc: [tabs(tab("One", "t1"), tab("Two", "t2"))], steps: [{ insertText: [[0, 1, 0], 3, "!"] }] },
+  { name: "tabs: label emptied", doc: [tabs(tab("One", "t1"), tab("Two", "t2"))], steps: [{ deleteText: [[0, 1, 0], 0, 3] }] },
+  { name: "tabs: tab removed", doc: [tabs(tab("One", "t1"), tab("Two", "t2"), tab("Three", "t3"))], steps: [{ remove: [0, 1] }] },
+  { name: "tabs: only tab removed", doc: [tabs(tab("One", "t1")), p("b")], steps: [{ remove: [0, 0] }] },
+  { name: "tabs: tabs removed", doc: [tabs(tab("One", "t1")), p("b")], steps: [{ remove: [0] }] },
+  { name: "tabs: tab moved", doc: [tabs(tab("One", "t1"), tab("Two", "t2"))], steps: [{ remove: [0, 0] }, { insert: [[0, 1], [tab("One", "t1")]] }] },
+  { name: "tabs: panel emptied", doc: [tabs(tab("One", "t1", p("x")))], steps: [{ remove: [0, 0, 1, 0] }] },
+  { name: "tabs: nested without ids", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("Outer", undefined, tabs(tab("Inner"))))]] }] },
+  { name: "tabs: in a callout", doc: [wrap("callout", p("c"))], steps: [{ insert: [[0, 1], [tabs(tab("One"))]] }] },
+  { name: "tabs: in a column", doc: [{ type: "columns", content: [{ type: "column", content: [p("a")] }, { type: "column", content: [p("b")] }] }], steps: [{ insert: [[0, 0, 1], [tabs(tab("One"))]] }] },
+  { name: "tabs: in a table cell", doc: [table(row(cell(p("c"))))], steps: [{ insert: [[0, 0, 0, 1], [tabs(tab("One"))]] }] },
+  { name: "tabs: in a synced block", doc: [{ type: "transclusionSource", content: [p("s")] }], steps: [{ insert: [[0, 1], [tabs(tab("One"))]] }] },
+  { name: "tabs: remote without ids", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("One"), tab("Two"))]] }, { remote: true }] },
+  { name: "tabs: remote duplicate ids", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("One", "t1"), tab("Two", "t1"))]] }, { remote: true }] },
+  { name: "tabs: whole document", doc: [tabs(tab("One"), tab("Two", "t2"), tab("Three", "t2")), p("b")], steps: [{ replaceDocument: true }] },
+  { name: "tabs: remote whole document", doc: [tabs(tab("One"), tab("Two", "t2"), tab("Three", "t2")), p("b")], steps: [{ replaceDocument: true }, { remote: true }] },
+  { name: "tabs: attribute of a tab", doc: [tabs(tab("One", "t1"), tab("Two", "t2"))], steps: [{ setAttrs: [[0, 1], { id: "t1" }] }] },
+  { name: "tabs: select a tab", doc: [tabs(tab("One", "t1"), tab("Two", "t2"))], steps: [{ selectNode: [0, 1] }] },
+  { name: "tabs: copy inserted before the original", doc: [p("a"), tabs(tab("One", "t1"))], steps: [{ insert: [[1], [tabs(tab("Copy", "t1"))]] }] },
+  { name: "tabs: existing duplicates, edit elsewhere", doc: [tabs(tab("One", "t1"), tab("Two", "t1")), p("b")], steps: [{ insertText: [[1], 1, "x"] }] },
+  { name: "tabs: existing duplicates in two blocks, edit elsewhere", doc: [tabs(tab("One", "t1")), tabs(tab("Two", "t1")), p("b")], steps: [{ insertText: [[2], 1, "x"] }] },
+  { name: "tabs: three duplicates", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("One", "t1"), tab("Two", "t1"), tab("Three", "t1"))]] }] },
+  { name: "tabs: duplicate in nested tabs", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("Outer", "t1", tabs(tab("Inner", "t1"))))]] }] },
+  { name: "tabs: remote edit elsewhere, ids missing", doc: [tabs(tab("One"), tab("Two")), p("b")], steps: [{ insertText: [[1], 1, "x"] }, { remote: true }] },
+  { name: "tabs: tabs block replaced by itself", doc: [tabs(tab("One"), tab("Two", "t2"), tab("Three", "t2")), p("b")], steps: [{ replace: [[0], [tabs(tab("One"), tab("Two", "t2"), tab("Three", "t2"))]] }] },
+  { name: "tabs: all blocks replaced one by one", doc: [tabs(tab("One"), tab("Two", "t2"), tab("Three", "t2")), p("b")], steps: [{ replace: [[0], [tabs(tab("One"), tab("Two", "t2"), tab("Three", "t2"))]] }, { replace: [[1], [p("b")]] }] },
+  { name: "tabs: whole document after an edit", doc: [tabs(tab("One"), tab("Two")), p("b")], steps: [{ insertText: [[1], 1, "x"] }, { replaceDocument: true }] },
+  { name: "tabs: other characters in an id", doc: [p("a")], steps: [{ insert: [[1], [tabs(tab("One", "Tab-1 x"), tab("Two", "1234"))]] }] },
+  { name: "tabs: null id", doc: [p("a")], steps: [{ insert: [[1], [{ type: "tabs", content: [{ ...tab("One"), attrs: { id: null } }] }]] }] },
+  { name: "tabs: id emptied", doc: [tabs(tab("One", "t1"), tab("Two", "t2"))], steps: [{ setAttrs: [[0, 0], { id: "" }] }] },
+  { name: "tabs: selection with ids missing", doc: [tabs(tab("One"), tab("Two")), p("b")], steps: [{ selectNode: [0, 1] }] },
+  { name: "tabs: label and panel only", doc: [p("a")], steps: [{ insert: [[1], [{ type: "tabs", content: [{ type: "tab", content: [label("L")] }] }]] }] },
+  { name: "tabs: remote copy after the original", doc: [tabs(tab("One", "t1")), p("b")], steps: [{ insert: [[1], [tabs(tab("Copy", "t1"))]] }, { remote: true }] },
+  { name: "tabs: remote copy before the original", doc: [p("a"), tabs(tab("One", "t1"))], steps: [{ insert: [[1], [tabs(tab("Copy", "t1"))]] }, { remote: true }] },
+  { name: "tabs: remote edit of a label, id missing", doc: [tabs(tab("One"), tab("Two")), p("b")], steps: [{ insertText: [[0, 0, 0], 3, "!"] }, { remote: true }] },
+  { name: "tabs: remote edit in a panel, id missing", doc: [tabs(tab("One", undefined, p("x")), tab("Two")), p("b")], steps: [{ insertText: [[0, 0, 1, 0], 1, "y"] }, { remote: true }] },
+  { name: "tabs: remote id emptied", doc: [tabs(tab("One", "t1"), tab("Two", "t2"))], steps: [{ setAttrs: [[0, 0], { id: "" }] }, { remote: true }] },
+  { name: "tabs: remote existing duplicates, edit elsewhere", doc: [tabs(tab("One", "t1"), tab("Two", "t1")), p("b")], steps: [{ insertText: [[1], 1, "x"] }, { remote: true }] },
+  { name: "tabs: edit after the whole document", doc: [tabs(tab("One"), tab("Two")), p("b")], steps: [{ replaceDocument: true }, { insertText: [[1], 1, "x"] }] },
+  { name: "tabs: copy inserted before the original in the same block", doc: [tabs(tab("One", "t1"), tab("Two", "t2"))], steps: [{ insert: [[0, 0], [tab("Copy", "t2")]] }] },
+  { name: "tabs: whole document with new tabs", doc: [p("a")], steps: [{ replaceDocumentWith: [p("a"), tabs(tab("One"), tab("Two", "t2"), tab("Three", "t2"))] }] },
+  { name: "tabs: remote whole document with new tabs", doc: [p("a")], steps: [{ replaceDocumentWith: [p("a"), tabs(tab("One"), tab("Two", "t2"), tab("Three", "t2"))] }, { remote: true }] },
+  { name: "tabs: remote whole document with a changed id", doc: [tabs(tab("One", "t1"), tab("Two", "t2")), p("b")], steps: [{ replaceDocumentWith: [tabs(tab("One", "t1"), tab("Two", "t1")), p("b")] }, { remote: true }] },
+  { name: "tabs: whole document with a changed id", doc: [tabs(tab("One", "t1"), tab("Two", "t2")), p("b")], steps: [{ replaceDocumentWith: [tabs(tab("One", "t1"), tab("Two", "t1")), p("b")] }] },
+  { name: "tabs: remote tab removed, ids missing", doc: [tabs(tab("One"), tab("Two"), tab("Three")), p("b")], steps: [{ remove: [0, 2] }, { remote: true }] },
+  { name: "tabs: remote tab moved, duplicates", doc: [tabs(tab("One", "t1"), tab("Two", "t1"), tab("Three", "t3"))], steps: [{ remove: [0, 2] }, { insert: [[0, 0], [tab("Three", "t3")]] }, { remote: true }] },
+  { name: "tabs: remote edit before the tabs, ids missing", doc: [p("a"), tabs(tab("One"), tab("Two"))], steps: [{ insertText: [[0], 1, "x"] }, { remote: true }] },
+  { name: "tabs: remote paragraph before the tabs, ids missing", doc: [p("a"), tabs(tab("One"), tab("Two"))], steps: [{ insert: [[0], [p("new")]] }, { remote: true }] },
+  { name: "tabs: whole document, tabs shifted", doc: [p("a"), tabs(tab("One"), tab("Two"))], steps: [{ replaceDocumentWith: [p("new"), p("a"), tabs(tab("One"), tab("Two"))] }] },
+  { name: "tabs: remote whole document, tabs shifted", doc: [p("a"), tabs(tab("One"), tab("Two"))], steps: [{ replaceDocumentWith: [p("new"), p("a"), tabs(tab("One"), tab("Two"))] }, { remote: true }] },
+  { name: "tabs: remote label of a tab with an id", doc: [tabs(tab("One", "t1"), tab("Two"))], steps: [{ insertText: [[0, 0, 0], 3, "!"] }, { remote: true }] },
+  // When the tab ids are checked, without other rules adding steps: every paragraph has an id, a paragraph comes last.
+  ...(() => {
+    const pid = (text: string, id: string) => p(text, { id });
+    const ptab = (text: string, id: string) => ({ ...tab(text, id), content: [label(text), { type: "tabPanel", content: [pid(`in ${text}`, `q${text}`)] }] });
+    const doc = (labelTwo = "Two", ids = ["ta", "", "tc"]) => [pid("a", "pa"), tabs(ptab("One", ids[0]), ptab(labelTwo, ids[1]), ptab("Three", ids[2])), pid("b", "pb")];
+    const cases: [string, Step[], JSONContent[]?][] = [
+      ["typing", [{ insertText: [[0], 1, "x"] }]],
+      ["typing from another user", [{ insertText: [[0], 1, "x"] }, { remote: true }]],
+      ["paragraph rebuilt with new attributes", [{ setAttrs: [[0], { textAlign: "center" }] }]],
+      ["paragraph rebuilt with the same attributes", [{ setAttrs: [[0], {}] }]],
+      ["paragraph in a panel rebuilt", [{ setAttrs: [[1, 0, 1, 0], { textAlign: "center" }] }]],
+      ["paragraph rebuilt by another user", [{ setAttrs: [[2], { textAlign: "right" }] }, { remote: true }]],
+      ["paragraph attribute step", [{ setAttribute: [[0], "textAlign", "center"] }]],
+      ["tab id attribute step", [{ setAttribute: [[1, 0], "id", ""] }]],
+      ["tab rebuilt with an empty id", [{ setAttrs: [[1, 0], { id: "" }] }]],
+      ["label replaced by itself", [{ replace: [[1, 1, 0], [label("Two")]] }]],
+      ["panel replaced by itself", [{ replace: [[1, 1, 1], [{ type: "tabPanel", content: [pid("in Two", "qTwo")] }]] }]],
+      ["tab replaced by itself", [{ replace: [[1, 2], [ptab("Three", "tc")]] }]],
+      ["tab removed", [{ remove: [1, 2] }]],
+      ["tabs inside an inserted callout", [{ insert: [[2], [wrap("callout", tabs(ptab("Inner", "ti")))]] }]],
+      ["whole document, a label changed", [{ replaceDocumentWith: doc("Zwei") }]],
+      ["whole document, ids reordered", [{ replaceDocumentWith: doc("Two", ["tc", "", "ta"]) }]],
+      ["whole document, an id changed, from another user", [{ replaceDocumentWith: doc("Two", ["ta", "", "tz"]) }, { remote: true }]],
+      ["tabs block split between two tabs", [{ split: [[1, 1], "after"] }]],
+      ["two tabs blocks joined", [{ insert: [[2], [tabs(ptab("Four", "td"))]] }, { join: [[2]] }]],
+      ["whole document but the first paragraph", [{ replace: [[1], [tabs(ptab("One", "ta"), ptab("Two", ""), ptab("Three", "tc"))]] }, { replace: [[2], [pid("b", "pb")]] }]],
+    ];
+    return cases.map(([name, steps]) => ({ name: `tab id rule: ${name}`, doc: doc(), steps }));
+  })(),
+  { name: "tabs: block ids in a panel", doc: [p("a", { id: "keep" })], steps: [{ insert: [[1], [tabs(tab("One", "t1", p("x"), h("H")))]] }] },
+  { name: "trailing: tabs last", doc: [p("a"), tabs(tab("One", "t1"))], steps: [edit] },
+
+  // Integration links
+  { name: "integrations: card inserted", doc: [p("a")], steps: [{ insert: [[1], [{ type: "integrationCard", attrs: { url: "https://github.com/o/r/issues/1", provider: "github" } }]] }] },
+  { name: "integrations: mention inserted", doc: [p("ab")], steps: [{ insertInline: [[0], 1, { type: "integrationMention", attrs: { url: "https://github.com/o/r/pull/2", provider: "github" } }] }] },
+  { name: "integrations: link with provider", doc: [p("a")], steps: [{ replace: [[0], [p("x", {})].map((node) => ({ ...node, content: [t("issue", [{ type: "link", attrs: { href: "https://github.com/o/r/issues/1", integrationProvider: "github" } }])] }))] }] },
+  { name: "integrations: subpages sorted", doc: [p("a")], steps: [{ insert: [[1], [{ type: "subpages", attrs: { sortBy: "title-asc" } }]] }] },
+
   // Tables
   { name: "tables: missing cell", doc: [table(row(cell(p("a")), cell(p("b"))), row(cell(p("c")))), p()], steps: [{ insertText: [[0, 0, 0, 0], 1, "x"] }] },
 ];
@@ -194,7 +302,13 @@ function apply(tr: Transaction, step: Step) {
   } else if ("setAttrs" in step) {
     const pos = position(tr.doc, step.setAttrs[0]);
     tr.setNodeMarkup(pos, undefined, { ...tr.doc.nodeAt(pos)!.attrs, ...step.setAttrs[1] });
-  } else if ("selectNode" in step) tr.setSelection(NodeSelection.create(tr.doc, position(tr.doc, step.selectNode)));
+  } else if ("split" in step) {
+    const pos = position(tr.doc, step.split[0]);
+    tr.split(pos + tr.doc.nodeAt(pos)!.nodeSize);
+  } else if ("join" in step) tr.join(position(tr.doc, step.join[0]));
+  else if ("setAttribute" in step) tr.setNodeAttribute(position(tr.doc, step.setAttribute[0]), step.setAttribute[1], step.setAttribute[2]);
+  else if ("selectNode" in step) tr.setSelection(NodeSelection.create(tr.doc, position(tr.doc, step.selectNode)));
+  else if ("replaceDocumentWith" in step) tr.replaceWith(0, tr.doc.content.size, nodes(step.replaceDocumentWith));
   else if ("replaceDocument" in step) {
     // Like a Yjs update: the whole content again, as new nodes.
     tr.replaceWith(0, tr.doc.content.size, nodes(tr.doc.toJSON().content));
@@ -210,6 +324,62 @@ export function describeBlockIds(extensions: AnyExtension[]) {
     lengths: [...new Set(ids.map((id) => id.length))].sort(),
     alphabet: [...new Set(ids.join(""))].sort().join(""),
   };
+}
+
+/** The ids of the tabs anywhere in a value (documents, scenario steps), in order. */
+function tabIds(json: unknown, found: unknown[] = []): unknown[] {
+  if (Array.isArray(json)) json.forEach((item) => tabIds(item, found));
+  else if (json && typeof json === "object") {
+    const node = json as JSONContent;
+    if (node.type === "tab") found.push(node.attrs?.id);
+    Object.values(node).forEach((value) => tabIds(value, found));
+  }
+  return found;
+}
+
+/**
+ * Tab ids are random: new ones (not in the scenario, not empty) become "new1", "new2", … in document order, so results
+ * repeat. Their format is recorded by `describeTabIds`.
+ */
+function withNamedTabIds(content: unknown, scenario: Scenario) {
+  const known = new Set(tabIds([scenario.doc, scenario.steps]));
+  const names = new Map<unknown, string>();
+  const rename = (json: unknown): unknown => {
+    if (Array.isArray(json)) return json.map(rename);
+    if (!json || typeof json !== "object") return json;
+    const node = { ...(json as JSONContent) };
+    if (node.type === "tab" && typeof node.attrs?.id === "string" && node.attrs.id !== "" && !known.has(node.attrs.id)) {
+      if (!names.has(node.attrs.id)) names.set(node.attrs.id, `new${names.size + 1}`);
+      node.attrs = { ...node.attrs, id: names.get(node.attrs.id) };
+    }
+    if (node.content) node.content = rename(node.content) as JSONContent[];
+    return node;
+  };
+  return rename(content);
+}
+
+/** The lengths and letters of the ids 1,000 new tabs get, and whether they all differ. */
+export function describeTabIds(extensions: AnyExtension[]) {
+  const editor = new Editor({ extensions, content: { type: "doc", content: [{ type: "paragraph" }] } });
+  const state = EditorState.create({ schema: editor.schema, doc: editor.state.doc, plugins: editor.extensionManager.plugins });
+  const tabs = PMNode.fromJSON(editor.schema, { type: "tabs", content: Array.from({ length: 1000 }, () => ({ type: "tab", content: [{ type: "tabLabel" }, { type: "tabPanel", content: [{ type: "paragraph" }] }] })) });
+  const { state: next } = state.applyTransaction(state.tr.insert(0, tabs));
+  editor.destroy();
+  const ids = tabIds(next.doc.toJSON()) as string[];
+  return {
+    lengths: [...new Set(ids.map((id) => String(id).length))].sort(),
+    alphabet: [...new Set(ids.join(""))].sort().join(""),
+    allDifferent: new Set(ids).size === ids.length,
+  };
+}
+
+/** What creating an editor on a document does to its tabs (the tabs extension's onCreate hook). */
+export function describeTabsOnCreate(extensions: AnyExtension[]) {
+  const doc = [tabs(tab("One"), tab("Two", ""), tab("Three", "t3"), tab("Four", "t3")), p("b")];
+  const editor = new Editor({ extensions, content: { type: "doc", content: doc } });
+  const result = withNamedTabIds(editor.getJSON().content, { name: "onCreate", doc, steps: [] });
+  editor.destroy();
+  return result;
 }
 
 /** Runs every scenario with the given extensions; a refused change gives "refused". */
@@ -231,7 +401,7 @@ export function runScenarios(extensions: AnyExtension[]): Record<string, unknown
       const tr = state.tr;
       for (const step of scenario.steps) apply(tr, step);
       const { state: next, transactions } = state.applyTransaction(tr);
-      results[scenario.name] = transactions.length === 0 ? "refused" : next.doc.toJSON().content;
+      results[scenario.name] = transactions.length === 0 ? "refused" : withNamedTabIds(next.doc.toJSON().content, scenario);
     } catch (error) {
       results[scenario.name] = `error: ${String(error)}`;
     }

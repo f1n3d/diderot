@@ -3,8 +3,9 @@
 The engine edits a page through a ProseMirror document bound to the page's Yjs document. Whatever the engine's schema
 can't hold is lost when it writes back, so the schema must match the one the Docmost server and its web editor use,
 and the engine must make the same automatic changes to documents that the web editor makes. This file describes both
-for **Docmost v0.96.0**, the version the app supports (newer servers open pages read-only, see
-`AppSession.isNewerThanEditor`).
+for **Docmost v0.97.0**, the newest version the app supports (newer servers open pages read-only, see
+`AppSession.isNewerThanEditor`). Docmost 0.96 has the same format without tabs, integration links and the attributes
+`sortBy` (sub-pages) and `integrationProvider` (links); the app offers those only on servers that know them.
 
 ## How this was established
 
@@ -14,7 +15,8 @@ to documents. The results are in `spec/`:
 
 - `spec/schema.json`: every node and mark type in schema order, with content, groups, flags and attribute defaults.
 - `spec/plugins.json`: the plugins and hooks that can change documents, in the order they run.
-- `spec/behaviors.json`: the format of new block ids and the document after each scenario.
+- `spec/behaviors.json`: the format of new block ids and tab ids, what opening a document does to its tabs, and the
+  document after each scenario.
 
 The engine's own extensions (`src/extensions.ts`) are written from this description, `spec/` and TipTap's
 MIT-licensed extensions and documentation, without Docmost's source code. `pnpm run check` compares them with `spec/`
@@ -22,6 +24,9 @@ MIT-licensed extensions and documentation, without Docmost's source code. `pnpm 
 extensions and the engine's side by side (needs the Docmost checkout, like `pnpm run observe`). The development
 dependencies besides esbuild and TypeScript are the packages Docmost's extensions import when these two tools load
 them; nothing of them goes into `engine.js`.
+
+The tools run Docmost's editor without a view. What its tabs extension does when an editor shows a document was observed
+once with a browser-like environment (jsdom) around the same extensions; see "Tab ids" below.
 
 ## Documents
 
@@ -75,18 +80,31 @@ TipTap's StarterKit provides most of these unchanged; Docmost adds block ids and
 | `transclusionSource` | see below | block | defining, isolating | `id` |
 | `transclusionReference` | | block | atom, selectable, not draggable | `sourcePageId`, `transclusionId` |
 | `base` | | block | atom, selectable, draggable | `pageId`, `pendingKey` |
+| `tabs` | `tab+` | block | defining, isolating | |
+| `tab` | `tabLabel tabPanel` | | defining, isolating | `id` = `""` |
+| `tabLabel` | `inline*` | | defining, not selectable | |
+| `tabPanel` | `block+` | | defining as context | |
+| `integrationCard` | | block | atom, defining, draggable, isolating, not inline | `url` = `""`, `provider` = `""` |
 
 - A callout is a highlighted box; `type` picks its color (`default`, `info`, `note`, `success`, `warning`, `danger`)
   and `icon` an emoji.
 - `details` is a toggle: a one-line summary and the content that opens below it.
 - `mathBlock` (and `mathInline` below) hold LaTeX in `text`.
-- `subpages` lists the page's child pages; it has no attributes.
+- `subpages` lists the page's child pages; `sortBy` (default `"default"`) is the order the web lists them in:
+  `"default"` (as in the page tree), `"title-asc"` or `"recent"`.
 - `columns` lays out two or more `column`s; `layout` names the column widths, `width` overrides one column's.
 - A synced block (`transclusionSource`) holds blocks that other pages show through a `transclusionReference`. It may
   contain `paragraph`, `heading`, `blockquote`, `codeBlock`, `horizontalRule`, `bulletList`, `orderedList`,
   `taskList`, `image`, `video`, `audio`, `attachment`, `callout`, `details`, `embed`, `mathBlock`, `table`, `drawio`,
   `excalidraw`, `pdf`, `subpages`, `columns` and `youtube`, one or more in any order.
 - `base` shows the database on the page `pageId`; `pendingKey` is the web editor's.
+- `tabs` shows one `tab` at a time: each has a one-line label (`tabLabel`) and its blocks (`tabPanel`), and an `id`
+  (see "Tab ids"). Tabs come after the toggle types in the schema. They may sit at the top level, in callouts, columns,
+  toggles, quotes, list items and other tabs, but not in table cells or synced blocks (content put there lands after
+  the table or synced block). `tabPanel` is "defining as context": content pasted or dropped out of a panel keeps its
+  wrapping.
+- `integrationCard` shows a link to another service (an issue, a pull request, a design, …) as a card: `url` and
+  `provider`, the service's name. It comes last in the schema, with `integrationMention`.
 
 ### Tables
 
@@ -126,9 +144,11 @@ Uploaded files point to their attachment (`attachmentId`) and its address (`src`
 | `mathInline` | | inline, atom | `text` = `""` |
 | `status` | | inline, atom, selectable, draggable | `text` = `""`, `color` = `"gray"` |
 | `footnoteReference` | `text*` | inline, atom, draggable | `data-id`, `referenceNumber`, `href`, `class` = `"footnote-ref"` |
+| `integrationMention` | | inline, atom, selectable, not draggable | `url` = `""`, `provider` = `""` |
 
-All four are in the group `inline`. A mention points to a user or a page (`entityType` `"user"` or `"page"`,
+All five are in the group `inline`. A mention points to a user or a page (`entityType` `"user"` or `"page"`,
 `entityId`, for pages also `slugId`). The mention node comes third in the schema, right after the code block.
+`integrationMention` is the inline form of `integrationCard`.
 
 ### Footnotes
 
@@ -143,7 +163,7 @@ A footnote reference and its footnote share the `data-id`; how the section follo
 
 | Mark | Flags | Attributes |
 |---|---|---|
-| `link` | not inclusive | `href`, `target` = `"_blank"`, `rel` = `"noopener noreferrer nofollow"`, `class`, `title`, `internal` = false |
+| `link` | not inclusive | `href`, `target` = `"_blank"`, `rel` = `"noopener noreferrer nofollow"`, `class`, `title`, `internal` = false, `integrationProvider` |
 | `textStyle` | | `color` |
 | `bold`, `italic`, `strike`, `underline` | | |
 | `code` | excludes all other marks, code | |
@@ -152,7 +172,8 @@ A footnote reference and its footnote share the `data-id`; how the section follo
 | `highlight` | | `color`, `colorName` |
 
 In this order: `link`, `textStyle`, `bold`, `code`, `italic`, `strike`, `underline`, `comment`, `superscript`,
-`subscript`, `highlight`. `internal` marks links to pages of the same Docmost; `comment` marks text an inline comment
+`subscript`, `highlight`. `internal` marks links to pages of the same Docmost, `integrationProvider` names the service a
+link points to when the web editor recognized it; `comment` marks text an inline comment
 refers to; `colorName` and `backgroundColorName` name the color from the web editor's palette that `color` and
 `backgroundColor` hold.
 
@@ -167,6 +188,26 @@ Paragraphs, headings and synced blocks carry an `id`: 12 random lowercase letter
 extension assigns them, configured with these three types and this id format, and follows TipTap's rules: a change
 gives new and changed blocks without an id one; changes from other users are left alone; once a page has synced, every
 block still without an id gets one.
+
+### Tab ids
+
+Every tab has an `id`, new ones 12 random lowercase letters like block ids. After a transaction with a step that may
+have added, removed or moved tabs, every tab without an id (empty, missing, not text) or with an id an earlier tab in
+the document already has gets a new one; the first tab with an id keeps it, and other formats of ids stay. These steps
+count:
+
+- any step that rebuilds a node around its content (ProseMirror's `ReplaceAroundStep`, as `setNodeMarkup` makes when
+  attributes change), of any node anywhere: also the steps that give blocks their ids;
+- a replacement that inserts or removes content holding a tabs block or a tab, also as an open part of one (splitting
+  or joining tabs blocks);
+- a replacement of the whole document, but only if the order of the tab ids changes (a label or text changing doesn't
+  count).
+
+Typing, attribute steps (`setNodeAttribute`, so also setting a tab's id that way) and mark steps don't count.
+Changes from other users count the same. The new ids are a transaction of their own, left out of the undo history.
+
+When Docmost's web editor shows a document, the same happens shortly after (its `onCreate` hook); bound to a page with
+live collaboration, the rule above has already done it when the page loaded, as that replaces the whole document.
 
 ### A paragraph at the end
 
@@ -214,14 +255,17 @@ TipTap's table extension (prosemirror-tables) repairs tables after changes, for 
 The engine never types, pastes, clicks or selects: the app does that natively and sends whole blocks. So everything
 the web editor does only then is left out: input rules (Markdown shortcuts, typographic quotes), keyboard shortcuts,
 paste and click handling, node views and menus, decorations (code highlighting, comment highlighting, placeholders),
-HTML and Markdown conversion, and the refusal of text selections that cross into or out of a footnote.
+HTML and Markdown conversion, the refusal of text selections that cross into or out of a footnote, and the tabs
+plugin that keeps the selection in the tab that is shown (its transactions only move the selection; the engine keeps a
+plugin with its name that adds nothing).
 
 Docmost's editor also renumbers footnotes after a transaction whose steps cancel out directly in front of a
 reference (type a character, delete it); the engine doesn't, as it never makes such transactions.
 
 ## A newer Docmost
 
-1. Check out the new version next to this repository: `git -C ../docmost checkout v0.97.0`.
+1. Check out the new version next to this repository: `git -C ../docmost checkout v0.97.0`. (0.97.0 came without a Git
+   tag at first: the tag was set locally on its release commit, `git -C ../docmost tag v0.97.0 e113d652`.)
 2. If the server's extension list changed (`apps/server/src/collaboration/collaboration.util.ts`), update
    `tools/docmost-reference.ts`.
 3. `pnpm run observe` records the new version in `spec/`; `git diff spec` shows what changed.
