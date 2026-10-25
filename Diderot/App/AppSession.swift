@@ -625,12 +625,13 @@ final class AppSession {
         }
     }
 
-    /// The server derives the device name for its session list from the User-Agent ("iPhone", "iPad").
+    /// Names the app (not Docmost: it isn't Docmost's app); the server derives the device name for its session list
+    /// from the rest ("iPhone", "iPad").
     static let userAgent: String = {
         let device = UIDevice.current
         let version = device.systemVersion.replacingOccurrences(of: ".", with: "_")
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
-        return "Docmost/\(appVersion) (\(device.model); CPU iPhone OS \(version) like Mac OS X) DocmostKit/\(DocmostKitInfo.version)"
+        return "Diderot/\(appVersion) (\(device.model); CPU iPhone OS \(version) like Mac OS X) DocmostKit/\(DocmostKitInfo.version)"
     }()
 
     private func nextAccountAfterSignOut() -> StoredSession? {

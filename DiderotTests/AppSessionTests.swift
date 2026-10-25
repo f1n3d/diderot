@@ -27,6 +27,12 @@ struct AppSessionTests {
         #expect(await !pageSurvives(signInOf: bobElsewhere))
     }
 
+    /// The app sends its own name, not Docmost's: it isn't Docmost's app.
+    @Test func userAgentNamesTheApp() {
+        #expect(AppSession.userAgent.hasPrefix("Diderot/"))
+        #expect(AppSession.userAgent.contains("CPU iPhone OS"))
+    }
+
     private func user(_ id: String, workspace: String = "w1") throws -> CurrentUser {
         let json = #"{"user": {"id": "\#(id)", "email": "\#(id)@example.com"}, "workspace": {"id": "\#(workspace)", "name": "Docs"}}"#
         return try JSONDecoder().decode(CurrentUser.self, from: Data(json.utf8))
