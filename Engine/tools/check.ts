@@ -3,7 +3,7 @@
 // every scenario. Exits with 1 on any difference.
 import fs from "node:fs";
 import { describeDocumentPlugins, describeSchema } from "./describe-schema";
-import { describeBlockIds, runScenarios } from "./behaviors";
+import { describeBlockIds, describeTabIds, describeTabsOnCreate, runScenarios } from "./behaviors";
 import { schemaExtensions } from "../src/schema";
 
 // Left out on purpose (FORMAT.md): the footnote plugin's refusal of text selections that cross footnotes, and its
@@ -45,6 +45,8 @@ for (const plugin of plugins.plugins) plugin.filters &&= !leftOutFilters.has(plu
 compare("plugins", plugins, describeDocumentPlugins(schemaExtensions));
 const behaviors = expected("behaviors");
 compare("block ids", behaviors.blockIds, describeBlockIds(schemaExtensions));
+compare("tab ids", behaviors.tabIds, describeTabIds(schemaExtensions));
+compare("tabs on create", { content: behaviors.tabsOnCreate }, { content: describeTabsOnCreate(schemaExtensions) });
 const withoutLeftOut = (results: object) => Object.fromEntries(Object.entries(results).filter(([name]) => !leftOutScenarios.has(name)));
 compare("scenario", withoutLeftOut(behaviors.results as object), withoutLeftOut(runScenarios(schemaExtensions)));
 

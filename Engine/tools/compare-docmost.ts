@@ -29,6 +29,13 @@ const sides = [setup(docmostExtensions), setup(schemaExtensions)];
 
 const t = (text: string) => ({ type: "text", text });
 const ref = (id: string) => ({ type: "footnoteReference", attrs: { "data-id": id } });
+const p = (...content: JSONContent[]) => ({ type: "paragraph", content });
+const tab = (label: string, id: string | undefined, ...content: JSONContent[]) =>
+  ({ type: "tab", ...(id === undefined ? {} : { attrs: { id } }), content: [{ type: "tabLabel", content: label ? [t(label)] : [] }, { type: "tabPanel", content }] });
+const tabs = (...items: JSONContent[]) => ({ type: "tabs", content: items });
+const card = { type: "integrationCard", attrs: { url: "https://github.com/o/r/issues/1", provider: "github" } };
+const chip = { type: "integrationMention", attrs: { url: "https://linear.app/o/issue/A-1", provider: "linear" } };
+const providerLink = (text: string) => ({ type: "text", text, marks: [{ type: "link", attrs: { href: "https://gitlab.com/o/r/-/issues/2", integrationProvider: "gitlab" } }] });
 const fixtures = "../Packages/DocmostKit/Tests/DocmostKitTests/Fixtures";
 const documents: JSONContent[] = [
   ...fs.readdirSync(fixtures).filter((name) => name.startsWith("fixture-")).map((name) => JSON.parse(fs.readFileSync(`${fixtures}/${name}`, "utf8"))),
@@ -37,6 +44,22 @@ const documents: JSONContent[] = [
     { type: "paragraph", content: [t("x"), ref("f2"), t("y"), ref("f1")] },
     { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph", content: [ref("f3")] }] }] },
     { type: "footnotes", content: ["f1", "f2", "f3", "f9"].map((id) => ({ type: "footnote", attrs: { id, "data-id": id }, content: [{ type: "paragraph", content: [t(`note ${id}`)] }] })) },
+  ] },
+  // Docmost 0.97: tabs (one without an id, one with a taken id), integration links, sorted subpages.
+  { type: "doc", content: [
+    p(t("before")),
+    tabs(
+      tab("One", "ta", p(t("first panel")), { type: "bulletList", content: [{ type: "listItem", content: [p(t("item"))] }] }),
+      tab("Two", "tb", p(t("second"), ref("f1")), { type: "callout", content: [p(t("in a callout"))] }),
+      tab("", "", p(t("no id"))),
+      tab("Four", "ta", p(t("taken id"))),
+    ),
+    p(t("see "), chip, t(" and "), providerLink("the issue")),
+    card,
+    { type: "subpages", attrs: { sortBy: "recent" } },
+    { type: "columns", content: [{ type: "column", content: [tabs(tab("In a column", "tc", p(t("c"))))] }, { type: "column", content: [p(t("d"))] }] },
+    p(t("after")),
+    { type: "footnotes", content: [{ type: "footnote", attrs: { id: "f1", "data-id": "f1" }, content: [p(t("note"))] }] },
   ] },
 ].filter((doc) => {
   try {
@@ -59,6 +82,11 @@ const newBlocks: JSONContent[] = [
   { type: "callout", content: [{ type: "paragraph", attrs: { indent: 2 }, content: [t("c")] }] },
   { type: "transclusionSource", content: [{ type: "paragraph", content: [t("s"), ref("fa")] }] },
   { type: "paragraph", content: [t("visit https://example.com ")] },
+  tabs(tab("New", undefined, p(t("n")))),
+  tabs(tab("Copy", "ta", p(t("copy"))), tab("Empty", "", p())),
+  card,
+  p(t("chip "), chip),
+  { type: "subpages", attrs: { sortBy: "title-asc" } },
 ];
 
 type Change = [label: string, apply: (tr: Transaction, schema: Schema) => void];
@@ -81,7 +109,7 @@ function randomChange(doc: PMNode): Change {
   const textblocks = blocks.filter(({ node }) => node.isTextblock && node.type.name !== "codeBlock");
 
   const target = pick(blocks), first = pick(top), second = pick(top), block = pick(textblocks);
-  const json = target.node.toJSON(), extra = pick(newBlocks);
+  const extra = pick(newBlocks);
   const indent = Math.floor(random() * 10), addReference = random() < 0.5, referenceId = pick(["f1", "f2", "fz"]);
   const offset = Math.floor(random() * (block.node.content.size + 1));
   const typed = pick(["a", " ", "x y ", "https://example.org ", "mail@example.org "]);
@@ -90,11 +118,16 @@ function randomChange(doc: PMNode): Change {
   const fromOthers = (tr: Transaction) => remote && tr.setMeta("y-sync$", { isChangeOrigin: true });
   const at = `${target.node.type.name}@${target.pos}`;
 
-  switch (pick(["same", "edited", "insert", "delete", "move", "attributes", "everything", "split", "twoSteps", "type", "erase", "reference", "unreference"])) {
+  const tabsFound = blocks.filter(({ node }) => node.type.name === "tab");
+  const tabTarget = tabsFound.length ? pick(tabsFound) : null, newTabId = pick(["", "ta", "tb", "zz"]);
+
+  switch (pick(["same", "edited", "insert", "delete", "move", "attributes", "everything", "split", "twoSteps", "type", "erase", "reference", "unreference", "tabId"])) {
+    // Each side copies its own node: their random tab ids differ.
     case "same":
-      return [`replace ${at} with itself`, (tr, schema) => tr.replaceWith(target.pos, target.pos + target.node.nodeSize, PMNode.fromJSON(schema, json))];
+      return [`replace ${at} with itself`, (tr, schema) => tr.replaceWith(target.pos, target.pos + target.node.nodeSize, PMNode.fromJSON(schema, tr.doc.nodeAt(target.pos)!.toJSON()))];
     case "edited":
       return [`replace ${at} edited`, (tr, schema) => {
+        const json = tr.doc.nodeAt(target.pos)!.toJSON();
         const edited = { ...json, attrs: { ...json.attrs, ...(target.node.type.name === "paragraph" ? { indent } : {}) } };
         if (target.node.isTextblock) edited.content = [...(json.content ?? []), t(" more"), ...(addReference ? [ref(referenceId)] : [])];
         tr.replaceWith(target.pos, target.pos + target.node.nodeSize, PMNode.fromJSON(schema, edited));
@@ -140,6 +173,12 @@ function randomChange(doc: PMNode): Change {
         tr.insert(block.pos + 1 + offset, PMNode.fromJSON(schema, ref(referenceId)));
         fromOthers(tr);
       }];
+    case "tabId":
+      return [`tab id ${JSON.stringify(newTabId)} at tab@${tabTarget?.pos}${remote ? " (remote)" : ""}`, (tr) => {
+        if (!tabTarget) return;
+        tr.setNodeAttribute(tabTarget.pos, "id", newTabId);
+        fromOthers(tr);
+      }];
     default:
       return [`remove reference@${reference}${remote ? " (remote)" : ""}`, (tr) => {
         if (reference < 0) return;
@@ -147,6 +186,37 @@ function randomChange(doc: PMNode): Change {
         fromOthers(tr);
       }];
   }
+}
+
+/**
+ * Tab ids that neither side had at the start of the round are random on each side: they become "new1", "new2", … in
+ * document order, so the two sides compare by where new ids went.
+ */
+function withNamedTabIds(json: any, known: Set<unknown>): any {
+  if (typeof json !== "object" || json === null) return json;
+  const names = new Map<unknown, string>();
+  const rename = (node: any): any => {
+    if (Array.isArray(node)) return node.map(rename);
+    if (typeof node !== "object" || node === null) return node;
+    const copy = { ...node };
+    if (copy.type === "tab" && typeof copy.attrs?.id === "string" && copy.attrs.id !== "" && !known.has(copy.attrs.id)) {
+      if (!names.has(copy.attrs.id)) names.set(copy.attrs.id, `new${names.size + 1}`);
+      copy.attrs = { ...copy.attrs, id: names.get(copy.attrs.id) };
+    }
+    if (copy.content) copy.content = rename(copy.content);
+    return copy;
+  };
+  return rename(json);
+}
+
+/** The ids of the tabs in a document's JSON. */
+function tabIdsIn(json: any, found = new Set<unknown>()): Set<unknown> {
+  if (Array.isArray(json)) json.forEach((item) => tabIdsIn(item, found));
+  else if (typeof json === "object" && json !== null) {
+    if (json.type === "tab") found.add(json.attrs?.id);
+    if (json.content) tabIdsIn(json.content, found);
+  }
+  return found;
 }
 
 /** Where two JSON values first differ. */
@@ -184,7 +254,8 @@ for (let round = 0; round < rounds; round++) {
       }
     });
     transactions++;
-    const difference = firstDifference(results[0].json, results[1].json);
+    const known = tabIdsIn(start);
+    const difference = firstDifference(withNamedTabIds(results[0].json, known), withNamedTabIds(results[1].json, known));
     if (difference) {
       differences++;
       console.log(`✗ round ${round}: ${log.join(" → ")}\n  Docmost vs engine at ${difference}`);

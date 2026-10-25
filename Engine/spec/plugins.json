@@ -1,5 +1,5 @@
 {
- "docmost": "v0.96.0",
+ "docmost": "v0.97.0",
  "plugins": [
   {
    "key": "uniqueID",
@@ -27,6 +27,16 @@
    "filters": false
   },
   {
+   "key": "tabsView",
+   "appends": true,
+   "filters": false
+  },
+  {
+   "key": "tabIds",
+   "appends": true,
+   "filters": false
+  },
+  {
    "key": "trailingNode",
    "appends": true,
    "filters": false
@@ -40,6 +50,7 @@
  "hooks": [
   "uniqueID.onCreate",
   "link.onCreate",
-  "delete.onUpdate"
+  "delete.onUpdate",
+  "tabs.onCreate"
  ]
 }

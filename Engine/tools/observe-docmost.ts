@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import { describeDocumentPlugins, describeSchema } from "./describe-schema";
-import { describeBlockIds, runScenarios } from "./behaviors";
+import { describeBlockIds, describeTabIds, describeTabsOnCreate, runScenarios } from "./behaviors";
 import { docmostExtensions } from "./docmost-reference";
 
 const docmost = execFileSync("git", ["-C", "../../docmost", "describe", "--tags", "--dirty"], { encoding: "utf8" }).trim();
@@ -15,4 +15,9 @@ const write = (name: string, data: object) => {
 fs.mkdirSync("spec", { recursive: true });
 write("schema", describeSchema(docmostExtensions));
 write("plugins", describeDocumentPlugins(docmostExtensions));
-write("behaviors", { blockIds: describeBlockIds(docmostExtensions), results: runScenarios(docmostExtensions) });
+write("behaviors", {
+  blockIds: describeBlockIds(docmostExtensions),
+  tabIds: describeTabIds(docmostExtensions),
+  tabsOnCreate: describeTabsOnCreate(docmostExtensions),
+  results: runScenarios(docmostExtensions),
+});
