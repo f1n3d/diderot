@@ -106,14 +106,33 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 ## App Review
 
-Notes for Apple's reviewers (English). The demo account's email and password go into the "Sign-in required" fields, never into this file.
+Notes for Apple's reviewers (English, 4000 characters at most). They answer the six points App Review asks new developer accounts (Guideline 2.1, Information Needed, October 2026), and the same text goes into the reply in App Store Connect. The demo account's email and password go into the "Sign-in required" fields, never into this file. App Store Connect takes one attachment here: `Diderot-AppReview.mp4`, the screen recording of the release build on an iPhone (launch to sign-out), then the databases on a licensed server.
 
-> Diderot is a client for Docmost, a self-hosted wiki. To try it, use our demo server:
+> 1. Screen recording
+> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
+> • Accounts: the app doesn't create accounts. Accounts belong to the Docmost server that an organization or person runs, and its administrators invite and remove members. The app only signs in to existing accounts, so it has no registration or deletion flow.
+> • User-generated content: pages and comments come only from members of the same private workspace, on a server their own organization runs. There is no public content and no way to reach people outside the workspace. The workspace's administrators decide who is a member and can deactivate or remove members; space administrators can delete any page or comment.
+> • Paid content: none. The app is free, with no in-app purchases, subscriptions, ads or links to buy anything.
 >
-> 1. Open the app and enter the server address: <DEMO_URL>
-> 2. Sign in with the demo account below (email and password).
-> 3. The space "Product Team" has sample pages and a comment thread. Everything can be edited.
+> 2. Purpose and audience
+> Docmost is an open-source wiki that anyone can run on their own server for free. Diderot is a native iPhone and iPad app for it: people who keep notes, documentation or a knowledge base in Docmost can read and edit their pages on the go, offline too, with dictation, autocorrect, VoiceOver and keyboard shortcuts. Without the app they have only the website, which is hard to write in on a phone. Diderot is for anyone who uses a Docmost server (individuals, families, clubs, teams and companies), not for one particular organization.
 >
-> Docmost's databases (tables and boards) need a Docmost license with databases (Business and up) on the server, which the demo server doesn't have. The attached video shows them on a licensed server.
+> 3. Trying the app
+> • Open the app, enter the server address <DEMO_URL> and tap Continue.
+> • Sign in with the demo account below (email and password).
+> • The space "Product Team" has sample pages and a comment thread on "Weekly Sync". Everything can be edited, and you can create pages and write comments.
+> • Databases (tables and boards) need a Docmost license with databases (Business and up) on the server, which the demo server doesn't have. Part 2 of the attached video shows them on a licensed server.
+> No sample files are needed.
 >
-> The app sends data only to the Docmost server the user signs in to; it collects nothing itself.
+> 4. External services
+> • The Docmost server the user signs in to (for the review: our demo server). Content and sign-in go only there.
+> • Sign-in by email and password, LDAP or single sign-on, as the server offers. Single sign-on shows the server's sign-in page inside the app, which forwards to the identity provider the organization set up.
+> • Links and embeds that users add to pages (for example YouTube or Figma) open in Safari's in-app view only when tapped.
+> • Draw.io and Excalidraw drawings are edited in the Docmost server's own web editor, as on the web.
+> Nothing else: no analytics, crash reporting, advertising, payment or AI services. The open-source libraries the app includes run on the device (Settings › About › Licenses).
+>
+> 5. Regions
+> The app works the same in every region. It is offered everywhere except mainland China, in English and German.
+>
+> 6. Regulation and third-party material
+> Diderot isn't in a regulated industry and contains no protected third-party material. Docmost is open-source software; Diderot is an independent open-source client (MIT license, https://github.com/f1n3d/diderot) that talks to Docmost servers through their web API, as Docmost's own website does. It contains no Docmost code and isn't affiliated with Docmost; the name only says which servers the app works with.
