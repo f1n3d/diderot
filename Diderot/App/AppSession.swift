@@ -23,7 +23,8 @@ struct ReadySession: Sendable {
     let token: String
     var currentUser: CurrentUser
     var entitlements: Entitlements
-    /// Docmost version; nil if unknown (the server's GitHub check failed or took too long, Docmost Cloud, offline start).
+    /// Docmost version, else the last one this server told; nil if never known (Docmost Cloud, the server's GitHub check
+    /// failing or taking too long since the first sign-in).
     var serverVersion: String?
     var tokenClaims: JWTClaims? { JWTClaims(token: token) }
     /// Restored from the cache without reaching the server.
@@ -58,6 +59,8 @@ struct ReadySession: Sendable {
 enum CacheKey {
     static let currentUser = "users/me"
     static let entitlements = "workspace/entitlements"
+    /// The server's last known Docmost version.
+    static let serverVersion = "version"
     static let spaces = "spaces"
     static let recent = "pages/recent"
     static let favorites = "favorites"
@@ -226,9 +229,11 @@ final class AppSession {
                 if let cachedUser = await cache.read(CurrentUser.self, key: CacheKey.currentUser) {
                     AppLog.session.notice("Server unreachable, restoring session from cache: \(error.userMessage, privacy: .public)")
                     let entitlements = await cache.read(Entitlements.self, key: CacheKey.entitlements) ?? .community
+                    let version = await cache.read(String.self, key: CacheKey.serverVersion)
                     state = .ready(ReadySession(
                         server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,
-                        token: stored.token, currentUser: cachedUser, entitlements: entitlements, restoredOffline: true
+                        token: stored.token, currentUser: cachedUser, entitlements: entitlements,
+                        serverVersion: DebugLaunch.serverVersion ?? version, restoredOffline: true
                     ))
                     return
                 }
@@ -551,12 +556,14 @@ final class AppSession {
         }
     }
 
-    /// Clears the current server's offline cache, except the user and license that an offline start restores.
+    /// Clears the current server's offline cache, except the user, license and version that an offline start restores.
     func clearCache() async {
         guard let ready else { return }
+        let version = await ready.cache.read(String.self, key: CacheKey.serverVersion)
         await ready.cache.removeAll()
         await ready.cache.write(ready.currentUser, key: CacheKey.currentUser)
         await ready.cache.write(ready.entitlements, key: CacheKey.entitlements)
+        if let version { await ready.cache.write(version, key: CacheKey.serverVersion) }
         await removeLocalData(for: ready.server.url)
     }
 
@@ -587,7 +594,15 @@ final class AppSession {
             AppLog.session.error("Entitlements unavailable, using cached: \(error.userMessage, privacy: .public)")
             resolvedEntitlements = await cache.read(Entitlements.self, key: CacheKey.entitlements) ?? .community
         }
-        let serverVersion = try? await version
+        // Docmost names its version only after asking GitHub for its latest release, and nothing when GitHub refuses
+        // (60 requests an hour from one address) or a proxy blocks it: keep the last one it named.
+        let serverVersion: String?
+        if let current = (try? await version)?.currentVersion {
+            serverVersion = current
+            await cache.write(current, key: CacheKey.serverVersion)
+        } else {
+            serverVersion = await cache.read(String.self, key: CacheKey.serverVersion)
+        }
         // A reconnect must not undo a switch or sign-out made meanwhile; no await from here to the `state` write.
         if let replacing, !isStillCurrent(replacing) { return }
         let stored = StoredSession(serverURL: server.url, token: token, email: currentUser.user.email, workspaceName: currentUser.workspace.name)
@@ -597,7 +612,7 @@ final class AppSession {
         state = .ready(ReadySession(
             server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,
             token: token, currentUser: currentUser, entitlements: resolvedEntitlements,
-            serverVersion: DebugLaunch.serverVersion ?? serverVersion?.currentVersion
+            serverVersion: DebugLaunch.serverVersion ?? serverVersion
         ))
         AppLog.session.info("Signed in as \(currentUser.user.email, privacy: .private) at \(server.url.absoluteString, privacy: .public)")
     }

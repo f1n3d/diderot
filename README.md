@@ -114,7 +114,7 @@ You need:
   3. Copy `.env.example` to `.env` and enter that admin's email and password.
 
   For tests on an iPhone, the instance must be reachable on the network: set its `APP_URL` to `http://<your-mac>.local:3000`. The database tests need a Docmost license with databases.
-- **A second instance with Docmost 0.97** (the image `docmost/docmost:0.97.0`, e.g. a copy of the first one's database) at `http://localhost:3001` for the tests of content 0.97 introduced (`PORT=3001 Tools/run-uitests.sh`); on 0.96 they are skipped.
+- **A second instance with Docmost 0.97** (the image `docmost/docmost:0.97.0`, e.g. a copy of the first one's database with the workspace renamed: the server menu tells the two apart by name) at `http://localhost:3001` for the tests of content 0.97 introduced (`PORT=3001 Tools/run-uitests.sh`); on 0.96 they are skipped. Block GitHub in its container (Compose: `extra_hosts: ['api.github.com:127.0.0.1']`): Docmost tells its version only when its check of GitHub's latest release succeeds or can't connect at all, and GitHub refuses after 60 requests an hour from one address, fewer than the app starts of a test run; without the version the 0.97 tests skip or fail.
 - **Node 24 with Corepack**, only to rebuild the editor engine.
 
 ```sh

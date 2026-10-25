@@ -231,6 +231,23 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// Docmost names its version only if GitHub answers its release check: a sign-in without it and a start without
+    /// network keep the version named before (so 0.97 content can still be added), also after Clear Saved Content.
+    @Test func unknownVersionKeepsTheLastKnownOne() async throws {
+        StubURLProtocol.body.withLock {
+            $0 = #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}, "currentVersion": "0.97.0"}}"#
+        }
+        let named = try await sessionOnA()
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(named.ready?.hasDocmost097Features == true)
+        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        await session.restore()
+        #expect(session.ready?.serverVersion == "0.97.0")
+        await session.clearCache()
+        #expect(try await offlineSessionOnA().ready?.serverVersion == "0.97.0")
+        await removeCaches()
+    }
+
     /// On an iPad, a second window opens while the first shows the sign-in screen after the session ended.
     @Test func secondWindowKeepsTheSignInScreen() async throws {
         try store.save(StoredSession(serverURL: a, token: "a"))
