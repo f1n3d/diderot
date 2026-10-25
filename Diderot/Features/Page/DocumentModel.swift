@@ -283,6 +283,10 @@ final class DocumentModel {
     /// Where the page's one text editor lies (`PageEditor`, document space): over the text of the block that reported
     /// it last. Until the newly active block reports its place, the editor stays hidden at the old one.
     var editorFrame: (ref: NodeRef, frame: CGRect)?
+    /// How tall the page's text editor draws the active block's text. The block takes this height for its hidden copy
+    /// of the text: the copy breaks lines on its own (it hyphenates long words, the editor doesn't), and its height
+    /// alone let the typed text hang out of a callout.
+    var editorHeight: (ref: NodeRef, height: CGFloat)?
     /// How the page's text editor draws the active block's text.
     var editorStyle = EditorStyle(font: .body, leading: 0, alignment: .leading)
     /// The page text editor's text view, for Backspace at the text's start (`TextInputHooks`).
@@ -600,6 +604,7 @@ final class DocumentModel {
         guard active != nil else { return }
         commitPendingNow()
         active = nil
+        editorHeight = nil
         slashQuery = nil
         showsPlusMenu = false
         mentionQuery = nil
