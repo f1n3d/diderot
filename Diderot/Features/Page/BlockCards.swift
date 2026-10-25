@@ -151,6 +151,7 @@ struct TextNodeView: View {
                         .font(font)
                         .multilineTextAlignment(align.textAlignment)
                         .frame(maxWidth: .infinity, alignment: align.frameAlignment)
+                        .frame(height: model.editorHeight?.ref == ref ? model.editorHeight?.height : nil, alignment: .top)
                         .hidden()
                         .accessibilityHidden(true)
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
@@ -258,6 +259,9 @@ struct PageEditor: View {
                 // The text view puts the font's leading below every line, the reader only between lines: without the
                 // last one the editor is as tall as the reader's text, so the blocks below don't move.
                 .padding(.bottom, -model.editorStyle.leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    if place.ref == active.ref { model.editorHeight = (active.ref, height) }
+                }
                 .multilineTextAlignment(model.editorStyle.alignment)
                 .frame(width: place.frame.width, alignment: .topLeading)
                 // Until the new block reports its place, the editor would show the new text at the old one.
@@ -832,6 +836,7 @@ struct CodeNodeView: View {
                             Text(code.isEmpty ? " " : code)
                                 .font(Self.codeFont)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(height: model.editorHeight?.ref == ref ? model.editorHeight?.height : nil, alignment: .top)
                                 .hidden()
                                 .accessibilityHidden(true)
                                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in

@@ -1038,6 +1038,24 @@ import XCTest
         tapSheetBarButton(button(app, labels: ["Done", "Fertig"]), in: app.webViews.firstMatch)
     }
 
+    /// A callout grows with its text while editing. The block's hidden copy of the text hyphenated long German words
+    /// and broke lines earlier than the editor, so the typed text hung out of the box.
+    func test68_CalloutGrowsWithItsText() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "hinweis", pick: "block-callout")
+        let editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Hinweis\(stamp): Donaudampfschifffahrtsgesellschaftskapitän und Rechtsschutzversicherungsgesellschaften "
+            + "sind lange Wörter, die anders umbrechen als kurze. Noch ein Satz, damit die Box mehrere Zeilen hoch wird.")
+        Thread.sleep(forTimeInterval: 1.0)
+        let box = app.otherElements.matching(NSPredicate(format: "label ENDSWITH[c] 'callout' OR label ENDSWITH 'Hinweis'")).firstMatch
+        XCTAssertTrue(box.waitForExistence(timeout: 5), "Callout missing")
+        snapshot(app, "68-callout-long-text")
+        XCTAssertLessThanOrEqual(editor.frame.maxY, box.frame.maxY + 1, "Text hangs out of the callout: editor \(editor.frame), box \(box.frame)")
+        finishEditing(app)
+    }
+
     /// A version opened from "Page History" loads its media like the page itself: the image of "Fixture: Media"
     /// (Tools/seed-fixtures.py, which leaves a version with the image) appears instead of a spinner.
     func test49_HistoryVersionShowsImage() throws {
