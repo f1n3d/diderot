@@ -1,7 +1,7 @@
 import SwiftUI
 import DocmostKit
 
-/// Space logo, or its initial on a colored background.
+/// Space logo, or its initial in the app's forest green (Docmost has no colors for spaces).
 struct SpaceLogoView: View {
     let space: Space
     let baseURL: URL?
@@ -14,12 +14,12 @@ struct SpaceLogoView: View {
 
     private var initial: some View {
         RoundedRectangle(cornerRadius: size * 0.25)
-            .fill(Color.tint(for: space.id).opacity(0.18))
+            .fill(Color.accentColor.opacity(0.18))
             .frame(width: size, height: size)
             .overlay {
                 Text(String(space.name.prefix(1)).uppercased())
                     .font(.system(size: size * 0.45, weight: .semibold))
-                    .foregroundStyle(Color.tint(for: space.id))
+                    .foregroundStyle(Color.accentColor)
             }
             .accessibilityHidden(true)
     }
@@ -67,7 +67,7 @@ struct PageIconView: View {
 }
 
 extension Color {
-    /// Stable color per space ID or user name, so initials stay recognizable.
+    /// Stable color per user name, so people's initials stay recognizable.
     static func tint(for id: String) -> Color {
         let palette: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo, .mint]
         let hash = id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0x7fff_ffff }
