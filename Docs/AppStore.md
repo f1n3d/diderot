@@ -62,6 +62,19 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notes,knowledge base,documentation,self-hosted,editor,team,pages,markdown
 
+**What's New in This Version** (4000 at most; version 1.1.0)
+
+> For Docmost 0.97:
+> • Tabs: read and switch them; while editing, add, rename, move and delete them
+> • Links to GitHub, GitLab, Jira, Linear, Figma, Azure DevOps and Slack as cards or mentions with previews; connect your account right from the card
+> • Sub-pages sorted by hand, A–Z or by last change
+> • Copy a link to a comment; such links open the page at the comment
+>
+> Also:
+> • Pasting a link works as on the web: a web address becomes a link, a link to one of your pages becomes a mention
+> • Spaces in the app's green
+> • Fixed: a date, time, status or formula inserted at the start of a paragraph landed after its first letter
+
 ## Deutsch
 
 **Untertitel** (höchstens 30 Zeichen)
@@ -105,6 +118,19 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 **Schlüsselwörter** (höchstens 100, durch Kommas getrennt)
 
 > docmost,wiki,notizen,wissensdatenbank,dokumentation,selbst gehostet,editor,team,seiten,markdown
+
+**Neu in dieser Version** (höchstens 4000; Version 1.1.0)
+
+> Für Docmost 0.97:
+> • Registerkarten: lesen und wechseln; beim Bearbeiten hinzufügen, umbenennen, verschieben und löschen
+> • Links zu GitHub, GitLab, Jira, Linear, Figma, Azure DevOps und Slack als Karte oder Erwähnung mit Vorschau; das eigene Konto direkt über die Karte verbinden
+> • Unterseiten von Hand, nach A–Z oder nach letzter Änderung sortiert
+> • Link zu einem Kommentar kopieren; solche Links öffnen die Seite beim Kommentar
+>
+> Außerdem:
+> • Links einfügen wie im Web: Eine Webadresse wird zum Link, ein Link zu einer deiner Seiten zur Erwähnung
+> • Spaces im Grün der App
+> • Behoben: Datum, Uhrzeit, Status oder Formel am Anfang eines Absatzes landeten hinter dem ersten Buchstaben
 
 ## App Review
 
