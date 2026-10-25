@@ -12,7 +12,8 @@ struct NodeRef: Hashable, Sendable {
 
     init(path: [Int], node: PMNode) {
         self.path = path
-        self.id = node.string("id")
+        // A tab may have an empty id until Docmost gives it one: no identity.
+        self.id = node.string("id").flatMap { $0.isEmpty ? nil : $0 }
         self.type = node.type
     }
 
@@ -323,6 +324,9 @@ final class DocumentModel {
     var requestsWebEditor = false
     /// Workspace has the `bases` license feature.
     var canCreateBases = false
+    /// The server is Docmost 0.97 or newer: tabs, integration links and sorted sub-pages can be added (an older
+    /// server's web couldn't show them).
+    var hasDocmost097Features = false
     /// Creates a database (base) as a subpage (`template` "kanban" or `nil`) and returns its page ID.
     @ObservationIgnored var createBase: (@MainActor (String?) async throws -> String)?
     private(set) var isCreatingBase = false
@@ -802,6 +806,7 @@ final class DocumentModel {
         if SyncedBlockClipboard.hasAppContent, let index = commands.firstIndex(of: .syncedBlock) {
             commands.insert(.pasteSyncedBlock, at: index + 1)
         }
+        if !hasDocmost097Features { commands.removeAll { $0 == .tabs } }
         guard let active else { return commands }
         if active.type == "codeBlock" { commands.removeAll { $0.isInline } }
         let location = insertLocation(of: active)
@@ -810,8 +815,10 @@ final class DocumentModel {
         }
         let ancestors = ancestorTypes(of: active.ref.path)
         if ancestors.contains("transclusionSource") {
-            commands.removeAll { $0 == .syncedBlock || $0 == .pasteSyncedBlock }
+            // Nor tabs: synced blocks don't hold them (nor do table cells).
+            commands.removeAll { $0 == .syncedBlock || $0 == .pasteSyncedBlock || $0 == .tabs }
         }
+        if location == .tableCell { commands.removeAll { $0 == .tabs } }
         if ancestors.contains("columns") || location == .tableCell {
             commands.removeAll { if case .columns = $0 { true } else { false } }
         }
@@ -981,6 +988,8 @@ final class DocumentModel {
             Task { await insertBlocks([PMNode(type: "pageBreak")], placement: placement, focus: .after) }
         case .subpages:
             Task { await insertBlocks([PMNode(type: "subpages")], placement: placement, focus: .after) }
+        case .tabs:
+            Task { await insertBlocks([Self.tabsNode()], placement: placement, focus: .inside([0, 1, 0])) }
         case .drawio, .excalidraw:
             Task { await insertBlocks([PMNode(type: command == .drawio ? "drawio" : "excalidraw")], placement: placement, focus: .after) }
         case .mermaid:
@@ -1041,6 +1050,386 @@ final class DocumentModel {
     /// Inserts an inline atom (status, math, footnote reference) into the active text.
     func insertAtom(_ node: PMNode, offset: Int) {
         insertIntoActiveText(Self.editorText(from: [node]), offset: offset, plainAfter: true)
+    }
+
+    // MARK: Integration links (Docmost 0.97)
+
+    /// A tapped integration mention while editing: the page offers to open it or show it otherwise.
+    struct MentionTarget: Identifiable, Equatable {
+        let ref: NodeRef
+        let index: Int
+        let url: String
+        let provider: String
+        var id: String { "\(ref.identity)/\(index)" }
+    }
+
+    var mentionActions: MentionTarget?
+
+    enum IntegrationDisplay {
+        case card, mention, link
+    }
+
+    static func integrationMention(url: String, provider: String) -> PMNode {
+        PMNode(type: "integrationMention", attrs: ["url": .string(url), "provider": .string(provider)])
+    }
+
+    static func integrationCard(url: String, provider: String) -> PMNode {
+        PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": .string(provider)])
+    }
+
+    /// The link as text, with its service as the web keeps it.
+    static func integrationLinkText(url: String, provider: String) -> PMNode {
+        var attrs: [String: JSONValue] = ["href": .string(url), "target": "_blank", "internal": false]
+        if !provider.isEmpty { attrs["integrationProvider"] = .string(provider) }
+        return PMNode(type: "text", marks: [PMMark(type: "link", attrs: attrs)], text: url)
+    }
+
+    /// Shows an integration card as a mention or a link, in a paragraph of its own.
+    func showIntegrationCard(_ ref: NodeRef, as display: IntegrationDisplay) async {
+        guard display != .card, let (_, card) = locate(ref) else { return }
+        let url = card.string("url") ?? "", provider = card.string("provider") ?? ""
+        let inline = display == .mention ? Self.integrationMention(url: url, provider: provider) : Self.integrationLinkText(url: url, provider: provider)
+        await replace(ref, withNodes: [PMNode(type: "paragraph", content: [inline])])
+    }
+
+    /// Shows a mention as a link in its place, or as a card that splits its paragraph there (`blockReplacement`).
+    func showMention(_ target: MentionTarget, as display: IntegrationDisplay) async {
+        switch display {
+        case .mention:
+            return
+        case .link:
+            await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index,
+                              with: Self.integrationLinkText(url: target.url, provider: target.provider))
+        case .card:
+            guard let nodes = cardReplacement(for: target) else { return }
+            await replace(target.ref, withNodes: nodes)
+        }
+    }
+
+    /// Whether the mention can become a card where it is.
+    func canShowAsCard(_ target: MentionTarget) -> Bool {
+        cardReplacement(for: target) != nil
+    }
+
+    private func cardReplacement(for target: MentionTarget) -> [PMNode]? {
+        guard let (_, block) = locate(target.ref) else { return nil }
+        var seen = -1
+        guard let position = block.children.firstIndex(where: { child in
+            guard child.type == "integrationMention" else { return false }
+            seen += 1
+            return seen == target.index
+        }) else { return nil }
+        return blockReplacement(Self.integrationCard(url: target.url, provider: target.provider), paragraph: target.ref,
+                                before: Array(block.children[..<position]), after: Array(block.children[(position + 1)...]))
+    }
+
+    /// The service of the link at `range` of the active text that the workspace can show as a card or mention: the
+    /// link's own (`integrationProvider`) or its host's, if that integration is installed, as on the web.
+    func integrationProvider(ofLinkIn range: Range<AttributedString.Index>) -> String? {
+        guard hasDocmost097Features, let previews = linkPreviews, let run = activeText[range].runs.first, let url = run.link
+        else { return nil }
+        let provider = run.docmost.linkProvider
+            ?? IntegrationLinks.describe(url.absoluteString, unfurlHosts: previews.unfurlHosts).provider?.rawValue
+        guard let provider, previews.installedTypes.contains(provider) else { return nil }
+        return provider
+    }
+
+    /// Whether the link at `range` of the active text can become a card where it is.
+    func canShowLinkAsCard(in range: Range<AttributedString.Index>) -> Bool {
+        guard let active else { return false }
+        let (before, after) = activeInlines(around: range)
+        return blockReplacement(PMNode(type: "integrationCard"), paragraph: active.ref, before: before, after: after) != nil
+    }
+
+    /// Shows the link at `range` of the active text as a mention or a card, as the web's "Display as" does.
+    func showLink(in range: Range<AttributedString.Index>, provider: String, as display: IntegrationDisplay) {
+        guard let url = activeText[range].runs.first?.link?.absoluteString else { return }
+        switch display {
+        case .link:
+            return
+        case .mention:
+            let offset = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
+            activeText.removeSubrange(range)
+            insertIntoActiveText(Self.editorText(from: [Self.integrationMention(url: url, provider: provider)]), at: offset)
+        case .card:
+            placeBlockInActiveText(Self.integrationCard(url: url, provider: provider), replacing: range)
+        }
+    }
+
+    // MARK: Blocks in a paragraph (cards, inline databases)
+
+    /// The blocks that take a paragraph's place when a card or inline database goes into it, as on the web: the text
+    /// before (without its trailing spaces), the block, the text after (without its leading spaces), each part only if
+    /// it isn't empty. Nil where the web places none: outside a paragraph, in table cells, synced blocks and footnotes,
+    /// and in place of a list item's first line.
+    private func blockReplacement(_ block: PMNode, paragraph ref: NodeRef, before: [PMNode], after: [PMNode]) -> [PMNode]? {
+        guard ref.type == "paragraph", let (path, paragraph) = locate(ref),
+              ancestorTypes(of: path).isDisjoint(with: ["tableCell", "tableHeader", "transclusionSource", "footnote", "footnotes"])
+        else { return nil }
+        let before = Self.trimmingSpaces(before, atEnd: true), after = Self.trimmingSpaces(after, atEnd: false)
+        if before.isEmpty, path.last == 0, let parent = node(at: Array(path.dropLast())), ["listItem", "taskItem"].contains(parent.type) {
+            return nil
+        }
+        return (before.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: before)]) + [block]
+            + (after.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: after)])
+    }
+
+    /// Inline nodes without the spaces at one end (text nodes only, as the web trims them).
+    private static func trimmingSpaces(_ inlines: [PMNode], atEnd: Bool) -> [PMNode] {
+        var inlines = inlines
+        while let index = atEnd ? inlines.indices.last : inlines.indices.first, inlines[index].type == "text" {
+            let text = inlines[index].text ?? ""
+            let trimmed = atEnd ? String(text.reversed().drop(while: \.isWhitespace).reversed()) : String(text.drop(while: \.isWhitespace))
+            if !trimmed.isEmpty {
+                inlines[index] = PMNode(type: "text", marks: inlines[index].marks, text: trimmed)
+                break
+            }
+            inlines.remove(at: index)
+        }
+        return inlines
+    }
+
+    /// The active text's inline nodes before and after `range`.
+    private func activeInlines(around range: Range<AttributedString.Index>) -> (before: [PMNode], after: [PMNode]) {
+        (Self.inlines(from: AttributedString(activeText[activeText.startIndex..<range.lowerBound]), base: activeFont),
+         Self.inlines(from: AttributedString(activeText[range.upperBound..<activeText.endIndex]), base: activeFont))
+    }
+
+    /// Whether a card or inline database can take the place of `length` characters at the active text's `offset`.
+    private func blockFits(replacing offset: Int, length: Int = 0) -> Bool {
+        guard let active, offset >= 0, offset + length <= activeText.characters.count else { return false }
+        let start = activeText.characters.index(activeText.startIndex, offsetBy: offset)
+        let (before, after) = activeInlines(around: start..<activeText.characters.index(start, offsetBy: length))
+        return blockReplacement(PMNode(type: "integrationCard"), paragraph: active.ref, before: before, after: after) != nil
+    }
+
+    /// Puts a card or inline database in place of `range` of the active text (an empty range: at the cursor), splitting
+    /// the paragraph there (`blockReplacement`). The cursor goes to the text after it: the paragraph's rest, else the
+    /// next text block, else a new paragraph if nothing follows (as after inserting other blocks).
+    @discardableResult
+    private func placeBlockInActiveText(_ block: PMNode, replacing range: Range<AttributedString.Index>) -> Bool {
+        guard let engine, let active, let (path, paragraph) = locate(active.ref) else { return false }
+        let (before, after) = activeInlines(around: range)
+        guard var nodes = blockReplacement(block, paragraph: active.ref, before: before, after: after),
+              let blockOffset = nodes.firstIndex(of: block)
+        else { return false }
+        let parentPath = Array(path.dropLast()), index = path[path.count - 1]
+        let afterPath = parentPath + [index + blockOffset + 1]
+        var focus: [Int]? = afterPath
+        if nodes.last == block {
+            let siblings = parentPath.isEmpty ? document.children : node(at: parentPath)?.children ?? []
+            if siblings.indices.contains(index + 1), siblings[index + 1].type != "footnotes" {
+                if !Self.editableTextTypes.contains(siblings[index + 1].type) { focus = nil }
+            } else {
+                nodes.append(PMNode(type: "paragraph"))
+            }
+        }
+        // The new blocks hold the active text: its pending input isn't written on its own.
+        dropActive()
+        slashQuery = nil
+        showsPlusMenu = false
+        let target = NodeRef(path: path, node: paragraph).target
+        Task {
+            if report(await engine.replaceBlock(target, withNodes: nodes)), let focus {
+                await focusAfterOperation(focus, .start)
+            }
+        }
+        return true
+    }
+
+    // MARK: Pasted links
+
+    /// A pasted link the page asks about, where the web's paste menu offers a choice (Docmost 0.97): a link of an
+    /// installed integration (card, mention or the link itself) or a link to a database page (its mention or an inline
+    /// database). The paste is in already (`text` at `offset`: the link, or the page's mention); a choice replaces it.
+    struct PastedLink: Identifiable, Equatable {
+        let url: URL
+        let provider: IntegrationLinks.Provider?
+        /// The database page the link points to.
+        let base: LinkedPage?
+        /// A card or inline database can take the paste's place (`blockReplacement`).
+        let allowsBlock: Bool
+        let ref: NodeRef
+        let offset: Int
+        /// What the paste put in, to find it again.
+        let text: String
+        var id: String { url.absoluteString }
+    }
+
+    /// A page of this server a pasted link points to, for its mention.
+    struct LinkedPage: Equatable {
+        let id: String
+        let slugId: String?
+        let title: String
+        let anchor: String?
+    }
+
+    enum PasteChoice {
+        case card, mention, link, embeddedBase
+    }
+
+    /// Asked by the page while set (`finishPastedLink`).
+    private(set) var pastedLink: PastedLink?
+    /// The server's installed integrations; set by the page.
+    @ObservationIgnored var linkPreviews: LinkPreviewStore?
+    /// The page a link of this server points to (page mentions, database links); set by the page.
+    @ObservationIgnored var lookUpPage: (@MainActor (String) async -> Page?)?
+    @ObservationIgnored var serverURL: URL?
+
+    /// The paste proxy's question for clipboard text that is a single web link: true if the page inserts it itself, as
+    /// the web does, false for a plain paste. Over selected text the link goes onto that text. Otherwise the link goes in
+    /// as a link at once; then a link of an installed integration (Docmost 0.97, in a paragraph) asks how to show it,
+    /// and a link to a page of this server becomes a mention of the page once found (a database page then offers to
+    /// embed it, on 0.97). The paste always changes the text right away: text changed only after a paste that inserted
+    /// nothing left the editor's text view sending typed characters nowhere.
+    func pasteLink(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let active, active.type != "codeBlock", !trimmed.contains(where: \.isWhitespace),
+              let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https"
+        else { return false }
+        if linkSelection(to: url) { return true }
+        let offset = cursorOffset()
+        var provider: IntegrationLinks.Provider?
+        if hasDocmost097Features, active.type == "paragraph", let previews = linkPreviews {
+            provider = IntegrationLinks.provider(of: trimmed, installed: previews.installedTypes, unfurlHosts: previews.unfurlHosts)
+        }
+        let pasted = insertLinkText(url, provider: provider, at: offset)
+        if let provider {
+            pastedLink = PastedLink(url: url, provider: provider, base: nil, allowsBlock: blockFits(replacing: offset, length: pasted.count),
+                                    ref: active.ref, offset: offset, text: pasted)
+            return true
+        }
+        guard let serverURL, let lookUpPage, let slugId = Self.pageSlugId(of: url, serverURL: serverURL) else { return true }
+        let ref = active.ref
+        Task {
+            // A page that can't be found (or not seen) stays a link, as on the web.
+            guard let page = await lookUpPage(slugId), self.active?.ref == ref, let range = activeRange(offset: offset, text: pasted)
+            else { return }
+            let linked = LinkedPage(id: page.id, slugId: page.slugId, title: page.title ?? "", anchor: url.fragment)
+            let mention = Self.editorText(from: [pageMention(linked)])
+            replaceActiveText(range, with: mention)
+            keyboardFollowsText()
+            if hasDocmost097Features, page.isBase == true, blockFits(replacing: offset, length: mention.characters.count) {
+                pastedLink = PastedLink(url: url, provider: nil, base: linked, allowsBlock: true, ref: ref, offset: offset,
+                                        text: String(mention.characters))
+            }
+        }
+        return true
+    }
+
+    /// The page a link of this server points to, as the web matches it: a query such as `?commentId=` or a database
+    /// entry's `?row=` doesn't count.
+    private static func pageSlugId(of url: URL, serverURL: URL) -> String? {
+        switch ContentLinkRouter.destination(for: url, serverURL: serverURL) {
+        case .page(let slugId, _), .comment(let slugId, _): slugId
+        case .databaseEntry(let basePageId, _): basePageId
+        default: nil
+        }
+    }
+
+    /// A mention of the page, as the web makes one from a pasted link ("Untitled" unlocalized as there).
+    private func pageMention(_ page: LinkedPage) -> PMNode {
+        var attrs: [String: JSONValue] = [
+            "id": .string(UUID().uuidString.lowercased()),
+            "label": .string(page.title.isEmpty ? "Untitled" : page.title),
+            "entityType": "page",
+            "entityId": .string(page.id),
+            "slugId": page.slugId.map { .string($0) } ?? .null,
+        ]
+        if let currentUserId { attrs["creatorId"] = .string(currentUserId) }
+        if let anchor = page.anchor, !anchor.isEmpty { attrs["anchorId"] = .string(anchor) }
+        return PMNode(type: "mention", attrs: attrs)
+    }
+
+    /// Replaces the paste as chosen; nil (the question dismissed) keeps it.
+    func finishPastedLink(_ choice: PasteChoice?) {
+        guard let link = pastedLink else { return }
+        pastedLink = nil
+        guard let choice, active?.ref == link.ref, let range = activeRange(offset: link.offset, text: link.text) else { return }
+        let url = link.url.absoluteString, provider = link.provider?.rawValue ?? ""
+        switch choice {
+        case .card:
+            placeBlockInActiveText(Self.integrationCard(url: url, provider: provider), replacing: range)
+        case .embeddedBase:
+            if let base = link.base {
+                placeBlockInActiveText(PMNode(type: "base", attrs: ["pageId": .string(base.id)]), replacing: range)
+            }
+        case .mention:
+            // A database link is its mention already.
+            if link.base == nil {
+                replaceActiveText(range, with: Self.editorText(from: [Self.integrationMention(url: url, provider: provider)]))
+            }
+        case .link:
+            break
+        }
+    }
+
+    /// After the active text changed without the user (an answer arriving), the keyboard still works on the old text:
+    /// what was typed next went nowhere until the user moved the cursor. Reloading it makes it read the text again,
+    /// once the text view shows the new text (reloaded before, it read the old one again).
+    private func keyboardFollowsText() {
+        let expected = String(activeText.characters)
+        Task { @MainActor [weak self] in
+            for _ in 0..<20 {
+                guard let view = self?.editorTextView else { return }
+                if view.text == expected {
+                    view.reloadInputViews()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+        }
+    }
+
+    /// The range of `text` at `offset` of the active text, if it is still there.
+    private func activeRange(offset: Int, text: String) -> Range<AttributedString.Index>? {
+        guard offset >= 0, offset + text.count <= activeText.characters.count else { return nil }
+        let start = activeText.characters.index(activeText.startIndex, offsetBy: offset)
+        let end = activeText.characters.index(start, offsetBy: text.count)
+        return String(activeText[start..<end].characters) == text ? start..<end : nil
+    }
+
+    /// Replaces part of the active text, the cursor staying where it is; right after the new part, typing continues
+    /// plain (not as part of an atom).
+    private func replaceActiveText(_ range: Range<AttributedString.Index>, with run: AttributedString) {
+        let cursorAtEnd = insertionIndex() == range.upperBound
+        let start = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
+        activeText.transform(updating: &activeSelection) { $0.replaceSubrange(range, with: run) }
+        if cursorAtEnd {
+            let end = activeText.characters.index(activeText.startIndex, offsetBy: start + run.characters.count)
+            activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: AttributeContainer())
+        }
+        scheduleCommit(debounce: .zero)
+    }
+
+    /// A link pasted over selected text links that text, as on the web.
+    private func linkSelection(to url: URL) -> Bool {
+        guard case .ranges(let ranges) = activeSelection.indices(in: activeText) else { return false }
+        let selected = ranges.ranges.filter { !$0.isEmpty }
+        guard !selected.isEmpty else { return false }
+        for range in selected { activeText[range].link = url }
+        scheduleCommit(debounce: .zero)
+        return true
+    }
+
+    /// The link as linked text, remembering its service as the web does (`integrationProvider`); returns the text.
+    @discardableResult
+    private func insertLinkText(_ url: URL, provider: IntegrationLinks.Provider?, at offset: Int) -> String {
+        var run = AttributedString(url.absoluteString)
+        run.link = url
+        if let provider { run.docmost.linkProvider = provider.rawValue }
+        insertIntoActiveText(run, at: offset)
+        return url.absoluteString
+    }
+
+    /// Inserts at `offset` (0: the start) and puts the cursor after it, with plain typing attributes.
+    private func insertIntoActiveText(_ run: AttributedString, at offset: Int) {
+        guard active != nil else { return }
+        let position = min(max(offset, 0), activeText.characters.count)
+        activeText.insert(run, at: activeText.characters.index(activeText.startIndex, offsetBy: position))
+        let end = activeText.characters.index(activeText.startIndex, offsetBy: min(position + run.characters.count, activeText.characters.count))
+        activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: AttributeContainer())
+        scheduleCommit(debounce: .zero)
     }
 
     /// Applies the emoji keyboard's pick (`nil`: closed without one). The editor regains focus only once that
@@ -1372,6 +1761,65 @@ final class DocumentModel {
         report(await engine.replaceBlock(.path(path), with: PMNode(type: "columns", attrs: attrs, content: children)))
     }
 
+    // MARK: Tabs
+
+    /// A new tabs block as the web makes it: "Tab 1" and "Tab 2", each with an empty paragraph.
+    static func tabsNode() -> PMNode {
+        PMNode(type: "tabs", content: [tabNode(label: "Tab 1"), tabNode(label: "Tab 2")])
+    }
+
+    /// A tab without an id (Docmost gives it one): its label and a panel with an empty paragraph.
+    static func tabNode(label: String, panel: [PMNode] = [PMNode(type: "paragraph")]) -> PMNode {
+        PMNode(type: "tab", content: [
+            PMNode(type: "tabLabel", content: label.isEmpty ? nil : [PMNode(type: "text", text: label)]),
+            PMNode(type: "tabPanel", content: panel),
+        ])
+    }
+
+    /// The label of a tab node as plain text.
+    static func tabLabel(of tab: PMNode) -> String {
+        tab.children.first { $0.type == "tabLabel" }?.plainText ?? ""
+    }
+
+    /// Adds a tab at the end like the web's "+" ("Tab N", unlocalized as there); returns its path.
+    @discardableResult
+    func addTab(to tabsRef: NodeRef) async -> [Int]? {
+        guard let engine, let (path, tabs) = locate(tabsRef), let last = tabs.children.last else { return nil }
+        if active != nil { deactivate() }
+        let lastRef = NodeRef(path: path + [tabs.children.count - 1], node: last)
+        let tab = Self.tabNode(label: "Tab \(tabs.children.count + 1)")
+        return report(await engine.insertBlock(tab, relativeTo: lastRef.target, position: .after)) ? path + [tabs.children.count] : nil
+    }
+
+    /// Sets a tab's label; empty or unchanged labels are left alone, as on the web.
+    func renameTab(_ tabRef: NodeRef, to label: String) async {
+        let label = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let engine, let (path, tab) = locate(tabRef), !label.isEmpty, label != Self.tabLabel(of: tab),
+              let index = tab.children.firstIndex(where: { $0.type == "tabLabel" })
+        else { return }
+        let labelRef = NodeRef(path: path + [index], node: tab.children[index])
+        report(await engine.replaceBlock(labelRef.target, with: PMNode(type: "tabLabel", content: [PMNode(type: "text", text: label)])))
+    }
+
+    /// A copy right after the tab, as the web's "Duplicate": same label and content, new ids.
+    func duplicateTab(_ tabRef: NodeRef) async {
+        await duplicate(tabRef)
+    }
+
+    /// Moves a tab before or after another tab of the same block.
+    func moveTab(_ tabRef: NodeRef, to destination: NodeRef, before: Bool) async {
+        guard let engine, tabRef != destination else { return }
+        if active != nil { deactivate() }
+        report(await engine.moveBlock(tabRef.target, to: destination.target, position: before ? .before : .after))
+    }
+
+    /// Deletes a tab; deleting the last one removes the tabs block, as on the web.
+    func deleteTab(_ tabRef: NodeRef, in tabsRef: NodeRef) async {
+        guard let (_, tabs) = locate(tabsRef) else { return }
+        if let active, active.ref.path.starts(with: tabs.children.count == 1 ? tabsRef.path : tabRef.path) { deactivate() }
+        await delete(tabs.children.count == 1 ? tabsRef : tabRef)
+    }
+
     // MARK: Footnotes
 
     /// Tap on a footnote number: cursor to the end of its text in the page-end list (like a double-click on the web).
@@ -1397,6 +1845,8 @@ final class DocumentModel {
             editorSheet = .status(.edit(ref: ref, index: index), text: node.string("text") ?? "", color: node.string("color") ?? "gray")
         case "mathInline":
             editorSheet = .mathInline(.edit(ref: ref, index: index), latex: node.string("text") ?? "")
+        case "integrationMention":
+            mentionActions = MentionTarget(ref: ref, index: index, url: node.string("url") ?? "", provider: node.string("provider") ?? "")
         default:
             break
         }

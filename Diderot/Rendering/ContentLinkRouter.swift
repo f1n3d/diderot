@@ -10,6 +10,8 @@ nonisolated enum ContentLinkRouter {
         case page(slugId: String, anchor: String?)
         /// A database entry (the web's `?row=…&rowBase=…`): the database page and the row to open there.
         case databaseEntry(basePageId: String, rowId: String)
+        /// A comment on a page (Docmost 0.97's `?commentId=…`): the page, with the comment shown.
+        case comment(slugId: String, commentId: String)
         case anchor(String)
         case user(id: String)
         case external(URL)
@@ -89,6 +91,11 @@ nonisolated enum ContentLinkRouter {
         server.appending(path: "p/\(slugId)")
     }
 
+    /// A comment's link as the web copies it: the page with `?commentId=…`.
+    static func commentWebURL(server: URL, slugId: String, commentId: String) -> URL {
+        webPageURL(server: server, slugId: slugId).appending(queryItems: [URLQueryItem(name: "commentId", value: commentId)])
+    }
+
     static func destination(for url: URL, serverURL: URL?) -> Destination {
         if url.scheme == internalScheme {
             let id = url.lastPathComponent
@@ -112,6 +119,9 @@ nonisolated enum ContentLinkRouter {
                let base = query.first(where: { $0.name == "rowBase" })?.value, !base.isEmpty
             {
                 return .databaseEntry(basePageId: base, rowId: row)
+            }
+            if let commentId = query.first(where: { $0.name == "commentId" })?.value, !commentId.isEmpty {
+                return .comment(slugId: slugId, commentId: commentId)
             }
             return .page(slugId: slugId, anchor: url.fragment)
         }

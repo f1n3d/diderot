@@ -11,14 +11,14 @@ import XCTest
 
     // MARK: - Helpers
 
-    private func launch(openPage: Bool) -> XCUIApplication {
+    private func launch(openPage: Bool, arguments: [String] = []) -> XCUIApplication {
         let keys = openPage ? ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"] : []
-        return launchApp(extraEnvironment: environment.filter { keys.contains($0.key) })
+        return launchApp(extraEnvironment: environment.filter { keys.contains($0.key) }, arguments: arguments)
     }
 
     /// Opens the test page and waits for the engine sync ("Saved").
-    private func launchPage() -> XCUIApplication {
-        let app = launch(openPage: true)
+    private func launchPage(arguments: [String] = []) -> XCUIApplication {
+        let app = launch(openPage: true, arguments: arguments)
         waitForSync(app)
         return app
     }
@@ -531,16 +531,16 @@ import XCTest
 
     /// A tap at the start of a paragraph puts the caret there, as on the web; it used to go to the end. The script
     /// checks that "Anfang<stamp>" starts the paragraph after the table.
-    /// A server newer than the app's editor (Docmost 0.97 via the debug override): the page opens read-only with a
+    /// A server newer than the app's editor (Docmost 0.98 via the debug override): the page opens read-only with a
     /// notice, and tapping its text starts no editing.
     func test58_NewerServerOpensPagesReadOnly() {
         var extra = environment.filter { ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"].contains($0.key) }
-        extra["DOCMOST_DEBUG_SERVER_VERSION"] = "0.97.0"
+        extra["DOCMOST_DEBUG_SERVER_VERSION"] = "0.98.0"
         let app = launchApp(extraEnvironment: extra)
         let pill = element(app, "page-status")
         XCTAssertTrue(pill.waitForExistence(timeout: 40), "Page didn't load")
         XCTAssertTrue(["Read only", "Nur lesen"].contains(pill.label), "Status is “\(pill.label)”")
-        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Docmost 0.97.0")).firstMatch
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Docmost 0.98.0")).firstMatch
         XCTAssertTrue(notice.exists, "No notice about the server version")
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Erster Absatz")).firstMatch.tap()
         XCTAssertFalse(app.buttons["format-bold"].waitForExistence(timeout: 3), "Editing started on a newer server")
@@ -1589,6 +1589,244 @@ import XCTest
         _ = edit(app, blockContaining: "NachEinbettung\(stamp)")
         snapshot(app, "46-editing")
         finishEditing(app)
+    }
+
+    /// A pasted link to a page of this server becomes a mention of the page, as on the web (since Docmost 0.10). The
+    /// server check expects the test page's mention in the paragraph with "Verweis<stamp>".
+    func test74_PastePageLink() throws {
+        let server = try XCTUnwrap(environment["DOCMOST_DEBUG_SERVER"]), pageId = try XCTUnwrap(environment["DOCMOST_DEBUG_PAGE"])
+        let title = environment["DOCMOST_UITEST_PAGE_TITLE"] ?? "Editor-Test"
+        UIPasteboard.general.string = "\(server)/p/\(pageId)"
+        let app = launchPage()
+        // Into the empty paragraph: there, tapping the cursor shows "Paste" (in text, a tap only moves the cursor).
+        let editor = appendParagraph(app)
+        paste(into: editor, in: app)
+        XCTAssertTrue(waitForText(editor, contains: title, timeout: 10), "The pasted page link doesn't become a mention: “\(editor.value ?? "")”")
+        XCTAssertFalse((editor.value as? String ?? "").contains("http"), "The page link stays as text")
+        editor.typeText(" Verweis\(stamp)")
+        XCTAssertTrue(waitForText(editor, contains: "Verweis\(stamp)"), "Text typed after the mention is lost: “\(editor.value ?? "")”")
+        snapshot(app, "74-page-mention")
+        finishEditing(app)
+    }
+
+    // MARK: - Docmost 0.97 (`PORT=3001 Tools/run-uitests.sh`; skipped on older servers)
+
+    /// Tabs: "/reiter" inserts "Tab 1" and "Tab 2" with the cursor in the first; "+" adds a tab and asks for its name;
+    /// the tab's menu moves it left; a tab added and deleted again leaves nothing behind. The server check expects the
+    /// labels "Tab 1", "Dritter<stamp>", "Tab 2", the text in the first tab and an id of its own on every tab. Tab drag
+    /// off (`-tabs.tabDrag NO`): otherwise iOS keeps the drag armed while the menu is open and XCUITest waits a minute
+    /// per step.
+    func test69_Tabs() throws {
+        try requireDocmost097()
+        let app = launchPage(arguments: ["-tabs.tabDrag", "NO"])
+        _ = appendParagraph(app)
+        slash(app, "reiter", pick: "tabs")
+        Thread.sleep(forTimeInterval: 0.8)
+        activeEditor(app, "No cursor in the first tab").typeText("Reiter\(stamp)")
+        finishEditing(app)
+        let text = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Reiter\(stamp)")).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 5), "The first tab doesn't show its text")
+
+        let add = app.buttons["tabs-add"]
+        XCTAssertTrue(scrollTo(add, in: app), "The tabs' “+” is missing")
+        add.tap()
+        let name = app.alerts.textFields.firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 8), "Adding a tab doesn't ask for its name")
+        if (name.value(forKey: "hasKeyboardFocus") as? Bool) != true { name.tap() }
+        // The field holds the web's name "Tab 3".
+        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "Dritter\(stamp)")
+        app.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["Rename", "Umbenennen"])).firstMatch.tap()
+        let third = app.buttons["tab-Dritter\(stamp)"]
+        XCTAssertTrue(third.waitForExistence(timeout: 8), "The renamed tab doesn't show")
+        XCTAssertTrue(third.isSelected, "The new tab isn't the one shown")
+        XCTAssertFalse(text.exists, "The first tab's text shows in the new tab")
+
+        third.press(forDuration: 1.0)
+        let moveLeft = button(app, labels: ["Move Left", "Nach links verschieben"])
+        XCTAssertTrue(moveLeft.waitForExistence(timeout: 5), "“Move Left” is missing from the tab menu")
+        moveLeft.tap()
+        let first = app.buttons["tab-Tab 1"], second = app.buttons["tab-Tab 2"]
+        let order = NSPredicate { _, _ in first.frame.minX < third.frame.minX && third.frame.minX < second.frame.minX }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: order, object: nil)], timeout: 8), .completed,
+                       "“Move Left” doesn't put the tab between “Tab 1” and “Tab 2”")
+
+        add.tap()
+        let cancel = app.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["Cancel", "Abbrechen"])).firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 8), "Adding a tab doesn't ask for its name")
+        cancel.tap()
+        let fourth = app.buttons["tab-Tab 4"]
+        XCTAssertTrue(fourth.waitForExistence(timeout: 8), "The added tab “Tab 4” doesn't show")
+        fourth.press(forDuration: 1.0)
+        let delete = button(app, labels: ["Delete Tab", "Tab löschen"])
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "“Delete Tab” is missing from the tab menu")
+        delete.tap()
+        XCTAssertTrue(fourth.waitForNonExistence(timeout: 8), "The deleted tab remains")
+
+        first.tap()
+        XCTAssertTrue(text.waitForExistence(timeout: 5), "The first tab doesn't show its text again")
+        snapshot(app, "69-tabs")
+    }
+
+    /// Tabs: "Tab 2" dragged onto the left half of "Tab 1" goes first. The server check expects "Tab 2", "Tab 1" with the
+    /// text in "Tab 1". Tab menu off (`-tabs.tabMenu NO`): XCUITest doesn't do the menu-to-drag transition; on a device,
+    /// holding shows the menu and moving drags the tab.
+    func test73_TabDrag() throws {
+        try requireDocmost097()
+        let app = launchPage(arguments: ["-tabs.tabMenu", "NO"])
+        _ = appendParagraph(app)
+        slash(app, "reiter", pick: "tabs")
+        Thread.sleep(forTimeInterval: 0.8)
+        activeEditor(app, "No cursor in the first tab").typeText("Zieh\(stamp)")
+        finishEditing(app)
+        // test69's tabs may be on the page too: this test's are the last ones.
+        let firsts = app.buttons.matching(identifier: "tab-Tab 1"), seconds = app.buttons.matching(identifier: "tab-Tab 2")
+        let first = firsts.element(boundBy: max(0, firsts.count - 1)), second = seconds.element(boundBy: max(0, seconds.count - 1))
+        XCTAssertTrue(scrollTo(second, in: app), "“Tab 2” is missing")
+        second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+            forDuration: 0.8, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)),
+            withVelocity: .slow, thenHoldForDuration: 0.4
+        )
+        let moved = NSPredicate { _, _ in second.frame.minX < first.frame.minX }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: moved, object: nil)], timeout: 8), .completed,
+                       "Dragging doesn't put “Tab 2” before “Tab 1”")
+        snapshot(app, "73-tab-dragged")
+    }
+
+    /// Sub-pages: the block's order changes as on the web; the test page's children "Sortiert B" and "Sortiert A"
+    /// (Tools/run-uitests.sh creates them in that order) swap places. The server check expects `sortBy` "title-asc".
+    func test70_SubpagesSort() throws {
+        try requireDocmost097()
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "unterseit", pick: "subpages")
+        _ = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        finishEditing(app)
+        // test36 may have added sub-pages before: this test's block is the last.
+        let sorts = app.buttons.matching(identifier: "subpages-sort")
+        let sort = sorts.element(boundBy: max(0, sorts.count - 1))
+        XCTAssertTrue(scrollTo(sort, in: app), "The sub-pages' sort menu is missing")
+        sort.tap()
+        let titles = button(app, labels: ["A–Z"])
+        XCTAssertTrue(titles.waitForExistence(timeout: 5), "“A–Z” is missing from the sort menu")
+        titles.tap()
+        XCTAssertTrue(waitForLabel(sort, matching: ".*A–Z.*", timeout: 8), "The menu doesn't show the new order: “\(sort.label)”")
+        // This block's rows are the last ones of each page.
+        func row(_ title: String) -> XCUIElement? {
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).allElementsBoundByIndex.last
+        }
+        let a = try XCTUnwrap(row("Sortiert A"), "Child page “Sortiert A” missing"), b = try XCTUnwrap(row("Sortiert B"), "Child page “Sortiert B” missing")
+        XCTAssertLessThan(a.frame.minY, b.frame.minY, "A–Z doesn't put “Sortiert A” before “Sortiert B”")
+        snapshot(app, "70-subpages-sorted")
+    }
+
+    /// A comment's link: "Copy Link" copies the page's web address with `?commentId=`; opened from outside
+    /// (`diderot://open?url=…`), it shows the page with the comments at that thread.
+    func test71_CommentLink() throws {
+        try requireDocmost097()
+        let app = launchPage()
+        app.buttons["page-comments"].tap()
+        let composer = element(app, "comments-composer")
+        XCTAssertTrue(composer.waitForExistence(timeout: 10), "Comments sheet doesn't open")
+        // Test-Kollegin's reply (seed-notifications.py).
+        let reply = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'comment-'"))
+            .containing(NSPredicate(format: "label == 'Nachtrag der Kollegin'")).firstMatch
+        XCTAssertTrue(reply.waitForExistence(timeout: 10), "Test-Kollegin's reply is missing")
+        let replyId = String(reply.identifier.dropFirst("comment-".count))
+        app.buttons["comment-menu-\(replyId)"].tap()
+        let copy = button(app, labels: ["Copy Link", "Link kopieren"])
+        XCTAssertTrue(copy.waitForExistence(timeout: 5), "“Copy Link” is missing from the comment menu")
+        copy.tap()
+
+        // The link, pasted into the composer (and not sent).
+        composer.tap()
+        composer.tap()
+        let paste = labeled(app, ["Paste", "Einsetzen"])
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), "No “Paste” in the composer")
+        paste.tap()
+        let copied = NSPredicate { _, _ in (composer.value as? String)?.contains("commentId=\(replyId)") == true }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: copied, object: nil)], timeout: 5), .completed,
+                       "The copied link is “\(composer.value ?? "")”")
+        let link = (composer.value as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(link.contains("/p/"), "The copied link isn't a page's web address: \(link)")
+        tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
+        XCTAssertTrue(composer.waitForNonExistence(timeout: 5), "The comments don't close")
+        backButton(app).tap()
+        XCTAssertTrue(app.buttons["page-comments"].waitForNonExistence(timeout: 5), "The page doesn't close")
+
+        var deepLink = URLComponents()
+        deepLink.scheme = "diderot"
+        deepLink.host = "open"
+        deepLink.queryItems = [URLQueryItem(name: "url", value: link)]
+        app.open(try XCTUnwrap(deepLink.url))
+        XCTAssertTrue(composer.waitForExistence(timeout: 20), "The comment link doesn't open the comments")
+        XCTAssertTrue(reply.waitForExistence(timeout: 10), "The comments don't show the linked thread")
+        snapshot(app, "71-comment-link")
+        tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
+    }
+
+    /// A pasted link of an installed integration (Tools/run-uitests.sh installs a stand-in GitHub integration on the 0.97
+    /// dev instance): "Paste As" offers card, mention and link; the card offers to connect one's GitHub account in the
+    /// web's settings; a mention shows as a link after a tap. The server check expects the card and the link, both
+    /// with provider "github".
+    func test72_PasteIntegrationLink() throws {
+        try requireDocmost097()
+        try XCTSkipUnless((environment["DOCMOST_INTEGRATIONS"] ?? "").split(separator: ",").contains("github"),
+                          "No GitHub integration installed on the dev server")
+        let link = "https://github.com/docmost/docmost/pull/\(stamp)"
+        UIPasteboard.general.string = link
+        let app = launchPage()
+        paste(into: appendParagraph(app), in: app)
+        let card = button(app, labels: ["Card", "Karte"])
+        XCTAssertTrue(card.waitForExistence(timeout: 8), "Pasting a GitHub link doesn't ask how to show it")
+        XCTAssertTrue(button(app, labels: ["Mention", "Erwähnung"]).exists, "“Mention” is missing from “Paste As”")
+        XCTAssertTrue(button(app, labels: ["URL"]).exists, "“URL” is missing from “Paste As”")
+        snapshot(app, "72-paste-as")
+        card.tap()
+        let connect = app.buttons["integration-connect"]
+        XCTAssertTrue(connect.waitForExistence(timeout: 15), "The card doesn't offer to connect a GitHub account")
+        if app.textViews["active-editor"].exists { finishEditing(app) }
+        XCTAssertTrue(scrollTo(connect, in: app), "The card's “Connect” is out of reach")
+        snapshot(app, "72-card")
+        connect.tap()
+        let done = app.buttons["integration-connect-done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10), "“Connect” doesn't open the web's settings")
+        // The web's dialog "Connect GitHub to Docmost" (its language may differ) hides the page behind it from VoiceOver.
+        let settings = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS 'GitHub' AND label CONTAINS 'Docmost'")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 20), "The web's connection settings don't load")
+        snapshot(app, "72-connect")
+        done.tap()
+        XCTAssertTrue(done.waitForNonExistence(timeout: 5), "The settings don't close")
+
+        paste(into: appendParagraph(app), in: app)
+        let mention = button(app, labels: ["Mention", "Erwähnung"])
+        XCTAssertTrue(mention.waitForExistence(timeout: 8), "The second paste doesn't ask how to show the link")
+        mention.tap()
+        Thread.sleep(forTimeInterval: 1.0)
+        let afterMention = activeEditor(app)
+        afterMention.typeText(" danach")
+        XCTAssertTrue(waitForText(afterMention, contains: "danach"), "Text typed after the mention is lost: “\(afterMention.value ?? "")”")
+        finishEditing(app)
+        let shown = app.links.matching(NSPredicate(format: "label CONTAINS %@", "docmost/docmost#\(stamp)")).firstMatch
+        XCTAssertTrue(scrollTo(shown, in: app), "The mention doesn't show")
+        shown.tap()
+        let asLink = button(app, labels: ["Show as URL", "Als URL anzeigen"])
+        XCTAssertTrue(asLink.waitForExistence(timeout: 5), "Tapping the mention doesn't offer “Show as URL”")
+        asLink.tap()
+        let plain = app.links.matching(NSPredicate(format: "label == %@", link)).firstMatch
+        XCTAssertTrue(plain.waitForExistence(timeout: 8), "The mention doesn't turn into the link")
+        snapshot(app, "72-link")
+    }
+
+    /// Pastes the clipboard at the cursor: tapping the cursor shows the edit menu; otherwise ⌘V.
+    private func paste(into editor: XCUIElement, in app: XCUIApplication) {
+        editor.tap()
+        let paste = labeled(app, ["Paste", "Einsetzen"])
+        if paste.waitForExistence(timeout: 3) {
+            paste.tap()
+        } else {
+            editor.typeKey("v", modifierFlags: .command)
+        }
     }
 
     /// Waits until the label matches the regular expression.

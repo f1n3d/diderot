@@ -55,6 +55,7 @@ struct CommentsView: View {
                 }
             }
             .environment(\.renderContext, RenderContext(session: session, pageId: page.id))
+            .environment(\.linkPreviews, session.linkPreviews)
             .task { if comments.state.value == nil { await comments.load() } }
         }
         .accessibilityIdentifier("comments-sheet")
@@ -125,9 +126,10 @@ struct CommentsView: View {
     }
 
     private func row(_ comment: PageComment) -> some View {
-        // Same conditions as menu(for:), so "…" never opens an empty menu.
+        // Same conditions as menu(for:), so "…" never opens an empty menu; on Docmost 0.97 every comment has "Copy Link".
         CommentRow(comment: comment, baseURL: session.server?.url,
-                   showsMenu: (canComment && !comment.isReply) || comment.creatorId == currentUserId || isSpaceAdmin,
+                   showsMenu: (canComment && !comment.isReply) || comment.creatorId == currentUserId || isSpaceAdmin
+                       || session.ready?.hasDocmost097Features == true,
                    confirmsDelete: Binding { confirmsDelete?.id == comment.id } set: { if !$0 { confirmsDelete = nil } },
                    onDelete: { run { try await comments.delete(comment) } }) {
             if comment.isInline, onShowInPage != nil {
@@ -156,6 +158,12 @@ struct CommentsView: View {
                 Button("Reopen", systemImage: "arrow.uturn.backward.circle") { run { try await comments.setResolved(comment, false) } }
             } else {
                 Button("Resolve", systemImage: "checkmark.circle") { run { try await comments.setResolved(comment, true) } }
+            }
+        }
+        // Docmost 0.97 opens these links at the comment.
+        if session.ready?.hasDocmost097Features == true, let server = session.server?.url {
+            Button("Copy Link", systemImage: "link") {
+                UIPasteboard.general.url = ContentLinkRouter.commentWebURL(server: server, slugId: page.slugId ?? page.id, commentId: comment.id)
             }
         }
         if comment.creatorId == currentUserId || isSpaceAdmin {

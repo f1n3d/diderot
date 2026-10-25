@@ -266,6 +266,12 @@ struct LinkSheet: View {
         return model.activeText[range].runs.first?.link
     }
 
+    /// The whole link the sheet edits (a selection may cover part of it): what becomes a card or mention.
+    private var wholeLink: Range<AttributedString.Index>? {
+        guard let range = targetRange, let url = existingLink else { return nil }
+        return model.activeText.runs[\.link].first { link, linkRange in link == url && linkRange.contains(range.lowerBound) }?.1
+    }
+
     /// The address as it gets linked: nil while empty, with spaces, or of a kind the web doesn't link either.
     private var link: URL? {
         ContentLinkRouter.normalizedLink(address).flatMap { ContentLinkRouter.isLinkable($0) ? $0 : nil }
@@ -308,6 +314,21 @@ struct LinkSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                    }
+                }
+                // Docmost 0.97: a link of an installed integration shows as a card or mention too, as on the web.
+                if let range = wholeLink, let provider = model.integrationProvider(ofLinkIn: range) {
+                    Section {
+                        if model.canShowLinkAsCard(in: range) {
+                            Button("Show as Card") {
+                                model.showLink(in: range, provider: provider, as: .card)
+                                dismiss()
+                            }
+                        }
+                        Button("Show as Mention") {
+                            model.showLink(in: range, provider: provider, as: .mention)
+                            dismiss()
+                        }
                     }
                 }
                 if existingLink != nil {

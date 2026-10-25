@@ -488,3 +488,30 @@ struct EmbedNodeView: View {
         }
     }
 }
+
+/// Sub-pages while editing: on Docmost 0.97 and newer the block's sort order can be changed, as on the web.
+struct SubpagesNodeView: View {
+    let model: DocumentModel
+    let node: PMNode
+    let ref: NodeRef
+
+    var body: some View {
+        let model = model, ref = ref
+        SubpagesBlockView(
+            sortBy: node.string("sortBy").flatMap(SubpagesSort.init(rawValue:)) ?? .manual,
+            sort: model.isEditable && model.hasDocmost097Features ? { order in
+                Task { await model.setAttributes(of: ref, ["sortBy": .string(order.rawValue)]) }
+            } : nil
+        )
+    }
+}
+
+extension SubpagesSort {
+    var title: String {
+        switch self {
+        case .manual: String(localized: "Manual")
+        case .titleAscending: String(localized: "A–Z")
+        case .recent: String(localized: "Recent")
+        }
+    }
+}

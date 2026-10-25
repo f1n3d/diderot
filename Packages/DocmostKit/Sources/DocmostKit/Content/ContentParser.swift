@@ -21,7 +21,7 @@ public enum ContentParser {
     }
 
     private static let inlineTypes: Set<String> = [
-        "text", "hardBreak", "mention", "mathInline", "status", "footnoteReference",
+        "text", "hardBreak", "mention", "mathInline", "status", "footnoteReference", "integrationMention",
     ]
 
     // MARK: - Blocks
@@ -110,7 +110,24 @@ public enum ContentParser {
             return Block(id: id, kind: .mathBlock(node.string("text") ?? node.plainText))
 
         case "subpages":
-            return Block(id: id, kind: .subpages)
+            return Block(id: id, kind: .subpages(sortBy: node.string("sortBy").flatMap(SubpagesSort.init(rawValue:)) ?? .manual))
+
+        case "tabs":
+            var seen: Set<String> = []
+            let tabs = node.children.enumerated().filter { $0.element.type == "tab" }.map { index, tab -> TabItem in
+                let tabPath = "\(path).\(index)"
+                let label = tab.children.first { $0.type == "tabLabel" }
+                let panel = tab.children.first { $0.type == "tabPanel" }
+                let blocks = panel.map { parseBlocks($0.children, path: "\(tabPath).1", state: &state) } ?? []
+                var tabId = tab.string("id") ?? ""
+                if tabId.isEmpty || seen.contains(tabId) { tabId = "t\(tabPath)" }
+                seen.insert(tabId)
+                return TabItem(id: tabId, label: label?.plainText ?? "", blocks: blocks)
+            }
+            return Block(id: id, kind: .tabs(tabs))
+
+        case "integrationCard":
+            return Block(id: id, kind: .integrationCard(integrationLink(node)))
 
         case "transclusionSource":
             if let anchor = node.string("id") {
@@ -241,6 +258,8 @@ public enum ContentParser {
                 result.append(marked(.status(text: child.string("text") ?? "", color: child.string("color") ?? "gray"), child))
             case "footnoteReference":
                 result.append(marked(.footnoteReference(number: child.string("referenceNumber"), dataId: child.string("data-id")), child))
+            case "integrationMention":
+                result.append(marked(.integrationMention(integrationLink(child)), child))
             default:
                 if !child.children.isEmpty {
                     result.append(contentsOf: inlines(of: child))
@@ -252,6 +271,10 @@ public enum ContentParser {
             }
         }
         return result
+    }
+
+    private static func integrationLink(_ node: PMNode) -> IntegrationLink {
+        IntegrationLink(url: node.string("url") ?? "", provider: node.string("provider") ?? "")
     }
 
     private static func marked(_ atom: Inline, _ node: PMNode) -> Inline {
@@ -272,7 +295,7 @@ public enum ContentParser {
             case "subscript": style.subscript = true
             case "link":
                 if let href = mark.string("href"), !href.isEmpty {
-                    style.link = Link(href: href)
+                    style.link = Link(href: href, integrationProvider: mark.string("integrationProvider"))
                 }
             case "highlight":
                 style.highlight = Highlight(color: mark.string("color"), colorName: mark.string("colorName"))

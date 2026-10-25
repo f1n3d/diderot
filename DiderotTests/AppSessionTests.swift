@@ -39,15 +39,24 @@ struct AppSessionTests {
     }
 }
 
-/// The bundled editor follows Docmost 0.96 (`Engine/`): newer servers get read-only pages, unknown versions don't.
+/// The bundled editor follows Docmost 0.97 (`Engine/`): newer servers get read-only pages, unknown versions don't.
+/// Only known 0.97 servers and newer get the blocks 0.96 doesn't know.
 struct ServerVersionTests {
     @Test func versionsNewerThanTheEditor() {
-        let versions = [("0.96.0", false), ("0.96.4", false), ("0.95.1", false), ("v0.96.0", false), ("0.97.0", true),
-                        ("v0.97.0-beta.1", true), ("1.0.0", true), ("", false), ("next", false)]
+        let versions = [("0.96.0", false), ("0.97.0", false), ("0.97.3", false), ("v0.97.0-beta.1", false),
+                        ("0.98.0", true), ("v0.98.0-beta.1", true), ("1.0.0", true), ("", false), ("next", false)]
         for (version, newer) in versions {
             #expect(ReadySession.isNewerThanEditor(version) == newer, "\(version)")
         }
         #expect(!ReadySession.isNewerThanEditor(nil))
+    }
+
+    @Test func docmost097Features() throws {
+        let versions: [(String?, Bool)] = [("0.96.4", false), ("0.97.0", true), ("v0.97.1", true), ("0.98.0", true),
+                                           ("1.0.0", true), (nil, false), ("next", false)]
+        for (version, expected) in versions {
+            #expect(ReadySession.supportsDocmost097(version) == expected, "\(version ?? "nil")")
+        }
     }
 }
 
@@ -225,6 +234,23 @@ struct AppSessionRaceTests {
         await DiskCache(scope: a.absoluteString).write(business, key: CacheKey.entitlements)
         try await sessionOnA().clearCache()
         #expect(try await offlineSessionOnA().ready?.entitlements == business)
+        await removeCaches()
+    }
+
+    /// Docmost names its version only if GitHub answers its release check: a sign-in without it and a start without
+    /// network keep the version named before (so 0.97 content can still be added), also after Clear Saved Content.
+    @Test func unknownVersionKeepsTheLastKnownOne() async throws {
+        StubURLProtocol.body.withLock {
+            $0 = #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}, "currentVersion": "0.97.0"}}"#
+        }
+        let named = try await sessionOnA()
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(named.ready?.hasDocmost097Features == true)
+        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        await session.restore()
+        #expect(session.ready?.serverVersion == "0.97.0")
+        await session.clearCache()
+        #expect(try await offlineSessionOnA().ready?.serverVersion == "0.97.0")
         await removeCaches()
     }
 

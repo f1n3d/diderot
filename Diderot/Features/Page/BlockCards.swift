@@ -85,6 +85,10 @@ struct NodeView: View {
             MathBlockNodeView(model: model, node: node, ref: ref)
         case "embed":
             EmbedNodeView(model: model, node: node, ref: ref)
+        case "tabs":
+            TabsNodeView(model: model, node: node, ref: ref)
+        case "subpages":
+            SubpagesNodeView(model: model, node: node, ref: ref)
         default:
             ReaderNodeView(node: node)
         }
@@ -116,6 +120,7 @@ struct TextNodeView: View {
     @Environment(\.paragraphFont) private var paragraphFont
     @Environment(\.fontResolutionContext) private var fontContext
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @Environment(\.linkPreviews) private var linkPreviews
 
     private var fontLeading: CGFloat { CTFontGetLeading(font.resolve(in: fontContext).ctFont) }
 
@@ -185,6 +190,7 @@ struct TextNodeView: View {
                 }
             }
             .font(font)
+            .loadsLinkPreviews(for: inlines)
             .multilineTextAlignment(align.textAlignment)
             .frame(maxWidth: .infinity, alignment: align.frameAlignment)
             .padding(.leading, indent)
@@ -213,7 +219,7 @@ struct TextNodeView: View {
     /// Text as in the reader, with find matches highlighted.
     private func displayed(_ inlines: [Inline]) -> AttributedString {
         // Editable: tapping a status or math atom opens its sheet (link carries block and atom index).
-        var builder = InlineTextBuilder(baseURL: context.baseURL, font: font)
+        var builder = InlineTextBuilder(baseURL: context.baseURL, font: font, previewTitle: { linkPreviews?.preview(for: $0)?.title })
         if model.isEditable { builder.atomLinkBlock = ref.identity }
         var text = builder.attributedString(for: inlines)
         if let find { FindMatcher.highlight(&text, find: find, ref: ref) }
@@ -298,7 +304,11 @@ struct ActiveTextEditor: View {
             .modifier(EditorFocus(model: model, ref: ref, onFocus: {
                 // Pasting a copied synced block embeds it instead of inserting its markup as text.
                 let model = model
-                SyncedBlockPasteProxy.install { reference in model.pasteSyncedReferenceIntoActive(reference) }
+                EditorPasteProxy.install { reference in
+                    model.pasteSyncedReferenceIntoActive(reference)
+                } onLink: { link in
+                    model.pasteLink(link)
+                }
                 if let view = FirstResponder.current as? UITextView {
                     model.editorTextView = view
                     TextInputHooks.install(on: view)
@@ -1119,6 +1129,9 @@ private struct BlockDragModifier: ViewModifier {
                                 Button("Edit Equation") { model.editorSheet = .mathBlock(.edit(entry.ref), latex: entry.node.string("text") ?? "") }
                             case "drawio", "excalidraw":
                                 Button("Edit in Web Editor") { model.requestsWebEditor = true }
+                            case "integrationCard":
+                                Button("Show as Mention") { Task { await model.showIntegrationCard(entry.ref, as: .mention) } }
+                                Button("Show as URL") { Task { await model.showIntegrationCard(entry.ref, as: .link) } }
                             default:
                                 EmptyView()
                             }

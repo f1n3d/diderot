@@ -165,6 +165,100 @@ struct DocumentModelTests {
         }
     }
 
+    /// A pasted web link goes in as a link, as on the web (Tiptap's paste rule); over selected text it links that text;
+    /// other text, other schemes and code blocks paste as usual.
+    @Test func pastedLinkBecomesALink() throws {
+        let paragraph = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Hallo Welt")])
+        let code = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let x = 1")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph, code]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        let url = try #require(URL(string: "https://example.com/a"))
+
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        #expect(model.pasteLink(" https://example.com/a\n"))
+        #expect(String(model.activeText.characters) == "Hallo Welthttps://example.com/a")
+        #expect(model.activeText.runs.contains { $0.link == url && String(model.activeText[$0.range].characters) == url.absoluteString })
+
+        // Over "Welt": the word becomes the link.
+        let start = model.activeText.characters.index(model.activeText.startIndex, offsetBy: 6)
+        let end = model.activeText.characters.index(start, offsetBy: 4)
+        model.activeSelection = AttributedTextSelection(range: start..<end)
+        #expect(model.pasteLink(url.absoluteString))
+        #expect(String(model.activeText.characters) == "Hallo Welthttps://example.com/a")
+        #expect(model.activeText[start..<end].runs.allSatisfy { $0.link == url })
+
+        #expect(!model.pasteLink("two words"))
+        #expect(!model.pasteLink("mailto:someone@example.com"))
+        model.activate(NodeRef(path: [1], node: code), node: code)
+        #expect(!model.pasteLink(url.absoluteString))
+    }
+
+    /// A mention shown as a card splits its paragraph there, as on the web: the text before (without its trailing
+    /// space), the card, the text after. No card in place of a list item's first line, in a table cell or a heading.
+    @Test func mentionAsCardSplitsItsParagraph() async throws {
+        let url = "https://github.com/o/r/issues/1"
+        let mention = PMNode(type: "integrationMention", attrs: ["url": .string(url), "provider": "github"])
+        let paragraph = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Siehe "), mention, PMNode(type: "text", text: " danach")])
+        let item = PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [PMNode(type: "paragraph", content: [mention])])])
+        let cell = PMNode(type: "table", content: [PMNode(type: "tableRow", content: [
+            PMNode(type: "tableCell", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "x "), mention])]),
+        ])])
+        let heading = PMNode(type: "heading", attrs: ["level": 2], content: [PMNode(type: "text", text: "x "), mention])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph, item, cell, heading]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        func target(_ path: [Int]) throws -> DocumentModel.MentionTarget {
+            DocumentModel.MentionTarget(ref: NodeRef(path: path, node: try #require(model.node(at: path))), index: 0, url: url, provider: "github")
+        }
+
+        #expect(try !model.canShowAsCard(target([1, 0, 0])))
+        #expect(try !model.canShowAsCard(target([2, 0, 0, 0])))
+        #expect(try !model.canShowAsCard(target([3])))
+        let first = try target([0])
+        #expect(model.canShowAsCard(first))
+        await model.showMention(first, as: .card)
+        #expect(engine.replacedWith.last == [
+            PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Siehe")]),
+            PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": "github"]),
+            PMNode(type: "paragraph", content: [PMNode(type: "text", text: "danach")]),
+        ])
+    }
+
+    /// A pasted link to a page of this server becomes a mention of it, with the anchor, as on the web; a query such as
+    /// `?commentId=` doesn't count, and a page that can't be found stays a link.
+    @Test(.timeLimit(.minutes(1))) func pastedPageLinkBecomesAMention() async throws {
+        let paragraph = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Hallo ")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.serverURL = URL(string: "https://wiki.example.com")
+        model.currentUserId = "u1"
+        let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"Ziel"}"#.utf8))
+        model.lookUpPage = { slugId in slugId == "Ab12" ? target : nil }
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        func inlines() -> [PMNode] { DocumentModel.inlines(from: model.activeText, base: .body) }
+
+        #expect(model.pasteLink("https://wiki.example.com/s/demo/p/ziel-Ab12?commentId=c1#abschnitt"))
+        while !inlines().contains(where: { $0.type == "mention" }) { try await Task.sleep(for: .milliseconds(10)) }
+        let mention = try #require(inlines().first { $0.type == "mention" })
+        #expect(mention.string("label") == "Ziel")
+        #expect(mention.string("entityType") == "page")
+        #expect(mention.string("entityId") == "p2")
+        #expect(mention.string("slugId") == "Ab12")
+        #expect(mention.string("anchorId") == "abschnitt")
+        #expect(mention.string("creatorId") == "u1")
+
+        let missing = "https://wiki.example.com/p/fehlt-Zz99"
+        #expect(model.pasteLink(missing))
+        while !model.activeText.runs.contains(where: { $0.link?.absoluteString == missing }) { try await Task.sleep(for: .milliseconds(10)) }
+    }
+
     /// "/bild" → Image drops the query before the picker opens, as on the web: gone on cancel, replaced by the uploads.
     @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func mediaCommandRemovesSlashQuery(uploads: Bool) async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
@@ -996,6 +1090,8 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var inserted: [(node: PMNode, target: BlockTarget?, position: BlockInsertPosition)] = []
     /// Targets of `replaceBlock(_:withNodes:)`.
     private(set) var replaced: [BlockTarget] = []
+    /// The blocks of each `replaceBlock(_:withNodes:)`.
+    private(set) var replacedWith: [[PMNode]] = []
     private(set) var deleted: [BlockTarget] = []
     /// Children that `splitContainer(after:)` split their container after.
     private(set) var splitAfter: [BlockTarget] = []
@@ -1034,6 +1130,7 @@ final class FakeDocumentEngine: DocumentEngine {
     func currentDocument() async -> PMNode? { document }
     func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> Bool {
         replaced.append(target)
+        replacedWith.append(nodes)
         whileInserting?()
         return true
     }

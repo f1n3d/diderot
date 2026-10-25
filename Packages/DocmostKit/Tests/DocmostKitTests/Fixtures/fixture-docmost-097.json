@@ -1,0 +1,259 @@
+{
+  "title": "Fixture: Docmost 0.97",
+  "icon": "🗂️",
+  "content": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "fixtureheadtabs"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Tabs"
+          }
+        ]
+      },
+      {
+        "type": "tabs",
+        "content": [
+          {
+            "type": "tab",
+            "attrs": {
+              "id": "fixturetabone"
+            },
+            "content": [
+              {
+                "type": "tabLabel",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Overview"
+                  }
+                ]
+              },
+              {
+                "type": "tabPanel",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "The first tab with a "
+                      },
+                      {
+                        "type": "text",
+                        "text": "bold",
+                        "marks": [
+                          {
+                            "type": "bold"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "text",
+                        "text": " word."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "bulletList",
+                    "content": [
+                      {
+                        "type": "listItem",
+                        "content": [
+                          {
+                            "type": "paragraph",
+                            "content": [
+                              {
+                                "type": "text",
+                                "text": "A list in a tab"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tab",
+            "attrs": {
+              "id": "fixturetabtwo"
+            },
+            "content": [
+              {
+                "type": "tabLabel",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Details"
+                  }
+                ]
+              },
+              {
+                "type": "tabPanel",
+                "content": [
+                  {
+                    "type": "callout",
+                    "attrs": {
+                      "type": "info"
+                    },
+                    "content": [
+                      {
+                        "type": "paragraph",
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "A callout in the second tab."
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "heading",
+                    "attrs": {
+                      "level": 3,
+                      "id": "fixtureheadintab"
+                    },
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "A heading in a tab"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tab",
+            "attrs": {
+              "id": "fixturetabthree"
+            },
+            "content": [
+              {
+                "type": "tabLabel"
+              },
+              {
+                "type": "tabPanel",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "A tab without a name."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "fixtureheadintegrations"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Integration links"
+          }
+        ]
+      },
+      {
+        "type": "integrationCard",
+        "attrs": {
+          "url": "https://github.com/docmost/docmost/issues/1",
+          "provider": "github"
+        }
+      },
+      {
+        "type": "integrationCard",
+        "attrs": {
+          "url": "https://linear.app/acme/issue/ENG-42/fix-the-crash",
+          "provider": "linear"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Inline: "
+          },
+          {
+            "type": "integrationMention",
+            "attrs": {
+              "url": "https://github.com/docmost/docmost/pull/2606",
+              "provider": "github"
+            }
+          },
+          {
+            "type": "text",
+            "text": " and a link "
+          },
+          {
+            "type": "text",
+            "text": "to an issue",
+            "marks": [
+              {
+                "type": "link",
+                "attrs": {
+                  "href": "https://github.com/docmost/docmost/issues/2",
+                  "integrationProvider": "github"
+                }
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": "."
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "fixtureheadsubpages"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Sub-pages, A–Z"
+          }
+        ]
+      },
+      {
+        "type": "subpages",
+        "attrs": {
+          "sortBy": "title-asc"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "End of the fixture."
+          }
+        ]
+      }
+    ]
+  }
+}

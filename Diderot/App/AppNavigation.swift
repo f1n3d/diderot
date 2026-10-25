@@ -32,6 +32,7 @@ final class AppNavigation {
         switch DeepLink.resolve(url, serverURL: serverURL) {
         case .page(let slugId, _): PageSelection(pageId: slugId)
         case .databaseEntry(let basePageId, let rowId): PageSelection(pageId: basePageId, rowId: rowId)
+        case .comment(let slugId, let commentId): PageSelection(pageId: slugId, commentId: commentId)
         default: nil
         }
     }

@@ -12,6 +12,7 @@ Prints the IDs as `KEY=value` (for Tools/run-uitests.sh).
 """
 import hashlib
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -19,7 +20,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE_URL = "http://localhost:3000/api/"
+BASE_URL = os.environ.get("DOCMOST_SEED_URL", "http://localhost:3000") + "/api/"
 
 
 def credentials():

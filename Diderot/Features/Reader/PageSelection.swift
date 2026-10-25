@@ -9,11 +9,14 @@ struct PageSelection: Hashable, Sendable {
     var focusTitle = false
     /// Database page: entry to open once it has loaded (a link to the entry).
     var rowId: String?
+    /// A comment to show once the page has loaded (a link to the comment).
+    var commentId: String?
 
-    init(pageId: String, title: String? = nil, rowId: String? = nil) {
+    init(pageId: String, title: String? = nil, rowId: String? = nil, commentId: String? = nil) {
         self.pageId = pageId
         self.title = title
         self.rowId = rowId
+        self.commentId = commentId
     }
 
     init(page: SidebarPage) {

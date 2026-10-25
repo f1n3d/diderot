@@ -21,6 +21,9 @@ extension Block {
         case .mathBlock(let latex): return latex
         case .image(let image): return image.alt ?? ""
         case .media(let media): return media.name ?? ""
+        case .tabs(let tabs):
+            return tabs.map { ([$0.label] + $0.blocks.map(\.plainText)).joined(separator: "\n") }.joined(separator: "\n")
+        case .integrationCard(let link): return link.url
         case .horizontalRule, .subpages, .transclusionReference, .base, .pageBreak: return ""
         }
     }
@@ -46,6 +49,7 @@ extension [Inline] {
             case .mathInline(let latex): return latex
             case .status(let text, _): return text
             case .footnoteReference(let number, _): return number.map { "[\($0)]" } ?? ""
+            case .integrationMention(let link): return link.url
             case .marked(let atom, _): return [atom].plainText
             case .unknown: return ""
             }

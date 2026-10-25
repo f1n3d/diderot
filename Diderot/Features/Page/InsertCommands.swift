@@ -133,6 +133,8 @@ enum InsertCommand: Hashable, Identifiable {
     case mermaid, drawio, excalidraw
     case date, time, status, emoji
     case subpages, syncedBlock
+    /// Docmost 0.97 and newer.
+    case tabs
     case columns(Int)
     case embed(EmbedProvider)
     /// Embeds a synced block copied earlier in the app.
@@ -144,7 +146,7 @@ enum InsertCommand: Hashable, Identifiable {
             .block(.paragraph), .block(.taskList), .block(.heading1), .block(.heading2), .block(.heading3),
             .block(.bulletList), .block(.orderedList), .block(.quote), .block(.codeBlock), .block(.divider),
             .pageBreak, .footnote, .image, .camera, .video, .audio, .pdf, .attachment, .block(.table), .base, .kanban,
-            .block(.toggle), .block(.callout), .mathInline, .mathBlock, .mermaid, .drawio, .excalidraw,
+            .block(.toggle), .tabs, .block(.callout), .mathInline, .mathBlock, .mermaid, .drawio, .excalidraw,
             .date, .time, .status, .emoji, .subpages, .syncedBlock, .columns(2), .columns(3), .columns(4), .columns(5),
         ]
         commands += EmbedProvider.allCases.map { .embed($0) }
@@ -175,6 +177,7 @@ enum InsertCommand: Hashable, Identifiable {
         case .emoji: "emoji"
         case .subpages: "subpages"
         case .syncedBlock: "synced-block"
+        case .tabs: "tabs"
         case .columns(let count): "columns-\(count)"
         case .embed(let provider): "embed-\(provider.rawValue)"
         case .pasteSyncedBlock: "paste-synced-block"
@@ -226,6 +229,7 @@ enum InsertCommand: Hashable, Identifiable {
         case .emoji: "Emoji"
         case .subpages: "Subpages"
         case .syncedBlock: "Synced block"
+        case .tabs: "Tabs"
         case .pasteSyncedBlock: "Paste synced block"
         case .block, .columns, .embed: ""
         }
@@ -255,6 +259,7 @@ enum InsertCommand: Hashable, Identifiable {
         case .emoji: "face.smiling"
         case .subpages: "list.bullet.indent"
         case .syncedBlock, .pasteSyncedBlock: "arrow.triangle.2.circlepath"
+        case .tabs: "rectangle.topthird.inset.filled"
         case .columns(let count): count == 2 ? "rectangle.split.2x1" : "rectangle.split.3x1"
         case .embed(let provider): provider.symbol
         }
@@ -301,6 +306,7 @@ enum InsertCommand: Hashable, Identifiable {
         case .subpages: ["subpages", "children", "child pages", "contents", "toc", "unterseiten", "inhaltsverzeichnis", "verzeichnis"]
         case .syncedBlock: ["synced", "sync", "reuse", "shared", "transclusion", "synchronisiert", "wiederverwenden"]
         case .pasteSyncedBlock: ["paste", "synced", "sync", "einfügen", "einsetzen", "synchronisiert"]
+        case .tabs: ["tabs", "tabbed", "multi", "panel", "reiter", "registerkarten"]
         case .columns(let count): ["columns", "layout", "side by side", "split", "spalten", "nebeneinander", "\(count)"]
         case .embed(let provider): provider.searchTerms + ["embed", "einbetten"]
         }
