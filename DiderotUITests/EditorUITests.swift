@@ -1631,8 +1631,9 @@ import XCTest
         app.typeKey(.leftArrow, modifierFlags: [])
         XCTAssertTrue(showsSlide(2), "The left arrow key doesn't go back: \(counter.label)")
 
-        // The table's slide ends with it: the paragraph after it begins the next one, without the table.
-        let after = app.staticTexts["Nach der Tabelle."].firstMatch
+        // The table's slide ends with it: the paragraph after it begins the next one, without the table. (test52 types
+        // at the paragraph's start.)
+        let after = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nach der Tabelle.")).firstMatch
         for _ in 0..<total where !after.isHittable {
             app.buttons["presentation-next"].tap()
             Thread.sleep(forTimeInterval: 0.5)
