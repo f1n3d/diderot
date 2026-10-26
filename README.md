@@ -54,7 +54,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
     - bold, italic, underline, strikethrough, inline code, highlight, link, code block
     - line break, undo and redo through the Yjs history like the web editor, duplicate, delete
   - Formats stay while typing on and are visible in the editor.
-  - Move blocks by holding and dragging. The title is inline, the icon comes from the emoji keyboard; status pill and collaborator avatars.
+  - Move blocks by holding and dragging, or with "Arrange Blocks" in the page's menu. While a block is being edited, holding belongs to the text, as in a text editor: the magnifier moves the cursor, and in another text block the cursor goes where the finger was. The title is inline, the icon comes from the emoji keyboard; status pill and collaborator avatars.
   - Everything is live through an invisible TipTap/Yjs engine (`Engine/`). It loads its own page only, no frames: a YouTube embed there contacts nobody.
 - Every slash command of the web editor: "/" at the start of a block or after a space opens a scrollable list in the web's order. Search works in English and German; Return picks the first match. It includes:
   - text blocks, divider, page break, subpages, table
