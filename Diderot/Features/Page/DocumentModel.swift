@@ -1376,7 +1376,10 @@ final class DocumentModel {
 
     /// After the active text changed without the user (an answer arriving), the keyboard still works on the old text:
     /// what was typed next went nowhere until the user moved the cursor. Reloading it makes it read the text again,
-    /// once the text view shows the new text (reloaded before, it read the old one again).
+    /// once the text view shows the new text (reloaded before, it read the old one again). And once more a moment
+    /// later: the first reload sometimes still found the text view busy with the change, and typing stayed lost (test74,
+    /// about one run in four). Key events from outside the on-screen keyboard can still go nowhere after a paste
+    /// (BACKLOG).
     private func keyboardFollowsText() {
         let expected = String(activeText.characters)
         Task { @MainActor [weak self] in
@@ -1384,6 +1387,9 @@ final class DocumentModel {
                 guard let view = self?.editorTextView else { return }
                 if view.text == expected {
                     view.reloadInputViews()
+                    try? await Task.sleep(for: .milliseconds(300))
+                    // Nothing typed meanwhile: then reloading again costs nothing.
+                    if view.text == expected, view === self?.editorTextView { view.reloadInputViews() }
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(25))
