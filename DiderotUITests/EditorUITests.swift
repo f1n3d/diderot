@@ -1605,7 +1605,15 @@ import XCTest
         paste(into: editor, in: app)
         XCTAssertTrue(waitForText(editor, contains: title, timeout: 10), "The pasted page link doesn't become a mention: “\(editor.value ?? "")”")
         XCTAssertFalse((editor.value as? String ?? "").contains("http"), "The page link stays as text")
-        editor.typeText(" Verweis\(stamp)")
+        // The space as a tap on the on-screen keyboard, as a person types: after a paste into the editor, key events
+        // such as `typeText` sends (a hardware keyboard's too) can go nowhere until something is typed on the on-screen
+        // keyboard or the cursor moves (BACKLOG).
+        let space = app.keyboards.keys.matching(NSPredicate(format: "label IN %@", ["space", "Leerzeichen"])).firstMatch
+        XCTAssertTrue(space.waitForExistence(timeout: 5), "No space key on the keyboard")
+        space.tap()
+        let typed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in ((editor.value as? String) ?? "").count > title.count }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [typed], timeout: 5), .completed, "The space typed after the mention is lost: “\(editor.value ?? "")”")
+        editor.typeText("Verweis\(stamp)")
         XCTAssertTrue(waitForText(editor, contains: "Verweis\(stamp)"), "Text typed after the mention is lost: “\(editor.value ?? "")”")
         snapshot(app, "74-page-mention")
         finishEditing(app)
