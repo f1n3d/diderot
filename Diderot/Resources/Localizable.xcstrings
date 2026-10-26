@@ -1850,6 +1850,16 @@
         }
       }
     },
+    "Exit Presentation Mode": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsentationsmodus beenden"
+          }
+        }
+      }
+    },
     "Expand": {
       "localizations": {
         "de": {
@@ -2364,6 +2374,16 @@
         }
       }
     },
+    "Laser Pointer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laserpointer"
+          }
+        }
+      }
+    },
     "Last modified by %@": {
       "localizations": {
         "de": {
@@ -2864,6 +2884,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nächster Treffer"
+          }
+        }
+      }
+    },
+    "Next Slide": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächste Folie"
           }
         }
       }
@@ -3553,6 +3583,16 @@
         }
       }
     },
+    "Presentation Mode": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsentationsmodus"
+          }
+        }
+      }
+    },
     "Preview": {
       "localizations": {
         "de": {
@@ -3579,6 +3619,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vorheriger Treffer"
+          }
+        }
+      }
+    },
+    "Previous Slide": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorherige Folie"
           }
         }
       }
@@ -4373,6 +4423,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Single Sign-on"
+          }
+        }
+      }
+    },
+    "Slide %lld of %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folie %lld von %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Slide %1$lld of %2$lld"
           }
         }
       }

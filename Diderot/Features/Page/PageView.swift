@@ -46,6 +46,8 @@ struct PageView: View {
     @State private var showsAppendNote = false
     @State private var showsWebEditor = DebugLaunch.route == "webeditor"
     @State private var showsArrange = false
+    /// The page for the presentation mode, as it was when it opened (as on the web).
+    @State private var presentation: Presentation?
     @State private var confirmsTrash = false
     @State private var showsPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
@@ -281,6 +283,11 @@ struct PageView: View {
             photoItems = []
             uploads += 1
             Task { await uploadPhotos(items, to: target) }
+        }
+        .fullScreenCover(item: $presentation) { presentation in
+            PresentationView(pageId: presentation.pageId, title: presentation.title, document: presentation.document) { url in
+                handle(url, outside: OpenURLAction { _ in .discarded })
+            }
         }
         .fullScreenCover(isPresented: $showsCamera) {
             CameraPicker { data in
@@ -890,6 +897,7 @@ struct PageView: View {
         Button("Find on Page", systemImage: "text.magnifyingglass") { openFind() }
             .disabled(showsWebLayout)
         Button("Page History", systemImage: "clock.arrow.circlepath") { showsHistory = true }
+        Button("Presentation Mode", systemImage: "play.rectangle") { Task { await present(page) } }
         if page.canEdit {
             Divider()
             if page.isInTrash {
@@ -913,6 +921,16 @@ struct PageView: View {
                 Label("Share Link", systemImage: "square.and.arrow.up")
             }
         }
+    }
+
+    /// Opens the presentation mode with the page as it is now, the text being typed included, as the web takes the
+    /// live editor's content.
+    private func present(_ page: Page) async {
+        await model?.flush()
+        model?.deactivate()
+        let shownTitle: String? = canEditMeta(page) ? title : unsentTitle ?? page.title
+        presentation = Presentation(pageId: page.id, title: PageTitle.display(shownTitle),
+                                    document: model.map { ContentParser.parse($0.document) } ?? ContentDocument(json: page.content))
     }
 
     /// Title and icon go through REST and need no engine.

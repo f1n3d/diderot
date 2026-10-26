@@ -56,6 +56,11 @@ Decided on October 22, 2026, for later:
 
 - iPad with a hardware keyboard (checked on October 23, 2026, simulator only): the editor's UI tests pass there except test10 and test14, which expect the on-screen keyboard (also before the page's one editor). Return and Backspace from a hardware keyboard couldn't be checked reliably in the simulator; to try on a real iPad with a keyboard.
 
+## Presentation mode
+
+- A presenter view for an external display: the slides on the TV, controls and the next slide on the iPhone (decided on October 26, 2026, for later). Today iOS mirrors the screen.
+- On an iPad the system's own pointer stays visible under the laser pointer's dot; the web hides the cursor. SwiftUI can't hide it on iOS (`pointerVisibility` is macOS only), UIKit could with a `UIPointerInteraction`.
+
 ## Databases
 
 As of stage 2 (editing, creating, deleting, moving). Deliberately still on the web:

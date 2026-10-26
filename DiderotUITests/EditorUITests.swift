@@ -1591,6 +1591,61 @@ import XCTest
         finishEditing(app)
     }
 
+    /// Presentation mode as on the web (Docmost 0.97, here on every server): a title slide, then the page's blocks; a
+    /// table ends its slide, so "Nach der Tabelle." begins the next. The bar, a swipe and the arrow keys move between
+    /// slides; ✕ ends it. (Escape too, but XCUITest's Escape key never reaches an iOS app.)
+    func test76_PresentationMode() {
+        let app = launchPage()
+        app.buttons["page-more"].tap()
+        let item = button(app, labels: ["Presentation Mode", "Präsentationsmodus"])
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "“Presentation Mode” missing from the menu")
+        item.tap()
+        let counter = app.staticTexts["presentation-counter"]
+        XCTAssertTrue(counter.waitForExistence(timeout: 5), "The presentation doesn't open")
+        snapshot(app, "76-title")
+        let titleSlide = app.staticTexts["presentation-title"]
+        XCTAssertTrue(titleSlide.isHittable && titleSlide.label == "Editor-Test", "The first slide doesn't show the page title: “\(titleSlide.label)”")
+        // "Slide 2 of 5", "Folie 2 von 5".
+        func slide() -> (number: Int, total: Int) {
+            let numbers = counter.label.split(separator: " ").compactMap { Int($0) }
+            return numbers.count == 2 ? (numbers[0], numbers[1]) : (0, 0)
+        }
+        func showsSlide(_ number: Int) -> Bool {
+            let shown = NSPredicate { _, _ in slide().number == number }
+            return XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: shown, object: nil)], timeout: 5) == .completed
+        }
+        XCTAssertEqual(slide().number, 1, "The presentation doesn't begin with the title: \(counter.label)")
+        let total = slide().total
+        XCTAssertGreaterThanOrEqual(total, 3, "The page doesn't make at least two slides: \(counter.label)")
+
+        app.buttons["presentation-next"].tap()
+        XCTAssertTrue(showsSlide(2), "“Next Slide” doesn't move on: \(counter.label)")
+        snapshot(app, "76-slide-2")
+        app.swipeLeft()
+        XCTAssertTrue(showsSlide(3), "Swiping doesn't move on: \(counter.label)")
+        snapshot(app, "76-slide-3")
+        app.swipeRight()
+        XCTAssertTrue(showsSlide(2), "Swiping back doesn't go back: \(counter.label)")
+        app.typeKey(.rightArrow, modifierFlags: [])
+        XCTAssertTrue(showsSlide(3), "The right arrow key doesn't move on: \(counter.label)")
+        app.typeKey(.leftArrow, modifierFlags: [])
+        XCTAssertTrue(showsSlide(2), "The left arrow key doesn't go back: \(counter.label)")
+
+        // The table's slide ends with it: the paragraph after it begins the next one, without the table.
+        let after = app.staticTexts["Nach der Tabelle."].firstMatch
+        for _ in 0..<total where !after.isHittable {
+            app.buttons["presentation-next"].tap()
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        XCTAssertTrue(after.isHittable, "No slide shows “Nach der Tabelle.”")
+        snapshot(app, "76-after-table")
+        XCTAssertFalse(app.staticTexts["Kopf A"].firstMatch.isHittable, "The table and the paragraph after it share a slide")
+
+        app.buttons["presentation-close"].tap()
+        XCTAssertTrue(counter.waitForNonExistence(timeout: 5), "✕ doesn't end the presentation")
+        XCTAssertTrue(element(app, "page-title").isHittable, "The page isn't back after the presentation")
+    }
+
     /// A pasted link to a page of this server becomes a mention of the page, as on the web (since Docmost 0.10). The
     /// server check expects the test page's mention in the paragraph with "Verweis<stamp>".
     func test74_PastePageLink() throws {
