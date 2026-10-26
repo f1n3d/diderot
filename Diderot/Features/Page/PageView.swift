@@ -48,6 +48,7 @@ struct PageView: View {
     @State private var showsArrange = false
     /// The page for the presentation mode, as it was when it opened (as on the web).
     @State private var presentation: Presentation?
+    @State private var showsAttachments = false
     @State private var confirmsTrash = false
     @State private var showsPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
@@ -260,6 +261,9 @@ struct PageView: View {
         }
         .sheet(isPresented: $showsArrange) {
             if let model { ArrangeSheet(model: model) }
+        }
+        .sheet(isPresented: $showsAttachments) {
+            if let page = state.value { PageAttachmentsView(page: page, canDelete: canDeleteAttachments(of: page)) }
         }
         .sheet(isPresented: Binding(get: { model?.editsLink ?? false }, set: { model?.editsLink = $0 })) {
             if let model { LinkSheet(model: model) }
@@ -897,6 +901,7 @@ struct PageView: View {
         Button("Find on Page", systemImage: "text.magnifyingglass") { openFind() }
             .disabled(showsWebLayout)
         Button("Page History", systemImage: "clock.arrow.circlepath") { showsHistory = true }
+        Button("Attachments", systemImage: "paperclip") { showsAttachments = true }
         Button("Presentation Mode", systemImage: "play.rectangle") { Task { await present(page) } }
         if page.canEdit {
             Divider()
@@ -931,6 +936,12 @@ struct PageView: View {
         let shownTitle: String? = canEditMeta(page) ? title : unsentTitle ?? page.title
         presentation = Presentation(pageId: page.id, title: PageTitle.display(shownTitle),
                                     document: model.map { ContentParser.parse($0.document) } ?? ContentDocument(json: page.content))
+    }
+
+    /// As on the web: the server deletes a page's files since Docmost 0.97, only for space admins who may edit the page.
+    private func canDeleteAttachments(of page: Page) -> Bool {
+        session.ready?.hasDocmost097Features == true && page.canEdit && !page.isInTrash && !offline.isOffline
+            && spaces.state.value?.first { $0.id == page.spaceId }?.role == .admin
     }
 
     /// Title and icon go through REST and need no engine.

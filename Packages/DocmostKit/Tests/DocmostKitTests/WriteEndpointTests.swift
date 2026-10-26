@@ -31,6 +31,19 @@ struct WriteEndpointTests {
         #expect(append["format"] == "markdown")
     }
 
+    @Test func pageAttachmentsListAndDelete() throws {
+        let list = Endpoints.Attachments.list(pageId: "p1", query: "bild")
+        #expect(list.path == "pages/attachments")
+        let listBody = try body(of: list)
+        #expect(listBody["pageId"] == "p1")
+        #expect(listBody["query"] == "bild")
+        #expect(try body(of: Endpoints.Attachments.list(pageId: "p1"))["query"] == nil)
+
+        let delete = Endpoints.Attachments.delete(attachmentId: "a1")
+        #expect(delete.path == "attachments/delete")
+        #expect(try body(of: delete)["attachmentId"] == "a1")
+    }
+
     @Test func deleteAndRestore() throws {
         let trash = try body(of: Endpoints.Pages.delete(pageId: "p1"))
         #expect(trash["permanentlyDelete"] == nil)

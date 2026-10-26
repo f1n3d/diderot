@@ -1708,6 +1708,47 @@ import XCTest
         finishEditing(app)
     }
 
+    /// The page's files, as the web lists them (Docmost 0.96): the script uploads "Anhang<stamp>.txt" to the test page;
+    /// the list finds it by name and opens it in Quick Look. From Docmost 0.97 on a space admin deletes it with a swipe
+    /// and the server check expects it gone; 0.96 can't delete files, so the swipe offers nothing.
+    func test77_PageAttachments() {
+        let app = launchPage()
+        app.buttons["page-more"].tap()
+        let item = button(app, labels: ["Attachments", "Anhänge"])
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "“Attachments” missing from the menu")
+        item.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10), "The attachments list doesn't open")
+        search.tap()
+        search.typeText("Anhang\(stamp)")
+        let file = app.staticTexts["Anhang\(stamp).txt"]
+        XCTAssertTrue(file.waitForExistence(timeout: 10), "The uploaded file isn't listed")
+        snapshot(app, "77-attachments")
+
+        file.tap()
+        let content = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@",
+                                                                             "UI-Test \(stamp)", "UI-Test \(stamp)")).firstMatch
+        XCTAssertTrue(content.waitForExistence(timeout: 10), "Quick Look doesn't show the file")
+        snapshot(app, "77-quick-look")
+        // iOS 26 and later close Quick Look with an ✕ ("Close"), earlier with "Done".
+        button(app, labels: ["Close", "Schließen", "Done", "Fertig"]).tap()
+        XCTAssertTrue(content.waitForNonExistence(timeout: 5), "Quick Look doesn't close")
+
+        file.swipeLeft()
+        let deleteLabels = ["Delete", "Löschen"]
+        let swipeDelete = app.buttons.matching(NSPredicate(format: "label IN %@", deleteLabels)).firstMatch
+        guard serverHasDocmost097 else {
+            XCTAssertFalse(swipeDelete.waitForExistence(timeout: 3), "Swiping offers “Delete”, which Docmost 0.96 can't do")
+            return
+        }
+        XCTAssertTrue(swipeDelete.waitForExistence(timeout: 5), "Swiping shows no “Delete”")
+        swipeDelete.tap()
+        let confirm = app.popovers.firstMatch.buttons.matching(NSPredicate(format: "label IN %@", deleteLabels)).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Deleting asks nothing")
+        confirm.tap()
+        XCTAssertTrue(file.waitForNonExistence(timeout: 10), "The deleted file stays in the list")
+    }
+
     // MARK: - Docmost 0.97 (`PORT=3001 Tools/run-uitests.sh`; skipped on older servers)
 
     /// Tabs: "/reiter" inserts "Tab 1" and "Tab 2" with the cursor in the first; "+" adds a tab and asks for its name;

@@ -618,6 +618,16 @@
         }
       }
     },
+    "Attachments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anhänge"
+          }
+        }
+      }
+    },
     "Audio": {
       "localizations": {
         "de": {
@@ -1413,6 +1423,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diesen synchronisierten Block löschen? Seiten, die ihn einbetten, zeigen dann, dass es ihn nicht mehr gibt."
+          }
+        }
+      }
+    },
+    "Delete “%@”?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ löschen?"
           }
         }
       }
@@ -2918,6 +2938,16 @@
         }
       }
     },
+    "No attachments on this page yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dieser Seite gibt es noch keine Anhänge."
+          }
+        }
+      }
+    },
     "No entries": {
       "localizations": {
         "de": {
@@ -4109,6 +4139,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Suche"
+          }
+        }
+      }
+    },
+    "Search attachments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anhänge suchen"
           }
         }
       }

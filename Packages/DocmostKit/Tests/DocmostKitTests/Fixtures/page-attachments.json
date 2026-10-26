@@ -1,0 +1,61 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a169be-693a-746b-b8ee-df5955f261b3",
+                "fileName": "Bild-20261023-191048.jpeg",
+                "filePath": "01a11a90-f71d-748b-b589-2d4dd2aa3240/files/01a169be-693a-746b-b8ee-df5955f261b3/Bild-20261023-191048.jpeg",
+                "fileSize": 9482,
+                "fileExt": ".jpeg",
+                "mimeType": "image/jpeg",
+                "type": "file",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "pageId": "01a11b76-6cec-7e19-97dc-d9fac5ac27e7",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "aiChatId": null,
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "createdAt": "2026-10-23T17:10:48.892Z",
+                "updatedAt": "2026-10-23T17:10:48.892Z",
+                "deletedAt": null,
+                "creator": {
+                    "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                    "name": "Dev Admin",
+                    "avatarUrl": null
+                },
+                "url": "http://localhost:3000/api/files/01a169be-693a-746b-b8ee-df5955f261b3/Bild-20261023-191048.jpeg"
+            },
+            {
+                "id": "01a16967-a7bd-74ce-b311-bde1378ba0a4",
+                "fileName": "Bild-20261023-173603.jpeg",
+                "filePath": "01a11a90-f71d-748b-b589-2d4dd2aa3240/files/01a16967-a7bd-74ce-b311-bde1378ba0a4/Bild-20261023-173603.jpeg",
+                "fileSize": 6991,
+                "fileExt": ".jpeg",
+                "mimeType": "image/jpeg",
+                "type": "file",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "pageId": "01a11b76-6cec-7e19-97dc-d9fac5ac27e7",
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "aiChatId": null,
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "createdAt": "2026-10-23T15:36:03.265Z",
+                "updatedAt": "2026-10-23T15:36:03.265Z",
+                "deletedAt": null,
+                "creator": {
+                    "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                    "name": "Dev Admin",
+                    "avatarUrl": null
+                },
+                "url": "http://localhost:3000/api/files/01a16967-a7bd-74ce-b311-bde1378ba0a4/Bild-20261023-173603.jpeg"
+            }
+        ],
+        "meta": {
+            "limit": 2,
+            "hasNextPage": true,
+            "hasPrevPage": false,
+            "nextCursor": "aWQ9MDFhMTY5NjctYTdiZC03NGNlLWIzMTEtYmRlMTM3OGJhMGE0",
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}
