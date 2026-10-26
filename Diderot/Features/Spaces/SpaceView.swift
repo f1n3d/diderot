@@ -207,7 +207,7 @@ struct SpaceView: View {
                         TreeRow(row: row, store: store, runner: runner, canEdit: canEdit) {
                             Task { await createPage(parentPageId: row.page.id) }
                         }
-                        .modifier(TreeDragModifier(page: row.page, spaceId: space.id, enabled: canEdit) { draggedId, zone in
+                        .modifier(TreeDragModifier(page: row.page, depth: row.depth, spaceId: space.id, enabled: canEdit, store: store) { draggedId, zone in
                             Task { await movePage(draggedId, relativeTo: row.page, zone: zone) }
                         })
                         if row.id != rows.last?.id {
@@ -416,6 +416,7 @@ private struct TreeRow: View {
         .padding(.trailing, 8)
         .padding(.vertical, 2)
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("tree-row-\(page.id)")
     }
 
     @ViewBuilder
