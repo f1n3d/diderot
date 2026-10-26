@@ -27,7 +27,9 @@ import XCTest
         let pill = element(app, "page-status")
         XCTAssertTrue(pill.waitForExistence(timeout: 40), "Page didn't load")
         let synced = expectation(for: NSPredicate(format: "label IN %@", ["Saved", "Gespeichert"]), evaluatedWith: pill)
-        wait(for: [synced], timeout: 30)
+        // The dev server sometimes answers after 25 s and more: right after the script reset the page, or when the test
+        // before left changes (its collab server stores and unloads the page with a delay first).
+        wait(for: [synced], timeout: 60)
     }
 
     /// Taps a text block at the right end of its last line, which puts the caret at the end, and waits for the editor.
