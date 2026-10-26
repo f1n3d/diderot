@@ -83,6 +83,26 @@ for title in ["Sortiert B", "Sortiert A"]:
 PY
 fi
 
+# Pages below the test page for the tree's drop zones (EditorUITests test79): "Baum-Ziel<stamp>" with the subpage
+# "Baum-Kind<stamp>", then "Baum-Quelle<stamp>". Leftovers of earlier runs go first.
+python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || echo "Could not create the pages for the tree drop test"
+import json, os, re, sys, urllib.request
+stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
+def call(path, body):
+    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
+    request.add_header("Content-Type", "application/json")
+    request.add_header("Authorization", "Bearer " + token)
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read() or b"{}").get("data")
+space = call("pages/info", {"pageId": page})["spaceId"]
+for old in call("pages/sidebar-pages", {"pageId": page, "limit": 100})["items"]:
+    if re.fullmatch(r"Baum-(Ziel|Quelle)\d+", old.get("title") or ""):
+        call("pages/delete", {"pageId": old["id"], "permanentlyDelete": True})
+target = call("pages/create", {"spaceId": space, "parentPageId": page, "title": "Baum-Ziel" + stamp})
+call("pages/create", {"spaceId": space, "parentPageId": target["id"], "title": "Baum-Kind" + stamp})
+call("pages/create", {"spaceId": space, "parentPageId": page, "title": "Baum-Quelle" + stamp})
+PY
+
 # Reset the test page to known content (through Yjs, so the editor sees it too). JSON, since Docmost's Markdown import
 # adds an empty task item after the first paragraph.
 echo "Resetting the test page …"
@@ -141,7 +161,7 @@ case "${AREA:-}" in
   schnell) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test5_ReturnAndBackspace,$E/test6_CreatePageFromSpace,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test42_EditAfterReturningToPage,HomeUITests/test19_SearchTabShowsHomeThenResults,HomeUITests/test50_TrashConfirmationAtRow,BaseUITests/test22_BasePageFromTree,BaseUITests/test25_BaseKanbanColumnsAndCard" ;;
   editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly" ;;
   bloecke) ONLY="$E/test7_DragBlock,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink" ;;
-  seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test32_FindOnPage,$E/test33_Comments,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,HomeUITests" ;;
+  seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test33_Comments,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
   server) ONLY="ServerUITests" ;;
   *) echo "Unknown AREA “$AREA”: schnell, editor, bloecke, seiten, datenbanken or server" >&2; exit 1 ;;
@@ -546,6 +566,29 @@ for label, ok in checks:
 sys.exit(0 if all(ok for _, ok in checks) else 1)
 PY
 fi
+
+# Tree drop zones (EditorUITests test79): "Baum-Quelle<stamp>" ended up in "Baum-Ziel<stamp>", after "Baum-Kind<stamp>".
+# Then deletes both pages with their subpages.
+python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || CHECKS_FAILED=1
+import json, os, sys, urllib.request
+stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
+def call(path, body):
+    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
+    request.add_header("Content-Type", "application/json")
+    request.add_header("Authorization", "Bearer " + token)
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read() or b"{}").get("data")
+made = [p for p in call("pages/sidebar-pages", {"pageId": page, "limit": 100})["items"]
+        if p.get("title") in ("Baum-Ziel" + stamp, "Baum-Quelle" + stamp)]
+target = next((p for p in made if p.get("title") == "Baum-Ziel" + stamp), None)
+children = [p.get("title") for p in call("pages/sidebar-pages", {"pageId": target["id"], "limit": 100})["items"]] if target else []
+ok = children == ["Baum-Kind" + stamp, "Baum-Quelle" + stamp]
+print(("OK     " if ok else "MISSING") + " Tree: Baum-Quelle" + stamp + " in Baum-Ziel" + stamp + " after Baum-Kind" + stamp
+      + " (subpages: " + ", ".join(map(str, children)) + ")")
+for p in made:
+    call("pages/delete", {"pageId": p["id"], "permanentlyDelete": True})
+sys.exit(0 if ok else 1)
+PY
 
 # Page tree: after the drag test, the test page must be the first root page of its space.
 SPACE_ID=$(curl -s -X POST "$DOCMOST_SEED_URL/api/pages/info" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \

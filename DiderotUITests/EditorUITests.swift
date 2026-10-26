@@ -348,8 +348,10 @@ import XCTest
         for _ in 0..<8 where !first.isHittable { app.swipeDown() }
         XCTAssertTrue(first.isHittable && source.exists, "Rows not visible at the same time")
         snapshot(app, "11-before")
+        // The row's top quarter (the title's top would be its middle half already).
+        let firstRow = element(app, "tree-row-" + firstId.dropFirst("page-".count))
         source.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
-            .press(forDuration: 1.2, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)))
+            .press(forDuration: 1.2, thenDragTo: firstRow.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.1)))
         let moved = expectation(for: NSPredicate { _, _ in
             let s = app.buttons["page-\(pageId)"]
             let f = app.buttons[firstId]
@@ -357,6 +359,79 @@ import XCTest
         }, evaluatedWith: nil)
         wait(for: [moved], timeout: 15)
         snapshot(app, "11-after")
+    }
+
+    /// Page tree drop zones, as on the web (`TreeDropZone`). Below the test page the script makes "Baum-Ziel<stamp>"
+    /// with the subpage "Baum-Kind<stamp>", then "Baum-Quelle<stamp>", which is dragged:
+    /// 1. onto the middle of the collapsed "Baum-Ziel": into it, which opens it;
+    /// 2. onto its top quarter: before it, at its level;
+    /// 3. onto the bottom quarter of the open "Baum-Ziel": into it, below "Baum-Kind" (thirds put it after the subpages);
+    /// 4. before it again, then held over the bottom quarter of the collapsed "Baum-Ziel": that opens it, so the page
+    ///    goes into it rather than after it.
+    func test79_TreeDropZones() {
+        let app = launch(openPage: false)
+        let slug = environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo"
+        let space = app.buttons["space-\(slug)"]
+        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card missing")
+        space.tap()
+        let testPage = element(app, "tree-row-\(environment["DOCMOST_DEBUG_PAGE"]!)")
+        XCTAssertTrue(scrollTo(testPage, in: app), "Test page not in the tree")
+        let expand = testPage.buttons.matching(NSPredicate(format: "label IN %@", ["Expand", "Ausklappen"])).firstMatch
+        if expand.exists { expand.tap() }
+        // While its subpages load, the row shows a spinner instead of the chevron.
+        let collapse = testPage.buttons.matching(NSPredicate(format: "label IN %@", ["Collapse", "Einklappen"])).firstMatch
+        XCTAssertTrue(collapse.waitForExistence(timeout: 20), "The test page's subpages don't load")
+        func page(_ name: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'page-' AND label CONTAINS %@", name + stamp)).firstMatch
+        }
+        let target = page("Baum-Ziel"), child = page("Baum-Kind"), source = page("Baum-Quelle")
+        // The tree shows only the rows on screen: scroll to them.
+        XCTAssertTrue(scrollTo(target, in: app), "“Baum-Ziel” missing below the test page")
+        XCTAssertTrue(source.waitForExistence(timeout: 5), "“Baum-Quelle” missing below “Baum-Ziel”")
+        let targetRow = element(app, "tree-row-" + target.identifier.dropFirst("page-".count))
+
+        /// Drags "Baum-Quelle" to `dy` of the "Baum-Ziel" row (0 its top, 1 its bottom), held there for `hold` seconds.
+        func drag(to dy: CGFloat, hold: TimeInterval = 0) {
+            XCTAssertTrue(scrollTo(targetRow, in: app), "“Baum-Ziel” not in the tree")
+            XCTAssertTrue(source.isHittable, "“Baum-Quelle” not visible next to “Baum-Ziel”")
+            let start = source.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+            let end = targetRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: dy))
+            if hold > 0 {
+                start.press(forDuration: 1.2, thenDragTo: end, withVelocity: .default, thenHoldForDuration: hold)
+            } else {
+                start.press(forDuration: 1.2, thenDragTo: end)
+            }
+        }
+        /// Waits until the tree shows the move (it reloads once the server has it).
+        func expect(_ description: String, _ shown: @escaping () -> Bool) {
+            let moved = expectation(for: NSPredicate { _, _ in shown() }, evaluatedWith: nil)
+            moved.expectationDescription = description
+            wait(for: [moved], timeout: 15)
+        }
+        // A subpage's title starts one level (24 points) further right.
+        func isSubpageOfTarget() -> Bool {
+            source.exists && child.exists && abs(source.frame.minX - child.frame.minX) < 2
+                && child.frame.minX > target.frame.minX + 10 && source.frame.minY > child.frame.minY
+        }
+        func isBeforeTarget() -> Bool {
+            source.exists && abs(source.frame.minX - target.frame.minX) < 2 && source.frame.maxY <= target.frame.minY + 1
+        }
+
+        drag(to: 0.5)
+        expect("“Baum-Quelle” goes into the collapsed “Baum-Ziel”, below “Baum-Kind”", isSubpageOfTarget)
+        snapshot(app, "79-1-into")
+        drag(to: 0.1)
+        expect("“Baum-Quelle” goes before “Baum-Ziel”", isBeforeTarget)
+        drag(to: 0.9)
+        expect("“Baum-Quelle” goes into the open “Baum-Ziel”, not after its subpages", isSubpageOfTarget)
+        snapshot(app, "79-3-into-open")
+        drag(to: 0.1)
+        expect("“Baum-Quelle” goes before “Baum-Ziel” again", isBeforeTarget)
+        targetRow.buttons.matching(NSPredicate(format: "label IN %@", ["Collapse", "Einklappen"])).firstMatch.tap()
+        XCTAssertTrue(child.waitForNonExistence(timeout: 5), "“Baum-Ziel” doesn't collapse")
+        drag(to: 0.9, hold: 1.5)
+        expect("Held over the collapsed “Baum-Ziel”, “Baum-Quelle” opens it and goes into it", isSubpageOfTarget)
+        snapshot(app, "79-4-opened")
     }
 
     /// Insert a table and add a row below via the table bar above it.
