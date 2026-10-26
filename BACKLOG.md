@@ -52,6 +52,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 - iPad with two windows: "Comment" in the selection menu always belongs to the page that appeared last; in the other window the entry is missing or opens the sheet in the wrong window (review finding on P21, October 15, 2026).
 
 - iPad with a hardware keyboard (checked on October 23, 2026, simulator only): the editor's UI tests pass there except test10 and test14, which expect the on-screen keyboard (also before the page's one editor). Return and Backspace from a hardware keyboard couldn't be checked reliably in the simulator; to try on a real iPad with a keyboard.
+  - After pasting into the editor through the edit menu, keys from a hardware keyboard can go nowhere until something is typed on the on-screen keyboard or the cursor moves (found on October 26, 2026, simulator only). XCUITest's `typeKey` and `typeText` show it after a pasted link and after plain text, taps on the on-screen keyboard don't. The space search field doesn't have it, and the editor without the app's paste handling does, so it is probably there since 1.0. Whether ⌘V does the same couldn't be checked: XCUITest's ⌘V pasted nothing. Reloading the keyboard (as after a pasted page link turns into its mention) helps only sometimes. To try on a real iPad with a keyboard; test74 types its first key on the on-screen keyboard for this reason.
 
 ## Presentation mode
 
