@@ -74,6 +74,10 @@ Deliberately not yet like the web (found in the code review on October 13, 2026)
 
 - If a space allows comments by readers, readers can also comment on selected text on the web (inline comments). The app doesn't offer readers inline comments.
 
+## Templates
+
+- Creating, editing and deleting templates stays on the web, like the workspace settings (decided on October 26, 2026). Without a license that has them, the app offers no templates; the web shows them disabled with an upgrade hint.
+
 ## Other
 
 - iPhone Duo (checked on October 24, 2026, in the Xcode 27.1 simulator; Apple's guidance: the tech talk "Prepare your app for iPhone Duo"):

@@ -1,0 +1,60 @@
+{
+    "data": {
+        "id": "01a17809-2afe-7e39-a9ca-49b692cd7bd9",
+        "title": "Besprechung",
+        "description": "Notizen einer Besprechung",
+        "icon": "📝",
+        "spaceId": null,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "createdAt": "2026-10-26T11:47:09.182Z",
+        "updatedAt": "2026-10-26T11:47:09.182Z",
+        "content": {
+            "type": "doc",
+            "content": [
+                {
+                    "type": "heading",
+                    "attrs": {
+                        "level": 2
+                    },
+                    "content": [
+                        {
+                            "text": "Agenda",
+                            "type": "text"
+                        }
+                    ]
+                },
+                {
+                    "type": "taskList",
+                    "content": [
+                        {
+                            "type": "taskItem",
+                            "attrs": {
+                                "checked": false
+                            },
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "text": "Punkt",
+                                            "type": "text"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "creator": {
+            "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+            "name": "Dev Admin",
+            "avatarUrl": null
+        }
+    },
+    "success": true,
+    "status": 200
+}

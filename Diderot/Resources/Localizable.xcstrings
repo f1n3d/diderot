@@ -548,6 +548,16 @@
         }
       }
     },
+    "All Templates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Vorlagen"
+          }
+        }
+      }
+    },
     "Appearance": {
       "localizations": {
         "de": {
@@ -2013,6 +2023,26 @@
         }
       }
     },
+    "Get started with": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erste Schritte mit"
+          }
+        }
+      }
+    },
+    "Global": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Global"
+          }
+        }
+      }
+    },
     "Gray": {
       "localizations": {
         "de": {
@@ -2878,6 +2908,16 @@
         }
       }
     },
+    "New Page from Template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Seite aus Vorlage"
+          }
+        }
+      }
+    },
     "New Subpage": {
       "localizations": {
         "de": {
@@ -3074,6 +3114,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keine Unterseiten."
+          }
+        }
+      }
+    },
+    "No templates found": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Vorlagen gefunden"
           }
         }
       }
@@ -4213,6 +4263,16 @@
         }
       }
     },
+    "Search templates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlagen suchen"
+          }
+        }
+      }
+    },
     "Select text first to turn it into a link; otherwise the address is inserted as text.": {
       "localizations": {
         "de": {
@@ -4756,6 +4816,26 @@
         }
       }
     },
+    "Template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlage"
+          }
+        }
+      }
+    },
+    "Templates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlagen"
+          }
+        }
+      }
+    },
     "Text": {
       "localizations": {
         "de": {
@@ -4938,6 +5018,16 @@
         }
       }
     },
+    "This Space": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Bereich"
+          }
+        }
+      }
+    },
     "This board isn't grouped by a select or status property. Set the grouping in the web editor.": {
       "localizations": {
         "de": {
@@ -5054,6 +5144,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diese Seite liegt im Papierkorb."
+          }
+        }
+      }
+    },
+    "This page is no longer empty": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Seite ist nicht mehr leer"
           }
         }
       }
@@ -5346,6 +5446,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wird hochgeladen …"
+          }
+        }
+      }
+    },
+    "Use": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwenden"
+          }
+        }
+      }
+    },
+    "Use Template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlage verwenden"
+          }
+        }
+      }
+    },
+    "Use a Template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Vorlage verwenden"
           }
         }
       }
