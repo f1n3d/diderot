@@ -36,6 +36,39 @@ struct ReaderFixtureTests {
         #expect(document.blocks.count == 15)
     }
 
+    /// Docmost 0.96's list of a page's files: newest first, with who uploaded them and when.
+    @Test func pageAttachmentsWithUploader() throws {
+        let attachments = try TestSupport.decodeFixture(Paginated<DocmostKit.Attachment>.self, "page-attachments")
+        #expect(attachments.items.count == 2)
+        #expect(attachments.meta.hasNextPage)
+        let newest = try #require(attachments.items.first)
+        #expect(newest.fileName == "Bild-20261023-191048.jpeg")
+        #expect(newest.fileSize == 9482)
+        #expect(newest.isImage)
+        #expect(newest.creator?.name == "Dev Admin")
+        let createdAt = try #require(newest.createdAt)
+        #expect(createdAt > (attachments.items.last?.createdAt ?? .distantFuture))
+        #expect(newest.fileURLPath == "/api/files/01a169be-693a-746b-b8ee-df5955f261b3/Bild-20261023-191048.jpeg")
+    }
+
+    /// Templates (Enterprise feature `templates`): the list leaves the content out, `templates/info` brings it.
+    @Test func templatesListAndInfo() throws {
+        let templates = try TestSupport.decodeFixture(Paginated<PageTemplate>.self, "templates")
+        #expect(templates.items.map(\.displayTitle) == ["Besprechung", "Projekt"])
+        let global = try #require(templates.items.first)
+        #expect(global.spaceId == nil)
+        #expect(global.icon == "📝")
+        #expect(global.description == "Notizen einer Besprechung")
+        #expect(global.content == nil)
+        #expect(templates.items.last?.spaceId != nil)
+
+        let info = try TestSupport.decodeFixture(PageTemplate.self, "template-info")
+        #expect(info.id == global.id)
+        let document = ContentDocument(json: info.content)
+        #expect(document.blocks.count == 2)
+        #expect(document.blocks.first?.plainText == "Agenda")
+    }
+
     @Test func transclusionLookupStatuses() throws {
         let lookup = try TestSupport.decodeFixture(TransclusionLookup.self, "transclusion-lookup")
         #expect(lookup.items.count == 2)

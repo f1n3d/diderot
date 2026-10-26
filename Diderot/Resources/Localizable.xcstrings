@@ -548,6 +548,16 @@
         }
       }
     },
+    "All Templates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Vorlagen"
+          }
+        }
+      }
+    },
     "Appearance": {
       "localizations": {
         "de": {
@@ -614,6 +624,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Anhang"
+          }
+        }
+      }
+    },
+    "Attachments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anhänge"
           }
         }
       }
@@ -1417,6 +1437,16 @@
         }
       }
     },
+    "Delete “%@”?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ löschen?"
+          }
+        }
+      }
+    },
     "Deleted %@": {
       "localizations": {
         "de": {
@@ -1989,6 +2019,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Voller Zugriff"
+          }
+        }
+      }
+    },
+    "Get started with": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erste Schritte mit"
+          }
+        }
+      }
+    },
+    "Global": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Global"
           }
         }
       }
@@ -2858,6 +2908,16 @@
         }
       }
     },
+    "New Page from Template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Seite aus Vorlage"
+          }
+        }
+      }
+    },
     "New Subpage": {
       "localizations": {
         "de": {
@@ -2914,6 +2974,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keine App kann diesen Link öffnen."
+          }
+        }
+      }
+    },
+    "No attachments on this page yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dieser Seite gibt es noch keine Anhänge."
           }
         }
       }
@@ -3044,6 +3114,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keine Unterseiten."
+          }
+        }
+      }
+    },
+    "No templates found": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Vorlagen gefunden"
           }
         }
       }
@@ -4113,6 +4193,16 @@
         }
       }
     },
+    "Search attachments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anhänge suchen"
+          }
+        }
+      }
+    },
     "Search failed": {
       "localizations": {
         "de": {
@@ -4169,6 +4259,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Seiten suchen"
+          }
+        }
+      }
+    },
+    "Search templates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlagen suchen"
           }
         }
       }
@@ -4716,6 +4816,26 @@
         }
       }
     },
+    "Template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlage"
+          }
+        }
+      }
+    },
+    "Templates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlagen"
+          }
+        }
+      }
+    },
     "Text": {
       "localizations": {
         "de": {
@@ -4898,6 +5018,16 @@
         }
       }
     },
+    "This Space": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Bereich"
+          }
+        }
+      }
+    },
     "This board isn't grouped by a select or status property. Set the grouping in the web editor.": {
       "localizations": {
         "de": {
@@ -5014,6 +5144,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diese Seite liegt im Papierkorb."
+          }
+        }
+      }
+    },
+    "This page is no longer empty": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Seite ist nicht mehr leer"
           }
         }
       }
@@ -5306,6 +5446,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wird hochgeladen …"
+          }
+        }
+      }
+    },
+    "Use": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwenden"
+          }
+        }
+      }
+    },
+    "Use Template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlage verwenden"
+          }
+        }
+      }
+    },
+    "Use a Template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Vorlage verwenden"
           }
         }
       }

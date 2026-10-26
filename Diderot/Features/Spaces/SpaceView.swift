@@ -13,6 +13,7 @@ struct SpaceView: View {
     @State private var recent: LoadState<[Page]> = .idle
     @State private var search: SearchModel
     @State private var isCreatingPage = false
+    @State private var showsTemplates = false
     @FocusState private var searchFocused: Bool
 
     private enum Mode: Hashable { case hierarchy, recent }
@@ -24,6 +25,8 @@ struct SpaceView: View {
     }
 
     private var canEdit: Bool { space.membership?.canEditPages ?? false }
+    /// Templates need the Enterprise feature; without it the web shows them disabled, the app not at all.
+    private var offersTemplates: Bool { session.ready?.entitlements.has("templates") == true }
 
     var body: some View {
         ScrollView {
@@ -65,12 +68,24 @@ struct SpaceView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if canEdit {
-                Button {
-                    Task { await createPage(parentPageId: nil) }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.title2.weight(.semibold))
-                        .frame(width: 56, height: 56)
+                Group {
+                    if offersTemplates {
+                        // A tap creates a page at once; held, it offers a template, as Safari's "+" offers more.
+                        Menu {
+                            Button("New Page from Template", systemImage: "doc.on.doc") { showsTemplates = true }
+                        } label: {
+                            newPageLabel
+                        } primaryAction: {
+                            Task { await createPage(parentPageId: nil) }
+                        }
+                        .menuStyle(.button)
+                    } else {
+                        Button {
+                            Task { await createPage(parentPageId: nil) }
+                        } label: {
+                            newPageLabel
+                        }
+                    }
                 }
                 .buttonStyle(.glassProminent)
                 .buttonBorderShape(.circle)
@@ -80,6 +95,9 @@ struct SpaceView: View {
                 .accessibilityIdentifier("space-new-page")
                 .keyboardShortcut("n", modifiers: .command)
             }
+        }
+        .sheet(isPresented: $showsTemplates) {
+            TemplatePickerView(spaceId: space.id) { template in try await createPage(from: template) }
         }
         .modifier(OptionalPageActionSheets(runner: runner))
         .onChange(of: changes.version) { _, _ in
@@ -314,6 +332,19 @@ struct SpaceView: View {
         } catch {
             runner?.toast = error.userMessage
         }
+    }
+
+    private var newPageLabel: some View {
+        Image(systemName: "plus")
+            .font(.title2.weight(.semibold))
+            .frame(width: 56, height: 56)
+    }
+
+    /// A new page from a template at the top of the space, as the web's space menu creates it; it opens.
+    private func createPage(from template: PageTemplate) async throws {
+        let created = try await session.send(Endpoints.Templates.use(templateId: template.id, spaceId: space.id))
+        changes.pageChanged(in: space.id)
+        navigation.open(PageSelection(page: created))
     }
 
     private func loadRecent() async {
