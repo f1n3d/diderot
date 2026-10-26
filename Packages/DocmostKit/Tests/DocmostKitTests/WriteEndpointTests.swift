@@ -44,6 +44,25 @@ struct WriteEndpointTests {
         #expect(try body(of: delete)["attachmentId"] == "a1")
     }
 
+    @Test func templatesAndDatabaseConversion() throws {
+        let space = try body(of: Endpoints.Templates.list(spaceId: "s1"))
+        #expect(space["spaceId"] == "s1")
+        #expect(try body(of: Endpoints.Templates.list())["spaceId"] == nil)
+        #expect(Endpoints.Templates.info(templateId: "t1").path == "templates/info")
+
+        let use = Endpoints.Templates.use(templateId: "t1", spaceId: "s1")
+        #expect(use.path == "templates/use")
+        let useBody = try body(of: use)
+        #expect(useBody["templateId"] == "t1")
+        #expect(useBody["spaceId"] == "s1")
+        #expect(useBody["parentPageId"] == nil)
+
+        let kanban = try body(of: Endpoints.Bases.convert(pageId: "p1", template: "kanban"))
+        #expect(kanban["pageId"] == "p1")
+        #expect(kanban["template"] == "kanban")
+        #expect(try body(of: Endpoints.Bases.convert(pageId: "p1"))["template"] == nil)
+    }
+
     @Test func deleteAndRestore() throws {
         let trash = try body(of: Endpoints.Pages.delete(pageId: "p1"))
         #expect(trash["permanentlyDelete"] == nil)

@@ -127,6 +127,29 @@ while IFS='=' read -r key value; do
   case "$key" in DOCMOST_UITEST_BASE|DOCMOST_UITEST_BASE_HOST|DOCMOST_UITEST_BASE_FULL|DOCMOST_UITEST_BASE_NESTED|DOCMOST_UITEST_BASE_IDS) export "TEST_RUNNER_$key=$value" ;; esac
 done < <(Tools/seed-bases.py "$PAGE" || echo "Could not create database test data" >&2)
 
+# Templates for EditorUITests test78 (Enterprise feature `templates`): "Vorlage<stamp> Bereich" of the test page's space
+# and "Vorlage<stamp> Global"; their IDs for the check and clean-up below. Without the license nothing is made.
+TEMPLATES=$(python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || true
+import json, os, sys, urllib.request
+stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
+def call(path, body):
+    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
+    request.add_header("Content-Type", "application/json")
+    request.add_header("Authorization", "Bearer " + token)
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read() or b"{}").get("data")
+space = call("pages/info", {"pageId": page})["spaceId"]
+content = {"type": "doc", "content": [
+    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Agenda" + stamp}]},
+    {"type": "paragraph", "content": [{"type": "text", "text": "Aus der Vorlage"}]}]}
+made = [call("templates/create", {"title": "Vorlage" + stamp + " Bereich", "spaceId": space, "content": content})["id"],
+        call("templates/create", {"title": "Vorlage" + stamp + " Global", "icon": "📝", "content": content})["id"]]
+print(",".join(made))
+PY
+)
+[ -n "$TEMPLATES" ] || echo "No templates for the template test (license?)"
+export TEST_RUNNER_DOCMOST_UITEST_TEMPLATES="$TEMPLATES"
+
 export TEST_RUNNER_DOCMOST_DEBUG_SERVER="${DOCMOST_DEBUG_SERVER-$DEFAULT_SERVER}"
 export TEST_RUNNER_DOCMOST_DEBUG_EMAIL="${DOCMOST_DEBUG_EMAIL-$DEV_ADMIN_EMAIL}"
 export TEST_RUNNER_DOCMOST_DEBUG_PASSWORD="${DOCMOST_DEBUG_PASSWORD-$DEV_ADMIN_PASSWORD}"
@@ -357,6 +380,41 @@ checks = [
 ]
 for label, ok in checks:
     print(("OK     " if ok else "MISSING") + " " + label)
+sys.exit(0 if all(ok for _, ok in checks) else 1)
+PY
+fi
+
+# Templates (EditorUITests test78): the page from the space's template and the empty page filled from the global one,
+# both with the template's content. Then deletes them and the templates.
+if [ -n "$TEMPLATES" ]; then
+python3 - "$STAMP" "$PAGE" "$TOKEN" "$TEMPLATES" <<'PY' || CHECKS_FAILED=1
+import json, os, sys, urllib.request
+stamp, page, token, templates = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split(",")
+def call(path, body):
+    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
+    request.add_header("Content-Type", "application/json")
+    request.add_header("Authorization", "Bearer " + token)
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read() or b"{}").get("data")
+def plain(node):
+    if isinstance(node, dict):
+        return (node.get("text") or "") + "".join(plain(child) for child in node.get("content") or [])
+    return ""
+space = call("pages/info", {"pageId": page})["spaceId"]
+roots = call("pages/sidebar-pages", {"spaceId": space, "limit": 100})["items"]
+made = {title: next((p for p in roots if p.get("title") == title), None)
+        for title in ["Vorlage" + stamp + " Bereich", "Vorlage" + stamp + " Global"]}
+checks = []
+for title, found in made.items():
+    content = call("pages/info", {"pageId": found["id"], "format": "json"})["content"] if found else None
+    checks.append(("Templates: page " + title + " with Agenda" + stamp, found is not None and ("Agenda" + stamp) in plain(content)))
+for label, ok in checks:
+    print(("OK     " if ok else "MISSING") + " " + label)
+for found in made.values():
+    if found:
+        call("pages/delete", {"pageId": found["id"], "permanentlyDelete": True})
+for template in templates:
+    call("templates/delete", {"templateId": template})
 sys.exit(0 if all(ok for _, ok in checks) else 1)
 PY
 fi

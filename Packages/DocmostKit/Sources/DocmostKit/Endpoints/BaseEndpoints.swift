@@ -45,6 +45,17 @@ extension Endpoints {
             .post("bases/create", body: CreateBody(parentPageId: parentPageId, template: template))
         }
 
+        public struct ConvertBody: Encodable, Sendable {
+            public let pageId: String
+            public var template: String?
+        }
+
+        /// Turns an empty page into a database (Docmost 0.95), as the web's "Get started with" does: with `template:
+        /// "kanban"` it gets a kanban view, otherwise a table view.
+        public static func convert(pageId: String, template: String? = nil) -> Endpoint<NoContent> {
+            .post("bases/convert", body: ConvertBody(pageId: pageId, template: template))
+        }
+
         public struct CreateRowBody: Encodable, Sendable {
             public let pageId: String
             public var cells: [String: JSONValue]

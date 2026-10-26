@@ -27,6 +27,27 @@ struct DocumentModelTests {
         #expect(engine.saved.map(\.plainText) == ["Hello!", "Hello!?"])
     }
 
+    /// "Get started with" fills only a blank page (one empty line, as the web's `editor.isEmpty`): a template's blocks
+    /// replace that line; on a page someone typed into meanwhile nothing changes.
+    @Test func templateFillsOnlyABlankPage() async throws {
+        let template = [PMNode(type: "heading", attrs: ["level": 2], content: [PMNode(type: "text", text: "Agenda")]),
+                        PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Punkt")])]
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph")]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        #expect(model.isBlank)
+        #expect(await model.fill(with: template))
+        #expect(engine.replaced == [.path([0], type: "paragraph")])
+        #expect(engine.replacedWith == [template])
+
+        engine.document = PMNode(type: "doc", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "x")])])
+        model.syncFromEngine()
+        #expect(!model.isBlank)
+        #expect(await model.fill(with: template) == false)
+        #expect(engine.replacedWith.count == 1)
+    }
+
     /// Switching the list type before the debounced save drops it, as the new list has the text (pending, it would hide
     /// a collaborator's later edit and overwrite it on leaving); the item reopens with the text despite an older event.
     @Test(.timeLimit(.minutes(1))) func listTypeSwitchDropsPendingSave() async throws {
