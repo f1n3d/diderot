@@ -14,11 +14,8 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 
 ## App Store
 
-Decided on October 22, 2026, for later:
-
-- Free, with voluntary tips as in-app purchases (as Swift Paperless does), a privacy policy, a support address, and a test server with an account for Apple's reviewers.
-- A personal developer account (a sole proprietorship isn't a legal entity, so the own name appears as the seller); classify the trader status under the Digital Services Act.
-- The name "Diderot" has no current trademark entries in the EU and Germany (TMview, October 22, 2026); look at the few entries elsewhere before (countries, classes, goods). App Store Connect can leave out countries.
+- Voluntary tips as in-app purchases, as Swift Paperless does (decided on October 22, 2026; after version 1.1, decided on October 25, 2026). They need Apple's Paid Apps agreement with tax and bank details, the purchases themselves and their own review; the trader status under the Digital Services Act may change with them.
+- The name "Diderot" has no current trademark entries in the EU and Germany (TMview, October 22, 2026); the few entries elsewhere weren't looked into. The app is offered in every country but mainland China.
 
 ## Editor
 
@@ -34,9 +31,9 @@ Decided on October 22, 2026, for later:
   - Backspace at a block's start comes from a hook on the editor's text view class (SwiftUI's TextEditor doesn't report it). Should Apple build TextEditor differently, Backspace there would stop joining blocks (UI tests test5 and test44 notice it); an own UIKit text view would avoid the hook.
   - Typing right after Return, before the new block is active (about 0.1 s in the simulator), lands in the old block; the block editors dropped it.
 - With two app windows (iPad Stage Manager, external display), the edited line can sit wrongly above the keyboard, because the keyboard's position isn't converted into the page's window (review finding F32, postponed on October 12, 2026).
-- Newer Docmost servers: if the server reports a version after 0.96, the app opens pages read-only (October 22, 2026).
+- Newer Docmost servers: if the server reports a version after 0.97, the app opens pages read-only (October 22, 2026; 0.97 since version 1.1).
   - It asks for the version when signing in and when the app starts, so it notices a server update during a session only afterwards.
-  - If the server reports no version (its GitHub check fails or takes over 3 s, Docmost Cloud), pages stay editable and only the content check on opening protects them (review finding F384). What a newer web client inserts during editing can then still be deleted by the app, as can unknown attributes of known blocks when the block changes.
+  - Docmost names its version only after asking GitHub for its latest release; it names none when GitHub refuses (60 requests an hour from one address) or a proxy blocks it, and the app waits at most 3 s for it. The app then keeps the version the server named last (since version 1.1). If the server never named one (Docmost Cloud, or never since the first sign-in), pages stay editable and only the content check on opening protects them (review finding F384), and what 0.97 brought (tabs, integration links, sorted sub-pages) can't be added. What a newer web client inserts during editing can then still be deleted by the app, as can unknown attributes of known blocks when the block changes.
 - Toggling, callout type, code language and columns reach blocks by their position. If a collaborator moves blocks above in the roughly 150 ms before the tap, the change hits the wrong block. Very rare; to be solved for all of these places together (review finding on F45, October 14, 2026).
 - The app shows justified text left-aligned when reading and editing; the web justifies it (review note on F46, October 14, 2026). Checked on October 21, 2026: SwiftUI's Text and TextEditor can't justify, also in iOS 27.1 (only left, center, right). It would take a UIKit text view for such paragraphs, rebuilding links, comments, search and text selection, so it's postponed. Justification is kept when saving.
 - Page titles (review findings on N18, October 15, 2026):
@@ -87,4 +84,4 @@ Deliberately not yet like the web (found in the code review on October 13, 2026)
   - The check "New paragraph: Taste… bold from Cmd-B" (test2) sometimes misses ⌘B: the word stays selected but not bold. Rarer since pauses around ⌘B; once in four runs on October 21, 2026; on October 22, 2026, after many runs twice in a row, and green again after restarting the simulator. So rather the simulator's state than the app.
   - test35 sometimes took about 60 s longer ("App animations complete notification not received" when handing over the emoji).
 - Not for the Mac (decided on October 25, 2026: on a Mac, Docmost's web client does the job). Its availability for Macs with Apple silicon is turned off in App Store Connect (Pricing and Availability; the API has no field for it). One more reason: on a Mac with macOS 27.0.1, writing a file with `.completeFileProtection` fails with EPERM, also outside a sandbox (`.completeFileProtectionUntilFirstUserAuthentication` works), so the offline cache would stay empty there; for the same reason DocmostKit's `DiskCacheTests` fail on such a Mac (GitHub's runners and iPhones are fine).
-- Unit tests on GitHub's runners: `formulaRendersAgainAfterItsWebProcessEnded`, `keepsItsContentOnReturn` (MediaBlockViewTests) and `lateReconnectKeepsTheSwitch` (AppSessionRaceTests) failed there before October 23, 2026, never locally; since then the first wait up to 20 s and the last one's hook waits for the reconnect's own request. If one fails there again, look further.
+- Unit tests on GitHub's runners: `keepsItsContentOnReturn` (MediaBlockViewTests) and `lateReconnectKeepsTheSwitch` (AppSessionRaceTests) failed there before October 23, 2026, never locally; since then MediaBlockViewTests wait up to 20 s, and the second one's hook waits for the reconnect's own request. If one fails there again, look further. `formulaRendersAgainAfterItsWebProcessEnded` failed there twice more (October 24 and 25, 2026): GitHub's simulator sometimes doesn't let the app end the web process (RunningBoard: "Client not entitled"); the test is cancelled then and shows as skipped.
