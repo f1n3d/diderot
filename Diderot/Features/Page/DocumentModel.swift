@@ -410,6 +410,12 @@ final class DocumentModel {
     }
 
     var isEditable: Bool { engine != nil && isLive && readOnlyReason == nil }
+    /// Nothing but an empty first line, as the web's `editor.isEmpty`: the page offers to start with a template or a
+    /// database (`GetStartedRow`).
+    var isBlank: Bool {
+        let blocks = document.children
+        return blocks.isEmpty || (blocks.count == 1 && blocks[0].type == "paragraph" && blocks[0].children.isEmpty)
+    }
     /// No blocks, or read-only with one empty paragraph. Not `plainText`: a lone mention, image or divider is content.
     var showsEmptyPlaceholder: Bool {
         let blocks = document.children
@@ -1733,6 +1739,16 @@ final class DocumentModel {
     func unsyncReference(_ reference: PMNode, at ref: NodeRef, content nodes: [PMNode]) async {
         guard let path = node(at: ref.path) == reference ? ref.path : path(where: { $0 == reference }) else { return }
         await replace(NodeRef(path: path, node: reference), withNodes: nodes)
+    }
+
+    /// Puts a template's blocks into a blank page, as the web's "Get started with" does; `false` once it isn't blank.
+    func fill(with nodes: [PMNode]) async -> Bool {
+        guard let engine, isBlank, !nodes.isEmpty else { return false }
+        if active != nil { deactivate() }
+        guard let first = topLevel.first else {
+            return report(await engine.insertBlocks(nodes, relativeTo: nil, position: .after))
+        }
+        return report(await engine.replaceBlock(first.ref.target, withNodes: nodes))
     }
 
     /// Replaces a block with others (unsyncing: the content instead of the wrapper or the reference).

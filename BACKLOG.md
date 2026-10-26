@@ -45,13 +45,18 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 - Offline and background (review findings on F182 and F183, October 15, 2026):
   - With the same page open offline in two iPad windows, the second window can delete or overwrite the first one's saved changes when leaving.
   - Changes not yet sent stay on the device after signing out, until the same person signs in there again (October 22, 2026). A server signed out of is no longer in the list, so they can then only be deleted together with the app.
-  - If the device is online but the server unreachable without refusing the connection (e.g. behind a disconnected VPN), the app's start waits up to its 30 s timeout before showing saved content (October 22, 2026). Without a network (airplane mode) the app starts at once.
+  - A server that doesn't answer without refusing the connection (e.g. behind a disconnected VPN): with saved content the start shows it after 5 s and tries once more in the background (October 26, 2026); after that, only the return to the app or of the network tries again. Without saved content (e.g. iOS cleared the cache) the start waits for the requests' 30 s timeout.
   - For very old pages without a stored Yjs document, syncing changes made offline can duplicate the content (as on the web).
 - Media (review findings on F167, F164 and F43, October 15, 2026):
   - Blocks can be dragged while the editor isn't connected, but then dropped nowhere. A long press on text keeps selecting text meanwhile (checked on the iPhone on October 22, 2026).
 - iPad with two windows: "Comment" in the selection menu always belongs to the page that appeared last; in the other window the entry is missing or opens the sheet in the wrong window (review finding on P21, October 15, 2026).
 
 - iPad with a hardware keyboard (checked on October 23, 2026, simulator only): the editor's UI tests pass there except test10 and test14, which expect the on-screen keyboard (also before the page's one editor). Return and Backspace from a hardware keyboard couldn't be checked reliably in the simulator; to try on a real iPad with a keyboard.
+
+## Presentation mode
+
+- A presenter view for an external display: the slides on the TV, controls and the next slide on the iPhone (decided on October 26, 2026, for later). Today iOS mirrors the screen.
+- On an iPad the system's own pointer stays visible under the laser pointer's dot; the web hides the cursor. SwiftUI can't hide it on iOS (`pointerVisibility` is macOS only), UIKit could with a `UIPointerInteraction`.
 
 ## Databases
 
@@ -68,6 +73,10 @@ As of stage 2 (editing, creating, deleting, moving). Deliberately still on the w
 Deliberately not yet like the web (found in the code review on October 13, 2026):
 
 - If a space allows comments by readers, readers can also comment on selected text on the web (inline comments). The app doesn't offer readers inline comments.
+
+## Templates
+
+- Creating, editing and deleting templates stays on the web, like the workspace settings (decided on October 26, 2026). Without a license that has them, the app offers no templates; the web shows them disabled with an upgrade hint.
 
 ## Other
 

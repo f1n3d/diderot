@@ -1,0 +1,49 @@
+{
+    "data": {
+        "items": [
+            {
+                "id": "01a17809-2afe-7e39-a9ca-49b692cd7bd9",
+                "title": "Besprechung",
+                "description": "Notizen einer Besprechung",
+                "icon": "📝",
+                "spaceId": null,
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-26T11:47:09.182Z",
+                "updatedAt": "2026-10-26T11:47:09.182Z",
+                "creator": {
+                    "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                    "name": "Dev Admin",
+                    "avatarUrl": null
+                }
+            },
+            {
+                "id": "01a17809-2b04-773f-ae18-a77b121a82cc",
+                "title": "Projekt",
+                "description": null,
+                "icon": null,
+                "spaceId": "01a11ad8-2d11-7712-9c71-b207a3853ba2",
+                "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+                "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "lastUpdatedById": "01a11a90-f71c-707b-ba76-800020050b3d",
+                "createdAt": "2026-10-26T11:47:09.188Z",
+                "updatedAt": "2026-10-26T11:47:09.188Z",
+                "creator": {
+                    "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+                    "name": "Dev Admin",
+                    "avatarUrl": null
+                }
+            }
+        ],
+        "meta": {
+            "limit": 10,
+            "hasNextPage": false,
+            "hasPrevPage": false,
+            "nextCursor": null,
+            "prevCursor": null
+        }
+    },
+    "success": true,
+    "status": 200
+}

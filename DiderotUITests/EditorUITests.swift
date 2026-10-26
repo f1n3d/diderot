@@ -271,6 +271,61 @@ import XCTest
         XCTAssertTrue(row.waitForNonExistence(timeout: 10), "Page still in the trash after deleting it permanently")
     }
 
+    /// Templates (Enterprise feature `templates`), as on the web; the script makes "Vorlage<stamp> Bereich" for the
+    /// test space and "Vorlage<stamp> Global". Holding the space's "+" offers a template: "This Space" lists the space's
+    /// own, its preview shows the content, "Use Template" makes the page. A new, empty page offers "Get started with"
+    /// databases and a template: "Use" on the global one fills the page and gives it the template's title. The server
+    /// check expects both pages with the template's content, then deletes them and the templates.
+    func test78_Templates() throws {
+        try XCTSkipIf((environment["DOCMOST_UITEST_TEMPLATES"] ?? "").isEmpty, "No templates on this server (license)")
+        let app = launch(openPage: false)
+        let space = app.buttons["space-\(environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo")"]
+        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card missing")
+        space.tap()
+        let fab = app.buttons["space-new-page"]
+        XCTAssertTrue(fab.waitForExistence(timeout: 20), "“+” missing")
+        fab.press(forDuration: 1.2)
+        let fromTemplate = button(app, labels: ["New Page from Template", "Neue Seite aus Vorlage"])
+        XCTAssertTrue(fromTemplate.waitForExistence(timeout: 5), "Holding “+” offers no template")
+        fromTemplate.tap()
+        let spaceTemplate = app.staticTexts["Vorlage\(stamp) Bereich"]
+        XCTAssertTrue(spaceTemplate.waitForExistence(timeout: 10), "“This Space” doesn't list the space's template")
+        XCTAssertFalse(app.staticTexts["Vorlage\(stamp) Global"].exists, "“This Space” lists the global template")
+        snapshot(app, "78-picker")
+        spaceTemplate.tap()
+        XCTAssertTrue(app.staticTexts["Agenda\(stamp)"].waitForExistence(timeout: 10), "The preview doesn't show the content")
+        app.buttons["template-use"].tap()
+        let title = element(app, "page-title")
+        XCTAssertTrue(title.waitForExistence(timeout: 20), "The page from the template doesn't open")
+        XCTAssertTrue(app.staticTexts["Agenda\(stamp)"].waitForExistence(timeout: 20), "The new page lacks the template's content")
+        XCTAssertEqual(title.value as? String, "Vorlage\(stamp) Bereich", "The new page lacks the template's title")
+        snapshot(app, "78-from-template")
+
+        backButton(app).tap()
+        XCTAssertTrue(fab.waitForExistence(timeout: 10), "Back in the space, “+” is missing")
+        fab.tap()
+        XCTAssertTrue(element(app, "page-title").waitForExistence(timeout: 20), "The new page doesn't open")
+        waitForSync(app)
+        let chip = app.buttons["get-started-template"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 10), "The empty page offers no template")
+        XCTAssertTrue(app.buttons["get-started-database"].exists && app.buttons["get-started-kanban"].exists,
+                      "The empty page offers no databases")
+        snapshot(app, "78-get-started")
+        chip.tap()
+        let all = button(app, labels: ["All Templates", "Alle Vorlagen"])
+        XCTAssertTrue(all.waitForExistence(timeout: 10), "The picker offers no “All Templates”")
+        all.tap()
+        let use = app.buttons["template-use-Vorlage\(stamp) Global"]
+        XCTAssertTrue(use.waitForExistence(timeout: 10), "“All Templates” lacks the global template")
+        use.tap()
+        XCTAssertTrue(app.staticTexts["Agenda\(stamp)"].waitForExistence(timeout: 20), "The template doesn't fill the page")
+        let filledTitle = element(app, "page-title"), globalTitle = "Vorlage\(stamp) Global"
+        let titled = NSPredicate { _, _ in filledTitle.value as? String == globalTitle }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: titled, object: nil)], timeout: 10), .completed,
+                       "The filled page doesn't take the template's title: “\(filledTitle.value ?? "")”")
+        snapshot(app, "78-filled")
+    }
+
     /// Long-press a block and drag it onto the heading: "Letzter Absatz" lands before "Überschrift".
     func test7_DragBlock() {
         let app = launchPage()
@@ -1593,6 +1648,62 @@ import XCTest
         finishEditing(app)
     }
 
+    /// Presentation mode as on the web (Docmost 0.97, here on every server): a title slide, then the page's blocks; a
+    /// table ends its slide, so "Nach der Tabelle." begins the next. The bar, a swipe and the arrow keys move between
+    /// slides; ✕ ends it. (Escape too, but XCUITest's Escape key never reaches an iOS app.)
+    func test76_PresentationMode() {
+        let app = launchPage()
+        app.buttons["page-more"].tap()
+        let item = button(app, labels: ["Presentation Mode", "Präsentationsmodus"])
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "“Presentation Mode” missing from the menu")
+        item.tap()
+        let counter = app.staticTexts["presentation-counter"]
+        XCTAssertTrue(counter.waitForExistence(timeout: 5), "The presentation doesn't open")
+        snapshot(app, "76-title")
+        let titleSlide = app.staticTexts["presentation-title"]
+        XCTAssertTrue(titleSlide.isHittable && titleSlide.label == "Editor-Test", "The first slide doesn't show the page title: “\(titleSlide.label)”")
+        // "Slide 2 of 5", "Folie 2 von 5".
+        func slide() -> (number: Int, total: Int) {
+            let numbers = counter.label.split(separator: " ").compactMap { Int($0) }
+            return numbers.count == 2 ? (numbers[0], numbers[1]) : (0, 0)
+        }
+        func showsSlide(_ number: Int) -> Bool {
+            let shown = NSPredicate { _, _ in slide().number == number }
+            return XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: shown, object: nil)], timeout: 5) == .completed
+        }
+        XCTAssertEqual(slide().number, 1, "The presentation doesn't begin with the title: \(counter.label)")
+        let total = slide().total
+        XCTAssertGreaterThanOrEqual(total, 3, "The page doesn't make at least two slides: \(counter.label)")
+
+        app.buttons["presentation-next"].tap()
+        XCTAssertTrue(showsSlide(2), "“Next Slide” doesn't move on: \(counter.label)")
+        snapshot(app, "76-slide-2")
+        app.swipeLeft()
+        XCTAssertTrue(showsSlide(3), "Swiping doesn't move on: \(counter.label)")
+        snapshot(app, "76-slide-3")
+        app.swipeRight()
+        XCTAssertTrue(showsSlide(2), "Swiping back doesn't go back: \(counter.label)")
+        app.typeKey(.rightArrow, modifierFlags: [])
+        XCTAssertTrue(showsSlide(3), "The right arrow key doesn't move on: \(counter.label)")
+        app.typeKey(.leftArrow, modifierFlags: [])
+        XCTAssertTrue(showsSlide(2), "The left arrow key doesn't go back: \(counter.label)")
+
+        // The table's slide ends with it: the paragraph after it begins the next one, without the table. (test52 types
+        // at the paragraph's start.)
+        let after = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nach der Tabelle.")).firstMatch
+        for _ in 0..<total where !after.isHittable {
+            app.buttons["presentation-next"].tap()
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        XCTAssertTrue(after.isHittable, "No slide shows “Nach der Tabelle.”")
+        snapshot(app, "76-after-table")
+        XCTAssertFalse(app.staticTexts["Kopf A"].firstMatch.isHittable, "The table and the paragraph after it share a slide")
+
+        app.buttons["presentation-close"].tap()
+        XCTAssertTrue(counter.waitForNonExistence(timeout: 5), "✕ doesn't end the presentation")
+        XCTAssertTrue(element(app, "page-title").isHittable, "The page isn't back after the presentation")
+    }
+
     /// A pasted link to a page of this server becomes a mention of the page, as on the web (since Docmost 0.10). The
     /// server check expects the test page's mention in the paragraph with "Verweis<stamp>".
     func test74_PastePageLink() throws {
@@ -1658,6 +1769,47 @@ import XCTest
         snapshot(app, "75-typed")
         XCTAssertTrue(waitForText(editor, contains: "Halten\(stamp)Letzter"), "Holding another paragraph doesn't put the caret where the finger was: “\(editor.value ?? "")”")
         finishEditing(app)
+    }
+
+    /// The page's files, as the web lists them (Docmost 0.96): the script uploads "Anhang<stamp>.txt" to the test page;
+    /// the list finds it by name and opens it in Quick Look. From Docmost 0.97 on a space admin deletes it with a swipe
+    /// and the server check expects it gone; 0.96 can't delete files, so the swipe offers nothing.
+    func test77_PageAttachments() {
+        let app = launchPage()
+        app.buttons["page-more"].tap()
+        let item = button(app, labels: ["Attachments", "Anhänge"])
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "“Attachments” missing from the menu")
+        item.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10), "The attachments list doesn't open")
+        search.tap()
+        search.typeText("Anhang\(stamp)")
+        let file = app.staticTexts["Anhang\(stamp).txt"]
+        XCTAssertTrue(file.waitForExistence(timeout: 10), "The uploaded file isn't listed")
+        snapshot(app, "77-attachments")
+
+        file.tap()
+        let content = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@",
+                                                                             "UI-Test \(stamp)", "UI-Test \(stamp)")).firstMatch
+        XCTAssertTrue(content.waitForExistence(timeout: 10), "Quick Look doesn't show the file")
+        snapshot(app, "77-quick-look")
+        // iOS 26 and later close Quick Look with an ✕ ("Close"), earlier with "Done".
+        button(app, labels: ["Close", "Schließen", "Done", "Fertig"]).tap()
+        XCTAssertTrue(content.waitForNonExistence(timeout: 5), "Quick Look doesn't close")
+
+        file.swipeLeft()
+        let deleteLabels = ["Delete", "Löschen"]
+        let swipeDelete = app.buttons.matching(NSPredicate(format: "label IN %@", deleteLabels)).firstMatch
+        guard serverHasDocmost097 else {
+            XCTAssertFalse(swipeDelete.waitForExistence(timeout: 3), "Swiping offers “Delete”, which Docmost 0.96 can't do")
+            return
+        }
+        XCTAssertTrue(swipeDelete.waitForExistence(timeout: 5), "Swiping shows no “Delete”")
+        swipeDelete.tap()
+        let confirm = app.popovers.firstMatch.buttons.matching(NSPredicate(format: "label IN %@", deleteLabels)).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Deleting asks nothing")
+        confirm.tap()
+        XCTAssertTrue(file.waitForNonExistence(timeout: 10), "The deleted file stays in the list")
     }
 
     // MARK: - Docmost 0.97 (`PORT=3001 Tools/run-uitests.sh`; skipped on older servers)

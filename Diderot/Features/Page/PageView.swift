@@ -46,6 +46,9 @@ struct PageView: View {
     @State private var showsAppendNote = false
     @State private var showsWebEditor = DebugLaunch.route == "webeditor"
     @State private var showsArrange = false
+    /// The page for the presentation mode, as it was when it opened (as on the web).
+    @State private var presentation: Presentation?
+    @State private var showsAttachments = false
     @State private var confirmsTrash = false
     @State private var showsPhotoPicker = false
     @State private var photoItems: [PhotosPickerItem] = []
@@ -58,6 +61,8 @@ struct PageView: View {
     @State private var centering = CenteringState()
     @State private var keyboard = KeyboardObserver()
     @State private var find = PageFind()
+    /// The templates for an empty page ("Get started with").
+    @State private var showsTemplates = false
     #if DEBUG
     /// Test hook: counts full keyboard dismissals so UI tests can check the keyboard stays up across block switches.
     @State private var debugKeyboardHides = 0
@@ -259,6 +264,9 @@ struct PageView: View {
         .sheet(isPresented: $showsArrange) {
             if let model { ArrangeSheet(model: model) }
         }
+        .sheet(isPresented: $showsAttachments) {
+            if let page = state.value { PageAttachmentsView(page: page, canDelete: canDeleteAttachments(of: page)) }
+        }
         .sheet(isPresented: Binding(get: { model?.editsLink ?? false }, set: { model?.editsLink = $0 })) {
             if let model { LinkSheet(model: model) }
         }
@@ -281,6 +289,11 @@ struct PageView: View {
             photoItems = []
             uploads += 1
             Task { await uploadPhotos(items, to: target) }
+        }
+        .fullScreenCover(item: $presentation) { presentation in
+            PresentationView(pageId: presentation.pageId, title: presentation.title, document: presentation.document) { url in
+                handle(url, outside: OpenURLAction { _ in .discarded })
+            }
         }
         .fullScreenCover(isPresented: $showsCamera) {
             CameraPicker { data in
@@ -471,6 +484,7 @@ struct PageView: View {
                                 .foregroundStyle(.secondary)
                         }
                         DocumentBody(model: model)
+                        getStarted(model)
                         if let error = model.errorMessage {
                             Label(error, systemImage: "exclamationmark.triangle")
                                 .font(.footnote)
@@ -498,6 +512,10 @@ struct PageView: View {
         }
         .scrollPosition($position, anchor: .top)
         .scrollDismissesKeyboard(.interactively)
+        // Here, not with the page's other sheets: that chain is at the type checker's limit.
+        .modifier(TemplatePickerSheet(isPresented: $showsTemplates, spaceId: page.spaceId) { template in
+            try await fill(page, with: template)
+        })
         .onGeometryChange(for: ViewGeometry.self) { geometry in
             ViewGeometry(frame: geometry.frame(in: .global), safeTop: geometry.safeAreaInsets.top, safeBottom: geometry.safeAreaInsets.bottom)
         } action: { geometry in
@@ -890,6 +908,8 @@ struct PageView: View {
         Button("Find on Page", systemImage: "text.magnifyingglass") { openFind() }
             .disabled(showsWebLayout)
         Button("Page History", systemImage: "clock.arrow.circlepath") { showsHistory = true }
+        Button("Attachments", systemImage: "paperclip") { showsAttachments = true }
+        Button("Presentation Mode", systemImage: "play.rectangle") { Task { await present(page) } }
         if page.canEdit {
             Divider()
             if page.isInTrash {
@@ -913,6 +933,22 @@ struct PageView: View {
                 Label("Share Link", systemImage: "square.and.arrow.up")
             }
         }
+    }
+
+    /// Opens the presentation mode with the page as it is now, the text being typed included, as the web takes the
+    /// live editor's content.
+    private func present(_ page: Page) async {
+        await model?.flush()
+        model?.deactivate()
+        let shownTitle: String? = canEditMeta(page) ? title : unsentTitle ?? page.title
+        presentation = Presentation(pageId: page.id, title: PageTitle.display(shownTitle),
+                                    document: model.map { ContentParser.parse($0.document) } ?? ContentDocument(json: page.content))
+    }
+
+    /// As on the web: the server deletes a page's files since Docmost 0.97, only for space admins who may edit the page.
+    private func canDeleteAttachments(of page: Page) -> Bool {
+        session.ready?.hasDocmost097Features == true && page.canEdit && !page.isInTrash && !offline.isOffline
+            && spaces.state.value?.first { $0.id == page.spaceId }?.role == .admin
     }
 
     /// Title and icon go through REST and need no engine.
@@ -1023,6 +1059,12 @@ struct PageView: View {
             Task { await store.load() }
         }
         model?.canComment = canComment(on: page)
+        // Turned into a database ("Get started with"): the text editor stops, the page shows the rows.
+        if page.isBase == true, let model {
+            model.suspend()
+            self.model = nil
+            return
+        }
         if let model, model.engine != nil {
             if page.canEdit && !page.isInTrash { return }
             // Trashed or edit rights lost since the cached state: the collab server drops every edit, so rebuild read-only.
@@ -1156,6 +1198,52 @@ struct PageView: View {
                 toast = String(localized: "The title goes to the server once it can be reached.")
             }
             savingTitle = nil
+        }
+    }
+
+    /// "Get started with" (`GetStartedRow`), as on the web: databases need the `bases` license feature, templates the
+    /// `templates` one; without them it offers nothing.
+    private var offersDatabases: Bool { session.ready?.entitlements.has("bases") == true }
+    private var offersTemplates: Bool { session.ready?.entitlements.has("templates") == true }
+
+    /// An empty page's "Get started with" (`GetStartedRow`).
+    @ViewBuilder
+    private func getStarted(_ model: DocumentModel) -> some View {
+        if model.isEditable, model.isBlank, offersDatabases || offersTemplates {
+            GetStartedRow(offersDatabases: offersDatabases, offersTemplates: offersTemplates, start: startWith)
+        }
+    }
+
+    private func startWith(_ choice: GetStartedRow.Choice) {
+        switch choice {
+        case .database: Task { await convertToDatabase(template: nil) }
+        case .kanban: Task { await convertToDatabase(template: "kanban") }
+        case .template: showsTemplates = true
+        }
+    }
+
+    /// Turns the empty page into a database, as the web's "Get started with" does; the page then shows its rows.
+    private func convertToDatabase(template: String?) async {
+        guard let page = state.value else { return }
+        do {
+            _ = try await session.send(Endpoints.Bases.convert(pageId: page.id, template: template))
+            changes.pageChanged(in: page.spaceId)
+            await load(force: true)
+        } catch {
+            toast = error.userMessage
+        }
+    }
+
+    /// Fills the empty page with a template as the web does: its content, and its title if the page has none.
+    private func fill(_ page: Page, with template: PageTemplate) async throws {
+        guard let model else { return }
+        let full = template.content == nil ? try await session.send(Endpoints.Templates.info(templateId: template.id)) : template
+        guard await model.fill(with: full.content.flatMap(PMNode.init(json:))?.children ?? []) else {
+            throw TemplateError.pageNotEmpty
+        }
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let templateTitle = full.title, !templateTitle.isEmpty {
+            title = templateTitle
+            commitTitle()
         }
     }
 

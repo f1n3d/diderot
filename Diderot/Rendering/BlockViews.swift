@@ -91,12 +91,14 @@ struct ParagraphView: View {
     @Environment(\.renderContext) private var context
     @Environment(\.paragraphFont) private var paragraphFont
     @Environment(\.linkPreviews) private var linkPreviews
+    @Environment(\.showsCommentMarks) private var showsCommentMarks
 
     var body: some View {
         if text.inlines.isEmpty {
             Text(" ")
         } else {
-            Text(InlineTextBuilder(baseURL: context.baseURL, font: paragraphFont ?? .body, previewTitle: { linkPreviews?.preview(for: $0)?.title })
+            Text(InlineTextBuilder(baseURL: context.baseURL, font: paragraphFont ?? .body, previewTitle: { linkPreviews?.preview(for: $0)?.title },
+                                   showsComments: showsCommentMarks)
                 .attributedString(for: text.inlines))
                 .loadsLinkPreviews(for: text.inlines)
                 .multilineTextAlignment(text.align.textAlignment)
@@ -112,6 +114,8 @@ struct HeadingView: View {
     let text: TextBlock
     @Environment(\.renderContext) private var context
     @Environment(\.linkPreviews) private var linkPreviews
+    @Environment(\.showsCommentMarks) private var showsCommentMarks
+    @Environment(\.headingFont) private var headingFont
 
     /// Also the editor's (`TextNodeView`), so a page and its versions look the same.
     static func font(level: Int) -> Font {
@@ -126,8 +130,9 @@ struct HeadingView: View {
     }
 
     var body: some View {
-        let font = Self.font(level: level)
-        Text(InlineTextBuilder(baseURL: context.baseURL, font: font, previewTitle: { linkPreviews?.preview(for: $0)?.title })
+        let font = headingFont?(level) ?? Self.font(level: level)
+        Text(InlineTextBuilder(baseURL: context.baseURL, font: font, previewTitle: { linkPreviews?.preview(for: $0)?.title },
+                               showsComments: showsCommentMarks)
             .attributedString(for: text.inlines))
             .loadsLinkPreviews(for: text.inlines)
             .font(font)
@@ -260,6 +265,8 @@ struct CodeBlockView: View {
                 .textSelection(.enabled)
                 .padding(12)
         }
+        // Only a wider one scrolls: a swipe over a narrow one turns the presentation's slide.
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
         .overlay(alignment: .topTrailing) {
@@ -340,6 +347,7 @@ struct DetailsView: View {
     let blocks: [Block]
     @Environment(\.renderContext) private var context
     @Environment(\.linkPreviews) private var linkPreviews
+    @Environment(\.showsCommentMarks) private var showsCommentMarks
     @State private var isExpanded: Bool
 
     init(initiallyOpen: Bool, summary: [Inline], blocks: [Block]) {
@@ -353,7 +361,8 @@ struct DetailsView: View {
             BlockStack(blocks: blocks)
                 .padding(.top, 6)
         } label: {
-            Text(InlineTextBuilder(baseURL: context.baseURL, font: .body.weight(.medium), previewTitle: { linkPreviews?.preview(for: $0)?.title })
+            Text(InlineTextBuilder(baseURL: context.baseURL, font: .body.weight(.medium), previewTitle: { linkPreviews?.preview(for: $0)?.title },
+                                   showsComments: showsCommentMarks)
                 .attributedString(for: summary))
                 .loadsLinkPreviews(for: summary)
         }
@@ -514,6 +523,8 @@ struct TableView: View {
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(.separator)))
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+        // Only a wider one scrolls: a swipe over a narrow one turns the presentation's slide.
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
     }
 }
 

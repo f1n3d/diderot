@@ -34,6 +34,20 @@ extension Endpoints {
         }
     }
 
+    public enum Attachments {
+        public struct ListBody: Encodable, Sendable {
+            public let pageId: String
+            public var query: String?
+            public var limit: Int?
+            public var cursor: String?
+        }
+
+        /// Files uploaded to a page, the newest first (Docmost 0.96); `query` keeps those whose name contains it.
+        public static func list(pageId: String, query: String? = nil, cursor: String? = nil, limit: Int = 50) -> Endpoint<Paginated<Attachment>> {
+            .post("pages/attachments", body: ListBody(pageId: pageId, query: query, limit: limit, cursor: cursor))
+        }
+    }
+
     public enum Transclusions {
         public struct Reference: Encodable, Sendable, Hashable {
             public let sourcePageId: String

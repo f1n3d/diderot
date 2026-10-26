@@ -68,6 +68,8 @@ struct TabStrip<Accessory: View, Decorated: View>: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
             }
+            // Only a wider strip scrolls: a swipe over a narrow one turns the presentation's slide.
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .onChange(of: selected, initial: true) { _, id in
                 guard let id else { return }
                 withAnimation { proxy.scrollTo(id, anchor: .center) }

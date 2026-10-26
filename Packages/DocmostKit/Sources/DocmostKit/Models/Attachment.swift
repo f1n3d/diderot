@@ -6,16 +6,23 @@ public struct Attachment: Codable, Sendable, Hashable, Identifiable {
     public let fileName: String
     public let fileSize: Int?
     public let mimeType: String?
+    /// Who uploaded it and when (`pages/attachments`).
+    public let creator: UserRef?
+    public let createdAt: Date?
 
-    public init(id: String, fileName: String, fileSize: Int? = nil, mimeType: String? = nil) {
+    public init(id: String, fileName: String, fileSize: Int? = nil, mimeType: String? = nil, creator: UserRef? = nil,
+                createdAt: Date? = nil) {
         self.id = id
         self.fileName = fileName
         self.fileSize = fileSize
         self.mimeType = mimeType
+        self.creator = creator
+        self.createdAt = createdAt
     }
 
+    // Not the list's `url`: it names the host the server is configured with, which the device may not reach.
     private enum CodingKeys: String, CodingKey {
-        case id, fileName, fileSize, mimeType
+        case id, fileName, fileSize, mimeType, creator, createdAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -31,6 +38,8 @@ public struct Attachment: Codable, Sendable, Hashable, Identifiable {
             fileSize = nil
         }
         mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+        creator = try container.decodeIfPresent(UserRef.self, forKey: .creator)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
     }
 
     /// Path as the web client writes it into image and attachment nodes.
