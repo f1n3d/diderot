@@ -10,6 +10,8 @@ struct InlineTextBuilder {
     var atomLinkBlock: String?
     /// A link's title from the server's preview (`LinkPreviewStore`), for integration mentions.
     var previewTitle: (String) -> String? = { _ in nil }
+    /// Unresolved comments marked and opening on tap (`showsCommentMarks`).
+    var showsComments = true
 
     func attributedString(for inlines: [Inline]) -> AttributedString {
         var result = AttributedString()
@@ -106,7 +108,7 @@ struct InlineTextBuilder {
             run.foregroundColor = .accentColor
             run.underlineStyle = .single
         }
-        if let comment = style.comment, !comment.resolved {
+        if showsComments, let comment = style.comment, !comment.resolved {
             run.backgroundColor = Color.yellow.opacity(0.25)
             // Opens the comment on tap, in the text color instead of link styling; a real link takes precedence.
             if run.link == nil, let id = comment.commentId, let url = CommentLink.url(for: id) {
@@ -212,6 +214,13 @@ nonisolated extension Color {
         }
         self.init(.sRGB, red: r, green: g, blue: b, opacity: a)
     }
+}
+
+extension EnvironmentValues {
+    /// Unresolved comments show marked and open on tap; not in the presentation mode, as on the web.
+    @Entry var showsCommentMarks = true
+    /// Heading fonts by level instead of the reader's (`HeadingView.font`): the presentation mode's larger ones.
+    @Entry var headingFont: ((Int) -> Font)?
 }
 
 /// Makes comment marks in text tappable: a custom scheme that the page view intercepts to open the comment.
