@@ -1611,6 +1611,47 @@ import XCTest
         finishEditing(app)
     }
 
+    /// While a block is edited, a long press belongs to the text, not to moving blocks: in the edited text the text
+    /// view's magnifier moves the caret ("Lupe<stamp>" at the start of "Erster Absatz"), on another paragraph the caret
+    /// goes where the finger was ("Halten<stamp>" at the start of "Letzter Absatz"), and holding and moving the list
+    /// onto the heading neither moves it nor ends editing. Without editing, blocks move as before (test7). The server
+    /// check expects both texts and the list after the heading.
+    func test75_LongPressWhileEditingBelongsToTheText() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Erster Absatz")
+        Thread.sleep(forTimeInterval: 0.6)
+        // Left of the first letter: the editor's frame reaches a little beyond its text.
+        editor.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 2, dy: 12)).press(forDuration: 1)
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Lupe\(stamp)")
+        XCTAssertTrue(waitForText(editor, contains: "Lupe\(stamp)Erster"), "Holding the edited text doesn't move the caret: “\(editor.value ?? "")”")
+
+        // Other tests add to the items (a mention, typed text): by their start.
+        func listItem(_ text: String) -> XCUIElement { app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", text)).firstMatch }
+        let item = listItem("Punkt zwei")
+        let heading = app.staticTexts["Überschrift"].firstMatch
+        XCTAssertTrue(scrollTo(item, in: app) && heading.exists, "List or heading not found")
+        item.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5))
+            .press(forDuration: 1.2, thenDragTo: heading.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)))
+        Thread.sleep(forTimeInterval: 1)
+        snapshot(app, "75-held-and-moved")
+        // The long press put the caret into "Punkt zwei": the editor lies on it, still below the heading.
+        let held = activeEditor(app, timeout: 2, "Holding and moving a block ends editing")
+        XCTAssertTrue((held.value as? String)?.hasPrefix("Punkt zwei") == true, "Holding “Punkt zwei” doesn't edit it: “\(held.value ?? "")”")
+        XCTAssertGreaterThan(held.frame.minY, app.staticTexts["Überschrift"].firstMatch.frame.minY, "Holding and moving a block while editing moves it")
+
+        let paragraph = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Letzter Absatz")).firstMatch
+        XCTAssertTrue(scrollTo(paragraph, in: app, anchor: CGVector(dx: 0, dy: 0.5)), "“Letzter Absatz” not found")
+        paragraph.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 1, dy: 0)).press(forDuration: 1)
+        editor = activeEditor(app, "Holding another paragraph doesn't edit it")
+        XCTAssertTrue(waitForText(editor, contains: "Letzter Absatz"), "Holding another paragraph edits a different one: “\(editor.value ?? "")”")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Halten\(stamp)")
+        snapshot(app, "75-typed")
+        XCTAssertTrue(waitForText(editor, contains: "Halten\(stamp)Letzter"), "Holding another paragraph doesn't put the caret where the finger was: “\(editor.value ?? "")”")
+        finishEditing(app)
+    }
+
     // MARK: - Docmost 0.97 (`PORT=3001 Tools/run-uitests.sh`; skipped on older servers)
 
     /// Tabs: "/reiter" inserts "Tab 1" and "Tab 2" with the cursor in the first; "+" adds a tab and asks for its name;

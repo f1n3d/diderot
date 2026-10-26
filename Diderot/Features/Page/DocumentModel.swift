@@ -264,7 +264,11 @@ final class DocumentModel {
     private(set) var document: PMNode
     private(set) var isLive = false
     private(set) var readOnlyReason: ReadOnlyReason?
-    private(set) var active: Active?
+    private(set) var active: Active? {
+        didSet { if (active != nil) != hasActiveBlock { hasActiveBlock = active != nil } }
+    }
+    /// A block is being edited. Changes only when editing starts or ends, so every block can watch it (not `active`).
+    private(set) var hasActiveBlock = false
     var activeText = AttributedString()
     var activeSelection = AttributedTextSelection()
     /// Font the active text block draws with (set by its `TextNodeView`); saving compares system bold against it.

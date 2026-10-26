@@ -202,6 +202,9 @@ struct TextNodeView: View {
             .textSelection(.enabled)
             .contentShape(Rectangle())
             .simultaneousGesture(SpatialTapGesture().onEnded { tapped(at: $0.location) })
+            .modifier(LongPressPlacesCaret(model: model) { location in
+                model.activate(ref, node: node, cursor: .point(caretPoint(location)))
+            })
             // A transform, not `@Environment`: the page renews its action each edit, which would rebuild every block.
             .transformEnvironment(\.openURL) { openURL in
                 let page = openURL
@@ -237,9 +240,32 @@ struct TextNodeView: View {
                 return
             }
             // The caret goes where the finger was, as on the web. VoiceOver taps the block's center: the end fits better.
-            let point = CGPoint(x: location.x - indent, y: location.y - headingTop)
-            if model.isEditable { model.activate(ref, node: node, cursor: UIAccessibility.isVoiceOverRunning ? .end : .point(point)) }
+            if model.isEditable {
+                model.activate(ref, node: node, cursor: UIAccessibility.isVoiceOverRunning ? .end : .point(caretPoint(location)))
+            }
         }
+    }
+
+    /// `location` in this view relative to its text, which starts after the indent and the heading's top padding.
+    private func caretPoint(_ location: CGPoint) -> CGPoint {
+        CGPoint(x: location.x - indent, y: location.y - headingTop)
+    }
+}
+
+/// While a block is edited, a long press on another text puts the caret where the finger was, as a long press in a text
+/// does (in the edited one, the text view itself shows the magnifier). Blocks aren't dragged then (`BlockDragModifier`).
+private struct LongPressPlacesCaret: ViewModifier {
+    let model: DocumentModel
+    let place: (CGPoint) -> Void
+
+    func body(content: Content) -> some View {
+        content.gesture(
+            LongPressGesture(minimumDuration: 0.3).sequenced(before: DragGesture(minimumDistance: 0))
+                .onEnded { value in
+                    if case .second(true, let drag?) = value { place(drag.location) }
+                },
+            including: model.hasActiveBlock ? .all : .subviews
+        )
     }
 }
 
@@ -1076,7 +1102,8 @@ private struct TableCellNodeView: View {
 
 // MARK: - Drag & Drop
 
-/// Long-press and drag a block to move it; where shown, its "…" button offers Duplicate, Delete and edit actions.
+/// Long-press and drag a block to move it, unless a block is being edited; where shown, its "…" button offers Duplicate,
+/// Delete and edit actions.
 private struct BlockDragModifier: ViewModifier {
     let model: DocumentModel
     let entry: NodeEntry
@@ -1143,6 +1170,9 @@ private struct BlockDragModifier: ViewModifier {
                 .onDrag {
                     DragPayload.provider(BlockDropDelegate.prefix(model) + entry.ref.identity)
                 }
+                // While a block is edited, a long press belongs to the text (`LongPressPlacesCaret`), not to moving
+                // blocks: they move through "Arrange Blocks" then. This one keeps the drag from starting elsewhere.
+                .gesture(LongPressGesture(minimumDuration: 0.3), including: model.hasActiveBlock ? .all : .subviews)
                 .onDrop(of: DragPayload.types, delegate: BlockDropDelegate(
                     model: model, ref: entry.ref, height: { height },
                     targeted: { isTargeted = $0 }, before: { insertBefore = $0 }
