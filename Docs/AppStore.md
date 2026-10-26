@@ -64,14 +64,25 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 **What's New in This Version** (4000 at most; version 1.1.0)
 
+> New:
+> • Presentation mode: a page as slides, from the page menu
+> • Attachments: a page's files in the page menu, to search, open and share
+> • Templates: hold "+" for a new page from a template (needs a Docmost license with templates)
+> • An empty page becomes a database or a kanban board with one tap (needs a Docmost license with databases)
+>
 > For Docmost 0.97:
 > • Tabs: read and switch them; while editing, add, rename, move and delete them
 > • Links to GitHub, GitLab, Jira, Linear, Figma, Azure DevOps and Slack as cards or mentions with previews; connect your account right from the card
 > • Sub-pages sorted by hand, A–Z or by last change
 > • Copy a link to a comment; such links open the page at the comment
+> • Start an empty page from a template
+> • Space admins can delete a page's attachments
 >
 > Also:
 > • Pasting a link works as on the web: a web address becomes a link, a link to one of your pages becomes a mention
+> • In the page tree, a dragged page lands where the web puts it: before, after or inside a page
+> • While editing, a long press no longer moves blocks; on another paragraph it places the cursor there
+> • When your server doesn't answer, the app shows your saved pages after 5 seconds instead of 30
 > • Spaces in the app's green
 > • Fixed: a date, time, status or formula inserted at the start of a paragraph landed after its first letter
 
@@ -121,14 +132,25 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 **Neu in dieser Version** (höchstens 4000; Version 1.1.0)
 
+> Neu:
+> • Präsentationsmodus: eine Seite als Folien, im Seitenmenü
+> • Anhänge: die Dateien einer Seite im Seitenmenü, zum Suchen, Öffnen und Teilen
+> • Vorlagen: „+“ gedrückt halten für eine neue Seite aus einer Vorlage (braucht eine Docmost-Lizenz mit Vorlagen)
+> • Eine leere Seite wird mit einem Tippen zur Datenbank oder zum Kanban-Board (braucht eine Docmost-Lizenz mit Datenbanken)
+>
 > Für Docmost 0.97:
 > • Registerkarten: lesen und wechseln; beim Bearbeiten hinzufügen, umbenennen, verschieben und löschen
 > • Links zu GitHub, GitLab, Jira, Linear, Figma, Azure DevOps und Slack als Karte oder Erwähnung mit Vorschau; das eigene Konto direkt über die Karte verbinden
 > • Unterseiten von Hand, nach A–Z oder nach letzter Änderung sortiert
 > • Link zu einem Kommentar kopieren; solche Links öffnen die Seite beim Kommentar
+> • Eine leere Seite mit einer Vorlage beginnen
+> • Space-Admins können die Anhänge einer Seite löschen
 >
 > Außerdem:
 > • Links einfügen wie im Web: Eine Webadresse wird zum Link, ein Link zu einer deiner Seiten zur Erwähnung
+> • Im Seitenbaum landet eine gezogene Seite dort, wo das Web sie ablegt: davor, dahinter oder als Unterseite
+> • Beim Bearbeiten verschiebt langes Drücken keine Blöcke mehr; auf einem anderen Absatz setzt es den Cursor dorthin
+> • Antwortet dein Server nicht, zeigt die App nach 5 statt 30 Sekunden deine gespeicherten Seiten
 > • Spaces im Grün der App
 > • Behoben: Datum, Uhrzeit, Status oder Formel am Anfang eines Absatzes landeten hinter dem ersten Buchstaben
 
