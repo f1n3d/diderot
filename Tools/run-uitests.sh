@@ -114,6 +114,14 @@ PY
 # posted by "Test-Kollegin" as comments on the test page, and her reply to one of them (EditorUITests test33).
 Tools/seed-notifications.py "$PAGE" --count 2 || echo "Could not create notifications for the bell tests"
 
+# A file on the test page for the attachments list (EditorUITests test77), which opens and deletes it.
+mkdir -p Tools/.cache
+ATTACHMENT="Tools/.cache/Anhang$STAMP.txt"
+printf 'Anhang für den UI-Test %s\n' "$STAMP" > "$ATTACHMENT"
+curl -sSf -o /dev/null -X POST "$DOCMOST_SEED_URL/api/files/upload" -H "Authorization: Bearer $TOKEN" \
+  -F "pageId=$PAGE" -F "file=@$ATTACHMENT;type=text/plain" || echo "Could not upload the file for the attachments test"
+rm -f "$ATTACHMENT"
+
 # Databases "Kanban-Test", "Datenbank-Test" and "Projekte › Projektplan", and the page "Datenbank-Einbettung", for the BaseUITests.
 while IFS='=' read -r key value; do
   case "$key" in DOCMOST_UITEST_BASE|DOCMOST_UITEST_BASE_HOST|DOCMOST_UITEST_BASE_FULL|DOCMOST_UITEST_BASE_NESTED|DOCMOST_UITEST_BASE_IDS) export "TEST_RUNNER_$key=$value" ;; esac
@@ -387,6 +395,29 @@ checks = [
 for label, ok in checks:
     print(("OK     " if ok else "MISSING") + " " + label)
 sys.exit(0 if all(ok for _, ok in checks) else 1)
+PY
+
+# Attachments (EditorUITests test77): from 0.97 on the uploaded Anhang<stamp>.txt deleted from the list, and the files
+# of earlier runs whose test didn't get that far removed; 0.96 can't delete files, so there they stay.
+docmost_097 && DELETES_FILES=1 || DELETES_FILES=0
+python3 - "$STAMP" "$PAGE" "$TOKEN" "$DELETES_FILES" <<'PY' || CHECKS_FAILED=1
+import json, os, re, sys, urllib.request
+stamp, page, token, deletes = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
+if not deletes:
+    sys.exit(0)
+def call(path, body):
+    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
+    request.add_header("Content-Type", "application/json")
+    request.add_header("Authorization", "Bearer " + token)
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read() or b"{}").get("data")
+left = call("pages/attachments", {"pageId": page, "query": "Anhang" + stamp, "limit": 10})["items"]
+ok = not left
+print(("OK     " if ok else "MISSING") + " Attachments: Anhang" + stamp + ".txt deleted from the list")
+for attachment in call("pages/attachments", {"pageId": page, "query": "Anhang", "limit": 100})["items"]:
+    if re.fullmatch(r"Anhang\d+\.txt", attachment["fileName"]):
+        call("attachments/delete", {"attachmentId": attachment["id"]})
+sys.exit(0 if ok else 1)
 PY
 
 # Inserting via "/" and "+" (EditorUITests test34–39): expects the nodes the web editor creates.

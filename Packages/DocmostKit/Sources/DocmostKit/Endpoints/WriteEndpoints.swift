@@ -107,6 +107,17 @@ extension Endpoints.Comments {
     }
 }
 
+extension Endpoints.Attachments {
+    public struct AttachmentIdBody: Encodable, Sendable {
+        public let attachmentId: String
+    }
+
+    /// Deletes a page's uploaded file; the server allows it to space admins who can edit the page (403 otherwise).
+    public static func delete(attachmentId: String) -> Endpoint<NoContent> {
+        .post("attachments/delete", body: AttachmentIdBody(attachmentId: attachmentId))
+    }
+}
+
 /// Builds a comment's ProseMirror document from plain text (one paragraph per line).
 public enum CommentContent {
     public static func document(for text: String) -> JSONValue {
