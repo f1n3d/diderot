@@ -135,7 +135,8 @@ struct MediaBlockViewTests {
     }
 
     /// A formula is blank after its web process ended (iOS reclaimed its memory in the background, a crash). Coming
-    /// back into view renders it again.
+    /// back into view renders it again. GitHub's simulator sometimes doesn't let the app end the process (RunningBoard:
+    /// "Client not entitled"); the test is cancelled then, as there is nothing to check.
     @Test func formulaRendersAgainAfterItsWebProcessEnded() async throws {
         let navigation = ReaderNavigation()
         var appearances = 0
@@ -153,11 +154,16 @@ struct MediaBlockViewTests {
         defer { window.isHidden = true }
         #expect(await poll { appearances == 1 && !spinner(in: window) })
         let island = try #require(webViews(in: window).first)
-        // WebKit's private test hook; only the tests call it.
-        let kill = NSSelectorFromString("_killWebContentProcess")
-        try #require(island.responds(to: kill))
-        island.perform(kill)
-        try #require(await poll { island.url == nil }, "blank")
+        // WebKit's private test hook and process ID; only the tests use them.
+        let end = NSSelectorFromString("_killWebContentProcess")
+        try #require(island.responds(to: end))
+        let process = try #require(island.value(forKey: "_webProcessIdentifier") as? pid_t)
+        island.perform(end)
+        let blank = await poll { island.url == nil }
+        if !blank, process > 0, kill(process, 0) == 0 || errno == EPERM {
+            try Test.cancel("The web process kept running.")
+        }
+        try #require(blank, "blank")
 
         navigation.path.append("Subpage")
         #expect(await poll { disappearances == 1 })
