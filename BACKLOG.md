@@ -45,7 +45,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 - Offline and background (review findings on F182 and F183, October 15, 2026):
   - With the same page open offline in two iPad windows, the second window can delete or overwrite the first one's saved changes when leaving.
   - Changes not yet sent stay on the device after signing out, until the same person signs in there again (October 22, 2026). A server signed out of is no longer in the list, so they can then only be deleted together with the app.
-  - If the device is online but the server unreachable without refusing the connection (e.g. behind a disconnected VPN), the app's start waits up to its 30 s timeout before showing saved content (October 22, 2026). Without a network (airplane mode) the app starts at once.
+  - A server that doesn't answer without refusing the connection (e.g. behind a disconnected VPN): with saved content the start shows it after 5 s and tries once more in the background (October 26, 2026); after that, only the return to the app or of the network tries again. Without saved content (e.g. iOS cleared the cache) the start waits for the requests' 30 s timeout.
   - For very old pages without a stored Yjs document, syncing changes made offline can duplicate the content (as on the web).
 - Media (review findings on F167, F164 and F43, October 15, 2026):
   - Blocks can be dragged while the editor isn't connected, but then dropped nowhere. A long press on text keeps selecting text meanwhile (checked on the iPhone on October 22, 2026).

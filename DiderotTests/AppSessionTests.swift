@@ -254,6 +254,38 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// A start with saved content waits only `startDeadline` for a server that doesn't answer (behind a VPN that is
+    /// off, its requests would wait 30 s): it shows the saved content, keeps trying and loads the session once answered.
+    @Test func unansweredStartShowsTheSavedContent() async throws {
+        _ = try await sessionOnA()
+        StubURLProtocol.unanswered.withLock { $0 = 3 }  // the first try's user, license and version
+        defer { StubURLProtocol.unanswered.withLock { $0 = 0 } }
+        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        session.startDeadline = .milliseconds(300)
+        let start = ContinuousClock.now
+        await session.restore()
+        #expect(ContinuousClock.now - start < .seconds(5), "not the requests' timeout")
+        #expect(session.ready?.restoredOffline == true, "the saved content")
+        for _ in 0..<100 where session.ready?.restoredOffline == true { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(session.ready?.restoredOffline == false, "the next try was answered")
+        await removeCaches()
+    }
+
+    /// Without saved content there is nothing to show instead: the start waits for a slow server as before.
+    @Test func slowStartWithoutSavedContentWaits() async throws {
+        await removeCaches()
+        try store.save(StoredSession(serverURL: a, token: "a"))
+        StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+        defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { try? await Task.sleep(for: .milliseconds(600)) } }
+        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        session.startDeadline = .milliseconds(200)
+        await session.restore()
+        #expect(session.ready?.server.url == a)
+        #expect(session.ready?.restoredOffline == false)
+        await removeCaches()
+    }
+
     /// On an iPad, a second window opens while the first shows the sign-in screen after the session ended.
     @Test func secondWindowKeepsTheSignInScreen() async throws {
         try store.save(StoredSession(serverURL: a, token: "a"))
@@ -891,6 +923,8 @@ private nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendabl
     /// Taken by any other request (another session's, a background check), the hook delays nothing the test awaits.
     static let beforeNextAnswerFor = Mutex<String?>(nil)
     static let offline = Mutex(false)
+    /// How many of the next requests get no answer, as from a server behind a VPN that is off (they wait until cancelled).
+    static let unanswered = Mutex(0)
     static let body = Mutex<String?>(nil)
     static let status = Mutex(200)
 
@@ -902,6 +936,11 @@ private nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendabl
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return
         }
+        if Self.unanswered.withLock({ count in
+            guard count > 0 else { return false }
+            count -= 1
+            return true
+        }) { return }
         let target = (request.url?.host ?? "") + (request.url?.path ?? "")
         let isFor = Self.beforeNextAnswerFor.withLock { $0 }.map { $0 == target } ?? true
         let action = isFor ? Self.beforeNextAnswer.withLock { $0.take() } : nil

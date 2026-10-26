@@ -117,6 +117,10 @@ final class AppSession {
         self.protocolClasses = protocolClasses
     }
 
+    /// How long a start with saved content waits for the server: one that doesn't answer (behind a VPN that is off)
+    /// would keep the launch screen up until the requests' timeout (30 s).
+    @ObservationIgnored var startDeadline: Duration = .seconds(5)
+
     var hasAccounts: Bool { !accounts.isEmpty }
 
     /// Link previews of the signed-in session, made for its token; a new sign-in (or sign-out) starts afresh.
@@ -212,11 +216,16 @@ final class AppSession {
                 return
             }
             let client = makeClient(for: stored.serverURL, token: stored.token)
+            let hasSavedContent = await makeCache(for: stored.serverURL).read(CurrentUser.self, key: CacheKey.currentUser) != nil
+            var answeredLate = false
             do {
                 // Without a network (flight mode) the requests can wait for their timeout: start from the cache at once.
                 if await Self.hasNoNetwork() { throw APIError.network(URLError(.notConnectedToInternet)) }
-                try await finishSignIn(server: server, client: client, token: stored.token)
-                return
+                // With saved content to show, a server that doesn't answer in time doesn't keep the start waiting either.
+                if try await finishSignIn(server: server, client: client, token: stored.token,
+                                          within: hasSavedContent ? startDeadline : nil) { return }
+                answeredLate = true
+                throw APIError.network(URLError(.timedOut))
             } catch let error as APIError where error.isSessionExpired {
                 AppLog.session.notice("Stored session rejected by server, signing out")
                 keychain("clear") { try sessionStore.clear() }
@@ -224,7 +233,7 @@ final class AppSession {
                 state = .signedOut(server)
                 return
             } catch {
-                // Offline or server error: continue with the cached user and content.
+                // Offline, no answer in time or a server error: continue with the cached user and content.
                 let cache = makeCache(for: stored.serverURL)
                 if let cachedUser = await cache.read(CurrentUser.self, key: CacheKey.currentUser) {
                     AppLog.session.notice("Server unreachable, restoring session from cache: \(error.userMessage, privacy: .public)")
@@ -235,6 +244,8 @@ final class AppSession {
                         token: stored.token, currentUser: cachedUser, entitlements: entitlements,
                         serverVersion: DebugLaunch.serverVersion ?? version, restoredOffline: true
                     ))
+                    // The sign-in stopped waiting: it goes on in the background, as when the network returns.
+                    if answeredLate { Task { await reconnectIfNeeded() } }
                     return
                 }
                 AppLog.session.error("Could not validate stored session: \(error.userMessage, privacy: .public)")
@@ -615,6 +626,22 @@ final class AppSession {
             serverVersion: DebugLaunch.serverVersion ?? serverVersion
         ))
         AppLog.session.info("Signed in as \(currentUser.user.email, privacy: .private) at \(server.url.absoluteString, privacy: .public)")
+    }
+
+    /// `finishSignIn`, given up after `deadline` (`nil`: as long as the requests take): `false` if it was.
+    private func finishSignIn(server: ServerInfo, client: APIClient, token: String, within deadline: Duration?) async throws -> Bool {
+        guard let deadline else {
+            try await finishSignIn(server: server, client: client, token: token)
+            return true
+        }
+        return try await withThrowingTaskGroup(of: Bool.self) { group in
+            group.addTask { try await self.finishSignIn(server: server, client: client, token: token); return true }
+            group.addTask { try await Task.sleep(for: deadline); return false }
+            if try await group.next() == true { return true }
+            group.cancelAll()
+            // Done right before the cancel: then it counts.
+            return (try? await group.next()) == true
+        }
     }
 
     private func makeClient(for url: URL, token: String?) -> APIClient {
