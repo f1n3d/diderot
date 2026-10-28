@@ -13,9 +13,19 @@ extension Endpoints {
         /// Docmost after 0.96 refuses longer queries (search and suggestions); this one and older ones search the start.
         static let maxQueryLength = 200
 
+        /// Whole characters up to `maxQueryLength` code points: the server's `MaxLength` counts code points, not
+        /// characters, and refused a long query in Hindi or with skin-tone emoji that fit 200 characters.
+        static func clipped(_ query: String) -> String {
+            var count = 0
+            return String(query.prefix { character in
+                count += character.unicodeScalars.count
+                return count <= maxQueryLength
+            })
+        }
+
         /// Full-text search (prefix match), paged via `offset`.
         public static func search(query: String, spaceId: String? = nil, titleOnly: Bool? = nil, limit: Int = 25, offset: Int = 0) -> Endpoint<SearchResponse> {
-            .post("search", body: Body(query: String(query.prefix(maxQueryLength)), spaceId: spaceId, titleOnly: titleOnly, limit: limit, offset: offset))
+            .post("search", body: Body(query: clipped(query), spaceId: spaceId, titleOnly: titleOnly, limit: limit, offset: offset))
         }
 
         public struct SuggestBody: Encodable, Sendable {
@@ -27,7 +37,7 @@ extension Endpoints {
         }
 
         public static func suggest(query: String, users: Bool = true, pages: Bool = true, spaceId: String? = nil, limit: Int = 10) -> Endpoint<SearchSuggestions> {
-            .post("search/suggest", body: SuggestBody(query: String(query.prefix(maxQueryLength)), includeUsers: users, includePages: pages, spaceId: spaceId, limit: limit))
+            .post("search/suggest", body: SuggestBody(query: clipped(query), includeUsers: users, includePages: pages, spaceId: spaceId, limit: limit))
         }
     }
 

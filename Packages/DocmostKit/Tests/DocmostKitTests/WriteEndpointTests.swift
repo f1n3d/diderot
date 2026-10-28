@@ -85,6 +85,16 @@ struct WriteEndpointTests {
         #expect(ContentDocument(json: document).blocks.count == 3)
     }
 
+    /// Search queries keep within the server's 200 code points, in whole characters: a long query in Hindi or with
+    /// skin-tone emoji fit 200 characters and failed with 400.
+    @Test func searchQueriesKeepToTheServersLimit() {
+        let hindi = String(repeating: "कि", count: 150)  // 2 code points per character
+        let clipped = Endpoints.Search.clipped(hindi)
+        #expect(clipped.unicodeScalars.count == 200)
+        #expect(clipped.count == 100)
+        #expect(Endpoints.Search.clipped("kurz") == "kurz")
+    }
+
     @Test func commentPlainTextForEditing() {
         #expect(CommentContent.plainText(of: CommentContent.document(for: "Zeile eins\n\nZeile drei")) == "Zeile eins\n\nZeile drei")
         // Content from the web client: mentions and lists become plain text.
