@@ -280,6 +280,56 @@ struct DocumentModelTests {
         while !model.activeText.runs.contains(where: { $0.link?.absoluteString == missing }) { try await Task.sleep(for: .milliseconds(10)) }
     }
 
+    /// A page title starting with a combining mark merges with the character before its mention, so the text gets shorter
+    /// than both parts: the cursor after the mention stays inside it (it trapped).
+    @Test(.timeLimit(.minutes(1))) func mentionOfTitleWithCombiningMarkKeepsTheCursorInside() async throws {
+        let paragraph = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "see ")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.serverURL = URL(string: "https://wiki.example.com")
+        let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"́Spec"}"#.utf8))
+        model.lookUpPage = { _ in target }
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+
+        #expect(model.pasteLink("https://wiki.example.com/p/spec-Ab12"))
+        // By its text: the merged mark leaves no clean run for the mention to be read back from.
+        while !String(model.activeText.characters).hasSuffix("Spec") { try await Task.sleep(for: .milliseconds(10)) }
+        guard case .insertionPoint(let cursor) = model.activeSelection.indices(in: model.activeText) else {
+            Issue.record("no insertion point")
+            return
+        }
+        #expect(cursor == model.activeText.endIndex)
+    }
+
+    /// While the link sheet holds the text, a pasted page link stays a link: the sheet keeps its range in that text, which
+    /// the shorter mention would end before.
+    @Test(.timeLimit(.minutes(1))) func pastedPageLinkStaysALinkWhileTheLinkSheetIsOpen() async throws {
+        let paragraph = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Hallo ")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.serverURL = URL(string: "https://wiki.example.com")
+        let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"Ziel"}"#.utf8))
+        var answer: CheckedContinuation<Page?, Never>?
+        model.lookUpPage = { _ in await withCheckedContinuation { answer = $0 } }
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+
+        let url = "https://wiki.example.com/p/ziel-Ab12"
+        #expect(model.pasteLink(url))
+        while answer == nil { try await Task.sleep(for: .milliseconds(10)) }
+        model.editsLink = true
+        answer?.resume(returning: target)
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(model.activeText.runs.contains { $0.link?.absoluteString == url })
+        #expect(!DocumentModel.inlines(from: model.activeText, base: .body).contains { $0.type == "mention" })
+    }
+
     /// "/bild" → Image drops the query before the picker opens, as on the web: gone on cancel, replaced by the uploads.
     @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func mediaCommandRemovesSlashQuery(uploads: Bool) async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))

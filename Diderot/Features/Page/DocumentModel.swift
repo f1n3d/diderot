@@ -1314,8 +1314,10 @@ final class DocumentModel {
         guard let serverURL, let lookUpPage, let slugId = Self.pageSlugId(of: url, serverURL: serverURL) else { return true }
         let ref = active.ref
         Task {
-            // A page that can't be found (or not seen) stays a link, as on the web.
-            guard let page = await lookUpPage(slugId), self.active?.ref == ref, let range = activeRange(offset: offset, text: pasted)
+            // A page that can't be found (or not seen) stays a link, as on the web. So does one while a sheet holds the text:
+            // the link sheet keeps its range in it.
+            guard let page = await lookUpPage(slugId), self.active?.ref == ref, !self.editsInSheet,
+                  let range = activeRange(offset: offset, text: pasted)
             else { return }
             let linked = LinkedPage(id: page.id, slugId: page.slugId, title: page.title ?? "", anchor: url.fragment)
             let mention = Self.editorText(from: [pageMention(linked)])
@@ -1414,7 +1416,9 @@ final class DocumentModel {
         let start = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
         activeText.transform(updating: &activeSelection) { $0.replaceSubrange(range, with: run) }
         if cursorAtEnd {
-            let end = activeText.characters.index(activeText.startIndex, offsetBy: start + run.characters.count)
+            // Clamped: a run starting with a combining mark merges with the character before it, so the text can be
+            // shorter than both parts.
+            let end = activeText.characters.index(activeText.startIndex, offsetBy: min(start + run.characters.count, activeText.characters.count))
             activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: AttributeContainer())
         }
         scheduleCommit(debounce: .zero)
