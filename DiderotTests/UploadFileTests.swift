@@ -8,7 +8,9 @@ import UniformTypeIdentifiers
 struct UploadFileTests {
     /// Everyone sees upload names on the web, so the stamp ignores the uploader's calendar and digits.
     @Test func cameraNameHasGregorianStamp() throws {
-        let name = UploadFile.camera(Data()).fileName
+        let file = try UploadFile.camera(Data())
+        defer { file.remove() }
+        let name = file.fileName
         let year = try #require(name.wholeMatch(of: /Foto-(\d{4})\d{4}-\d{6}\.jpg/.asciiOnlyDigits())?.1)
         #expect(Int(year) == Calendar(identifier: .gregorian).component(.year, from: .now))
     }
@@ -33,7 +35,15 @@ struct UploadFileTests {
     @Test func videosLeaveTheirLocationBehind() async throws {
         let video = try await Self.movie(location: "+48.1374+011.5755/")
         #expect(try await Self.hasLocation(video), "The test video has no location")
-        let uploaded = try await UploadFile.withoutLocation(video: video, type: .quickTimeMovie)
+        // Staged as the picker's copy is: in a folder of its own, which the shared file then lies in.
+        let folder = FileManager.default.temporaryDirectory.appending(path: "upload-test-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let original = folder.appending(path: "original.mov")
+        try video.write(to: original)
+        let shared = try await UploadFile.withoutLocation(videoAt: original, type: .quickTimeMovie)
+        #expect(!FileManager.default.fileExists(atPath: original.path), "the original goes")
+        let uploaded = try Data(contentsOf: shared)
         #expect(try await !Self.hasLocation(uploaded))
         #expect(try await Self.asset(uploaded) { try await $0.load(.duration).seconds } > 0)
     }

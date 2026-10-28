@@ -83,23 +83,54 @@ public actor APIClient {
     }
 
     /// Uploads a file to a page as `multipart/form-data`. `files/upload` answers without an envelope (`res.send`).
-    public func uploadAttachment(pageId: String, fileName: String, mimeType: String, data: Data) async throws -> Attachment {
+    /// Uploads a file on disk: the request body goes to a file beside it, written in chunks, and URLSession sends it from
+    /// there, so neither the file nor the body is held in memory (a large video took the app's memory).
+    public func uploadAttachment(pageId: String, fileName: String, mimeType: String, fileURL: URL) async throws -> Attachment {
         let boundary = "----DocmostBoundary" + UUID().uuidString
-        var body = Data()
-        func append(_ text: String) { body.append(Data(text.utf8)) }
-        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"pageId\"\r\n\r\n\(pageId)\r\n")
-        let safeName = fileName.replacingOccurrences(of: "\"", with: "_")
-        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeName)\"\r\nContent-Type: \(mimeType)\r\n\r\n")
-        body.append(data)
-        append("\r\n--\(boundary)--\r\n")
+        let body = fileURL.deletingLastPathComponent().appending(path: "body-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: body) }
+        guard FileManager.default.createFile(atPath: body.path, contents: nil, attributes: [.protectionKey: FileProtectionType.complete]) else {
+            throw APIError.invalidResponse
+        }
+        let output = try FileHandle(forWritingTo: body)
+        do {
+            defer { try? output.close() }
+            let (head, tail) = Self.multipartFrame(boundary: boundary, pageId: pageId, fileName: fileName, mimeType: mimeType)
+            try output.write(contentsOf: head)
+            let input = try FileHandle(forReadingFrom: fileURL)
+            defer { try? input.close() }
+            while let chunk = try input.read(upToCount: 1 << 20), !chunk.isEmpty {
+                try output.write(contentsOf: chunk)
+            }
+            try output.write(contentsOf: tail)
+        }
+        let request = uploadRequest(boundary: boundary)
+        let (responseData, _) = try await execute(request, path: "files/upload") { try await self.session.upload(for: request, fromFile: body) }
+        return try decode(Attachment.self, from: responseData, unwrapsEnvelope: false)
+    }
 
-        let path = "files/upload"
-        var request = URLRequest(url: apiURL(path))
+    private static func multipartFrame(boundary: String, pageId: String, fileName: String, mimeType: String) -> (head: Data, tail: Data) {
+        let safeName = fileName.replacingOccurrences(of: "\"", with: "_")
+        let head = "--\(boundary)\r\nContent-Disposition: form-data; name=\"pageId\"\r\n\r\n\(pageId)\r\n"
+            + "--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeName)\"\r\nContent-Type: \(mimeType)\r\n\r\n"
+        return (Data(head.utf8), Data("\r\n--\(boundary)--\r\n".utf8))
+    }
+
+    private func uploadRequest(boundary: String) -> URLRequest {
+        var request = URLRequest(url: apiURL("files/upload"))
         request.httpMethod = "POST"
         applyHeaders(to: &request, requiresAuth: true)
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-        let (responseData, _) = try await execute(request, path: path)
+        return request
+    }
+
+    /// Uploads data in memory (small payloads, tests).
+    public func uploadAttachment(pageId: String, fileName: String, mimeType: String, data: Data) async throws -> Attachment {
+        let boundary = "----DocmostBoundary" + UUID().uuidString
+        let (head, tail) = Self.multipartFrame(boundary: boundary, pageId: pageId, fileName: fileName, mimeType: mimeType)
+        var request = uploadRequest(boundary: boundary)
+        request.httpBody = head + data + tail
+        let (responseData, _) = try await execute(request, path: "files/upload")
         return try decode(Attachment.self, from: responseData, unwrapsEnvelope: false)
     }
 
@@ -136,11 +167,19 @@ public actor APIClient {
         return (scheme, url.host()?.lowercased(), url.port ?? (scheme == "http" ? 80 : 443))
     }
 
-    private func execute(_ request: URLRequest, path: String) async throws -> (Data, HTTPURLResponse) {
+    /// `send`: how the request goes out, if not as `session.data(for:)` (an upload from a file).
+    private func execute(
+        _ request: URLRequest, path: String, send: (() async throws -> (Data, URLResponse))? = nil
+    ) async throws -> (Data, HTTPURLResponse) {
         let started = ContinuousClock.now
         let method = request.httpMethod ?? "GET"
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response): (Data, URLResponse)
+            if let send {
+                (data, response) = try await send()
+            } else {
+                (data, response) = try await session.data(for: request)
+            }
             guard let http = response as? HTTPURLResponse else {
                 throw APIError.invalidResponse
             }

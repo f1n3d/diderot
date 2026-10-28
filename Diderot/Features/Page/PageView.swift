@@ -303,7 +303,7 @@ struct PageView: View {
                 guard let model else { return }
                 let target = model.takeMediaTarget()
                 startUpload(in: model)
-                Task { await upload([UploadFile.camera(data)], to: target, in: model) }
+                Task { await upload(1, to: target, in: model) { _ in try UploadFile.camera(data) } }
             }
             .ignoresSafeArea()
         }
@@ -1295,27 +1295,11 @@ struct PageView: View {
     }
 
     private func uploadPhotos(_ items: [PhotosPickerItem], to target: MediaTarget, in model: DocumentModel) async {
-        var files: [UploadFile] = []
-        for item in items {
-            do {
-                if let file = try await UploadFile.photo(item) { files.append(file) }
-            } catch {
-                toast = error.localizedDescription
-            }
-        }
-        await upload(files, to: target, in: model)
+        await upload(items.count, to: target, in: model) { try await UploadFile.photo(items[$0]) }
     }
 
     private func uploadFiles(at urls: [URL], to target: MediaTarget, in model: DocumentModel) async {
-        var files: [UploadFile] = []
-        for url in urls {
-            do {
-                files.append(try await UploadFile.file(at: url))
-            } catch {
-                toast = error.localizedDescription
-            }
-        }
-        await upload(files, to: target, in: model)
+        await upload(urls.count, to: target, in: model) { try await UploadFile.file(at: urls[$0]) }
     }
 
     /// Counts an upload as soon as its picker closes; it always ends in `upload`. The model keeps its page's engine open
@@ -1325,21 +1309,24 @@ struct PageView: View {
         model.uploadStarted()
     }
 
-    /// Uploads the files one by one and inserts them together at the target, in the page they were picked for.
-    private func upload(_ files: [UploadFile], to target: MediaTarget, in model: DocumentModel) async {
+    /// Prepares, uploads and removes the files one at a time, so a large video isn't staged beside all the others, and
+    /// inserts them together at the target, in the page they were picked for.
+    private func upload(_ count: Int, to target: MediaTarget, in model: DocumentModel, file: (Int) async throws -> UploadFile?) async {
         defer {
             uploads -= 1
             model.uploadEnded()
         }
-        guard let client = session.client, !files.isEmpty else { return }
+        guard let client = session.client else { return }
         let pageId = model.page.id
         var attachments: [Attachment] = []
-        for file in files {
+        for index in 0..<count {
             do {
-                let attachment = try await session.perform {
-                    try await client.uploadAttachment(pageId: pageId, fileName: file.fileName, mimeType: file.mimeType, data: file.data)
-                }
-                attachments.append(attachment)
+                guard let prepared = try await file(index) else { continue }
+                defer { prepared.remove() }
+                attachments.append(try await session.perform {
+                    try await client.uploadAttachment(pageId: pageId, fileName: prepared.fileName, mimeType: prepared.mimeType,
+                                                      fileURL: prepared.fileURL)
+                })
             } catch {
                 toast = error.userMessage
             }

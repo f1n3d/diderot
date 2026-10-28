@@ -16,7 +16,7 @@ nonisolated enum TempFile {
 
     /// Deletes all downloads: the top-level folders callers write to.
     static func removeAll() {
-        for folder in ["attachments", "exports"] {
+        for folder in ["attachments", "exports", "uploads"] {
             try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory.appending(component: folder))
         }
     }

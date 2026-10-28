@@ -5,18 +5,58 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// A file to upload from Photos, the camera or Files (editor and database file properties).
+/// A file to upload from Photos, the camera or Files (editor and database file properties), staged on disk: held in
+/// memory, a large video (or many photos) took the app's memory, twice while its location was removed. `remove` deletes
+/// it once uploaded.
 nonisolated struct UploadFile: Sendable {
-    let data: Data
+    let fileURL: URL
     let fileName: String
     let mimeType: String
+
+    /// One folder per upload under tmp/uploads (`TempFile.removeAll` clears what a crash left).
+    static let folder = FileManager.default.temporaryDirectory.appending(path: "uploads", directoryHint: .isDirectory)
+
+    private static func stagingFolder() throws -> URL {
+        let folder = folder.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    private static func staged(_ data: Data, fileName: String, mimeType: String) throws -> UploadFile {
+        let url = try stagingFolder().appending(path: "file")
+        try data.write(to: url, options: .completeFileProtection)
+        return UploadFile(fileURL: url, fileName: fileName, mimeType: mimeType)
+    }
+
+    /// Deletes the staged copy.
+    func remove() {
+        try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent())
+    }
+
+    /// A library video as a file, not as data: `Data.self` read it whole into memory.
+    private struct VideoFile: Transferable {
+        let url: URL
+        static var transferRepresentation: some TransferRepresentation {
+            FileRepresentation(importedContentType: .movie) { received in
+                let copy = try UploadFile.stagingFolder().appending(path: "original.\(received.file.pathExtension)")
+                try FileManager.default.copyItem(at: received.file, to: copy)
+                return VideoFile(url: copy)
+            }
+        }
+    }
 
     /// Library photo or video, without its location: the photo picker hands it over "with location" unless that is
     /// switched off, and everyone who can read the page could download it. Images other than JPEG, PNG and GIF upload
     /// as JPEG: the web client can't show HEIC/HEIF.
     @concurrent static func photo(_ item: PhotosPickerItem) async throws -> UploadFile? {
-        guard var data = try await item.loadTransferable(type: Data.self) else { return nil }
         let type = item.supportedContentTypes.first
+        if let type, type.conforms(to: .movie) {
+            guard let video = try await item.loadTransferable(type: VideoFile.self) else { return nil }
+            let shared = try await withoutLocation(videoAt: video.url, type: type)
+            return UploadFile(fileURL: shared, fileName: "Video-\(stamp()).\(shared.pathExtension)",
+                              mimeType: type.preferredMIMEType ?? "video/quicktime")
+        }
+        guard var data = try await item.loadTransferable(type: Data.self) else { return nil }
         var ext = type?.preferredFilenameExtension ?? "jpg"
         var mime = type?.preferredMIMEType ?? "image/jpeg"
         if let type, type.conforms(to: .image), !type.conforms(to: .jpeg), !type.conforms(to: .png), !type.conforms(to: .gif),
@@ -26,13 +66,10 @@ nonisolated struct UploadFile: Sendable {
             data = jpeg
             ext = "jpg"
             mime = "image/jpeg"
-        } else if let type, type.conforms(to: .movie) {
-            data = try await withoutLocation(video: data, type: type)
         } else {
             data = try withoutLocation(image: data)
         }
-        let name = type?.conforms(to: .movie) == true ? "Video" : "Bild"
-        return UploadFile(data: data, fileName: "\(name)-\(stamp()).\(ext)", mimeType: mime)
+        return try staged(data, fileName: "Bild-\(stamp()).\(ext)", mimeType: mime)
     }
 
     /// The image without its location; one without a location stays as it is. A JPEG keeps its encoding (only its
@@ -70,25 +107,25 @@ nonisolated struct UploadFile: Sendable {
         (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])?[kCGImagePropertyGPSDictionary] != nil
     }
 
-    /// The video without its location and other personal metadata (what sharing keeps), not encoded anew. If that
-    /// fails, it doesn't upload rather than with the location.
-    @concurrent static func withoutLocation(video data: Data, type: UTType) async throws -> Data {
+    /// The video at `input` (staged, in its own folder) without its location and other personal metadata (what sharing
+    /// keeps), not encoded anew: the exported file beside it, file to file; the original goes. If that fails, it
+    /// doesn't upload rather than with the location, and its folder goes.
+    @concurrent static func withoutLocation(videoAt input: URL, type: UTType) async throws -> URL {
         let fileType: AVFileType = type.conforms(to: .mpeg4Movie) ? .mp4 : .mov
-        let directory = FileManager.default.temporaryDirectory.appending(path: "upload-\(UUID().uuidString)", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let input = directory.appending(path: "original.\(type.preferredFilenameExtension ?? "mov")")
-        let output = directory.appending(path: "shared.\(fileType == .mp4 ? "mp4" : "mov")")
+        let output = input.deletingLastPathComponent().appending(path: "shared.\(fileType == .mp4 ? "mp4" : "mov")")
         do {
-            try data.write(to: input, options: .completeFileProtection)
             guard let export = AVAssetExportSession(asset: AVURLAsset(url: input), presetName: AVAssetExportPresetPassthrough) else {
                 throw LocationNotRemoved()
             }
             export.metadataItemFilter = .forSharing()
             try await export.export(to: output, as: fileType)
-            return try Data(contentsOf: output)
+            try? FileManager.default.removeItem(at: input)
+            // Best effort, as the export picks its own: the simulator refuses to set it.
+            try? (output as NSURL).setResourceValue(URLFileProtection.complete, forKey: .fileProtectionKey)
+            return output
         } catch {
             AppLog.ui.error("Video location not removed: \(error.localizedDescription, privacy: .public)")
+            try? FileManager.default.removeItem(at: input.deletingLastPathComponent())
             throw LocationNotRemoved()
         }
     }
@@ -98,17 +135,19 @@ nonisolated struct UploadFile: Sendable {
     }
 
     /// JPEG from the camera.
-    static func camera(_ data: Data) -> UploadFile {
-        UploadFile(data: data, fileName: "Foto-\(stamp()).jpg", mimeType: "image/jpeg")
+    static func camera(_ data: Data) throws -> UploadFile {
+        try staged(data, fileName: "Foto-\(stamp()).jpg", mimeType: "image/jpeg")
     }
 
-    /// File from the file importer (security-scoped URL).
+    /// File from the file importer (security-scoped URL), copied file to file.
     @concurrent static func file(at url: URL) async throws -> UploadFile {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        let data = try Data(contentsOf: url)
+        let copy = try stagingFolder().appending(path: "file")
+        try FileManager.default.copyItem(at: url, to: copy)
+        try? (copy as NSURL).setResourceValue(URLFileProtection.complete, forKey: .fileProtectionKey)
         let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-        return UploadFile(data: data, fileName: url.lastPathComponent, mimeType: mime)
+        return UploadFile(fileURL: copy, fileName: url.lastPathComponent, mimeType: mime)
     }
 
     private static func stamp() -> String {
