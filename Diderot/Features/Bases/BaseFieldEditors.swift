@@ -422,7 +422,13 @@ struct BaseFileEditor: View {
         }
         .fullScreenCover(isPresented: $showsCamera) {
             CameraPicker { data in
-                Task { await upload(UploadFile.camera(data)) }
+                Task {
+                    do {
+                        await upload(try UploadFile.camera(data))
+                    } catch {
+                        model.toast = error.localizedDescription
+                    }
+                }
             }
             .ignoresSafeArea()
         }
@@ -444,7 +450,7 @@ struct BaseFileEditor: View {
     }
 
     private func upload(_ file: UploadFile) async {
-        await model.attachFile(rowId: rowId, propertyId: property.id, data: file.data, fileName: file.fileName, mimeType: file.mimeType)
+        await model.attachFile(rowId: rowId, propertyId: property.id, file: file)
     }
 
     private func remove(_ file: FileEntry) {

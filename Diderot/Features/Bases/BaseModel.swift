@@ -389,14 +389,17 @@ final class BaseModel {
     }
 
     /// Uploads a file to the database's page and appends it to the file cell.
-    func attachFile(rowId: String, propertyId: String, data: Data, fileName: String, mimeType: String) async {
+    /// Uploads a staged file (`UploadFile`) and adds it to the cell; the staged copy goes afterwards.
+    func attachFile(rowId: String, propertyId: String, file: UploadFile) async {
+        defer { file.remove() }
         guard canEdit, let client = session.client else { return }
         isUploading = true
         defer { isUploading = false }
         let pageId = pageId
+        let mimeType = file.mimeType
         do {
             let attachment = try await session.perform {
-                try await client.uploadAttachment(pageId: pageId, fileName: fileName, mimeType: mimeType, data: data)
+                try await client.uploadAttachment(pageId: pageId, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
             }
             let files = row(id: rowId)?.cells[propertyId]?.arrayValue ?? []
             await setCell(rowId: rowId, propertyId: propertyId, to: .array(files + [BaseValue.file(attachment, mimeType: mimeType)]))
