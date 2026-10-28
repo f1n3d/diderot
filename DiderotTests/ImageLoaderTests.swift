@@ -25,6 +25,23 @@ struct ImageLoaderTests {
         #expect(ImageLoader.thumbnailSize(targetPixelWidth: 2560, ratio: 0.5) == 2560)
     }
 
+    /// A width from the document such as "nan%" or a huge negative number gives a bounded pixel width: turning it into an
+    /// Int trapped, for everyone who saw the image.
+    @Test func pixelWidthsStayInBounds() {
+        #expect(ImageLoader.pixelWidth(for: -1e20, scale: 3) == 64)
+        #expect(ImageLoader.pixelWidth(for: .nan, scale: 3) == 64)
+        #expect(ImageLoader.pixelWidth(for: 1e20, scale: 3) == 16_384)
+        #expect(ImageLoader.pixelWidth(for: 300, scale: 3) == 900)
+    }
+
+    /// An image larger than the source limit isn't decoded at all, not even as a thumbnail: a file that is small as such
+    /// but huge unpacked (a member's crafted avatar) took the app's memory wherever it showed.
+    @Test func sourcesOverTheLimitAreNotDecoded() async throws {
+        let data = try jpeg(width: 400, height: 300, orientation: 1)
+        #expect(await ImageLoader.decode(data, targetPixelWidth: 100, maxSourcePixels: 100_000) == nil)
+        #expect(await ImageLoader.decode(data, targetPixelWidth: 100, maxSourcePixels: 200_000) != nil)
+    }
+
     private func jpeg(width: Int, height: Int, orientation: Int) throws -> Data {
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,

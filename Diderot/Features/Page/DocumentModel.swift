@@ -1172,6 +1172,11 @@ final class DocumentModel {
         let url: String
         let provider: String
         var id: String { "\(ref.identity)/\(index)" }
+        /// What "Open Link" opens in the in-app browser: web addresses only, as the web treats a mention with another
+        /// address as one without a link (Safari's view throws, ending the app, on any other).
+        var webURL: URL? {
+            URL(string: url).flatMap { ContentLinkRouter.opening(for: $0) == .browser ? $0 : nil }
+        }
     }
 
     var mentionActions: MentionTarget?

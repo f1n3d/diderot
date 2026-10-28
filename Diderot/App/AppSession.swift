@@ -196,7 +196,13 @@ final class AppSession {
     /// Every window's root view calls this, but windows share the session: only the first call restores it, in a task
     /// that closing its window can't cancel.
     func restoreAtLaunch() async {
-        if launchRestore == nil { launchRestore = Task { await restore() } }
+        if launchRestore == nil {
+            launchRestore = Task {
+                await restore()
+                // Once per launch: a window opened later (iPad) would remove the cookie of an editor open in another.
+                await WebEditorStores.removeLeftoverAuthCookies()
+            }
+        }
         await launchRestore?.value
     }
 
@@ -311,12 +317,14 @@ final class AppSession {
     /// Removes another saved sign-in: ends its server session and deletes its cache and unsent changes.
     func removeAccount(_ account: StoredSession) async {
         guard !isCurrent(account) else { return }
-        await endServerSession(account, client: makeClient(for: account.serverURL, token: account.token))
+        // As signing out: on the device first, then the server.
+        keepPendingLogout(account)
         keychain("remove") { try sessionStore.remove(serverURL: account.serverURL) }
-        await makeCache(for: account.serverURL).removeAll()
-        UnsentChanges.removeAll(server: account.serverURL)
         reloadAccounts()
+        UnsentChanges.removeAll(server: account.serverURL)
+        await makeCache(for: account.serverURL).removeAll()
         await removeLocalData(for: account.serverURL)
+        await sendPendingLogouts()
     }
 
     /// The saved sign-in whose server matches a web URL (for links to another server).
@@ -392,36 +400,26 @@ final class AppSession {
     /// Signs out of the current server and continues with another saved one, if any.
     func signOut() async {
         guard case .ready(let session) = state else { return }
-        await endServerSession(StoredSession(serverURL: session.server.url, token: session.token), client: session.client)
-        await removeLocalData(for: session.server.url)
-        // After the last await: while the state still shows this session, a finishing reconnect would save it again.
+        // On the device before any await: the server can take its 30 s to answer (behind a VPN that is off), and an app
+        // left meanwhile stayed signed in. A reconnect finishing meanwhile is no longer current, so it can't save the
+        // session again. The server's session ends through the waiting sign-outs, which retry until it answers.
+        keepPendingLogout(StoredSession(serverURL: session.server.url, token: session.token))
         keychain("remove") { try sessionStore.remove(serverURL: session.server.url) }
         reloadAccounts()
         AppLog.session.info("Signed out")
-        // A second tap on Sign Out or a switch during the awaits has already moved on.
-        guard isStillCurrent(session) else { return }
-        if let next = nextAccountAfterSignOut() {
-            await switchTo(next)
-        } else {
-            state = .signedOut(session.server)
-        }
+        let next = nextAccountAfterSignOut()
+        state = next == nil ? .signedOut(session.server) : .restoring
+        await removeLocalData(for: session.server.url)
+        if let next, case .restoring = state { await switchTo(next) }
+        await sendPendingLogouts()
     }
 
     // MARK: - Sign-outs the server didn't get
 
     @ObservationIgnored private var isSendingLogouts = false
 
-    /// Ends the session on its server. Out of reach, it would stay valid there until it expires, so it waits for
-    /// `sendPendingLogouts`; a 401 means the server ended it already.
-    private func endServerSession(_ session: StoredSession, client: APIClient) async {
-        do {
-            _ = try await client.send(Endpoints.Auth.logout)
-        } catch let error as APIError where error.isSessionExpired {
-        } catch {
-            keepPendingLogout(session)
-        }
-    }
-
+    /// A sign-out for its server: `sendPendingLogouts` ends the session there, now or once the server answers; out of
+    /// reach, it would stay valid there until it expires.
     private func keepPendingLogout(_ session: StoredSession) {
         keychain("keep the sign-out") {
             var pending = try sessionStore.pendingLogouts()
@@ -607,7 +605,10 @@ final class AppSession {
             await cache.write(resolvedEntitlements, key: CacheKey.entitlements)
         } catch {
             AppLog.session.error("Entitlements unavailable, using cached: \(error.userMessage, privacy: .public)")
-            resolvedEntitlements = await cache.read(Entitlements.self, key: CacheKey.entitlements) ?? .community
+            let cached = await cache.read(Entitlements.self, key: CacheKey.entitlements)
+            resolvedEntitlements = cached ?? .community
+            // Written again: `prune` below goes by age and size, like for photos and PDFs in the same cache.
+            if let cached { await cache.write(cached, key: CacheKey.entitlements) }
         }
         // Docmost names its version only after asking GitHub for its latest release, and nothing when GitHub refuses
         // (60 requests an hour from one address) or a proxy blocks it: keep the last one it named.
@@ -617,6 +618,8 @@ final class AppSession {
             await cache.write(current, key: CacheKey.serverVersion)
         } else {
             serverVersion = await cache.read(String.self, key: CacheKey.serverVersion)
+            // Written again, as the license above: a version the server stopped naming would only age.
+            if let serverVersion { await cache.write(serverVersion, key: CacheKey.serverVersion) }
         }
         // A reconnect must not undo a switch or sign-out made meanwhile; no await from here to the `state` write.
         if let replacing, !isStillCurrent(replacing) { return }
@@ -672,8 +675,8 @@ final class AppSession {
         return isOtherUser
     }
 
-    /// Removes what the offline cache doesn't cover: downloads, the system URL cache (files of older builds,
-    /// `AsyncImage` logos and avatars) and the server's web editor data.
+    /// Removes what the offline cache doesn't cover: downloads, the system URL cache (files of older builds, logos and
+    /// avatars) and the server's web editor data.
     private func removeLocalData(for serverURL: URL) async {
         TempFile.removeAll()
         URLCache.shared.removeAllCachedResponses()

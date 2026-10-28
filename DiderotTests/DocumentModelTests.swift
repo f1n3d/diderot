@@ -798,6 +798,17 @@ struct DocumentModelTests {
         while engine.saved.last?.plainText != "Eins neu" { try await Task.sleep(for: .milliseconds(10)) }
     }
 
+    /// "Open Link" on an integration mention opens only web addresses: Safari's view threw on any other, ending the app.
+    @Test func mentionOpensOnlyWebAddresses() {
+        func target(_ url: String) -> DocumentModel.MentionTarget {
+            DocumentModel.MentionTarget(ref: NodeRef(path: [0], id: "a"), index: 0, url: url, provider: "github")
+        }
+        #expect(target("https://github.com/o/r/issues/1").webURL != nil)
+        for url in ["mailto:a@b.c", "tel:1", "ftp://github.com/x", "javascript:alert(1)", "file:///x", "github.com/o/r", ""] {
+            #expect(target(url).webURL == nil, "\(url)")
+        }
+    }
+
     /// A refused live connection makes the page read-only with a message; it used to stay at "Connecting…".
     @Test func refusedLiveConnectionMakesThePageReadOnly() throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))

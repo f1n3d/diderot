@@ -19,15 +19,9 @@ struct CommentsView: View {
     var onShowInPage: ((PageComment) -> Void)?
 
     private enum Tab: Hashable { case open, resolved }
-    private enum Composing: Equatable {
-        case new
-        case reply(PageComment)
-        case edit(PageComment)
-    }
+    private typealias Composing = PageComments.Composing
 
     @State private var tab = Tab.open
-    @State private var draft = ""
-    @State private var composing = Composing.new
     @State private var isSending = false
     @State private var errorMessage: String?
     @State private var highlighted: String?
@@ -56,7 +50,12 @@ struct CommentsView: View {
             }
             .environment(\.renderContext, RenderContext(session: session, pageId: page.id))
             .environment(\.linkPreviews, session.linkPreviews)
-            .task { if comments.state.value == nil { await comments.load() } }
+            // Every time: comments others wrote since the page opened (their marks show live) would be missing. The list
+            // stays shown while it loads.
+            .task {
+                await comments.load()
+                comments.dropGoneTarget()
+            }
         }
         .accessibilityIdentifier("comments-sheet")
     }
@@ -103,7 +102,7 @@ struct CommentsView: View {
             .refreshable { await comments.load() }
             .task(id: focusId) {
                 // Tapped passage: show its thread (even if resolved), briefly highlighted.
-                guard let focusId, let comment = comments.comment(id: focusId) else { return }
+                guard let focusId, let comment = await comments.comment(id: focusId, reloadingIfMissing: true) else { return }
                 let thread = comment.parentCommentId.flatMap { comments.comment(id: $0) } ?? comment
                 tab = thread.isResolved ? .resolved : .open
                 try? await Task.sleep(for: .milliseconds(250))
@@ -148,10 +147,22 @@ struct CommentsView: View {
     @ViewBuilder
     private func menu(for comment: PageComment) -> some View {
         if canComment, !comment.isReply {
-            Button("Reply", systemImage: "arrowshape.turn.up.left") { compose(.reply(comment), text: "") }
+            // A new comment being written becomes the reply rather than vanishing.
+            Button("Reply", systemImage: "arrowshape.turn.up.left") {
+                compose(.reply(comment), text: comments.composing == .new ? comments.draft : "")
+            }
         }
         if comment.creatorId == currentUserId {
-            Button("Edit", systemImage: "pencil") { compose(.edit(comment), text: CommentContent.plainText(of: comment.content)) }
+            // The app edits plain text: a comment's links, mentions and formatting would be gone for good.
+            if CommentContent.isPlain(comment.content) {
+                Button("Edit", systemImage: "pencil") { compose(.edit(comment), text: CommentContent.plainText(of: comment.content)) }
+            } else {
+                Button {} label: {
+                    Label("Edit", systemImage: "pencil")
+                    Text("Comments with links, mentions or formatting can be edited on the web.")
+                }
+                .disabled(true)
+            }
         }
         if comments.canResolve, canComment, !comment.isReply {
             if comment.isResolved {
@@ -175,12 +186,12 @@ struct CommentsView: View {
     @ViewBuilder
     private var composer: some View {
         // Without comment rights it still shows for editing own comments and for errors (e.g. from Delete).
-        if canComment || composing != .new || errorMessage != nil {
+        if canComment || comments.composing != .new || errorMessage != nil {
             VStack(spacing: 6) {
-                if composing != .new {
+                if comments.composing != .new {
                     HStack {
                         Group {
-                            switch composing {
+                            switch comments.composing {
                             case .reply(let comment): Text("Replying to \(comment.creator?.name ?? String(localized: "comment"))")
                             case .edit: Text("Editing comment")
                             case .new: EmptyView()
@@ -197,7 +208,7 @@ struct CommentsView: View {
                     Text(errorMessage).font(.caption).foregroundStyle(.red)
                 }
                 HStack(alignment: .bottom, spacing: 8) {
-                    TextField(placeholder, text: $draft, axis: .vertical)
+                    TextField(placeholder, text: Bindable(comments).draft, axis: .vertical)
                         .lineLimit(1...5)
                         .textFieldStyle(.roundedBorder)
                         .focused($composerFocused)
@@ -209,7 +220,7 @@ struct CommentsView: View {
                             Image(systemName: "arrow.up.circle.fill").font(.title2)
                         }
                     }
-                    .disabled(isSending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isSending || comments.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityLabel("Send")
                     .accessibilityIdentifier("comments-send")
                 }
@@ -220,7 +231,7 @@ struct CommentsView: View {
     }
 
     private var placeholder: LocalizedStringKey {
-        switch composing {
+        switch comments.composing {
         case .new: "Add a comment"
         case .reply: "Write a reply"
         case .edit: "Edit comment"
@@ -228,16 +239,16 @@ struct CommentsView: View {
     }
 
     private func compose(_ mode: Composing, text: String) {
-        composing = mode
-        draft = text
+        comments.composing = mode
+        comments.draft = text
         errorMessage = nil
         composerFocused = mode != .new
     }
 
     private func send() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = comments.draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isSending else { return }
-        let mode = composing
+        let mode = comments.composing
         isSending = true
         errorMessage = nil
         Task {

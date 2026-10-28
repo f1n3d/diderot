@@ -40,7 +40,8 @@ final class BaseModel {
     private(set) var selectedViewId: String?
     private(set) var table = BaseRowList()
     private(set) var columns: [BaseKanbanColumn] = []
-    /// Board rows edited into a hidden column (or one added since loading), so their open detail sheet keeps them.
+    /// Rows outside what the view shows: board rows edited into a hidden column (or one added since loading), and an
+    /// entry opened from a link that the table's loaded rows or filter leave out. Their open detail sheet keeps them.
     private var offBoardRows: [String: BaseRow] = [:]
     private(set) var users: [String: UserRef] = [:]
     private(set) var pages: [String: PageRef] = [:]
@@ -62,6 +63,15 @@ final class BaseModel {
     /// Rows deleted, or whose delete waits in the write queue: an earlier change's response, a load (also one the
     /// server answered before the delete) or a view's offline copy doesn't bring them back.
     @ObservationIgnored private var deletedRowIds: Set<String> = []
+    /// Rows a write saved while a load ran: an answer the server gave before the write doesn't revert them.
+    @ObservationIgnored private var savedDuringLoad: [String: BaseRow] = [:]
+    @ObservationIgnored private var runningLoads = 0
+    /// Set by the screen. Offline the database is read-only, as pages are: a save would fail at once.
+    var isOffline = false
+    /// Text a failed save didn't get to the server, by "rowId/propertyId": its field shows it again, not the old value.
+    private(set) var unsavedDrafts: [String: String] = [:]
+    /// The sign-in this database was opened with: after a server switch, its queued writes must not reach the new server.
+    @ObservationIgnored private let token: String?
 
     private struct PendingWrite {
         let id = UUID()
@@ -73,6 +83,7 @@ final class BaseModel {
     init(pageId: String, session: AppSession) {
         self.pageId = pageId
         self.session = session
+        self.token = session.ready?.token
         self.selectedViewId = UserDefaults.standard.string(forKey: Self.viewKey(pageId))
     }
 
@@ -143,8 +154,13 @@ final class BaseModel {
         guard let base, let view = selectedView else { return }
         isLoadingRows = true
         rowsError = nil
+        runningLoads += 1
         // Switched tabs (or the view changed in a reload) meanwhile: the newer load shows the rows.
-        defer { if selectedView == view { isLoadingRows = false } }
+        defer {
+            runningLoads -= 1
+            if runningLoads == 0 { savedDuringLoad = [:] }
+            if selectedView == view { isLoadingRows = false }
+        }
         do {
             switch view.kind {
             case .table:
@@ -153,6 +169,7 @@ final class BaseModel {
                 table = BaseRowList(rows: page.items, cursor: page.meta.nextCursor, hasMore: page.meta.hasNextPage)
                 table.rows.removeAll { deletedRowIds.contains($0.id) }
                 merge(page.references)
+                reapplyOwnChanges()
             case .kanban:
                 guard let groupBy = BaseLayout.groupByProperty(base: base, view: view) else {
                     columns = []
@@ -175,6 +192,7 @@ final class BaseModel {
                 guard selectedView == view else { return }
                 for index in loaded.indices { loaded[index].list.rows.removeAll { deletedRowIds.contains($0.id) } }
                 columns = loaded
+                reapplyOwnChanges()
             }
             await storeSnapshot()
         } catch is CancellationError {
@@ -250,12 +268,18 @@ final class BaseModel {
         case license
         /// No write permission for this page.
         case permission
+        /// No connection: a save would fail at once.
+        case offline
     }
 
     var readOnlyReason: ReadOnlyReason? {
         guard session.ready?.entitlements.has("bases") == true else { return .license }
-        return base?.canEdit == true ? nil : .permission
+        guard base?.canEdit == true else { return .permission }
+        return isOffline ? .offline : nil
     }
+
+    /// The text a failed save of this cell didn't get to the server, if any.
+    func unsavedDraft(rowId: String, propertyId: String) -> String? { unsavedDrafts["\(rowId)/\(propertyId)"] }
 
     var canEdit: Bool { base != nil && readOnlyReason == nil }
 
@@ -288,11 +312,14 @@ final class BaseModel {
 
     /// Changes a cell optimistically; the response (with recomputed formulas and "Last edited") replaces the row, and a
     /// failure restores the previous state. `nil` clears the cell.
-    func setCell(rowId: String, propertyId: String, to value: JSONValue?) async {
+    /// `typed`: the field's text, kept if the save fails (see `unsavedDrafts`).
+    func setCell(rowId: String, propertyId: String, to value: JSONValue?, typed draft: String? = nil) async {
         guard let current = row(id: rowId) else { return }
+        let key = "\(rowId)/\(propertyId)"
+        unsavedDrafts[key] = nil
         let value = value.flatMap { $0.isNull ? nil : $0 }
         guard current.cells[propertyId] != value else { return }
-        await write(rowId: rowId, cells: [propertyId: value ?? .null], position: nil)
+        await write(rowId: rowId, cells: [propertyId: value ?? .null], position: nil, keeping: draft.map { (key, $0) })
     }
 
     /// Moves a card into a column, before `anchorId` (after it if `below`) or to the end. Column and order change in
@@ -415,11 +442,14 @@ final class BaseModel {
             id: BaseValue.newChoiceId(), name: name,
             color: BaseValue.choiceColors[existing.count % BaseValue.choiceColors.count]
         )
-        let options = BaseValue.typeOptions(property.typeOptions, adding: choice)
         let pageId = pageId
         do {
             let result = try await enqueue {
-                try await self.session.send(Endpoints.Bases.updateProperty(pageId: pageId, propertyId: propertyId, typeOptions: options))
+                // Onto the server's current options, not the copy loaded with the screen (there are no live updates): the
+                // server replaces the whole list, so options others added, renamed or recolored meanwhile would go.
+                let current = try await self.session.send(Endpoints.Bases.info(pageId: pageId)).property(id: propertyId)
+                let options = BaseValue.typeOptions((current ?? property).typeOptions, adding: choice)
+                return try await self.session.send(Endpoints.Bases.updateProperty(pageId: pageId, propertyId: propertyId, typeOptions: options))
             }
             // A reload may have brought a newer base meanwhile.
             base = self.base ?? base
@@ -456,8 +486,10 @@ final class BaseModel {
     // MARK: Internal writes
 
     /// Cell patch and/or new position of a row: queued and shown immediately.
-    private func write(rowId: String, cells: [String: JSONValue], position: String?) async {
-        guard canEdit, let current = row(id: rowId) else { return }
+    /// `keeping`: a field's text, kept in `unsavedDrafts` if the save fails, before the row shows its old value again.
+    private func write(rowId: String, cells: [String: JSONValue], position: String?, keeping draft: (key: String, text: String)? = nil) async {
+        // Not `canEdit`: a field that saves as the database turns read-only offline still tries, so its text is kept.
+        guard base?.canEdit == true, session.ready?.entitlements.has("bases") == true, let current = row(id: rowId) else { return }
         let view = selectedView
         if confirmedRows[rowId] == nil { confirmedRows[rowId] = current }
         let pending = PendingWrite(rowId: rowId, cells: cells, position: position)
@@ -470,9 +502,11 @@ final class BaseModel {
             }
             pendingWrites.removeAll { $0.id == pending.id }
             confirmedRows[rowId] = saved
+            if runningLoads > 0 { savedDuringLoad[rowId] = saved }
         } catch {
             pendingWrites.removeAll { $0.id == pending.id }
             toast = failureMessage(error, cells: cells)
+            if let draft { unsavedDrafts[draft.key] = draft.text }
         }
         // Switched tabs meanwhile: update the row only where the new view shows it, never add it there.
         if let display = overlay(rowId: rowId), selectedView == view || row(id: rowId) != nil { place(display) }
@@ -480,6 +514,16 @@ final class BaseModel {
             confirmedRows[rowId] = nil
             await storeSnapshot()
         }
+    }
+
+    /// The user's saved and pending changes over a rows answer the server may have given before them; only for rows the
+    /// answer shows, so a view switched to meanwhile gets no row it leaves out.
+    private func reapplyOwnChanges() {
+        func shown(_ id: String) -> Bool {
+            table.rows.contains { $0.id == id } || columns.contains { $0.list.rows.contains { $0.id == id } }
+        }
+        for row in savedDuringLoad.values where shown(row.id) { place(row) }
+        for rowId in Set(pendingWrites.map(\.rowId)) where shown(rowId) { place(overlay(rowId: rowId)) }
     }
 
     /// Failed-save message; on "Cell validation failed" it says which value is invalid, not the server's English text.
@@ -513,6 +557,7 @@ final class BaseModel {
         if let index = table.rows.firstIndex(where: { $0.id == row.id }) {
             table.rows[index] = row
         }
+        if offBoardRows[row.id] != nil { offBoardRows[row.id] = row }
         guard let groupBy = groupByProperty else { return }
         let target = BaseLayout.columnId(of: row, groupBy: groupBy)
         for index in columns.indices {
@@ -536,10 +581,17 @@ final class BaseModel {
         let previous = writeQueue
         let task = Task { @MainActor in
             await previous?.value
+            // Switched to another server meanwhile: the write would take its content there.
+            guard self.session.ready?.token == self.token else { throw SwitchedServer() }
             return try await operation()
         }
         writeQueue = Task { _ = try? await task.value }
         return try await task.value
+    }
+
+    /// A queued write after a switch to another server, dropped.
+    private struct SwitchedServer: LocalizedError {
+        var errorDescription: String? { String(localized: "Not saved: the app has switched to another server.") }
     }
 
     // MARK: - Cache

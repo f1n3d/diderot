@@ -224,7 +224,9 @@ struct PageView: View {
         }
         .confirmationDialog("Link", isPresented: Binding { model?.mentionActions != nil } set: { if !$0 { model?.mentionActions = nil } },
                             titleVisibility: .hidden, presenting: model?.mentionActions) { target in
-            Button("Open Link") { browsing = URL(string: target.url) }
+            if let url = target.webURL {
+                Button("Open Link") { browsing = url }
+            }
             if model?.canShowAsCard(target) == true {
                 Button("Show as Card") { Task { await model?.showMention(target, as: .card) } }
             }
