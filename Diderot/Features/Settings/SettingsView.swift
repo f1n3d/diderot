@@ -5,6 +5,7 @@ import DocmostKit
 struct SettingsView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(RenderContext.loadsOtherServersKey) private var loadsOtherServers = false
     @State private var logFile: URL?
     @State private var logError: String?
 
@@ -50,6 +51,13 @@ struct SettingsView: View {
                                 dismiss()
                             }
                         }
+                    }
+                    Section {
+                        Toggle("Load Content from Other Servers", isOn: $loadsOtherServers)
+                    } header: {
+                        Text("Privacy")
+                    } footer: {
+                        Text("Pages can show images, videos and PDFs from other websites. Off, they load only when you tap them: loading tells that website who reads the page and when.")
                     }
                     Section("Offline") {
                         LabeledContent("Saved content", value: cacheSizeText)

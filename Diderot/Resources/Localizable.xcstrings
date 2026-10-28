@@ -2033,6 +2033,16 @@
         }
       }
     },
+    "From %@. Tap to load.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von %@. Zum Laden tippen."
+          }
+        }
+      }
+    },
     "Full access": {
       "localizations": {
         "de": {
@@ -2574,6 +2584,16 @@
         }
       }
     },
+    "Load Content from Other Servers": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inhalte anderer Server automatisch laden"
+          }
+        }
+      }
+    },
     "Load More": {
       "localizations": {
         "de": {
@@ -2590,6 +2610,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Editor wird geladen …"
+          }
+        }
+      }
+    },
+    "Loads it from that server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lädt es von diesem Server"
           }
         }
       }
@@ -3593,6 +3623,16 @@
         }
       }
     },
+    "Pages can show images, videos and PDFs from other websites. Off, they load only when you tap them: loading tells that website who reads the page and when.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seiten können Bilder, Videos und PDFs von anderen Websites zeigen. Ist das aus, laden sie erst nach einem Tipp: Beim Laden erfährt die Website, wer die Seite wann liest."
+          }
+        }
+      }
+    },
     "Pages created in this space will show up here.": {
       "localizations": {
         "de": {
@@ -3739,6 +3779,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vorherige Folie"
+          }
+        }
+      }
+    },
+    "Privacy": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenschutz"
           }
         }
       }

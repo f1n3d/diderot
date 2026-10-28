@@ -21,6 +21,38 @@ struct RenderContext: Sendable {
     func mediaURL(_ src: String?) -> URL? {
         baseURL.flatMap { ImageURL.resolveContentMedia(src, baseURL: $0) }
     }
+
+    /// Whether media at `url` loads by itself: from the server, or from anywhere with Settings › "Load Content from Other
+    /// Servers" on. From another host it loads only after a tap otherwise (`OtherServerCard`): it would tell that host who
+    /// reads the page and when, as a tracking pixel does, while nothing is to leave the device but to the own server.
+    func loadsByItself(_ url: URL) -> Bool {
+        Self.loadsByItself(url, server: baseURL)
+    }
+
+    nonisolated static let loadsOtherServersKey = "loadsContentFromOtherServers"
+
+    nonisolated static func loadsByItself(_ url: URL, server: URL?) -> Bool {
+        // A file on the device tells nobody anything.
+        if url.isFileURL { return true }
+        guard let server else { return false }
+        return WebNavigationLimit.sameOrigin(url, server) || UserDefaults.standard.bool(forKey: loadsOtherServersKey)
+    }
+}
+
+/// Media from another server in place of the media, until tapped (`RenderContext.loadsByItself`).
+struct OtherServerCard: View {
+    let icon: String
+    let title: String
+    let url: URL
+    let load: () -> Void
+
+    var body: some View {
+        Button(action: load) {
+            PlaceholderCard(icon: icon, title: title, detail: String(localized: "From \(url.host() ?? url.absoluteString). Tap to load."))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(Text("Loads it from that server"))
+    }
 }
 
 extension RenderContext {

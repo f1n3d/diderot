@@ -4,6 +4,28 @@ import Testing
 
 /// Tests on `Tests/DocmostKitTests/Fixtures`; Tools/seed-fixtures.py imports `fixture-*.json` into the dev instance.
 struct ContentParserTests {
+    /// Comments show what the web's comment editor makes: an image, PDF or formula in a crafted comment shows as
+    /// unsupported and loads nothing, text, lists, quotes and code stay, and Mermaid stays its source.
+    @Test func commentsShowOnlyWhatTheCommentEditorMakes() throws {
+        let json = try JSONDecoder().decode(JSONValue.self, from: Data(#"""
+        {"type": "doc", "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "Hallo"}]},
+          {"type": "image", "attrs": {"src": "https://tracker.example.com/p.png"}},
+          {"type": "pdf", "attrs": {"src": "https://example.com/huge.pdf"}},
+          {"type": "mathBlock", "attrs": {"text": "x^2"}},
+          {"type": "bulletList", "content": [{"type": "listItem", "content": [{"type": "image", "attrs": {"src": "https://t.example.com/i.png"}}]}]},
+          {"type": "codeBlock", "attrs": {"language": "mermaid"}, "content": [{"type": "text", "text": "graph TD"}]}
+        ]}
+        """#.utf8))
+        let kinds = ContentDocument(commentJSON: json).blocks.map(\.kind)
+        guard kinds.count == 6, case .paragraph = kinds[0], case .unknown(let image, _) = kinds[1], case .unknown = kinds[2],
+              case .unknown = kinds[3], case .bulletList(let items) = kinds[4], case .codeBlock(let language, let code) = kinds[5]
+        else { Issue.record("unexpected kinds: \(kinds)"); return }
+        #expect(image == "image")
+        guard case .unknown = items.first?.blocks.first?.kind else { Issue.record("an image in a list item stays unsupported"); return }
+        #expect(language == nil && code == "graph TD")
+    }
+
     /// Crafted numbers stay in bounds: a list's start near Int.max numbers from 1 (browsers count lists in 32 bits), a
     /// huge colspan spans 1,000 columns, and widths such as "nan%" are no width. They trapped or took the app's memory.
     @Test func craftedNumbersStayInBounds() throws {

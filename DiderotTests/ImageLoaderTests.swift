@@ -25,6 +25,20 @@ struct ImageLoaderTests {
         #expect(ImageLoader.thumbnailSize(targetPixelWidth: 2560, ratio: 0.5) == 2560)
     }
 
+    /// Media from another host loads only after a tap, unless Settings turns that on; the server's own always loads.
+    @Test func otherServersLoadOnlyWhenAllowed() {
+        let server = URL(string: "https://wiki.example.com")!
+        let key = RenderContext.loadsOtherServersKey
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        UserDefaults.standard.set(false, forKey: key)
+        #expect(RenderContext.loadsByItself(URL(string: "https://wiki.example.com/api/files/a/b.png")!, server: server))
+        #expect(!RenderContext.loadsByItself(URL(string: "https://tracker.example.net/p.png")!, server: server))
+        #expect(!RenderContext.loadsByItself(URL(string: "http://wiki.example.com/b.png")!, server: server), "another scheme is another origin")
+        #expect(RenderContext.loadsByItself(URL.temporaryDirectory.appending(path: "clip.mov"), server: server), "a file on the device")
+        UserDefaults.standard.set(true, forKey: key)
+        #expect(RenderContext.loadsByItself(URL(string: "https://tracker.example.net/p.png")!, server: server))
+    }
+
     /// A width from the document such as "nan%" or a huge negative number gives a bounded pixel width: turning it into an
     /// Int trapped, for everyone who saw the image.
     @Test func pixelWidthsStayInBounds() {

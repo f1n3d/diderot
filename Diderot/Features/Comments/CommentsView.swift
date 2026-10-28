@@ -343,7 +343,8 @@ private struct CommentRow<Actions: View, MenuItems: View>: View {
                     }
                     .lineLimit(3)
             }
-            BlockStack(blocks: ContentDocument(json: comment.content).blocks, spacing: 6)
+            // What the web's comment editor allows; anything else shows as unsupported and loads nothing.
+            BlockStack(blocks: ContentDocument(commentJSON: comment.content).blocks, spacing: 6)
                 .font(.body)
             actions()
                 .font(.caption)

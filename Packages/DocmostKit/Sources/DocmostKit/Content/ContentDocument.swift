@@ -14,6 +14,33 @@ public struct ContentDocument: Sendable, Hashable {
 
 extension ContentDocument {
     /// Parses `Page.content`; `nil` or a string (Markdown/HTML format) yields an empty document.
+    /// A comment as the web's comment editor makes and shows it (text, lists, quotes, code, links, mentions). Other
+    /// blocks (media, math, diagrams, embeds, synced blocks, databases), which only crafted comments carry, show as
+    /// unsupported and load nothing: they told other hosts who read the comments, or loaded huge files.
+    public init(commentJSON json: JSONValue?) {
+        self.init(blocks: ContentDocument(json: json).blocks.map(Self.commentBlock), footnotes: [], anchors: [:])
+    }
+
+    private static func commentBlock(_ block: Block) -> Block {
+        func items(_ items: [ListItem]) -> [ListItem] {
+            items.map { ListItem(id: $0.id, number: $0.number, blocks: $0.blocks.map(commentBlock)) }
+        }
+        switch block.kind {
+        case .paragraph, .heading, .horizontalRule:
+            return block
+        // The web shows a Mermaid source in a comment as plain code.
+        case .codeBlock(let language, let code):
+            return language == "mermaid" ? Block(id: block.id, kind: .codeBlock(language: nil, code: code)) : block
+        case .blockquote(let blocks): return Block(id: block.id, kind: .blockquote(blocks.map(commentBlock)))
+        case .bulletList(let list): return Block(id: block.id, kind: .bulletList(items(list)))
+        case .orderedList(let list): return Block(id: block.id, kind: .orderedList(items(list)))
+        case .image: return Block(id: block.id, kind: .unknown(type: "image", []))
+        case .media(let media): return Block(id: block.id, kind: .unknown(type: media.kind.rawValue, []))
+        case .unknown(let type, _): return Block(id: block.id, kind: .unknown(type: type, []))
+        default: return Block(id: block.id, kind: .unknown(type: "block", []))
+        }
+    }
+
     public init(json: JSONValue?) {
         guard let json, let node = PMNode(json: json) else {
             self = .empty

@@ -9,6 +9,7 @@ struct ContentImageView: View {
     @State private var loaded: UIImage?
     @State private var failed = false
     @State private var availableWidth: CGFloat = 0
+    @State private var loadsFromOtherServer = false
 
     private var url: URL? { context.mediaURL(image.src) }
 
@@ -21,7 +22,7 @@ struct ContentImageView: View {
         }
         .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
-        .task(id: TaskKey(url: url, width: targetWidth)) { await load() }
+        .task(id: TaskKey(url: url, width: targetWidth, allowed: loadsFromOtherServer)) { await load() }
     }
 
     @ViewBuilder
@@ -32,6 +33,8 @@ struct ContentImageView: View {
                 .aspectRatio(contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .accessibilityLabel(image.alt ?? String(localized: "Image"))
+        } else if let url, !context.loadsByItself(url), !loadsFromOtherServer {
+            OtherServerCard(icon: "photo", title: image.alt ?? String(localized: "Image"), url: url) { loadsFromOtherServer = true }
         } else {
             placeholder
         }
@@ -66,10 +69,12 @@ struct ContentImageView: View {
     private struct TaskKey: Equatable {
         let url: URL?
         let width: CGFloat?
+        let allowed: Bool
     }
 
     private func load() async {
-        guard let url, let loader = context.imageLoader, let width = targetWidth else { return }
+        guard let url, let loader = context.imageLoader, let width = targetWidth,
+              context.loadsByItself(url) || loadsFromOtherServer else { return }
         failed = false
         do {
             loaded = try await loader.image(for: url, targetWidth: width, scale: displayScale)
