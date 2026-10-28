@@ -40,7 +40,8 @@ struct AppendNoteSheet: View {
             }
             .onAppear { isFocused = true }
         }
-        .interactiveDismissDisabled(isSaving)
+        // Typed input closes only with Cancel; a swipe threw it away.
+        .interactiveDismissDisabled(isSaving || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
     private func append() {

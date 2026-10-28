@@ -136,6 +136,22 @@ public enum CommentContent {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// Whether editing as plain text keeps all of a comment: paragraphs of unformatted text and line breaks only. Links,
+    /// mentions and formatting from the web would be lost for good, as comments have no history.
+    public static func isPlain(_ content: JSONValue?) -> Bool {
+        guard let content else { return true }
+        guard content["type"]?.stringValue == "doc" else { return false }
+        return (content["content"]?.arrayValue ?? []).allSatisfy { block in
+            block["type"]?.stringValue == "paragraph" && (block["content"]?.arrayValue ?? []).allSatisfy { inline in
+                switch inline["type"]?.stringValue {
+                case "text": (inline["marks"]?.arrayValue ?? []).isEmpty
+                case "hardBreak": true
+                default: false
+                }
+            }
+        }
+    }
+
     /// A comment's plain text for editing: one line per paragraph, mentions as "@Name".
     public static func plainText(of content: JSONValue?) -> String {
         lines(of: content ?? .null).joined(separator: "\n")

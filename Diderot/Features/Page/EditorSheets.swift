@@ -28,6 +28,7 @@ private struct StatusSheet: View {
     let target: EditorSheet.AtomTarget
     @State private var text: String
     @State private var color: String
+    private let initial: (text: String, color: String)
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
 
@@ -40,6 +41,7 @@ private struct StatusSheet: View {
         self.target = target
         _text = State(initialValue: text)
         _color = State(initialValue: color)
+        initial = (text, color)
     }
 
     private var isEditing: Bool { if case .edit = target { true } else { false } }
@@ -114,6 +116,8 @@ private struct StatusSheet: View {
         }
         // Full height from the start: at medium the keyboard covers the rest and the sheet then jumps up.
         .presentationDetents([.large])
+        // Typed input closes only with Cancel; a swipe (say, to hide the keyboard) threw it away.
+        .interactiveDismissDisabled(text != initial.text || color != initial.color)
     }
 
     private func apply() {
@@ -136,6 +140,7 @@ private struct MathSheet: View {
     let model: DocumentModel
     let kind: Kind
     @State private var latex: String
+    private let initialLatex: String
     /// Debounced preview so it doesn't reload on every keystroke.
     @State private var preview: String
     @Environment(\.dismiss) private var dismiss
@@ -146,6 +151,7 @@ private struct MathSheet: View {
         self.kind = kind
         _latex = State(initialValue: latex)
         _preview = State(initialValue: latex)
+        initialLatex = latex
     }
 
     private var isBlock: Bool { if case .block = kind { true } else { false } }
@@ -203,6 +209,7 @@ private struct MathSheet: View {
         }
         // Full height from the start, as in StatusSheet.
         .presentationDetents([.large])
+        .interactiveDismissDisabled(latex != initialLatex)
     }
 
     /// Applies the equation (`nil` deletes it).
@@ -226,6 +233,7 @@ private struct EmbedSheet: View {
     let slot: EditorSheet.BlockSlot
     let provider: EmbedProvider
     @State private var link: String
+    private let initialLink: String
     @State private var isInvalid = false
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
@@ -235,6 +243,7 @@ private struct EmbedSheet: View {
         self.slot = slot
         self.provider = provider
         _link = State(initialValue: link)
+        initialLink = link
     }
 
     var body: some View {
@@ -272,6 +281,7 @@ private struct EmbedSheet: View {
             .onAppear { focused = true }
         }
         .presentationDetents([.large])
+        .interactiveDismissDisabled(link != initialLink)
     }
 
     private func apply() {

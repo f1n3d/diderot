@@ -1016,6 +1016,16 @@
         }
       }
     },
+    "Comments with links, mentions or formatting can be edited on the web.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentare mit Links, Erwähnungen oder Formatierung lassen sich im Web bearbeiten."
+          }
+        }
+      }
+    },
     "Commit": {
       "localizations": {
         "de": {
