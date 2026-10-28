@@ -42,13 +42,17 @@ struct InlineCommentSheet: View {
             .navigationTitle("New Comment")
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
+                // Not while sending: the comment would still be posted, its mark landing in whatever block is active
+                // when the answer comes.
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { dismiss() }.disabled(isSending)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Send", action: send)
-                        .disabled(isSending || offset == nil || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .accessibilityIdentifier("inline-comment-send")
+                    Button(action: send) {
+                        if isSending { ProgressView() } else { Text("Send") }
+                    }
+                    .disabled(isSending || offset == nil || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("inline-comment-send")
                 }
             }
             .onAppear {
@@ -62,6 +66,8 @@ struct InlineCommentSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        // Typed input closes only with Cancel, and never while sending.
+        .interactiveDismissDisabled(isSending || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
     private func send() {

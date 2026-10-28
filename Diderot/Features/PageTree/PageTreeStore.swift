@@ -48,8 +48,11 @@ final class PageTreeStore {
     /// Visible rows in display order (depth-first over expanded nodes).
     var visibleRows: [Row] {
         var rows: [Row] = []
+        // Each page once: levels load at different times, so a page a collaborator moved meanwhile can turn up under its
+        // old and its new parent, even below itself, and the walk went on forever.
+        var shown: Set<String> = []
         func visit(_ pages: [SidebarPage], depth: Int) {
-            for page in pages {
+            for page in pages where shown.insert(page.id).inserted {
                 rows.append(Row(page: page, depth: depth))
                 if expanded.contains(page.id), let kids = children[page.id] {
                     visit(kids, depth: depth + 1)
@@ -87,6 +90,9 @@ final class PageTreeStore {
         do {
             root = try await loadAll(parent: nil)
         } catch is CancellationError {
+            // A push or tab switch cancelled the first load: with nothing shown, the spinner stayed for good.
+            // `loadRootIfNeeded` starts it again when the space shows again.
+            if generation == reloads, rootState.value == nil { rootState = .idle }
             return
         } catch let error as APIError where error.isGone {
             // The space was deleted or unshared: say so instead of leaving the shown tree up.
