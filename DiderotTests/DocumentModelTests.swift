@@ -808,6 +808,24 @@ struct DocumentModelTests {
         #expect(model.errorMessage == String(localized: "The server refused the live connection. The page is read-only."))
     }
 
+    /// Lost write access (Docmost 0.97's `page.permissions`, or a connection the server lets only read) ends editing and
+    /// makes the page read-only with a notice, for good: the page stayed editable and showed "Saved" while the server
+    /// ignored every edit.
+    @Test func lostWriteAccessMakesThePageReadOnly() throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Hallo")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        #expect(model.isEditable)
+
+        engine.onFailure?(.readOnly)
+
+        #expect(!model.isEditable)
+        #expect(model.active == nil)
+        #expect(model.readOnlyReason == .noPermission)
+        #expect(model.errorMessage == String(localized: "You can no longer edit this page. Changes the server didn't take stay on this device until you can edit it again."))
+    }
+
     /// A collaborator's change of the block being edited shows in the editor once nothing of the user's is pending, and
     /// the next key builds on it: the old text used to be written back over their sentence.
     @Test(.timeLimit(.minutes(1))) func collaboratorsChangeOfTheActiveBlockShowsAndStays() async throws {

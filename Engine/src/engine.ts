@@ -68,7 +68,15 @@ class DocmostEngine {
         if (state) this.scheduleDocument(0);
       },
       onAuthenticationFailed: ({ reason }) => emit("authenticationFailed", { error: reason }),
-      onAuthenticated: () => emit("authenticated"),
+      // "readonly" when the server lets the connection only read (a reader, a page in the trash).
+      onAuthenticated: ({ scope }) => emit("authenticated", { scope }),
+      // Docmost 0.97 tells a connection that lost write access, then ignores its updates.
+      onStateless: ({ payload }) => {
+        try {
+          const message = JSON.parse(payload);
+          if (message?.type === "page.permissions") emit("permissions", { access: message.access });
+        } catch {}
+      },
       onClose: ({ event }) => emit("closed", { code: event?.code, reason: event?.reason }),
     });
     // With the provider listening, so it counts them as unsent until the server confirms them; the sync sends them.

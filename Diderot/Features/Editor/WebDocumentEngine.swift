@@ -56,6 +56,9 @@ enum EngineFailure {
     case unsupportedContent
     /// The server refused the live connection (no access, page gone); the page used to stay at "Connecting…".
     case connectionRefused
+    /// The server takes no more edits from this user (write access lost, page moved or trashed): it ignores them, and the
+    /// page used to stay editable and show "Saved".
+    case readOnly
 }
 
 struct EngineParticipant: Identifiable, Hashable, Decodable {
@@ -348,6 +351,11 @@ final class WebDocumentEngine: DocumentEngine {
             status = .failed(event.error ?? "")
             participants = []
             onFailure?(.connectionRefused)
+        // The connection stays and shows others' edits; the server ignores this user's from now on.
+        case "authenticated":
+            if event.scope == "readonly" { onFailure?(.readOnly) }
+        case "permissions":
+            if event.access != "write" { onFailure?(.readOnly) }
         case "closed":
             if status != .idle { status = .disconnected }
         default:
@@ -382,6 +390,10 @@ struct EngineEvent: Decodable {
     let error: String?
     let document: PMNode?
     let participants: Participants?
+    /// "authenticated": "read-write" or "readonly".
+    let scope: String?
+    /// "permissions" (Docmost 0.97's `page.permissions`): "write", "read" or "none".
+    let access: String?
 
     /// Read one by one: the web client's entries have only `name` and `color`, no user id.
     struct Participants: Decodable {

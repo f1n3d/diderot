@@ -393,14 +393,22 @@ final class DocumentModel {
         if case .newerServer(let version) = readOnlyReason {
             errorMessage = String(localized: "This server runs Docmost \(version). This version of the app can only show its pages; you can edit them in the web editor.")
         }
-        // Like a failed start: read-only, and `resume` tries again.
         engine?.onFailure = { [weak self] failure in
-            self?.readOnlyReason = .notConnected
-            self?.errorMessage = switch failure {
+            guard let self else { return }
+            switch failure {
+            // Like a failed start: read-only, and `resume` tries again.
             case .unsupportedContent:
-                String(localized: "This page has content that this version of the app can't edit yet. You can edit it in the web editor.")
+                self.readOnlyReason = .notConnected
+                self.errorMessage = String(localized: "This page has content that this version of the app can't edit yet. You can edit it in the web editor.")
             case .connectionRefused:
-                String(localized: "The server refused the live connection. The page is read-only.")
+                self.readOnlyReason = .notConnected
+                self.errorMessage = String(localized: "The server refused the live connection. The page is read-only.")
+            // The engine stays connected, so others' edits keep showing. What the server didn't take stays in the unsent
+            // changes, which the page's next open sends: they count once the user may edit again.
+            case .readOnly:
+                self.deactivate()
+                self.readOnlyReason = .noPermission
+                self.errorMessage = String(localized: "You can no longer edit this page. Changes the server didn't take stay on this device until you can edit it again.")
             }
         }
         // Restart only if live: a page that left reopens on return; one still opening tries again when the app becomes
