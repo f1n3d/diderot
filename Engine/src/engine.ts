@@ -6,6 +6,7 @@ import Collaboration from "@tiptap/extension-collaboration";
 import { initProseMirrorDoc } from "@tiptap/y-tiptap";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import * as Y from "yjs";
+import { rebase } from "./rebase";
 import { schemaExtensions } from "./schema";
 
 declare global {
@@ -67,7 +68,15 @@ class DocmostEngine {
         if (state) this.scheduleDocument(0);
       },
       onAuthenticationFailed: ({ reason }) => emit("authenticationFailed", { error: reason }),
-      onAuthenticated: () => emit("authenticated"),
+      // "readonly" when the server lets the connection only read (a reader, a page in the trash).
+      onAuthenticated: ({ scope }) => emit("authenticated", { scope }),
+      // Docmost 0.97 tells a connection that lost write access, then ignores its updates.
+      onStateless: ({ payload }) => {
+        try {
+          const message = JSON.parse(payload);
+          if (message?.type === "page.permissions") emit("permissions", { access: message.access });
+        } catch {}
+      },
       onClose: ({ event }) => emit("closed", { code: event?.code, reason: event?.reason }),
     });
     // With the provider listening, so it counts them as unsent until the server confirms them; the sync sends them.
@@ -125,12 +134,16 @@ class DocmostEngine {
 
   // MARK: Block operations
 
-  /** Replaces one block with one or more (e.g. unsyncing a synced block: its content replaces the wrapper). */
-  replaceBlockWith(target: Target, json: JSONContent[]): boolean {
+  /**
+   * Replaces one block with one or more (e.g. unsyncing a synced block: its content replaces the wrapper). With `base`,
+   * the text block the app's edit started from: a collaborator's edit since then stays (`rebase`).
+   */
+  replaceBlockWith(target: Target, json: JSONContent[], base?: JSONContent | null): boolean {
     return this.transact((editor) => {
       const found = this.locate(editor, target);
       if (!found) return false;
-      const nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
+      let nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
+      if (base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(editor.schema, base), nodes[0]) ?? nodes[0]];
       editor.view.dispatch(editor.state.tr.replaceWith(found.pos, found.pos + found.node.nodeSize, nodes));
       return true;
     });

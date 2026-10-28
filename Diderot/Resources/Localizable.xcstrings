@@ -5692,6 +5692,16 @@
         }
       }
     },
+    "You can no longer edit this page. Changes the server didn't take stay on this device until you can edit it again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst diese Seite nicht mehr bearbeiten. Was der Server nicht angenommen hat, bleibt auf dem Gerät, bis du sie wieder bearbeiten darfst."
+          }
+        }
+      }
+    },
     "You can't edit pages in any other space.": {
       "localizations": {
         "de": {
