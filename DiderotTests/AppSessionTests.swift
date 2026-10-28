@@ -133,6 +133,19 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// Removing a server asks first while changes still wait for it; an emptied title list doesn't count.
+    @Test func waitingChangesAreFound() async throws {
+        let server = URL(string: "https://unsent-\(UUID().uuidString).example.com")!
+        #expect(!UnsentChanges.hasEntries(server: server))
+        let store = UnsentChanges.store(server: server, userId: "u1")
+        await store.write([String: UnsentTitle](), key: CacheKey.unsentTitles)
+        #expect(!UnsentChanges.hasEntries(server: server), "an emptied title list")
+        await store.writeData(Data([1, 2, 3]), key: CacheKey.unsentChanges("p1"))
+        #expect(UnsentChanges.hasEntries(server: server))
+        UnsentChanges.removeAll(server: server)
+        #expect(!UnsentChanges.hasEntries(server: server))
+    }
+
     @Test func removingAServerDeletesItsUnsentChanges() async throws {
         let session = try await sessionOnA()
         let key = CacheKey.unsentChanges("p")

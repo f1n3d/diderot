@@ -5,6 +5,8 @@ import DocmostKit
 struct ServersView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
+    /// The server whose removal waits for the confirmation.
+    @State private var removing: StoredSession?
 
     var body: some View {
         List {
@@ -41,10 +43,18 @@ struct ServersView: View {
                     .accessibilityIdentifier("server-\(account.host)")
                     .swipeActions(edge: .trailing) {
                         if !isCurrent {
-                            Button("Remove", systemImage: "trash", role: .destructive) {
-                                Task { await session.removeAccount(account) }
-                            }
+                            // Not `.destructive`: that role slides the row out at once, with a dialog attached to it.
+                            Button("Remove", systemImage: "trash") { remove(account) }
+                                .tint(.red)
                         }
+                    }
+                    // Removing deletes changes that wait for the server; a full swipe deleted them without a word.
+                    .confirmationDialog(Text("Remove “\(account.displayName)”?"),
+                                        isPresented: Binding { removing?.id == account.id } set: { if !$0 { removing = nil } },
+                                        titleVisibility: .visible) {
+                        Button("Remove", role: .destructive) { Task { await session.removeAccount(account) } }
+                    } message: {
+                        Text("Changes you made on this server haven't reached it yet. Removing the server deletes them from this device.")
                     }
                 }
             } footer: {
@@ -60,5 +70,14 @@ struct ServersView: View {
         }
         .navigationTitle("Servers")
         .toolbarTitleDisplayMode(.inline)
+    }
+
+    /// Asks first only while changes wait for the server; otherwise it goes at once, as before.
+    private func remove(_ account: StoredSession) {
+        if UnsentChanges.hasEntries(server: account.serverURL) {
+            removing = account
+        } else {
+            Task { await session.removeAccount(account) }
+        }
     }
 }
