@@ -186,8 +186,15 @@ struct AvatarView: View {
     var size: CGFloat = 36
 
     var body: some View {
-        RemoteThumbnail(url: baseURL.flatMap { ImageURL.resolve(avatarUrl, kind: .avatar, baseURL: $0) }, size: size,
-                        shape: Circle()) { initial }
+        RemoteThumbnail(url: url, size: size, shape: Circle()) { initial }
+    }
+
+    /// From another server (a link in the user's profile) only with Settings › "Load Content from Other Servers" on, as
+    /// page media; otherwise the initial (`RenderContext.loadsByItself`).
+    private var url: URL? {
+        guard let baseURL, let url = ImageURL.resolve(avatarUrl, kind: .avatar, baseURL: baseURL),
+              RenderContext.loadsByItself(url, server: baseURL) else { return nil }
+        return url
     }
 
     private var initial: some View {

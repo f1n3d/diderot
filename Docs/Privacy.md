@@ -10,6 +10,7 @@ Diderot is an app for [Docmost](https://github.com/docmost/docmost) servers that
 - Photos and videos you upload from your library leave their location behind.
 - Web links open in the in-app browser. A link to another app (such as a phone number or another app's link) opens only after the app asks you.
 - Embedded content (such as YouTube) shows as a card in the page and loads only when you open it. The web layout and the web editor show embeds as the web does.
+- Images, videos and PDFs that a page or comment takes from another website load only when you tap them, unless you turn on "Load Content from Other Servers" in the settings. Loading them tells that website your IP address and when you read the page.
 
 ## What stays on your device
 
@@ -44,6 +45,7 @@ Diderot ist eine App für [Docmost](https://github.com/docmost/docmost)-Server, 
 - Fotos und Videos, die du aus deiner Mediathek hochlädst, verlieren dabei ihren Aufnahmeort.
 - Weblinks öffnen sich im In-App-Browser. Ein Link in eine andere App (etwa eine Telefonnummer oder der Link einer anderen App) öffnet sich erst, nachdem die App nachgefragt hat.
 - Eingebettete Inhalte (etwa YouTube) erscheinen als Karte in der Seite und laden erst, wenn du sie öffnest. Web-Layout und Web-Editor zeigen Einbettungen wie das Web.
+- Bilder, Videos und PDFs, die eine Seite oder ein Kommentar von einer anderen Website holt, laden erst, wenn du sie antippst, außer du schaltest in den Einstellungen „Inhalte anderer Server automatisch laden“ ein. Beim Laden erfährt die Website deine IP-Adresse und wann du die Seite liest.
 
 ## Was auf deinem Gerät bleibt
 

@@ -41,12 +41,15 @@ struct DiagramView: View {
     @State private var markup: String?
     @State private var loadedSrc: String?
     @State private var failed = false
+    @State private var loadsFromOtherServer = false
 
     var body: some View {
         Group {
             if let markup {
                 WebIslandView(html: IslandHTML.svg(markup), minHeight: 80)
                     .accessibilityLabel(media.name ?? String(localized: "Diagram"))
+            } else if let url = context.mediaURL(media.src), !context.loadsByItself(url), !loadsFromOtherServer {
+                OtherServerCard(icon: "pencil.and.outline", title: media.name ?? media.kind.title, url: url) { loadsFromOtherServer = true }
             } else if failed {
                 PlaceholderCard(icon: "pencil.and.outline", title: media.name ?? media.kind.title,
                                 detail: String(localized: "Diagram could not be loaded."))
@@ -54,7 +57,7 @@ struct DiagramView: View {
                 ProgressView().frame(maxWidth: .infinity, minHeight: 80)
             }
         }
-        .task(id: media.src) { await load() }
+        .task(id: "\(media.src ?? "")|\(loadsFromOtherServer)") { await load() }
     }
 
     private func load() async {
@@ -64,6 +67,7 @@ struct DiagramView: View {
         // A new file that fails shows the error, not the previous file.
         func fail() { markup = nil; failed = true }
         guard let loader = context.imageLoader, let url = context.mediaURL(media.src) else { return fail() }
+        guard context.loadsByItself(url) || loadsFromOtherServer else { return }
         do {
             let data = try await loader.data(for: url)
             guard let text = String(data: data, encoding: .utf8), text.contains("<svg") else { return fail() }
@@ -83,10 +87,15 @@ struct VideoBlockView: View {
     let media: MediaBlock
     @Environment(\.renderContext) private var context
     @State private var player: AVPlayer?
+    @State private var loadsFromOtherServer = false
 
     var body: some View {
         Group {
-            if let player {
+            if player == nil, let url = context.mediaURL(media.src), !context.loadsByItself(url), !loadsFromOtherServer {
+                OtherServerCard(icon: media.kind == .audio ? "waveform" : "video", title: media.name ?? media.kind.title, url: url) {
+                    loadsFromOtherServer = true
+                }
+            } else if let player {
                 VideoPlayer(player: player)
                     .aspectRatio(media.kind == .audio ? nil : 16 / 9, contentMode: .fit)
                     .frame(height: media.kind == .audio ? 64 : nil)
@@ -96,9 +105,9 @@ struct VideoBlockView: View {
                                 detail: String(localized: "Media unavailable."))
             }
         }
-        .task(id: media.src) {
+        .task(id: "\(media.src ?? "")|\(loadsFromOtherServer)") {
             // Back in view: keep the player where it paused; retry one that failed to load (offline).
-            guard let url = context.mediaURL(media.src),
+            guard let url = context.mediaURL(media.src), context.loadsByItself(url) || loadsFromOtherServer,
                   player?.currentItem?.status == .failed || (player?.currentItem?.asset as? AVURLAsset)?.url != url else { return }
             var options: [String: Any] = [:]
             if let cookie = context.authCookie() {
@@ -121,6 +130,7 @@ struct PDFBlockView: View {
     @State private var loadedSrc: String?
     @State private var failed = false
     @State private var showsFullScreen = false
+    @State private var loadsFromOtherServer = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -136,13 +146,15 @@ struct PDFBlockView: View {
                     Spacer()
                     Button("Open") { showsFullScreen = true }.font(.caption)
                 }
+            } else if let url = context.mediaURL(media.src), !context.loadsByItself(url), !loadsFromOtherServer {
+                OtherServerCard(icon: "doc.richtext", title: media.name ?? "PDF", url: url) { loadsFromOtherServer = true }
             } else if failed {
                 PlaceholderCard(icon: "doc.richtext", title: media.name ?? "PDF", detail: String(localized: "PDF could not be loaded."))
             } else {
                 ProgressView().frame(maxWidth: .infinity, minHeight: 80)
             }
         }
-        .task(id: media.src) { await load() }
+        .task(id: "\(media.src ?? "")|\(loadsFromOtherServer)") { await load() }
         .sheet(isPresented: $showsFullScreen) {
             if let document {
                 NavigationStack {
@@ -163,6 +175,7 @@ struct PDFBlockView: View {
         // A new file that fails shows the error, not the previous file.
         func fail() { document = nil; failed = true }
         guard let loader = context.imageLoader, let url = context.mediaURL(media.src) else { return fail() }
+        guard context.loadsByItself(url) || loadsFromOtherServer else { return }
         do {
             let data = try await loader.data(for: url)
             if let pdf = PDFDocument(data: data) { document = pdf; loadedSrc = media.src } else { fail() }
