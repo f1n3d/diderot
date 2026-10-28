@@ -50,6 +50,11 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 - Media (review findings on F167, F164 and F43, October 15, 2026):
   - Blocks can be dragged while the editor isn't connected, but then dropped nowhere. A long press on text keeps selecting text meanwhile (checked on the iPhone on October 22, 2026).
 - iPad with two windows: "Comment" in the selection menu always belongs to the page that appeared last; in the other window the entry is missing or opens the sheet in the wrong window (review finding on P21, October 15, 2026).
+- Postponed in the code review of October 28, 2026:
+  - Every engine change sends the whole page as JSON, which the app decodes and compares on the main thread (M6). Measure first, on a page with about 1,000 blocks while a collaborator types; if it stutters, decode faster and off the main thread.
+  - Pasting several lines runs one Return per line, each through the whole editor (M50): 100 lines take seconds, the editor jumps from line to line meanwhile, and in a toggle title the lines run together. Inserting them in one step means reworking `handleReturn`.
+  - A long page keeps every decoded image it scrolled past until it closes (M51). Plausible, not measured: check in Instruments on a page with 100 large photos before releasing images off screen.
+  - With two iPad windows, Backspace joins blocks only in the window used last (M26): the hook on the text view class has one handler. A handler per text view would fix it; the hook is delicate (test5 and test44).
 
 - iPad with a hardware keyboard (checked on October 23, 2026, simulator only): the editor's UI tests pass there except test10 and test14, which expect the on-screen keyboard (also before the page's one editor). Return and Backspace from a hardware keyboard couldn't be checked reliably in the simulator; to try on a real iPad with a keyboard.
   - After pasting into the editor through the edit menu, keys from a hardware keyboard can go nowhere until something is typed on the on-screen keyboard or the cursor moves (found on October 26, 2026, simulator only). XCUITest's `typeKey` and `typeText` show it after a pasted link and after plain text, taps on the on-screen keyboard don't. The space search field doesn't have it, and the editor without the app's paste handling does, so it is probably there since 1.0. Whether ⌘V does the same couldn't be checked: XCUITest's ⌘V pasted nothing. Reloading the keyboard (as after a pasted page link turns into its mention) helps only sometimes. To try on a real iPad with a keyboard; test74 types its first key on the on-screen keyboard for this reason.
@@ -58,6 +63,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 
 - A presenter view for an external display: the slides on the TV, controls and the next slide on the iPhone (decided on October 26, 2026, for later). Today iOS mirrors the screen.
 - On an iPad the system's own pointer stays visible under the laser pointer's dot; the web hides the cursor. SwiftUI can't hide it on iOS (`pointerVisibility` is macOS only), UIKit could with a `UIPointerInteraction`.
+- Opening it builds every block of the page at once to measure the slides, so all formulas, diagrams, PDFs and images load, also for slides never shown (code review M13, October 28, 2026). The measuring copy should reserve their sizes without loading; the slides must still break as today.
 
 ## Databases
 
@@ -68,6 +74,8 @@ As of stage 2 (editing, creating, deleting, moving). Deliberately still on the w
 - Reordering table rows by hand (web: dragging in a table without sorting, `bases/rows/reorder`).
 - Live updates when others change something (socket.io, `base:subscribe`). Until then, pulling down refreshes.
 - Showing embedded databases in the page itself (today a card that opens the database).
+
+Also open: returning to a large table loads only its first 100 rows again and scrolls to the top (code review M37, October 28, 2026). Loading as many rows as were shown costs many requests on every return; weigh other ways first.
 
 ## Comments
 
@@ -93,5 +101,10 @@ Deliberately not yet like the web (found in the code review on October 13, 2026)
 - UI tests: two flaky spots, to investigate if they come back:
   - The check "New paragraph: Taste… bold from Cmd-B" (test2) sometimes misses ⌘B: the word stays selected but not bold. Rarer since pauses around ⌘B; once in four runs on October 21, 2026; on October 22, 2026, after many runs twice in a row, and green again after restarting the simulator. So rather the simulator's state than the app.
   - test35 sometimes took about 60 s longer ("App animations complete notification not received" when handing over the emoji).
+- Postponed in the code review of October 28, 2026:
+  - Opening a large attachment or exporting holds the whole file in memory and writes it on the main thread (M9). With the upload rework (M8) in mind: download straight to a file.
+  - A page tree refresh reloads every expanded level one request after the other, and a refresh a newer one replaced still runs to its end (M39).
+  - The hidden editor engine's page has no content security policy (M47). It matters only if `engine.js` itself turned malicious; a CI check that `engine.js` is built from its sources would do almost as much.
+  - A failed write to the store for unsent changes (a full disk) goes unnoticed (M55): the changes are gone without a message. Show a notice then, but don't empty the offline cache automatically.
 - Not for the Mac (decided on October 25, 2026: on a Mac, Docmost's web client does the job). Its availability for Macs with Apple silicon is turned off in App Store Connect (Pricing and Availability; the API has no field for it). One more reason: on a Mac with macOS 27.0.1, writing a file with `.completeFileProtection` fails with EPERM, also outside a sandbox (`.completeFileProtectionUntilFirstUserAuthentication` works), so the offline cache would stay empty there; for the same reason DocmostKit's `DiskCacheTests` fail on such a Mac (GitHub's runners and iPhones are fine).
 - Unit tests on GitHub's runners: `keepsItsContentOnReturn` (MediaBlockViewTests) and `lateReconnectKeepsTheSwitch` (AppSessionRaceTests) failed there before October 23, 2026, never locally; since then MediaBlockViewTests wait up to 20 s, and the second one's hook waits for the reconnect's own request. If one fails there again, look further. `formulaRendersAgainAfterItsWebProcessEnded` failed there twice more (October 24 and 25, 2026): GitHub's simulator sometimes doesn't let the app end the web process (RunningBoard: "Client not entitled"); the test is cancelled then and shows as skipped.
