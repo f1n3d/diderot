@@ -5178,6 +5178,16 @@
         }
       }
     },
+    "This synced block contains itself.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser synchronisierte Block enthält sich selbst."
+          }
+        }
+      }
+    },
     "This version is empty.": {
       "localizations": {
         "de": {
