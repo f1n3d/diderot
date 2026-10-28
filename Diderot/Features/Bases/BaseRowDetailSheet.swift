@@ -185,6 +185,8 @@ struct BaseRowDetailSheet: View {
                 Text("Read only. Editing databases requires a Docmost Business license on this server.")
             case .permission:
                 Text("Read only. You don't have permission to edit this database.")
+            case .offline:
+                Text("Read only while offline.")
             }
         } icon: {
             Image(systemName: "lock")
@@ -232,10 +234,7 @@ private struct BaseTitleField: View {
                 .font(.title2.bold())
                 .focused($focused)
                 .submitLabel(.done)
-                .onAppear {
-                    draft = stored
-                    original = stored
-                }
+                .onAppear { showStored(primary) }
                 .onChange(of: draft) { _, text in
                     // Titles are single-line: Return ends the input instead of adding a line break.
                     if text.contains("\n") {
@@ -246,10 +245,9 @@ private struct BaseTitleField: View {
                 .onChange(of: focused) { _, isFocused in
                     if !isFocused { commit(primary) }
                 }
-                .onChange(of: stored) { _, value in
+                .onChange(of: stored) { _, _ in
                     guard !focused else { return }
-                    draft = value
-                    original = value
+                    showStored(primary)
                 }
                 .onDisappear { commit(primary) }
                 .task {
@@ -269,11 +267,18 @@ private struct BaseTitleField: View {
         }
     }
 
+    /// The stored title, or the one a failed save didn't get to the server (see `BaseTextFieldEditor`).
+    private func showStored(_ primary: BaseProperty) {
+        original = stored
+        draft = model.unsavedDraft(rowId: row.id, propertyId: primary.id) ?? stored
+    }
+
     private func commit(_ primary: BaseProperty) {
         guard draft != original else { return }
         original = draft
         let rowId = row.id
         let value = BaseValue.text(draft)
-        Task { await model.setCell(rowId: rowId, propertyId: primary.id, to: value) }
+        let typed = draft
+        Task { await model.setCell(rowId: rowId, propertyId: primary.id, to: value, typed: typed) }
     }
 }

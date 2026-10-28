@@ -3249,6 +3249,16 @@
         }
       }
     },
+    "Not saved: the app has switched to another server.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gespeichert: Die App zeigt inzwischen einen anderen Server."
+          }
+        }
+      }
+    },
     "Not sent yet: the title goes to the server once it can be reached.": {
       "localizations": {
         "de": {
@@ -3769,6 +3779,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nur lesen"
+          }
+        }
+      }
+    },
+    "Read only while offline.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur lesbar, solange du offline bist."
           }
         }
       }

@@ -184,10 +184,7 @@ struct BaseTextFieldEditor: View {
                 .accessibilityLabel(kind == .email ? Text("Send Email") : Text("Open Link"))
             }
         }
-        .onAppear {
-            draft = initialDraft
-            original = draft
-        }
+        .onAppear(perform: showStored)
         .onChange(of: draft) { _, text in
             // Text is single-line but wraps: Return ends the input.
             if kind == .text, text.contains("\n") {
@@ -200,10 +197,16 @@ struct BaseTextFieldEditor: View {
         }
         .onChange(of: stored) { _, _ in
             guard !focused else { return }
-            draft = initialDraft
-            original = draft
+            showStored()
         }
         .onDisappear { commit() }
+    }
+
+    /// The stored value, or the text a failed save didn't get to the server: it stays in the field, the next commit sends
+    /// it again. A failed save used to put the old value back.
+    private func showStored() {
+        original = initialDraft
+        draft = model.unsavedDraft(rowId: rowId, propertyId: property.id) ?? original
     }
 
     private var showsFormattedNumber: Bool {
@@ -243,7 +246,8 @@ struct BaseTextFieldEditor: View {
         original = draft
         let rowId = rowId
         let propertyId = property.id
-        Task { await model.setCell(rowId: rowId, propertyId: propertyId, to: value) }
+        let typed = draft
+        Task { await model.setCell(rowId: rowId, propertyId: propertyId, to: value, typed: typed) }
     }
 }
 
@@ -263,21 +267,23 @@ struct BaseLongTextEditor: View {
         TextField("Empty", text: $draft, axis: .vertical)
             .lineLimit(1...12)
             .focused($focused)
-            .onAppear {
-                draft = stored?.stringValue ?? ""
-                original = draft
-            }
+            .onAppear(perform: showStored)
             .onChange(of: focused) { _, isFocused in
                 if !isFocused { commit() }
             }
-            .onChange(of: stored) { _, value in
+            .onChange(of: stored) { _, _ in
                 guard !focused else { return }
-                draft = value?.stringValue ?? ""
-                original = draft
+                showStored()
             }
             .onDisappear { commit() }
             .accessibilityLabel(Text(property.name))
             .accessibilityIdentifier("base-input-\(property.id)")
+    }
+
+    /// The stored text, or the one a failed save didn't get to the server (see `BaseTextFieldEditor`).
+    private func showStored() {
+        original = stored?.stringValue ?? ""
+        draft = model.unsavedDraft(rowId: rowId, propertyId: property.id) ?? original
     }
 
     private func commit() {
@@ -286,7 +292,8 @@ struct BaseLongTextEditor: View {
         let value = BaseValue.longText(draft)
         let rowId = rowId
         let propertyId = property.id
-        Task { await model.setCell(rowId: rowId, propertyId: propertyId, to: value) }
+        let typed = draft
+        Task { await model.setCell(rowId: rowId, propertyId: propertyId, to: value, typed: typed) }
     }
 }
 
