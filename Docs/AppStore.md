@@ -69,6 +69,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Attachments: a page's files in the page menu, to search, open and share
 > • Templates: hold "+" for a new page from a template (needs a Docmost license with templates)
 > • An empty page becomes a database or a kanban board with one tap (needs a Docmost license with databases)
+> • Images, videos and PDFs a page takes from another website load when you tap them, or right away with a new setting
 >
 > For Docmost 0.97:
 > • Tabs: read and switch them; while editing, add, rename, move and delete them
@@ -79,6 +80,9 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Space admins can delete a page's attachments
 >
 > Also:
+> • Editing together: what others type in the paragraph you are editing now shows up and is kept
+> • Changes made offline are saved as you go, and an upload finishes even if you leave the page
+> • More reliable: comments, database fields and page titles keep what you typed when saving fails or the app closes, and many rare crashes are fixed
 > • Pasting a link works as on the web: a web address becomes a link, a link to one of your pages becomes a mention
 > • In the page tree, a dragged page lands where the web puts it: before, after or inside a page
 > • While editing, a long press no longer moves blocks; on another paragraph it places the cursor there
@@ -137,6 +141,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Anhänge: die Dateien einer Seite im Seitenmenü, zum Suchen, Öffnen und Teilen
 > • Vorlagen: „+“ gedrückt halten für eine neue Seite aus einer Vorlage (braucht eine Docmost-Lizenz mit Vorlagen)
 > • Eine leere Seite wird mit einem Tippen zur Datenbank oder zum Kanban-Board (braucht eine Docmost-Lizenz mit Datenbanken)
+> • Bilder, Videos und PDFs, die eine Seite von einer anderen Website holt, laden nach einem Tippen, oder mit einer neuen Einstellung sofort
 >
 > Für Docmost 0.97:
 > • Registerkarten: lesen und wechseln; beim Bearbeiten hinzufügen, umbenennen, verschieben und löschen
@@ -147,6 +152,9 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Space-Admins können die Anhänge einer Seite löschen
 >
 > Außerdem:
+> • Gemeinsam bearbeiten: Was andere in dem Absatz tippen, den du gerade bearbeitest, erscheint jetzt und bleibt erhalten
+> • Offline gemachte Änderungen werden laufend gesichert, und ein Upload wird auch fertig, wenn du die Seite verlässt
+> • Zuverlässiger: Kommentare, Datenbankfelder und Seitentitel behalten, was du getippt hast, wenn das Speichern scheitert oder die App endet, und viele seltene Abstürze sind behoben
 > • Links einfügen wie im Web: Eine Webadresse wird zum Link, ein Link zu einer deiner Seiten zur Erwähnung
 > • Im Seitenbaum landet eine gezogene Seite dort, wo das Web sie ablegt: davor, dahinter oder als Unterseite
 > • Beim Bearbeiten verschiebt langes Drücken keine Blöcke mehr; auf einem anderen Absatz setzt es den Cursor dorthin
