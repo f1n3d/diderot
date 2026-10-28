@@ -918,6 +918,34 @@ struct DocumentModelTests {
         #expect(engine.deleted == [.id("b")])
     }
 
+    /// Text ↔ code keeps line breaks, as the web's setBlockType does: Shift-Return lines become the code's lines and
+    /// back, and the converted text doesn't split into blocks on the next key.
+    @Test(.timeLimit(.minutes(1))) func convertingBetweenTextAndCodeKeepsLines() async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [
+            PMNode(type: "text", text: "SELECT *"), PMNode(type: "hardBreak"), PMNode(type: "text", text: "FROM t"),
+        ])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1))) }
+
+        await model.convert(NodeRef(path: [0], node: paragraph), to: .codeBlock)
+        let code = try #require(engine.saved.last)
+        #expect(code.type == "codeBlock")
+        #expect(code.plainText == "SELECT *\nFROM t")
+
+        await model.convert(NodeRef(path: [0], node: code), to: .paragraph)
+        let text = try #require(engine.saved.last)
+        #expect(text.children.map(\.type) == ["text", "hardBreak", "text"])
+
+        #expect(model.active?.type == "paragraph")
+        model.activeText.append(AttributedString("x"))
+        model.activeTextChanged()
+        await model.flush()
+        #expect(engine.inserted.isEmpty)
+    }
+
     /// A formula written with Shift-Return stays whole while its paragraph is edited: its line break read as Return split
     /// the paragraph and turned the formula into text.
     @Test(.timeLimit(.minutes(1))) func formulaWithLineBreakSurvivesEditing() async throws {

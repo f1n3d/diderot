@@ -119,7 +119,8 @@ enum BlockTemplate: String, CaseIterable, Identifiable {
                 PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")]),
             ])
         case .codeBlock:
-            let text = inlines.map { PMNode(type: "doc", content: $0).plainText } ?? ""
+            // Line breaks become the code's lines, as the web's setBlockType does; mentions and other atoms drop out.
+            let text = inlines.map { $0.map { $0.type == "hardBreak" ? "\n" : $0.plainText }.joined() } ?? ""
             return PMNode(type: "codeBlock", attrs: ["language": .null], content: text.isEmpty ? nil : [PMNode(type: "text", text: text)])
         case .table:
             func cell(_ type: String) -> PMNode { PMNode(type: type, attrs: ["colspan": 1, "rowspan": 1], content: [PMNode(type: "paragraph")]) }
@@ -2505,7 +2506,13 @@ final class DocumentModel {
     static func inlineContent(of node: PMNode) -> [PMNode]? {
         switch node.type {
         case "paragraph", "heading", "detailsSummary": return node.content
-        case "codeBlock": return node.plainText.isEmpty ? nil : [PMNode(type: "text", text: node.plainText)]
+        case "codeBlock":
+            // The code's lines become line breaks, as on the web; a raw "\n" in text would count as Return.
+            let lines = node.plainText.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            let inlines = lines.enumerated().flatMap { index, line in
+                (index > 0 ? [PMNode(type: "hardBreak")] : []) + (line.isEmpty ? [] : [PMNode(type: "text", text: String(line))])
+            }
+            return inlines.isEmpty ? nil : inlines
         default:
             if let first = node.children.first { return inlineContent(of: first) }
             return nil
