@@ -43,7 +43,7 @@ enum BaseValue {
 
     // MARK: Number
 
-    /// Number input: empty clears the cell, unparseable input changes nothing.
+    /// Number input: empty clears the cell, unparseable or unreadable input changes nothing.
     enum NumberInput: Equatable {
         case clear
         case value(Double)
@@ -53,7 +53,10 @@ enum BaseValue {
     /// Parses numbers with comma or point, thousands separators allowed. The cell stores the plain number: percent as
     /// 50 for 50 %, progress as 0–100; decimal places only affect the display (web parity).
     static func parseNumber(_ draft: String, locale: Locale = .current) -> NumberInput {
-        var text = String(draft.map(asciiNumberCharacter)).filter { $0.isNumber || $0 == "," || $0 == "." || $0 == "-" }
+        let mapped = draft.map(asciiNumberCharacter)
+        // A character the parser can't read makes the input invalid instead of vanishing ("1/2" was 12, "1e6" 16).
+        guard mapped.allSatisfy(isNumberOrDecoration) else { return .invalid }
+        var text = String(mapped).filter { $0.isNumber || $0 == "," || $0 == "." || $0 == "-" }
         if text.isEmpty || text == "-" { return draft.trimmingCharacters(in: .whitespaces).isEmpty ? .clear : .invalid }
         let lastComma = text.lastIndex(of: ",")
         let lastPoint = text.lastIndex(of: ".")
@@ -85,6 +88,14 @@ enum BaseValue {
     /// Iran show Arabic-Indic or Persian ones, `numberDraft` too), the Arabic separators as "." and ",", and every
     /// minus or dash as "-" (U+2212 in regions like Sweden): a dash inside the number then makes it invalid ("1–5")
     /// instead of vanishing ("15").
+    /// Characters a typed or pasted number may carry besides its own: spaces and apostrophes grouping thousands
+    /// ("1 000", "1’000"), percent and currency signs, and the direction marks of Arabic and Persian minus signs
+    /// (`numberDraft`).
+    private static func isNumberOrDecoration(_ character: Character) -> Bool {
+        character.isNumber || character.isWhitespace || ",.-'’%٪".contains(character)
+            || character.unicodeScalars.allSatisfy { [.currencySymbol, .format].contains($0.properties.generalCategory) }
+    }
+
     private static func asciiNumberCharacter(_ character: Character) -> Character {
         if character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first,
            scalar.properties.numericType == .decimal, let digit = character.wholeNumberValue {

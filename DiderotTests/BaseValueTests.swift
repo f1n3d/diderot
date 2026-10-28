@@ -40,6 +40,13 @@ struct BaseValueTests {
     }
 
     @Test func numbersTakeCommaOrPointAsDecimalMark() {
+        // Characters the parser can't read make the input invalid instead of vanishing ("1/2" was 12, "1e6" 16).
+        for text in ["1/2", "3:30", "1e6", "12abc"] {
+            #expect(BaseValue.parseNumber(text) == .invalid, "\(text)")
+        }
+        #expect(BaseValue.parseNumber("1 000") == .value(1000))
+        #expect(BaseValue.parseNumber("50 %") == .value(50))
+        #expect(BaseValue.parseNumber("€ 12,50", locale: Locale(identifier: "de_DE")) == .value(12.5))
         #expect(BaseValue.parseNumber("4,5") == .value(4.5))
         #expect(BaseValue.parseNumber("4.5") == .value(4.5))
         #expect(BaseValue.parseNumber("1.234,56") == .value(1234.56))
