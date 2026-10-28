@@ -22,6 +22,17 @@ struct WebEditorViewTests {
     }
 
     /// Each server keeps its store across launches; the address is compared as the sign-ins compare it.
+    /// iPad windows share a server's store: its auth cookie goes with the last editor closed there, not with the first,
+    /// while another window still saves a drawing with it.
+    @Test func cookieGoesWithTheLastEditorOfAStore() {
+        let store = UUID()
+        WebEditorStores.editorOpened(store)
+        WebEditorStores.editorOpened(store)
+        #expect(!WebEditorStores.editorClosed(store))
+        #expect(WebEditorStores.editorClosed(store))
+        #expect(WebEditorStores.editorClosed(UUID()), "one never counted")
+    }
+
     @Test func eachServerKeepsItsOwnStore() {
         let defaults = Self.defaults("identifiers")
         let a = WebEditorStores.identifier(for: URL(string: "https://a.example.com")!, defaults: defaults)

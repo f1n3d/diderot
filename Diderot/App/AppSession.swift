@@ -196,7 +196,13 @@ final class AppSession {
     /// Every window's root view calls this, but windows share the session: only the first call restores it, in a task
     /// that closing its window can't cancel.
     func restoreAtLaunch() async {
-        if launchRestore == nil { launchRestore = Task { await restore() } }
+        if launchRestore == nil {
+            launchRestore = Task {
+                await restore()
+                // Once per launch: a window opened later (iPad) would remove the cookie of an editor open in another.
+                await WebEditorStores.removeLeftoverAuthCookies()
+            }
+        }
         await launchRestore?.value
     }
 
