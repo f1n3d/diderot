@@ -29,6 +29,35 @@ final class PageComments {
         state.value?.first { $0.id == id }
     }
 
+    enum Composing: Equatable {
+        case new
+        case reply(PageComment)
+        case edit(PageComment)
+    }
+
+    /// What the comment sheet's composer writes, and its text: kept here rather than in the sheet, so closing it (Done,
+    /// a swipe, a link, Show on Page) doesn't lose a comment being written. Cleared once it is sent.
+    var composing = Composing.new
+    var draft = ""
+
+    /// The comment with this ID, loading the list again if it's unknown: a collaborator's new comment whose mark came
+    /// through the live document already.
+    func comment(id: String, reloadingIfMissing: Bool) async -> PageComment? {
+        if let found = comment(id: id) { return found }
+        guard reloadingIfMissing else { return nil }
+        await load()
+        return comment(id: id)
+    }
+
+    /// A reply or edit whose comment is gone meanwhile (deleted elsewhere) becomes a new comment, its text kept.
+    func dropGoneTarget() {
+        switch composing {
+        case .reply(let target), .edit(let target):
+            if comment(id: target.id) == nil { composing = .new }
+        case .new: break
+        }
+    }
+
     /// Resolving is a licensed feature, as in the web client.
     var canResolve: Bool { session.ready?.entitlements.has("comment:resolution") == true }
 
