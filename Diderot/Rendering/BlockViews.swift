@@ -412,10 +412,11 @@ struct WeightedColumnsLayout: Layout {
         }
     }
 
-    private func columnWidths(total: CGFloat, count: Int) -> [CGFloat] {
+    func columnWidths(total: CGFloat, count: Int) -> [CGFloat] {
         guard count > 0 else { return [] }
         let available = max(total - spacing * CGFloat(count - 1), 0)
-        let parts = (0..<count).map { $0 < weights.count ? max(weights[$0], 0.1) : 1 }
+        // Bounded: huge weights from crafted content (1e308 each) add up to infinity and break the layout.
+        let parts = (0..<count).map { $0 < weights.count ? min(max(weights[$0], 0.1), 10_000) : 1 }
         let sum = parts.reduce(0, +)
         return parts.map { available * $0 / sum }
     }
@@ -569,7 +570,8 @@ struct TableCellWidth: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let content = subviews.first else { return .zero }
-        let width = fixed ?? min(max(content.sizeThatFits(.unspecified).width, 120), 320)
+        // A crafted colwidth (or a sum of them) can be infinite; 10,000 points is far wider than any real table.
+        let width = fixed.map { min($0, 10_000) } ?? min(max(content.sizeThatFits(.unspecified).width, 120), 320)
         return CGSize(width: width, height: content.sizeThatFits(ProposedViewSize(width: width, height: nil)).height)
     }
 

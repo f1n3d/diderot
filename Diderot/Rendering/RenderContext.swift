@@ -49,6 +49,9 @@ extension HTTPCookie {
 extension EnvironmentValues {
     @Entry var renderContext: RenderContext = .empty
     @Entry var listDepth: Int = 0
+    /// The synced blocks shown around a view ("sourcePageId/transclusionId", outermost first): one that contains itself
+    /// would load and nest forever.
+    @Entry var syncedBlockChain: [String] = []
 }
 
 /// Navigation stack of a tab (`MainTabView`); the reader pushes internal links, mentions and subpages onto it.

@@ -4,6 +4,30 @@ import Testing
 
 /// Tests on `Tests/DocmostKitTests/Fixtures`; Tools/seed-fixtures.py imports `fixture-*.json` into the dev instance.
 struct ContentParserTests {
+    /// Crafted numbers stay in bounds: a list's start near Int.max numbers from 1 (browsers count lists in 32 bits), a
+    /// huge colspan spans 1,000 columns, and widths such as "nan%" are no width. They trapped or took the app's memory.
+    @Test func craftedNumbersStayInBounds() throws {
+        let json = try JSONDecoder().decode(JSONValue.self, from: Data(#"""
+        {"type": "doc", "content": [
+          {"type": "orderedList", "attrs": {"start": 9223372036854775000}, "content": [
+            {"type": "listItem", "content": [{"type": "paragraph"}]}, {"type": "listItem", "content": [{"type": "paragraph"}]}]},
+          {"type": "table", "content": [{"type": "tableRow", "content": [
+            {"type": "tableCell", "attrs": {"colspan": 5e18}, "content": [{"type": "paragraph"}]}]}]}
+        ]}
+        """#.utf8))
+        let doc = ContentDocument(json: json)
+        guard case .orderedList(let items) = doc.blocks[0].kind else { Issue.record("expected ordered list"); return }
+        #expect(items.map(\.number) == [1, 2])
+        guard case .table(let table) = doc.blocks[1].kind else { Issue.record("expected table"); return }
+        #expect(table.rows.first?.cells.first?.colspan == 1_000)
+        #expect(ContentParser.listStart(of: PMNode(type: "orderedList", attrs: ["start": -3])) == -3)
+        for text in ["nan%", "nan", "-inf", "inf%"] {
+            #expect(Length(json: .string(text)) == nil, "\(text)")
+        }
+        #expect(Length(json: .string("50%")) == .percent(50))
+        #expect(Length(json: .number(240)) == .points(240))
+    }
+
     private func document(_ fixture: String) throws -> ContentDocument {
         let data = try TestSupport.fixture(fixture)
         let json = try JSONDecoder().decode(JSONValue.self, from: data)

@@ -668,8 +668,8 @@ final class AppSession {
         return isOtherUser
     }
 
-    /// Removes what the offline cache doesn't cover: downloads, the system URL cache (files of older builds,
-    /// `AsyncImage` logos and avatars) and the server's web editor data.
+    /// Removes what the offline cache doesn't cover: downloads, the system URL cache (files of older builds, logos and
+    /// avatars) and the server's web editor data.
     private func removeLocalData(for serverURL: URL) async {
         TempFile.removeAll()
         URLCache.shared.removeAllCachedResponses()

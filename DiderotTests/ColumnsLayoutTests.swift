@@ -12,6 +12,13 @@ struct ColumnsLayoutTests {
         PMNode(type: "column"),
     ])
 
+    /// Huge column widths from crafted content (1e308 each) add up to infinity: the layout's widths turned NaN. Bounded,
+    /// they share the width as equal weights do.
+    @Test func hugeWeightsGiveFiniteWidths() {
+        let widths = WeightedColumnsLayout(weights: [1e308, 1e308], spacing: 20).columnWidths(total: 400, count: 2)
+        #expect(widths == [190, 190])
+    }
+
     @Test func readerKeepsColumnContent() async throws {
         let block = try #require(ContentParser.parse(PMNode(type: "doc", content: [columns])).blocks.first)
         try await expectSameIsland(in: BlockView(block: block))
