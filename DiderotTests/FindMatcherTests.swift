@@ -6,6 +6,17 @@ import DocmostKit
 /// Find on page uses the views' block refs, which are the blocks' real paths in the document.
 @MainActor
 struct FindMatcherTests {
+    /// Matches are highlighted at their own characters, also after accents and emoji before them (the offsets go by
+    /// UTF-8 now, which made long code blocks fast).
+    @Test func highlightsTheMatchesThemselves() {
+        var text = AttributedString("Über 🇩🇪 und über, ÜBER")
+        let find = PageFind()
+        find.query = "über"
+        FindMatcher.highlight(&text, find: find, ref: NodeRef(path: [0], id: "a"))
+        let marked = text.runs.filter { $0.backgroundColor != nil }.map { String(text[$0.range].characters) }
+        #expect(marked == ["Über", "über", "ÜBER"])
+    }
+
     @Test func toggleContentHasItsRealPath() {
         func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", content: [PMNode(type: "text", text: text)]) }
         let toggle = PMNode(type: "details", attrs: ["open": true], content: [
