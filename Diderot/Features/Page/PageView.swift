@@ -31,6 +31,9 @@ struct PageView: View {
     @FocusState private var titleFocused: Bool
     /// Title whose save is running: a focus loss right after leaving the page would send it a second time.
     @State private var savingTitle: String?
+    /// The session the page loaded in: an edited title waits in its store when that session ends (401) or a link switches
+    /// to another server, as the page's text does.
+    @State private var pageSession: ReadySession?
     @State private var showsWebLayout = DebugLaunch.webLayout
     @State private var webHTML: String?
     @State private var showsComments = DebugLaunch.route == "comments"
@@ -392,11 +395,14 @@ struct PageView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, isOnScreen { model?.resume() }
             // iOS may end the app in the background, and an app swiped away in the app switcher never gets there: keep
-            // unsent changes as leaving the page would.
-            if phase != .active, let model {
+            // unsent changes as leaving the page would. A title being typed goes too (kept first, see `commitTitle`), also
+            // on a database page.
+            if phase != .active {
+                let savingTitle = phase == .background && titleFocused ? commitTitle() : nil
                 let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
                 Task {
-                    await model.saveUnsentChanges()
+                    await model?.saveUnsentChanges()
+                    await savingTitle?.value
                     UIApplication.shared.endBackgroundTask(task)
                 }
             }
@@ -971,6 +977,7 @@ struct PageView: View {
 
     private func load(force: Bool) async {
         guard let ready = session.ready else { return }
+        pageSession = ready
         let client = ready.client
         let cache = ready.cache
         if state.value == nil || force {
@@ -1185,24 +1192,32 @@ struct PageView: View {
 
     /// Saves an edited title; reads the view's values before the task starts, so it also works from `onDisappear`. One
     /// the server doesn't get (offline, unreachable) stays on the device and goes out later (`AppSession.sendUnsentTitles`).
-    private func commitTitle() {
-        guard let page = state.value, session.client != nil else { return }
+    /// Kept before it is sent, so it survives the app ending in the background meanwhile; it goes once sent.
+    @discardableResult
+    private func commitTitle() -> Task<Void, Never>? {
+        guard let page = state.value, let pageSession else { return nil }
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed != (page.title ?? ""), trimmed != savingTitle else { return }
+        guard trimmed != (page.title ?? ""), trimmed != savingTitle else { return nil }
+        // Its session ended (401) or a link switched servers: the title waits for the next sign-in there, like the text.
+        guard session.ready?.token == pageSession.token else {
+            return Task { await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges) }
+        }
         savingTitle = trimmed
-        Task {
-            // First: an older kept title going out meanwhile would overwrite this one.
-            await session.forgetUnsentTitle(pageId: page.id)
+        return Task {
+            // Replaces an older kept title, which then can't overwrite this one.
+            await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges)
             do {
-                // The response lacks permissions and space info, so reload instead of replacing the page.
                 _ = try await session.send(Endpoints.Pages.update(pageId: page.id, title: trimmed))
+                await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
                 unsentTitle = nil
                 changes.pageChanged(in: page.spaceId)
-                await load(force: true)
+                // The response lacks permissions and space info, so reload instead of replacing the page; on its own, so
+                // a background task doesn't wait for it.
+                Task { await load(force: true) }
             } catch where UnsentTitle.isFinal(error) {
+                await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
                 toast = error.userMessage
             } catch {
-                await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId)
                 unsentTitle = trimmed
                 toast = String(localized: "The title goes to the server once it can be reached.")
             }
