@@ -29,6 +29,10 @@ final class NotificationsStore {
         listState.value.map { items in unreadOnly ? items.filter(\.isUnread) : items }
     }
 
+    /// Counts list loads and marks: a list the server answered before a newer load or a mark doesn't win (it showed a
+    /// notification just marked as read unread again, and raised the badge).
+    @ObservationIgnored private var listLoads = 0
+
     init(session: AppSession) {
         self.session = session
     }
@@ -43,10 +47,15 @@ final class NotificationsStore {
         guard session.client != nil else { return }
         if listState.value == nil { listState = .loading }
         let filter = filter
+        listLoads += 1
+        let load = listLoads
         do {
             let page = try await session.send(Endpoints.Notifications.list(filter: filter, limit: 50))
             // Filter changed meanwhile: the load for the new one shows its list.
             guard filter == self.filter else { return }
+            // A mark or a newer load came meanwhile: this answer may predate it. The list keeps the mark, and the
+            // next load (a newer one, or the popover's next) brings the server's state.
+            guard load == listLoads else { return }
             listState = .loaded(page.items)
             // Only a complete, unfiltered list yields the bell's count; otherwise ask the server.
             if filter == .all, page.items.count < 50 {
@@ -66,6 +75,7 @@ final class NotificationsStore {
             listState = .loaded(items.map { $0.id == notification.id ? $0.markedRead() : $0 })
         }
         unreadCount = max(unreadCount - 1, 0)
+        listLoads += 1
         do {
             _ = try await session.send(Endpoints.Notifications.markRead([notification.id]))
         } catch {
@@ -86,6 +96,7 @@ final class NotificationsStore {
             listState = .loaded(items.map { $0.markedRead() })
         }
         unreadCount = 0
+        listLoads += 1
         do {
             _ = try await session.send(Endpoints.Notifications.markAllRead)
         } catch {

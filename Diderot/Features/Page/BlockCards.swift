@@ -474,7 +474,7 @@ struct ListNodeView: View {
 
     private func marker(index: Int) -> String {
         if node.type == "orderedList" {
-            return "\((node.int("start") ?? 1) + index)."
+            return "\(ContentParser.listStart(of: node) + index)."
         }
         return ListBlockView.bullet(depth: depth)
     }
@@ -956,7 +956,7 @@ struct TableNodeView: View {
                         GridRow {
                             ForEach(NodeEntry.entries(row.node.children, parentPath: row.ref.path)) { cell in
                                 TableCellNodeView(model: model, cell: cell)
-                                    .gridCellColumns(max(cell.node.int("colspan") ?? 1, 1))
+                                    .gridCellColumns(ContentParser.colspan(of: cell.node))
                             }
                         }
                     }

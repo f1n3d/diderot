@@ -96,10 +96,12 @@ enum FindMatcher {
         let current = find.currentMatch?.ref == ref ? find.currentMatch?.occurrence : nil
         let string = String(text.characters)
         for (index, range) in ranges(of: find.query, options: find.options, in: string).enumerated() {
-            let lower = string.distance(from: string.startIndex, to: range.lowerBound)
-            let length = string.distance(from: range.lowerBound, to: range.upperBound)
-            let start = text.characters.index(text.startIndex, offsetBy: lower)
-            let end = text.characters.index(start, offsetBy: length)
+            // By UTF-8 offset: constant time in `string`, logarithmic in `text`, as both hold the same text. Counting
+            // characters from the start for every match was quadratic: a long code block froze each keystroke.
+            let lower = string.utf8.distance(from: string.startIndex, to: range.lowerBound)
+            let upper = string.utf8.distance(from: string.startIndex, to: range.upperBound)
+            let start = text.utf8.index(text.startIndex, offsetBy: lower)
+            let end = text.utf8.index(text.startIndex, offsetBy: upper)
             text[start..<end].backgroundColor = index == current ? Color.orange.opacity(0.65) : Color.yellow.opacity(0.4)
         }
     }

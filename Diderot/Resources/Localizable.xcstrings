@@ -839,6 +839,16 @@
         }
       }
     },
+    "Changes you made on this server haven't reached it yet. Removing the server deletes them from this device.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen, die du auf diesem Server gemacht hast, sind noch nicht dort angekommen. Entfernst du den Server, werden sie auf diesem Gerät gelöscht."
+          }
+        }
+      }
+    },
     "Checklist": {
       "localizations": {
         "de": {
@@ -1002,6 +1012,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kommentare zu dieser Seite erscheinen hier."
+          }
+        }
+      }
+    },
+    "Comments with links, mentions or formatting can be edited on the web.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentare mit Links, Erwähnungen oder Formatierung lassen sich im Web bearbeiten."
           }
         }
       }
@@ -3249,6 +3269,16 @@
         }
       }
     },
+    "Not saved: the app has switched to another server.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gespeichert: Die App zeigt inzwischen einen anderen Server."
+          }
+        }
+      }
+    },
     "Not sent yet: the title goes to the server once it can be reached.": {
       "localizations": {
         "de": {
@@ -3773,6 +3803,16 @@
         }
       }
     },
+    "Read only while offline.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur lesbar, solange du offline bist."
+          }
+        }
+      }
+    },
     "Read only. Editing databases requires a Docmost Business license on this server.": {
       "localizations": {
         "de": {
@@ -3959,6 +3999,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Von der Seite entfernen"
+          }
+        }
+      }
+    },
+    "Remove “%@”?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ entfernen?"
           }
         }
       }
@@ -5174,6 +5224,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Server nutzt HTTP: Dein Passwort und deine Sitzung gehen unverschlüsselt durchs Netz. Fahre nur in einem Netz fort, dem du vertraust, etwa deinem eigenen."
+          }
+        }
+      }
+    },
+    "This synced block contains itself.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser synchronisierte Block enthält sich selbst."
           }
         }
       }

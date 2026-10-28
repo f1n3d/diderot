@@ -56,9 +56,10 @@ struct ContentImageView: View {
     private var targetWidth: CGFloat? {
         guard availableWidth > 0 else { return nil }
         switch image.width {
-        case .points(let points): return min(CGFloat(points), availableWidth)
+        case .points(let points) where points > 0: return min(CGFloat(points), availableWidth)
         case .percent(let percent): return availableWidth * CGFloat(min(max(percent, 5), 100)) / 100
-        case nil: return availableWidth
+        // No width, or none to use (zero, negative).
+        default: return availableWidth
         }
     }
 

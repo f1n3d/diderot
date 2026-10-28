@@ -29,6 +29,18 @@ struct PageTreeStoreTests {
         #expect(store.visibleRows.map(\.id) == ["A", "B", "C", "C1"])
     }
 
+    /// Levels loaded at different times can list a page a collaborator moved under its old and its new parent, even
+    /// below itself: each page shows once, where the walk went on forever and the app crashed.
+    @Test func aPageListedTwiceShowsOnce() {
+        let store = PageTreeStore(spaceId: "s")
+        store.setChildren([page("A", children: true)], of: nil)
+        store.setChildren([page("B", parent: "A", children: true)], of: "A")
+        store.setChildren([page("A", parent: "B", children: true)], of: "B")  // A moved under B since
+        store.setExpanded("A", true)
+        store.setExpanded("B", true)
+        #expect(store.visibleRows.map(\.id) == ["A", "B"])
+    }
+
     /// SpaceView.movePage drops nothing on, before or after a page's own subpages. Only visible rows are drop
     /// targets, so pages below a collapsed node don't count.
     @Test func isDescendantCoversOnlyVisibleSubpages() {
@@ -92,6 +104,21 @@ struct PageTreeStoreTests {
         await store.loadRootIfNeeded()
         #expect(store.visibleRows.map(\.id) == ["A"])
         #expect(await calls.list == ["root/-", "root/-"])
+    }
+
+    /// A first load cancelled by a push or tab switch starts again when the space shows again; the spinner stayed.
+    @Test func cancelledFirstLoadStartsAgain() async {
+        let calls = Calls()
+        let store = PageTreeStore(spaceId: "s") { parent, cursor in
+            await calls.record(parent ?? "root", cursor)
+            if await calls.list.count == 1 { throw CancellationError() }
+            return Paginated(items: [SidebarPage(id: "A", title: "A")], meta: PaginationMeta(hasNextPage: false, nextCursor: nil))
+        }
+
+        await store.loadRootIfNeeded()
+        guard case .idle = store.rootState else { Issue.record("still loading: \(store.rootState)"); return }
+        await store.loadRootIfNeeded()
+        #expect(store.visibleRows.map(\.id) == ["A"])
     }
 
     /// A refresh (after a rename, a move or a pull) keeps every expanded level open, not only the root's.

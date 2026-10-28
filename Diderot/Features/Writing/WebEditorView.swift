@@ -13,6 +13,7 @@ struct WebEditorView: View {
     let token: String
     var onClose: () -> Void = {}
 
+    private let storeID: UUID
     @State private var dataStore: WKWebsiteDataStore
     @State private var limit: WebNavigationLimit
     @State private var webPage: WebPage
@@ -25,7 +26,8 @@ struct WebEditorView: View {
         self.onClose = onClose
         // A persistent store of this server's own: the web editor needs IndexedDB (Yjs offline cache), which a
         // non-persistent store lacks. The auth cookie is removed on close.
-        let dataStore = WKWebsiteDataStore(forIdentifier: WebEditorStores.identifier(for: serverURL))
+        storeID = WebEditorStores.identifier(for: serverURL)
+        let dataStore = WKWebsiteDataStore(forIdentifier: storeID)
         var configuration = WebPage.Configuration()
         configuration.websiteDataStore = dataStore
         // Frames: embeds and the draw.io editor.
@@ -55,8 +57,10 @@ struct WebEditorView: View {
                     try? await load()
                 }
         }
+        .onAppear { WebEditorStores.editorOpened(storeID) }
+        // iPad windows share a server's store: its cookie goes with the last editor, not while another one still saves.
         .onDisappear {
-            Task { await removeCookies() }
+            if WebEditorStores.editorClosed(storeID) { Task { await removeCookies() } }
             onClose()
         }
     }
@@ -116,6 +120,16 @@ enum WebEditorStores {
     /// over, with edits it may hold that didn't reach the server yet (the web client syncs them when it opens the page).
     private static let shared = UUID(uuidString: "6E2F3C1A-5B7D-4E8F-9A0B-1C2D3E4F5A6B")!
     private static let key = "webEditorStores"
+
+    /// Editors open per store (iPad windows share a server's).
+    private static var openEditors: [UUID: Int] = [:]
+    static func editorOpened(_ store: UUID) { openEditors[store, default: 0] += 1 }
+    /// Whether that was the store's last open editor.
+    static func editorClosed(_ store: UUID) -> Bool {
+        let remaining = (openEditors[store] ?? 1) - 1
+        openEditors[store] = remaining > 0 ? remaining : nil
+        return remaining <= 0
+    }
 
     /// The server's store, the same across launches.
     static func identifier(for server: URL, defaults: UserDefaults = .standard) -> UUID {

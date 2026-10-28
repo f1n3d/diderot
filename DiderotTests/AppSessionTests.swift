@@ -119,6 +119,33 @@ struct AppSessionRaceTests {
 
     /// Unsent changes are kept per server and user: signing out keeps them for the next sign-in, removing a saved
     /// server deletes its own.
+    /// Sign Out takes effect on the device before the server is asked (behind a VPN that is off it takes its 30 s): an
+    /// app left meanwhile stayed signed in, with its content there on the next start.
+    @Test func signOutTakesEffectBeforeTheServerAnswers() async throws {
+        let session = try await sessionOnA()
+        let a = a
+        let signedOutFirst = Mutex<Bool?>(nil)
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+            signedOutFirst.withLock { $0 = !session.accounts.contains { $0.serverURL == a } }
+        } }
+        await session.signOut()
+        #expect(signedOutFirst.withLock { $0 } == true)
+        await removeCaches()
+    }
+
+    /// Removing a server asks first while changes still wait for it; an emptied title list doesn't count.
+    @Test func waitingChangesAreFound() async throws {
+        let server = URL(string: "https://unsent-\(UUID().uuidString).example.com")!
+        #expect(!UnsentChanges.hasEntries(server: server))
+        let store = UnsentChanges.store(server: server, userId: "u1")
+        await store.write([String: UnsentTitle](), key: CacheKey.unsentTitles)
+        #expect(!UnsentChanges.hasEntries(server: server), "an emptied title list")
+        await store.writeData(Data([1, 2, 3]), key: CacheKey.unsentChanges("p1"))
+        #expect(UnsentChanges.hasEntries(server: server))
+        UnsentChanges.removeAll(server: server)
+        #expect(!UnsentChanges.hasEntries(server: server))
+    }
+
     @Test func removingAServerDeletesItsUnsentChanges() async throws {
         let session = try await sessionOnA()
         let key = CacheKey.unsentChanges("p")
@@ -368,6 +395,67 @@ struct AppSessionRaceTests {
     }
 
     /// The user switches database views while the first view's rows load, and the second view's rows arrive first.
+    /// A database is read-only offline, as pages are. A save that fails keeps the field's text for the next try: the old
+    /// value used to come back, the input gone.
+    @Test func failedSaveKeepsTheTypedText() async throws {
+        let (model, session) = try await editableBase()
+        defer { withExtendedLifetime(session) {} }  // the model holds it unowned
+        #expect(model.canEdit)
+        model.isOffline = true
+        #expect(model.readOnlyReason == .offline)
+        model.isOffline = false
+
+        StubURLProtocol.status.withLock { $0 = 500 }
+        await model.setCell(rowId: "r1", propertyId: "p1", to: .string("neu"), typed: "neu")
+        StubURLProtocol.status.withLock { $0 = 200 }
+        #expect(model.unsavedDraft(rowId: "r1", propertyId: "p1") == "neu")
+        #expect(model.row(id: "r1")?.cells["p1"] == nil, "the row shows what the server has")
+
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "neu"}}}"# }
+        await model.setCell(rowId: "r1", propertyId: "p1", to: .string("neu"), typed: "neu")
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(model.unsavedDraft(rowId: "r1", propertyId: "p1") == nil)
+        #expect(model.row(id: "r1")?.cells["p1"] == .string("neu"))
+        await removeCaches()
+    }
+
+    /// A write queued while a's server didn't answer goes nowhere after a switch to b, with a notice: it used to reach b,
+    /// taking a's content there.
+    @Test func queuedWriteAfterASwitchIsDropped() async throws {
+        let (model, session) = try await editableBase()
+        let other = StoredSession(serverURL: b, token: "b")
+        let queued = Mutex<Task<Void, Never>?>(nil)
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+            // While a's server takes its time, a second change waits in the queue; then the user switches to b.
+            queued.withLock { $0 = Task { await model.setCell(rowId: "r1", propertyId: "p2", to: .string("zwei")) } }
+            await Task.yield()
+            StubURLProtocol.body.withLock { $0 = nil }  // b's own answers for the switch
+            await session.switchTo(other)
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "eins"}}}"# }
+        } }
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "eins"}}}"# }
+        await model.setCell(rowId: "r1", propertyId: "p1", to: .string("eins"))
+        await queued.withLock { $0 }?.value
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(session.ready?.server.url == b)
+        #expect(model.toast == String(localized: "Not saved: the app has switched to another server."))
+        await removeCaches()
+    }
+
+    /// An entry opened from a link that the table's loaded rows leave out shows its saved changes, and a second change
+    /// builds on the first: the sheet kept the old row, and a second tag replaced the first.
+    @Test func linkedEntryOutsideTheTableShowsItsChanges() async throws {
+        let (model, session) = try await editableBase()
+        defer { withExtendedLifetime(session) {} }  // the model holds it unowned
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r9", "cells": {}}}"# }
+        #expect(await model.fetchRowIfNeeded("r9"))
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r9", "cells": {"p1": "neu"}}}"# }
+        await model.setCell(rowId: "r9", propertyId: "p1", to: .string("neu"))
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(model.row(id: "r9")?.cells["p1"] == .string("neu"))
+        await removeCaches()
+    }
+
     @Test func lateRowsAnswerKeepsTheNewView() async throws {
         let session = try await sessionOnA()
         let pageId = "base-\(UUID().uuidString)"
@@ -781,6 +869,26 @@ struct AppSessionRaceTests {
         // The model holds its session unowned.
         withExtendedLifetime(session) {}
         await removeCaches()
+    }
+
+    /// A database on a with a Business license, editable, its table showing row r1 (no cells).
+    private func editableBase() async throws -> (BaseModel, AppSession) {
+        _ = try await sessionOnA()
+        let business = try JSONDecoder().decode(Entitlements.self, from: Data(#"{"tier": "business", "features": ["bases"]}"#.utf8))
+        await DiskCache(scope: a.absoluteString).write(business, key: CacheKey.entitlements)
+        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        await session.restore()
+        let pageId = "base-\(UUID().uuidString)"
+        UserDefaults.standard.removeObject(forKey: "base.view.\(pageId)")
+        let model = BaseModel(pageId: pageId, session: session)
+        StubURLProtocol.body.withLock {
+            $0 = #"{"data": {"id": "b", "permissions": {"canEdit": true}, "properties": [{"id": "p1", "name": "Text", "type": "text"}, {"id": "p2", "name": "Notiz", "type": "text"}], "views": [{"id": "v1", "name": "A", "type": "table", "position": "a"}]}}"#
+        }
+        await model.load()
+        StubURLProtocol.body.withLock { $0 = Self.rows("r1") }
+        await model.loadRows()
+        StubURLProtocol.body.withLock { $0 = nil }
+        return (model, session)
     }
 
     private static func rows(_ id: String) -> String {
