@@ -25,6 +25,15 @@ struct ImageLoaderTests {
         #expect(ImageLoader.thumbnailSize(targetPixelWidth: 2560, ratio: 0.5) == 2560)
     }
 
+    /// A width from the document such as "nan%" or a huge negative number gives a bounded pixel width: turning it into an
+    /// Int trapped, for everyone who saw the image.
+    @Test func pixelWidthsStayInBounds() {
+        #expect(ImageLoader.pixelWidth(for: -1e20, scale: 3) == 64)
+        #expect(ImageLoader.pixelWidth(for: .nan, scale: 3) == 64)
+        #expect(ImageLoader.pixelWidth(for: 1e20, scale: 3) == 16_384)
+        #expect(ImageLoader.pixelWidth(for: 300, scale: 3) == 900)
+    }
+
     private func jpeg(width: Int, height: Int, orientation: Int) throws -> Data {
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,

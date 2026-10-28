@@ -128,12 +128,14 @@ public enum Length: Sendable, Hashable {
 
     public init?(json: JSONValue?) {
         guard let json else { return nil }
+        // Finite only: "nan%" or "inf" from crafted content can't size anything.
         if let number = json.doubleValue {
+            guard number.isFinite else { return nil }
             self = .points(number)
         } else if let text = json.stringValue?.trimmingCharacters(in: .whitespaces), !text.isEmpty {
-            if text.hasSuffix("%"), let value = Double(text.dropLast()) {
+            if text.hasSuffix("%"), let value = Double(text.dropLast()), value.isFinite {
                 self = .percent(value)
-            } else if let value = Double(text.replacingOccurrences(of: "px", with: "")) {
+            } else if let value = Double(text.replacingOccurrences(of: "px", with: "")), value.isFinite {
                 self = .points(value)
             } else {
                 return nil

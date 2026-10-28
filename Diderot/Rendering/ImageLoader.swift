@@ -21,7 +21,7 @@ actor ImageLoader {
     }
 
     func image(for url: URL, targetWidth: CGFloat, scale: CGFloat) async throws -> UIImage {
-        let pixelWidth = max(Int((targetWidth * scale).rounded(.up)), 64)
+        let pixelWidth = Self.pixelWidth(for: targetWidth, scale: scale)
         // 256 px buckets, so slightly different layout widths share a cache entry.
         let bucket = ((pixelWidth + 255) / 256) * 256
         let key = "\(url.absoluteString)@\(bucket)" as NSString
@@ -76,6 +76,13 @@ actor ImageLoader {
         let target = Double(targetPixelWidth)
         let width = target * min(1, (maxPixels / (target * target * tall)).squareRoot())
         return Int((width * tall).rounded(.up))
+    }
+
+    /// Pixels for a width in points, bounded: a width from the document ("nan%", a huge negative number) can't be turned
+    /// into an Int.
+    nonisolated static func pixelWidth(for targetWidth: CGFloat, scale: CGFloat) -> Int {
+        let pixels = (targetWidth * scale).rounded(.up)
+        return pixels.isFinite ? Int(min(max(pixels, 64), 16_384)) : 64
     }
 
     @concurrent static func decode(_ data: Data, targetPixelWidth: Int) async -> UIImage? {
