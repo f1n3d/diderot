@@ -185,6 +185,8 @@ struct BaseRowDetailSheet: View {
                 Text("Read only. Editing databases requires a Docmost Business license on this server.")
             case .permission:
                 Text("Read only. You don't have permission to edit this database.")
+            case .offline:
+                Text("Read only while offline.")
             }
         } icon: {
             Image(systemName: "lock")
@@ -221,6 +223,7 @@ private struct BaseTitleField: View {
     @State private var draft = ""
     @State private var original = ""
     @FocusState private var focused: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
     private var stored: String {
         base.primaryProperty.flatMap { row.cells[$0.id]?.stringValue } ?? ""
@@ -232,10 +235,7 @@ private struct BaseTitleField: View {
                 .font(.title2.bold())
                 .focused($focused)
                 .submitLabel(.done)
-                .onAppear {
-                    draft = stored
-                    original = stored
-                }
+                .onAppear { showStored(primary) }
                 .onChange(of: draft) { _, text in
                     // Titles are single-line: Return ends the input instead of adding a line break.
                     if text.contains("\n") {
@@ -246,12 +246,13 @@ private struct BaseTitleField: View {
                 .onChange(of: focused) { _, isFocused in
                     if !isFocused { commit(primary) }
                 }
-                .onChange(of: stored) { _, value in
+                .onChange(of: stored) { _, _ in
                     guard !focused else { return }
-                    draft = value
-                    original = value
+                    showStored(primary)
                 }
                 .onDisappear { commit(primary) }
+                // Typed but not yet committed when the app leaves (see `BaseTextFieldEditor`).
+                .onChange(of: scenePhase) { _, phase in if phase == .background, focused { commit(primary) } }
                 .task {
                     guard autoFocus else { return }
                     try? await Task.sleep(for: .milliseconds(450))
@@ -269,11 +270,22 @@ private struct BaseTitleField: View {
         }
     }
 
+    /// The stored title, or the one a failed save didn't get to the server (see `BaseTextFieldEditor`).
+    private func showStored(_ primary: BaseProperty) {
+        original = stored
+        draft = model.unsavedDraft(rowId: row.id, propertyId: primary.id) ?? stored
+    }
+
     private func commit(_ primary: BaseProperty) {
         guard draft != original else { return }
         original = draft
         let rowId = row.id
         let value = BaseValue.text(draft)
-        Task { await model.setCell(rowId: rowId, propertyId: primary.id, to: value) }
+        let typed = draft
+        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        Task {
+            await model.setCell(rowId: rowId, propertyId: primary.id, to: value, typed: typed)
+            UIApplication.shared.endBackgroundTask(task)
+        }
     }
 }
