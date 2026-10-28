@@ -203,6 +203,17 @@ struct AppSessionRaceTests {
     }
 
     /// A request of a ends with 401 after the switch to b, e.g. because a's token was revoked meanwhile.
+    /// An editor engine still open after a switch to b asks for a fresh collab token for its page on a: it gets none,
+    /// where it used to get b's token for a's socket.
+    @Test func collabTokenOnlyForTheEnginesOwnSession() async throws {
+        let session = try await sessionOnA()
+        let owner = try #require(session.ready)
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        #expect(session.ready?.server.url == b)
+        #expect(await WebDocumentEngine.collabToken(session: session, owner: owner) == nil)
+        await removeCaches()
+    }
+
     @Test func lateUnauthorizedAnswerKeepsTheSwitch() async throws {
         let session = try await sessionOnA()
         let other = StoredSession(serverURL: b, token: "b")
