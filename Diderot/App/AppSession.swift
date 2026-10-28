@@ -311,12 +311,14 @@ final class AppSession {
     /// Removes another saved sign-in: ends its server session and deletes its cache and unsent changes.
     func removeAccount(_ account: StoredSession) async {
         guard !isCurrent(account) else { return }
-        await endServerSession(account, client: makeClient(for: account.serverURL, token: account.token))
+        // As signing out: on the device first, then the server.
+        keepPendingLogout(account)
         keychain("remove") { try sessionStore.remove(serverURL: account.serverURL) }
-        await makeCache(for: account.serverURL).removeAll()
-        UnsentChanges.removeAll(server: account.serverURL)
         reloadAccounts()
+        UnsentChanges.removeAll(server: account.serverURL)
+        await makeCache(for: account.serverURL).removeAll()
         await removeLocalData(for: account.serverURL)
+        await sendPendingLogouts()
     }
 
     /// The saved sign-in whose server matches a web URL (for links to another server).
@@ -392,36 +394,26 @@ final class AppSession {
     /// Signs out of the current server and continues with another saved one, if any.
     func signOut() async {
         guard case .ready(let session) = state else { return }
-        await endServerSession(StoredSession(serverURL: session.server.url, token: session.token), client: session.client)
-        await removeLocalData(for: session.server.url)
-        // After the last await: while the state still shows this session, a finishing reconnect would save it again.
+        // On the device before any await: the server can take its 30 s to answer (behind a VPN that is off), and an app
+        // left meanwhile stayed signed in. A reconnect finishing meanwhile is no longer current, so it can't save the
+        // session again. The server's session ends through the waiting sign-outs, which retry until it answers.
+        keepPendingLogout(StoredSession(serverURL: session.server.url, token: session.token))
         keychain("remove") { try sessionStore.remove(serverURL: session.server.url) }
         reloadAccounts()
         AppLog.session.info("Signed out")
-        // A second tap on Sign Out or a switch during the awaits has already moved on.
-        guard isStillCurrent(session) else { return }
-        if let next = nextAccountAfterSignOut() {
-            await switchTo(next)
-        } else {
-            state = .signedOut(session.server)
-        }
+        let next = nextAccountAfterSignOut()
+        state = next == nil ? .signedOut(session.server) : .restoring
+        await removeLocalData(for: session.server.url)
+        if let next, case .restoring = state { await switchTo(next) }
+        await sendPendingLogouts()
     }
 
     // MARK: - Sign-outs the server didn't get
 
     @ObservationIgnored private var isSendingLogouts = false
 
-    /// Ends the session on its server. Out of reach, it would stay valid there until it expires, so it waits for
-    /// `sendPendingLogouts`; a 401 means the server ended it already.
-    private func endServerSession(_ session: StoredSession, client: APIClient) async {
-        do {
-            _ = try await client.send(Endpoints.Auth.logout)
-        } catch let error as APIError where error.isSessionExpired {
-        } catch {
-            keepPendingLogout(session)
-        }
-    }
-
+    /// A sign-out for its server: `sendPendingLogouts` ends the session there, now or once the server answers; out of
+    /// reach, it would stay valid there until it expires.
     private func keepPendingLogout(_ session: StoredSession) {
         keychain("keep the sign-out") {
             var pending = try sessionStore.pendingLogouts()

@@ -119,6 +119,20 @@ struct AppSessionRaceTests {
 
     /// Unsent changes are kept per server and user: signing out keeps them for the next sign-in, removing a saved
     /// server deletes its own.
+    /// Sign Out takes effect on the device before the server is asked (behind a VPN that is off it takes its 30 s): an
+    /// app left meanwhile stayed signed in, with its content there on the next start.
+    @Test func signOutTakesEffectBeforeTheServerAnswers() async throws {
+        let session = try await sessionOnA()
+        let a = a
+        let signedOutFirst = Mutex<Bool?>(nil)
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+            signedOutFirst.withLock { $0 = !session.accounts.contains { $0.serverURL == a } }
+        } }
+        await session.signOut()
+        #expect(signedOutFirst.withLock { $0 } == true)
+        await removeCaches()
+    }
+
     @Test func removingAServerDeletesItsUnsentChanges() async throws {
         let session = try await sessionOnA()
         let key = CacheKey.unsentChanges("p")
