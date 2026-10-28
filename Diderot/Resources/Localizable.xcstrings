@@ -839,6 +839,16 @@
         }
       }
     },
+    "Changes you made on this server haven't reached it yet. Removing the server deletes them from this device.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen, die du auf diesem Server gemacht hast, sind noch nicht dort angekommen. Entfernst du den Server, werden sie auf diesem Gerät gelöscht."
+          }
+        }
+      }
+    },
     "Checklist": {
       "localizations": {
         "de": {
@@ -3979,6 +3989,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Von der Seite entfernen"
+          }
+        }
+      }
+    },
+    "Remove “%@”?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ entfernen?"
           }
         }
       }

@@ -14,6 +14,16 @@ enum UnsentChanges {
         return DiskCache(scope: userId, baseDirectory: directory(of: server), protection: .afterFirstUnlock)
     }
 
+    /// Whether any user's changes or titles still wait for the server (asked before removing it).
+    static func hasEntries(server: URL) -> Bool {
+        guard let files = FileManager.default.enumerator(at: directory(of: server), includingPropertiesForKeys: nil) else { return false }
+        return files.contains { item in
+            guard let url = item as? URL, ["bin", "json"].contains(url.pathExtension) else { return false }
+            // The titles' list stays behind as "{}" once they are all sent.
+            return (try? JSONDecoder().decode([String: UnsentTitle].self, from: Data(contentsOf: url)))?.isEmpty != true
+        }
+    }
+
     /// All users' changes for the server.
     static func removeAll(server: URL) {
         try? FileManager.default.removeItem(at: directory(of: server))
