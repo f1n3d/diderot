@@ -31,12 +31,30 @@ struct RemoteThumbnail<ClipShape: Shape, Placeholder: View>: View {
     let size: CGFloat
     let shape: ClipShape
     @ViewBuilder let placeholder: Placeholder
+    @Environment(\.displayScale) private var displayScale
+    @State private var image: UIImage?
+    @State private var loaded: URL?
 
     var body: some View {
         if let url {
-            AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { placeholder }
-                .frame(width: size, height: size)
-                .clipShape(shape)
+            Group {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    placeholder
+                }
+            }
+            .frame(width: size, height: size)
+            .clipShape(shape)
+            // Decoded at the size shown, as content images are. AsyncImage decoded the whole file: a member's avatar that
+            // is small as a file but huge unpacked ended the app wherever it showed. Same request as before: no token.
+            .task(id: url) {
+                if loaded == url, image != nil { return }
+                image = nil
+                guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
+                image = await ImageLoader.decode(data, targetPixelWidth: Int((size * displayScale).rounded(.up)))
+                loaded = url
+            }
         } else {
             placeholder
         }
