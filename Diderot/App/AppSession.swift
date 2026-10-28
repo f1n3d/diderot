@@ -461,8 +461,10 @@ final class AppSession {
     @ObservationIgnored private var isSendingTitles = false
 
     /// Keeps a page title the server didn't get; `sendUnsentTitles` sends it once the server answers.
-    func keepUnsentTitle(_ title: String, pageId: String, spaceId: String?) async {
-        guard let store = ready?.unsentChanges else { return }
+    /// `store`: the unsent changes of the session the page was opened in, as the editor engine keeps its own; a 401 or a
+    /// switch may have ended that session meanwhile. Without one, the current session's.
+    func keepUnsentTitle(_ title: String, pageId: String, spaceId: String?, in store: DiskCache? = nil) async {
+        guard let store = store ?? ready?.unsentChanges else { return }
         var titles = await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles) ?? [:]
         titles[pageId] = UnsentTitle(title: title, spaceId: spaceId)
         await store.write(titles, key: CacheKey.unsentTitles)
@@ -473,10 +475,12 @@ final class AppSession {
         await ready?.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?[pageId]?.title
     }
 
-    /// Drops the page's kept title: a newer one reached the server.
-    func forgetUnsentTitle(pageId: String) async {
+    /// Drops the page's kept title: it, or a newer one, reached the server. With `title`, only while it is still that one:
+    /// a newer title kept meanwhile stays.
+    func forgetUnsentTitle(pageId: String, title: String? = nil) async {
         guard let store = ready?.unsentChanges,
-              var titles = await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles), titles[pageId] != nil
+              var titles = await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles), let kept = titles[pageId],
+              title == nil || kept.title == title
         else { return }
         titles[pageId] = nil
         await store.write(titles, key: CacheKey.unsentTitles)

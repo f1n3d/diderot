@@ -119,6 +119,24 @@ struct AppSessionRaceTests {
 
     /// Unsent changes are kept per server and user: signing out keeps them for the next sign-in, removing a saved
     /// server deletes its own.
+    /// A title kept for a page of a goes into a's store, also after a switch to b, where it used to be dropped. Forgetting a
+    /// sent title removes only that one, not a newer one kept meanwhile.
+    @Test func keptTitlesStayWithTheirSession() async throws {
+        let session = try await sessionOnA()
+        let aStore = try #require(session.ready?.unsentChanges)
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: nil, in: aStore)
+        #expect(await aStore.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"]?.title == "Neu")
+        #expect(await session.unsentTitle(pageId: "p1") == nil, "not in b's store")
+
+        await session.keepUnsentTitle("Zwei", pageId: "p2", spaceId: nil)
+        await session.forgetUnsentTitle(pageId: "p2", title: "Eins")
+        #expect(await session.unsentTitle(pageId: "p2") == "Zwei")
+        await session.forgetUnsentTitle(pageId: "p2", title: "Zwei")
+        #expect(await session.unsentTitle(pageId: "p2") == nil)
+        await removeCaches()
+    }
+
     /// Sign Out takes effect on the device before the server is asked (behind a VPN that is off it takes its 30 s): an
     /// app left meanwhile stayed signed in, with its content there on the next start.
     @Test func signOutTakesEffectBeforeTheServerAnswers() async throws {
