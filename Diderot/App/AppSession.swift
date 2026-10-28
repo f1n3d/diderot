@@ -601,7 +601,10 @@ final class AppSession {
             await cache.write(resolvedEntitlements, key: CacheKey.entitlements)
         } catch {
             AppLog.session.error("Entitlements unavailable, using cached: \(error.userMessage, privacy: .public)")
-            resolvedEntitlements = await cache.read(Entitlements.self, key: CacheKey.entitlements) ?? .community
+            let cached = await cache.read(Entitlements.self, key: CacheKey.entitlements)
+            resolvedEntitlements = cached ?? .community
+            // Written again: `prune` below goes by age and size, like for photos and PDFs in the same cache.
+            if let cached { await cache.write(cached, key: CacheKey.entitlements) }
         }
         // Docmost names its version only after asking GitHub for its latest release, and nothing when GitHub refuses
         // (60 requests an hour from one address) or a proxy blocks it: keep the last one it named.
@@ -611,6 +614,8 @@ final class AppSession {
             await cache.write(current, key: CacheKey.serverVersion)
         } else {
             serverVersion = await cache.read(String.self, key: CacheKey.serverVersion)
+            // Written again, as the license above: a version the server stopped naming would only age.
+            if let serverVersion { await cache.write(serverVersion, key: CacheKey.serverVersion) }
         }
         // A reconnect must not undo a switch or sign-out made meanwhile; no await from here to the `state` write.
         if let replacing, !isStillCurrent(replacing) { return }
