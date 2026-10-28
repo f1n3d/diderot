@@ -128,6 +128,13 @@ final class WebDocumentEngine: DocumentEngine {
         self.session = session
     }
 
+    /// Dropped without `close` (its page view went away first): the page would stay connected, and show the user as
+    /// present, until the app quits.
+    isolated deinit {
+        processWatch?.cancel()
+        if let page { Task { _ = try? await page.callJavaScript("window.DocmostEngine.close();") } }
+    }
+
     func open(pageId: String) async throws {
         guard let ready = session.ready else { throw APIError.unauthorized(message: nil) }
         unload()

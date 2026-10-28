@@ -1094,7 +1094,7 @@ struct PageView: View {
         created.serverURL = session.server?.url
         created.lookUpPage = { [session] slugId in try? await session.send(Endpoints.Pages.info(pageId: slugId)) }
         let changes = changes
-        created.createBase = { template in
+        created.createBase = { [session] template in
             let base = try await session.send(Endpoints.Bases.create(parentPageId: page.id, template: template))
             changes.pageChanged(in: page.spaceId)
             return base.id
@@ -1105,8 +1105,12 @@ struct PageView: View {
             try await session.send(Endpoints.Search.suggest(query: query, users: true, pages: true, spaceId: spaceId, limit: 8))
         }
         model = created
-        registerSelectionCommands()
-        created.resume()
+        // A page that loaded after it left the screen (e.g. offline, back online under a pushed page) connects when it
+        // shows again (`onAppear`), not hidden.
+        if isOnScreen {
+            registerSelectionCommands()
+            created.resume()
+        }
     }
 
     // MARK: - Comments
