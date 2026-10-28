@@ -819,6 +819,70 @@ struct DocumentModelTests {
         #expect(model.errorMessage == String(localized: "The server refused the live connection. The page is read-only."))
     }
 
+    /// Offline, changes go into the store for unsent changes without leaving the page, 2 s after the last one: they lived
+    /// only in the engine's web process until the page left or the app reached the background. Online nothing is saved.
+    @Test(.timeLimit(.minutes(1)), arguments: [EngineStatus.disconnected, .synced])
+    func offlineChangesAreKeptWhileThePageStaysOpen(status: EngineStatus) async throws {
+        func doc(_ text: String) -> PMNode {
+            PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: text)])])
+        }
+        let engine = FakeDocumentEngine(document: doc("Hello"))
+        engine.status = status
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        await model.flush()
+        engine.document = doc("Hello!")
+        model.syncFromEngine()  // the engine's document event for the change
+
+        try await Task.sleep(for: .seconds(3))
+        #expect(engine.lifecycle == (status == .synced ? [] : ["save after 1"]))
+    }
+
+    /// Reopening after a refused live connection closes the engine first, as leaving does: its unsent changes (e.g.
+    /// made offline) are kept for the reopened engine, where the reopen threw them away.
+    @Test(.timeLimit(.minutes(1))) func reopeningAfterARefusedConnectionClosesFirst() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        engine.status = .failed("permission-denied")
+        engine.onFailure?(.connectionRefused)
+
+        model.resume()
+        await model.suspend().value
+
+        #expect(engine.lifecycle == ["close", "open", "close"])
+    }
+
+    /// Leaving the page while an upload runs keeps its engine open for the upload's insert and closes it after the last
+    /// one: the uploads used to end up only in the page's attachments. Back on the page, it stays open.
+    @Test(.timeLimit(.minutes(1))) func leavingDuringAnUploadClosesAfterIt() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+
+        model.uploadStarted()
+        model.uploadStarted()
+        model.leave()
+        #expect(model.isLive)
+        model.uploadEnded()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!engine.lifecycle.contains("close"))
+        model.uploadEnded()
+        while !engine.lifecycle.contains("close") { try await Task.sleep(for: .milliseconds(10)) }
+
+        engine.status = .idle  // closed, as the real engine is then
+        model.resume()
+        while !engine.lifecycle.contains("open") { try await Task.sleep(for: .milliseconds(10)) }
+        engine.status = .synced
+        model.uploadStarted()
+        model.leave()
+        model.resume()
+        model.uploadEnded()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(engine.lifecycle == ["close", "open"])
+    }
+
     /// Lost write access (Docmost 0.97's `page.permissions`, or a connection the server lets only read) ends editing and
     /// makes the page read-only with a notice, for good: the page stayed editable and showed "Saved" while the server
     /// ignored every edit.

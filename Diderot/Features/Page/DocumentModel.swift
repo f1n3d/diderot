@@ -446,13 +446,20 @@ final class DocumentModel {
 
     /// Serializes engine open/close: leaving while it opens (or returning while it closes) never leaves it half-open.
     @ObservationIgnored private var engineStep: Task<Void, Never>?
+    @ObservationIgnored private var unsentSave: Task<Void, Never>?
+    @ObservationIgnored private var runningUploads = 0
+    @ObservationIgnored private var suspendsAfterUploads = false
 
     /// Opens the engine unless it is open: when the page appears, after `suspend`, and to retry a failed start.
     func resume() {
+        suspendsAfterUploads = false
         let previous = engineStep
         engineStep = Task {
             await previous?.value
             guard let engine, engine.status == .idle || readOnlyReason == .notConnected else { return }
+            // A refused live connection leaves the engine open with changes the server never confirmed (e.g. made
+            // offline): closed as leaving does, it keeps them for the reopened engine to send.
+            if engine.status != .idle { await stop() }
             // Read-only until the reopened engine sends its document, even if one arrived while it was closing.
             isLive = false
             if readOnlyReason == .notConnected {
@@ -468,11 +475,33 @@ final class DocumentModel {
         }
     }
 
-    /// Page left the screen (closed, under a pushed page, tab switch): read-only until `resume` reopens the engine.
+    /// The page left the screen (closed, under a pushed page, tab switch). An upload still running goes into this page, so
+    /// the engine stays open until the last one is in; otherwise as `suspend`.
+    func leave() {
+        guard runningUploads > 0 else {
+            suspend()
+            return
+        }
+        deactivate()
+        suspendsAfterUploads = true
+    }
+
+    /// An upload for this page started or ended (see `leave`).
+    func uploadStarted() { runningUploads += 1 }
+    func uploadEnded() {
+        runningUploads -= 1
+        if runningUploads == 0, suspendsAfterUploads {
+            suspendsAfterUploads = false
+            suspend()
+        }
+    }
+
+    /// Read-only until `resume` reopens the engine.
     @discardableResult
     func suspend() -> Task<Void, Never> {
         // Commits pending input in a task queued ahead of the stop below, so the stored document includes it.
         deactivate()
+        unsentSave?.cancel()
         isLive = false
         let previous = engineStep
         let step = Task {
@@ -490,12 +519,31 @@ final class DocumentModel {
         await engine.saveUnsentChanges()
     }
 
+    /// While the server can't confirm changes (offline), saves them like leaving the page does, 2 s after the last one:
+    /// until then they lived only in the engine's web process, gone if the app crashed or was swiped away.
+    private func scheduleUnsentSave() {
+        unsentSave?.cancel()
+        unsentSave = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self else { return }
+            // Queued like opening and closing: beside a close, an older state could be kept after it.
+            let previous = engineStep
+            engineStep = Task {
+                await previous?.value
+                guard self.isLive, let engine = self.engine else { return }
+                await engine.saveUnsentChanges()
+            }
+        }
+    }
+
     /// Adopts the engine state; local, unconfirmed changes take precedence.
     func syncFromEngine() {
         guard let engine, let incoming = engine.document else { return }
         document = withOverrides(incoming)
         followMovedBlocks()
         isLive = true
+        // Every local change brings a document event, also those that bypass `commit` (inserts, moves, undo).
+        if engine.status != .synced { scheduleUnsentSave() }
         if let unsaved = unsavedAtEnd {
             unsavedAtEnd = nil
             Task { await commit(unsaved.ref, node: unsaved.node, base: nil) }

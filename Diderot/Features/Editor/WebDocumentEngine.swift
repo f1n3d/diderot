@@ -128,6 +128,20 @@ final class WebDocumentEngine: DocumentEngine {
         self.session = session
     }
 
+    /// A fresh collab token for a page opened with `owner`; none once a switch or sign-out replaced that session: another
+    /// server's token would go to this page's socket.
+    static func collabToken(session: AppSession, owner: ReadySession) async -> String? {
+        guard session.isStillCurrent(owner) else { return nil }
+        return try? await session.perform { try await owner.client.send(Endpoints.Auth.collabToken) }.token
+    }
+
+    /// Dropped without `close` (its page view went away first): the page would stay connected, and show the user as
+    /// present, until the app quits.
+    isolated deinit {
+        processWatch?.cancel()
+        if let page { Task { _ = try? await page.callJavaScript("window.DocmostEngine.close();") } }
+    }
+
     func open(pageId: String) async throws {
         guard let ready = session.ready else { throw APIError.unauthorized(message: nil) }
         unload()
@@ -154,7 +168,7 @@ final class WebDocumentEngine: DocumentEngine {
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(handler, name: "engine")
         configuration.userContentController.addScriptMessageHandler(CollabTokenHandler { [session] in
-            try? await session.send(Endpoints.Auth.collabToken).token
+            await Self.collabToken(session: session, owner: ready)
         }, contentWorld: .page, name: "collabToken")
         // Its own page only: no frames either (TipTap renders YouTube embeds as iframes), so nothing else hears of it.
         let page = WebPage(configuration: configuration, navigationDecider: WebNavigationLimit(home: ready.server.url))

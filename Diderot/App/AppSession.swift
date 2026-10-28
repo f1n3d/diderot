@@ -168,7 +168,7 @@ final class AppSession {
     }
 
     /// `false` once a switch or sign-out replaced `session`; a late network answer for it must change nothing.
-    private func isStillCurrent(_ session: ReadySession) -> Bool {
+    func isStillCurrent(_ session: ReadySession) -> Bool {
         guard let ready else { return false }
         return StoredAccounts.key(for: ready.server.url) == StoredAccounts.key(for: session.server.url) && ready.token == session.token
     }
