@@ -137,6 +137,7 @@ struct BaseTextFieldEditor: View {
     @State private var draft = ""
     @State private var original = ""
     @FocusState private var focused: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
     private var kind: BaseProperty.Kind? { property.kind }
 
@@ -200,6 +201,8 @@ struct BaseTextFieldEditor: View {
             showStored()
         }
         .onDisappear { commit() }
+        // Typed but not yet committed when the app leaves: iOS may end it in the background before the field loses focus.
+        .onChange(of: scenePhase) { _, phase in if phase == .background, focused { commit() } }
     }
 
     /// The stored value, or the text a failed save didn't get to the server: it stays in the field, the next commit sends
@@ -247,7 +250,12 @@ struct BaseTextFieldEditor: View {
         let rowId = rowId
         let propertyId = property.id
         let typed = draft
-        Task { await model.setCell(rowId: rowId, propertyId: propertyId, to: value, typed: typed) }
+        // Finished in the background too, when the app is leaving.
+        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        Task {
+            await model.setCell(rowId: rowId, propertyId: propertyId, to: value, typed: typed)
+            UIApplication.shared.endBackgroundTask(task)
+        }
     }
 }
 
@@ -262,6 +270,7 @@ struct BaseLongTextEditor: View {
     @State private var draft = ""
     @State private var original = ""
     @FocusState private var focused: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TextField("Empty", text: $draft, axis: .vertical)
@@ -276,6 +285,7 @@ struct BaseLongTextEditor: View {
                 showStored()
             }
             .onDisappear { commit() }
+            .onChange(of: scenePhase) { _, phase in if phase == .background, focused { commit() } }
             .accessibilityLabel(Text(property.name))
             .accessibilityIdentifier("base-input-\(property.id)")
     }
@@ -293,7 +303,12 @@ struct BaseLongTextEditor: View {
         let rowId = rowId
         let propertyId = property.id
         let typed = draft
-        Task { await model.setCell(rowId: rowId, propertyId: propertyId, to: value, typed: typed) }
+        // Finished in the background too, when the app is leaving.
+        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        Task {
+            await model.setCell(rowId: rowId, propertyId: propertyId, to: value, typed: typed)
+            UIApplication.shared.endBackgroundTask(task)
+        }
     }
 }
 

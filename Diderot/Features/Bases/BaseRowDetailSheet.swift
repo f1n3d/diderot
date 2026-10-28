@@ -223,6 +223,7 @@ private struct BaseTitleField: View {
     @State private var draft = ""
     @State private var original = ""
     @FocusState private var focused: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
     private var stored: String {
         base.primaryProperty.flatMap { row.cells[$0.id]?.stringValue } ?? ""
@@ -250,6 +251,8 @@ private struct BaseTitleField: View {
                     showStored(primary)
                 }
                 .onDisappear { commit(primary) }
+                // Typed but not yet committed when the app leaves (see `BaseTextFieldEditor`).
+                .onChange(of: scenePhase) { _, phase in if phase == .background, focused { commit(primary) } }
                 .task {
                     guard autoFocus else { return }
                     try? await Task.sleep(for: .milliseconds(450))
@@ -279,6 +282,10 @@ private struct BaseTitleField: View {
         let rowId = row.id
         let value = BaseValue.text(draft)
         let typed = draft
-        Task { await model.setCell(rowId: rowId, propertyId: primary.id, to: value, typed: typed) }
+        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
+        Task {
+            await model.setCell(rowId: rowId, propertyId: primary.id, to: value, typed: typed)
+            UIApplication.shared.endBackgroundTask(task)
+        }
     }
 }
