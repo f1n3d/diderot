@@ -918,6 +918,27 @@ struct DocumentModelTests {
         #expect(engine.deleted == [.id("b")])
     }
 
+    /// A formula written with Shift-Return stays whole while its paragraph is edited: its line break read as Return split
+    /// the paragraph and turned the formula into text.
+    @Test(.timeLimit(.minutes(1))) func formulaWithLineBreakSurvivesEditing() async throws {
+        let formula = PMNode(type: "mathInline", attrs: ["text": "a \\\\\nb"])
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p"], content: [
+            PMNode(type: "text", text: "x "), formula, PMNode(type: "text", text: " y"),
+        ])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        await model.flush()
+
+        #expect(engine.inserted.isEmpty)
+        #expect(engine.saved.last?.children.contains(formula) == true)
+    }
+
     /// Return in an empty list item continues after the list and removes the item (here its whole list) once the cursor
     /// has moved, which with the page's one editor is right away. A collaborator's list arriving above afterwards stays.
     @Test(.timeLimit(.minutes(1))) func leftListIsRemovedOnlyWhereItWas() async throws {

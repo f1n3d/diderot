@@ -62,6 +62,19 @@ struct InlineAttributedTextTests {
         #expect(edited.first?.text == "Hi @Janet ")
     }
 
+    /// A line break in an atom's text (a formula written with Shift-Return) or in a text node never reaches the editor as
+    /// "\n", which would count as Return: the atom shows a space and stays whole, the text gets a hardBreak.
+    @Test func lineBreaksNeverReachTheEditorAsReturn() {
+        let formula = PMNode(type: "mathInline", attrs: ["text": "a \\\\\nb"])
+        let text = InlineAttributedText.attributedString(from: [formula])
+        #expect(String(text.characters) == "a \\\\ b")
+        #expect(InlineAttributedText.inlines(from: text) == [formula])
+
+        let lines = InlineAttributedText.attributedString(from: [PMNode(type: "text", text: "a\nb")])
+        #expect(!lines.characters.contains("\n"))
+        #expect(InlineAttributedText.inlines(from: lines).map(\.type) == ["text", "hardBreak", "text"])
+    }
+
     /// Formatting part of an atom (a double-tap selects "Grace" without the "@") splits its run; the atom stays and
     /// takes the formatting whole, as on the web, where a selection covers an atom whole or not at all.
     @Test func keepsPartlyFormattedAtom() throws {
