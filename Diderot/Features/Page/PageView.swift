@@ -285,10 +285,11 @@ struct PageView: View {
         .photosPicker(isPresented: $showsPhotoPicker, selection: $photoItems, maxSelectionCount: nil,
                       matching: model?.pendingMedia?.action == .videos ? .videos : .images)
         .onChange(of: photoItems) { _, items in
-            guard !items.isEmpty, let target = model?.takeMediaTarget() else { return }
+            guard !items.isEmpty, let model else { return }
+            let target = model.takeMediaTarget()
             photoItems = []
-            uploads += 1
-            Task { await uploadPhotos(items, to: target) }
+            startUpload(in: model)
+            Task { await uploadPhotos(items, to: target, in: model) }
         }
         .fullScreenCover(item: $presentation) { presentation in
             PresentationView(pageId: presentation.pageId, title: presentation.title, document: presentation.document) { url in
@@ -297,18 +298,20 @@ struct PageView: View {
         }
         .fullScreenCover(isPresented: $showsCamera) {
             CameraPicker { data in
-                guard let target = model?.takeMediaTarget() else { return }
-                uploads += 1
-                Task { await upload([UploadFile.camera(data)], to: target) }
+                guard let model else { return }
+                let target = model.takeMediaTarget()
+                startUpload(in: model)
+                Task { await upload([UploadFile.camera(data)], to: target, in: model) }
             }
             .ignoresSafeArea()
         }
         .fileImporter(isPresented: $showsFileImporter, allowedContentTypes: importTypes, allowsMultipleSelection: true) { result in
             switch result {
             case .success(let urls):
-                guard let target = model?.takeMediaTarget() else { return }
-                uploads += 1
-                Task { await uploadFiles(at: urls, to: target) }
+                guard let model else { return }
+                let target = model.takeMediaTarget()
+                startUpload(in: model)
+                Task { await uploadFiles(at: urls, to: target, in: model) }
             case .failure(let error):
                 toast = error.localizedDescription
                 model?.cancelMedia()
@@ -388,8 +391,9 @@ struct PageView: View {
         // Back in the app: an editor that failed to open, or whose web process ended while opening, tries again.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, isOnScreen { model?.resume() }
-            // iOS may end the app in the background: keep unsent changes as leaving the page would.
-            if phase == .background, let model {
+            // iOS may end the app in the background, and an app swiped away in the app switcher never gets there: keep
+            // unsent changes as leaving the page would.
+            if phase != .active, let model {
                 let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
                 Task {
                     await model.saveUnsentChanges()
@@ -403,7 +407,8 @@ struct PageView: View {
             if titleFocused { commitTitle() }
             keyboard.stop()
             if let model, EditorSelectionCommands.model === model { EditorSelectionCommands.model = nil }
-            model?.suspend()
+            // The camera's full-screen cover is the page's own picker: the page stays live under it, for the photo.
+            if showsCamera { model?.deactivate() } else { model?.leave() }
         }
         // No automatic keyboard avoidance (it jumps before centering runs); `keyboardChanged` handles the keyboard.
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -1283,7 +1288,7 @@ struct PageView: View {
         }
     }
 
-    private func uploadPhotos(_ items: [PhotosPickerItem], to target: MediaTarget) async {
+    private func uploadPhotos(_ items: [PhotosPickerItem], to target: MediaTarget, in model: DocumentModel) async {
         var files: [UploadFile] = []
         for item in items {
             do {
@@ -1292,10 +1297,10 @@ struct PageView: View {
                 toast = error.localizedDescription
             }
         }
-        await upload(files, to: target)
+        await upload(files, to: target, in: model)
     }
 
-    private func uploadFiles(at urls: [URL], to target: MediaTarget) async {
+    private func uploadFiles(at urls: [URL], to target: MediaTarget, in model: DocumentModel) async {
         var files: [UploadFile] = []
         for url in urls {
             do {
@@ -1304,19 +1309,29 @@ struct PageView: View {
                 toast = error.localizedDescription
             }
         }
-        await upload(files, to: target)
+        await upload(files, to: target, in: model)
     }
 
-    /// Uploads the files one by one and inserts them together at the target.
-    private func upload(_ files: [UploadFile], to target: MediaTarget) async {
-        // Pickers count the upload as soon as they close; it always ends here.
-        defer { uploads -= 1 }
-        guard let page = state.value, let client = session.client, let model, !files.isEmpty else { return }
+    /// Counts an upload as soon as its picker closes; it always ends in `upload`. The model keeps its page's engine open
+    /// for it, also when the page leaves meanwhile (`DocumentModel.leave`).
+    private func startUpload(in model: DocumentModel) {
+        uploads += 1
+        model.uploadStarted()
+    }
+
+    /// Uploads the files one by one and inserts them together at the target, in the page they were picked for.
+    private func upload(_ files: [UploadFile], to target: MediaTarget, in model: DocumentModel) async {
+        defer {
+            uploads -= 1
+            model.uploadEnded()
+        }
+        guard let client = session.client, !files.isEmpty else { return }
+        let pageId = model.page.id
         var attachments: [Attachment] = []
         for file in files {
             do {
                 let attachment = try await session.perform {
-                    try await client.uploadAttachment(pageId: page.id, fileName: file.fileName, mimeType: file.mimeType, data: file.data)
+                    try await client.uploadAttachment(pageId: pageId, fileName: file.fileName, mimeType: file.mimeType, data: file.data)
                 }
                 attachments.append(attachment)
             } catch {
