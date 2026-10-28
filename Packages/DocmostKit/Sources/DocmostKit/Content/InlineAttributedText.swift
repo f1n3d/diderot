@@ -89,7 +89,9 @@ public enum InlineAttributedText {
         for node in inlines {
             switch node.type {
             case "text":
-                var run = AttributedString(node.text ?? "")
+                // A line break inside the text (pasted, imported) becomes a hardBreak, which it shows as; read as it is,
+                // it would count as Return and split the block.
+                var run = AttributedString(String((node.text ?? "").map { $0.isNewline ? lineBreak : $0 }))
                 apply(marks: node.marks ?? [], to: &run)
                 result.append(run)
             case "hardBreak":
@@ -220,7 +222,13 @@ public enum InlineAttributedText {
         return merged
     }
 
+    /// On one line: a line break in an atom's text (a formula written with Shift-Return) would count as Return and split
+    /// the block. The atom's JSON keeps the real text.
     public static func displayText(for node: PMNode) -> String {
+        String(atomText(for: node).map { $0.isNewline ? " " : $0 })
+    }
+
+    private static func atomText(for node: PMNode) -> String {
         switch node.type {
         case "mention":
             let label = node.string("label") ?? "…"

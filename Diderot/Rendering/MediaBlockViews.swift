@@ -458,7 +458,13 @@ struct TransclusionReferenceView: View {
     var refreshToken = 0
     var showsIcon = true
     @Environment(\.renderContext) private var context
+    @Environment(\.syncedBlockChain) private var chain
     @State private var state: LoadState<ContentDocument> = .idle
+
+    private var reference: String { "\(sourcePageId ?? "")/\(transclusionId ?? "")" }
+    /// Inside itself (directly or through others; also when made by mistake): shown once, not again inside. Deep chains
+    /// stop too.
+    private var repeats: Bool { chain.contains(reference) || chain.count >= 8 }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -469,27 +475,39 @@ struct TransclusionReferenceView: View {
                     .padding(.top, 4)
                     .accessibilityLabel("Synced block")
             }
-            switch state {
-            case .idle, .loading:
-                ProgressView().frame(maxWidth: .infinity, minHeight: 32)
-            case .failed(let error):
-                Text(error.userMessage).font(.subheadline).foregroundStyle(.secondary)
-            case .loaded(let document):
-                if document.isEmpty {
-                    Text("Synced block is empty.").font(.subheadline).foregroundStyle(.secondary)
-                } else {
-                    BlockStack(blocks: document.blocks)
-                        .environment(\.listDepth, 0)
-                }
+            if repeats {
+                Text("This synced block contains itself.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                content
             }
         }
-        .task(id: key) { await load() }
+        .task(id: key) {
+            guard !repeats else { return }
+            await load()
+        }
         // Another reference landing here (blocks shifted by an edit) or "Refresh" shows the spinner, not old content.
         // The new load has already begun: a failure it set at once (incomplete reference) stays.
         .onChange(of: key) { if state.value != nil { state = .idle } }
     }
 
-    private var key: String { "\(sourcePageId ?? "")/\(transclusionId ?? "")/\(refreshToken)" }
+    @ViewBuilder private var content: some View {
+        switch state {
+        case .idle, .loading:
+            ProgressView().frame(maxWidth: .infinity, minHeight: 32)
+        case .failed(let error):
+            Text(error.userMessage).font(.subheadline).foregroundStyle(.secondary)
+        case .loaded(let document):
+            if document.isEmpty {
+                Text("Synced block is empty.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                BlockStack(blocks: document.blocks)
+                    .environment(\.listDepth, 0)
+                    .environment(\.syncedBlockChain, chain + [reference])
+            }
+        }
+    }
+
+    private var key: String { "\(reference)/\(refreshToken)" }
 
     private func load() async {
         guard let client = context.client, let sourcePageId, let transclusionId else {

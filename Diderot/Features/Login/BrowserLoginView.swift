@@ -47,7 +47,9 @@ struct BrowserLoginView: View {
                             .background(.regularMaterial)
                     }
                 }
-                .navigationTitle(server.displayName)
+                // The host of the page asking for the password, not a name the server picks: a hostile server could
+                // show a copy of an identity provider's sign-in page under its workspace name.
+                .navigationTitle(page.url?.host() ?? server.url.host() ?? server.displayName)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {

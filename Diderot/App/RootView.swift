@@ -30,7 +30,6 @@ struct RootView: View {
         .task {
             await session.restoreAtLaunch()
             await session.sendPendingLogouts()
-            await WebEditorStores.removeLeftoverAuthCookies()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }

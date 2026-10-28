@@ -839,6 +839,16 @@
         }
       }
     },
+    "Changes you made on this server haven't reached it yet. Removing the server deletes them from this device.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen, die du auf diesem Server gemacht hast, sind noch nicht dort angekommen. Entfernst du den Server, werden sie auf diesem Gerät gelöscht."
+          }
+        }
+      }
+    },
     "Checklist": {
       "localizations": {
         "de": {
@@ -1002,6 +1012,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kommentare zu dieser Seite erscheinen hier."
+          }
+        }
+      }
+    },
+    "Comments with links, mentions or formatting can be edited on the web.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentare mit Links, Erwähnungen oder Formatierung lassen sich im Web bearbeiten."
           }
         }
       }
@@ -3249,6 +3269,16 @@
         }
       }
     },
+    "Not saved: the app has switched to another server.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gespeichert: Die App zeigt inzwischen einen anderen Server."
+          }
+        }
+      }
+    },
     "Not sent yet: the title goes to the server once it can be reached.": {
       "localizations": {
         "de": {
@@ -3773,6 +3803,16 @@
         }
       }
     },
+    "Read only while offline.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur lesbar, solange du offline bist."
+          }
+        }
+      }
+    },
     "Read only. Editing databases requires a Docmost Business license on this server.": {
       "localizations": {
         "de": {
@@ -3959,6 +3999,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Von der Seite entfernen"
+          }
+        }
+      }
+    },
+    "Remove “%@”?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ entfernen?"
           }
         }
       }
@@ -5178,6 +5228,16 @@
         }
       }
     },
+    "This synced block contains itself.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser synchronisierte Block enthält sich selbst."
+          }
+        }
+      }
+    },
     "This version is empty.": {
       "localizations": {
         "de": {
@@ -5688,6 +5748,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Du bist noch in keinem Space Mitglied."
+          }
+        }
+      }
+    },
+    "You can no longer edit this page. Changes the server didn't take stay on this device until you can edit it again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst diese Seite nicht mehr bearbeiten. Was der Server nicht angenommen hat, bleibt auf dem Gerät, bis du sie wieder bearbeiten darfst."
           }
         }
       }

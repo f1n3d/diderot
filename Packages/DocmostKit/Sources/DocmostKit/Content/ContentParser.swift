@@ -50,7 +50,7 @@ public enum ContentParser {
             return Block(id: id, kind: .bulletList(listItems(node, path: path, start: nil, state: &state)))
 
         case "orderedList":
-            return Block(id: id, kind: .orderedList(listItems(node, path: path, start: node.int("start") ?? 1, state: &state)))
+            return Block(id: id, kind: .orderedList(listItems(node, path: path, start: listStart(of: node), state: &state)))
 
         case "taskList":
             let items = node.children.enumerated().map { index, item -> TaskItem in
@@ -170,6 +170,19 @@ public enum ContentParser {
         return blocks
     }
 
+    /// An ordered list's first number. Browsers count lists in 32 bits and ignore a larger `start`; the range also keeps
+    /// `start + index` from overflowing (a crafted start near `Int.max` trapped).
+    public static func listStart(of list: PMNode) -> Int {
+        guard let start = list.int("start"), Int(Int32.min)...Int(Int32.max) ~= start else { return 1 }
+        return start
+    }
+
+    /// The columns a table cell spans, bounded for the layout: a crafted `colspan` of 5e18 took the memory of as many grid
+    /// columns.
+    public static func colspan(of cell: PMNode) -> Int {
+        min(max(cell.int("colspan") ?? 1, 1), 1_000)
+    }
+
     private static func listItems(_ list: PMNode, path: String, start: Int?, state: inout State) -> [ListItem] {
         list.children.enumerated().map { index, item in
             let itemPath = "\(path).\(index)"
@@ -187,7 +200,7 @@ public enum ContentParser {
                 return TableBlock.Cell(
                     id: cell.string("id") ?? "p\(cellPath)",
                     isHeader: cell.type == "tableHeader",
-                    colspan: max(cell.int("colspan") ?? 1, 1),
+                    colspan: colspan(of: cell),
                     colwidth: colwidth?.isEmpty == false ? colwidth : nil,
                     backgroundColor: cell.string("backgroundColor"),
                     backgroundColorName: cell.string("backgroundColorName"),

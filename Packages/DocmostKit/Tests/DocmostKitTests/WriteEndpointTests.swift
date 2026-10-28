@@ -95,6 +95,23 @@ struct WriteEndpointTests {
         #expect(Endpoints.Search.clipped("kurz") == "kurz")
     }
 
+    /// Only comments of plain text and line breaks are edited as text in the app: a link, mention or formatting from the web
+    /// would be gone for good.
+    @Test func onlyPlainCommentsEditAsText() throws {
+        #expect(CommentContent.isPlain(CommentContent.document(for: "Zeile eins\n\nZeile drei")))
+        #expect(CommentContent.isPlain(nil))
+        let withBreak = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "a"}, {"type": "hardBreak"}, {"type": "text", "text": "b"}]}]}"#.utf8))
+        #expect(CommentContent.isPlain(withBreak))
+        for inline in [#"{"type": "text", "text": "fett", "marks": [{"type": "bold"}]}"#,
+                       #"{"type": "text", "text": "Link", "marks": [{"type": "link", "attrs": {"href": "https://example.com"}}]}"#,
+                       #"{"type": "mention", "attrs": {"id": "m", "label": "Jane", "entityType": "user", "entityId": "u"}}"#] {
+            let content = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"type": "doc", "content": [{"type": "paragraph", "content": [\#(inline)]}]}"#.utf8))
+            #expect(!CommentContent.isPlain(content), "\(inline)")
+        }
+        let list = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"type": "doc", "content": [{"type": "bulletList", "content": []}]}"#.utf8))
+        #expect(!CommentContent.isPlain(list))
+    }
+
     @Test func commentPlainTextForEditing() {
         #expect(CommentContent.plainText(of: CommentContent.document(for: "Zeile eins\n\nZeile drei")) == "Zeile eins\n\nZeile drei")
         // Content from the web client: mentions and lists become plain text.

@@ -134,6 +134,27 @@ struct MediaBlockViewTests {
         #expect(labels(in: window).contains(String(localized: "Synced block reference is incomplete.")) == (id == nil))
     }
 
+    /// A synced block that contains itself (here through columns, as one pasted into its own column) loads once and says
+    /// so inside, where it loaded and nested forever and the page hung.
+    @Test func syncedBlockInsideItselfLoadsOnce() async throws {
+        let server = URL(string: "https://selfsynced.docmost.invalid")!
+        SelfReferenceURLProtocol.requests.withLock { $0 = 0 }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [SelfReferenceURLProtocol.self]
+        let client = APIClient(baseURL: server, configuration: configuration)
+        let context = RenderContext(baseURL: server, client: client, imageLoader: ImageLoader(client: client), token: nil, pageId: "p")
+        let host = UIHostingController(rootView: TransclusionReferenceView(sourcePageId: "s", transclusionId: "t").environment(\.renderContext, context))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        #expect(await poll { labels(in: window).contains(String(localized: "This synced block contains itself.")) })
+        try await Task.sleep(for: .seconds(1))
+        #expect(SelfReferenceURLProtocol.requests.withLock { $0 } == 1)
+    }
+
     /// A formula is blank after its web process ended (iOS reclaimed its memory in the background, a crash). Coming
     /// back into view renders it again. GitHub's simulator sometimes doesn't let the app end the process (RunningBoard:
     /// "Client not entitled"); the test is cancelled then, as there is nothing to check.
@@ -244,6 +265,25 @@ private nonisolated final class SlowURLProtocol: URLProtocol, @unchecked Sendabl
 
 /// Answers the first request to each server (a PDF, an SVG, subpages or a synced block), then never again, like a
 /// connection that dropped. Counts the requests per server.
+/// Answers every synced block lookup with content that holds the same synced block again, in a column.
+private nonisolated final class SelfReferenceURLProtocol: URLProtocol, @unchecked Sendable {
+    static let requests = Mutex(0)
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url else { return }
+        Self.requests.withLock { $0 += 1 }
+        let body = #"{"data": {"items": [{"content": {"type": "doc", "content": [{"type": "columns", "content": [{"type": "column", "content": [{"type": "transclusionReference", "attrs": {"sourcePageId": "s", "transclusionId": "t"}}]}, {"type": "column", "content": [{"type": "paragraph"}]}]}]}}]}}"#
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
 private nonisolated final class OnceURLProtocol: URLProtocol, @unchecked Sendable {
     static let requests = Mutex<[String: Int]>([:])
 

@@ -14,6 +14,7 @@ struct BaseRowRoute: Identifiable, Hashable {
 /// so there the header stays, shrunk to the view tabs in landscape. Rows are edited in a sheet with all fields.
 struct BaseScreen<Header: View>: View {
     @Environment(AppSession.self) private var session
+    @Environment(OfflineMonitor.self) private var offline
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     let page: Page
     /// Entry from a link, opened once the database has loaded.
@@ -51,6 +52,7 @@ struct BaseScreen<Header: View>: View {
         }
         .task(id: page.id) {
             let model = model ?? BaseModel(pageId: page.id, session: session)
+            model.isOffline = offline.isOffline
             self.model = model
             await model.load()
             if let linkedRowId, !openedLinkedRow, await model.fetchRowIfNeeded(linkedRowId) {
@@ -63,6 +65,7 @@ struct BaseScreen<Header: View>: View {
             }
             #endif
         }
+        .onChange(of: offline.isOffline) { _, isOffline in model?.isOffline = isOffline }
         .sheet(item: $openRow) { route in
             if let model {
                 BaseRowDetailSheet(model: model, route: route)

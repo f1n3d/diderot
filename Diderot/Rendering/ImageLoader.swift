@@ -21,7 +21,7 @@ actor ImageLoader {
     }
 
     func image(for url: URL, targetWidth: CGFloat, scale: CGFloat) async throws -> UIImage {
-        let pixelWidth = max(Int((targetWidth * scale).rounded(.up)), 64)
+        let pixelWidth = Self.pixelWidth(for: targetWidth, scale: scale)
         // 256 px buckets, so slightly different layout widths share a cache entry.
         let bucket = ((pixelWidth + 255) / 256) * 256
         let key = "\(url.absoluteString)@\(bucket)" as NSString
@@ -68,6 +68,8 @@ actor ImageLoader {
     /// Most pixels an image decodes to (about 48 MB): tall screenshots stay sharp in portrait on the iPhone; on wider
     /// screens (iPhone in landscape, iPad) they get slightly softer instead of taking up to 85 MB each.
     nonisolated static let maxPixels = 12_000_000.0
+    /// Largest image decoded at all, about twice a 48 MP photo.
+    nonisolated static let maxSourcePixels = 100_000_000.0
 
     /// The thumbnail size caps the longer side, so portrait images scale it by their height-to-width `ratio`, at most
     /// 4× (even taller images decode narrower), and the width shrinks to keep within `maxPixels`.
@@ -78,13 +80,22 @@ actor ImageLoader {
         return Int((width * tall).rounded(.up))
     }
 
-    @concurrent static func decode(_ data: Data, targetPixelWidth: Int) async -> UIImage? {
+    /// Pixels for a width in points, bounded: a width from the document ("nan%", a huge negative number) can't be turned
+    /// into an Int.
+    nonisolated static func pixelWidth(for targetWidth: CGFloat, scale: CGFloat) -> Int {
+        let pixels = (targetWidth * scale).rounded(.up)
+        return pixels.isFinite ? Int(min(max(pixels, 64), 16_384)) : 64
+    }
+
+    @concurrent static func decode(_ data: Data, targetPixelWidth: Int, maxSourcePixels: Double = maxSourcePixels) async -> UIImage? {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
         var maxPixelSize = targetPixelWidth
         if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
            let width = properties[kCGImagePropertyPixelWidth] as? Double,
            let height = properties[kCGImagePropertyPixelHeight] as? Double, width > 0, height > 0 {
+            // A small file that unpacks huge (a crafted avatar) would take the app's memory, also as a thumbnail.
+            guard width * height <= maxSourcePixels else { return nil }
             // Orientations 5–8 turn the image 90°.
             let ratio = (properties[kCGImagePropertyOrientation] as? Int ?? 1) >= 5 ? width / height : height / width
             maxPixelSize = thumbnailSize(targetPixelWidth: targetPixelWidth, ratio: ratio)

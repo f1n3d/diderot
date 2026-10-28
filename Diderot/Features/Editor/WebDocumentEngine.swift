@@ -22,7 +22,9 @@ protocol DocumentEngine: AnyObject, Observable {
     func saveUnsentChanges() async
     /// The document straight from the engine (not debounced), e.g. for the reader on close.
     func currentDocument() async -> PMNode?
-    func replaceBlock(_ target: BlockTarget, with node: PMNode) async -> Bool
+    /// With `base`, the text block the edit started from: a collaborator's edit of the block since then stays, unless
+    /// it changed the same range (the engine's `rebase`).
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?) async -> Bool
     /// Replaces one block with several (unsync a synced block, merge columns, …).
     func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> Bool
     /// Without a target: at the end of the document, before the footnotes.
@@ -37,6 +39,12 @@ protocol DocumentEngine: AnyObject, Observable {
     func redo() async
 }
 
+extension DocumentEngine {
+    func replaceBlock(_ target: BlockTarget, with node: PMNode) async -> Bool {
+        await replaceBlock(target, with: node, base: nil)
+    }
+}
+
 enum EngineStatus: Equatable {
     case idle, loading, connecting, connected, synced, disconnected
     case failed(String)
@@ -48,6 +56,9 @@ enum EngineFailure {
     case unsupportedContent
     /// The server refused the live connection (no access, page gone); the page used to stay at "Connecting…".
     case connectionRefused
+    /// The server takes no more edits from this user (write access lost, page moved or trashed): it ignores them, and the
+    /// page used to stay editable and show "Saved".
+    case readOnly
 }
 
 struct EngineParticipant: Identifiable, Hashable, Decodable {
@@ -236,8 +247,9 @@ final class WebDocumentEngine: DocumentEngine {
         participants = []
     }
 
-    func replaceBlock(_ target: BlockTarget, with node: PMNode) async -> Bool {
-        await replaceBlock(target, withNodes: [node])
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?) async -> Bool {
+        await call("return window.DocmostEngine.replaceBlockWith(target, json, base);",
+                   ["target": target.jsObject, "json": [Self.jsObject(node)], "base": base.map { Self.jsObject($0) } ?? NSNull()])
     }
 
     func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> Bool {
@@ -339,6 +351,11 @@ final class WebDocumentEngine: DocumentEngine {
             status = .failed(event.error ?? "")
             participants = []
             onFailure?(.connectionRefused)
+        // The connection stays and shows others' edits; the server ignores this user's from now on.
+        case "authenticated":
+            if event.scope == "readonly" { onFailure?(.readOnly) }
+        case "permissions":
+            if event.access != "write" { onFailure?(.readOnly) }
         case "closed":
             if status != .idle { status = .disconnected }
         default:
@@ -373,6 +390,10 @@ struct EngineEvent: Decodable {
     let error: String?
     let document: PMNode?
     let participants: Participants?
+    /// "authenticated": "read-write" or "readonly".
+    let scope: String?
+    /// "permissions" (Docmost 0.97's `page.permissions`): "write", "read" or "none".
+    let access: String?
 
     /// Read one by one: the web client's entries have only `name` and `color`, no user id.
     struct Participants: Decodable {

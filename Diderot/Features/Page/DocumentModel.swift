@@ -119,7 +119,8 @@ enum BlockTemplate: String, CaseIterable, Identifiable {
                 PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")]),
             ])
         case .codeBlock:
-            let text = inlines.map { PMNode(type: "doc", content: $0).plainText } ?? ""
+            // Line breaks become the code's lines, as the web's setBlockType does; mentions and other atoms drop out.
+            let text = inlines.map { $0.map { $0.type == "hardBreak" ? "\n" : $0.plainText }.joined() } ?? ""
             return PMNode(type: "codeBlock", attrs: ["language": .null], content: text.isEmpty ? nil : [PMNode(type: "text", text: text)])
         case .table:
             func cell(_ type: String) -> PMNode { PMNode(type: type, attrs: ["colspan": 1, "rowspan": 1], content: [PMNode(type: "paragraph")]) }
@@ -374,9 +375,15 @@ final class DocumentModel {
     @ObservationIgnored private var typingSwitches = 0
     /// Return or Backspace is switching blocks; meanwhile the old editor briefly shows the line break as a second line.
     var isSwitchingByTyping: Bool { typingSwitches > 0 }
-    /// Active block state adopted on undo/redo; writing it back would add a history step and lose "Redo".
+    /// Active block state the app set itself (a block's text on activation, undo/redo, a collaborator's change): writing
+    /// it back would save an untouched block, overwrite what others typed meanwhile and, after undo, lose "Redo".
     @ObservationIgnored private var adoptedText: AttributedString?
     @ObservationIgnored private var adoptedCode: String?
+    /// The block the active editor's text was made from, or last sent as: a collaborator's change of it shows in the
+    /// editor once nothing is pending (`adoptCollaboratorsChange`), and saves pass it as their base, so the engine keeps a
+    /// change that arrives meanwhile (`rebase`).
+    @ObservationIgnored private var activeBase: PMNode?
+    @ObservationIgnored private var adoptsChange = false
 
     init(page: Page, initialDocument: PMNode?, engine: (any DocumentEngine)?, readOnlyReason: ReadOnlyReason?) {
         self.page = page
@@ -386,14 +393,22 @@ final class DocumentModel {
         if case .newerServer(let version) = readOnlyReason {
             errorMessage = String(localized: "This server runs Docmost \(version). This version of the app can only show its pages; you can edit them in the web editor.")
         }
-        // Like a failed start: read-only, and `resume` tries again.
         engine?.onFailure = { [weak self] failure in
-            self?.readOnlyReason = .notConnected
-            self?.errorMessage = switch failure {
+            guard let self else { return }
+            switch failure {
+            // Like a failed start: read-only, and `resume` tries again.
             case .unsupportedContent:
-                String(localized: "This page has content that this version of the app can't edit yet. You can edit it in the web editor.")
+                self.readOnlyReason = .notConnected
+                self.errorMessage = String(localized: "This page has content that this version of the app can't edit yet. You can edit it in the web editor.")
             case .connectionRefused:
-                String(localized: "The server refused the live connection. The page is read-only.")
+                self.readOnlyReason = .notConnected
+                self.errorMessage = String(localized: "The server refused the live connection. The page is read-only.")
+            // The engine stays connected, so others' edits keep showing. What the server didn't take stays in the unsent
+            // changes, which the page's next open sends: they count once the user may edit again.
+            case .readOnly:
+                self.deactivate()
+                self.readOnlyReason = .noPermission
+                self.errorMessage = String(localized: "You can no longer edit this page. Changes the server didn't take stay on this device until you can edit it again.")
             }
         }
         // Restart only if live: a page that left reopens on return; one still opening tries again when the app becomes
@@ -483,7 +498,7 @@ final class DocumentModel {
         isLive = true
         if let unsaved = unsavedAtEnd {
             unsavedAtEnd = nil
-            Task { await commit(unsaved.ref, node: unsaved.node) }
+            Task { await commit(unsaved.ref, node: unsaved.node, base: nil) }
         }
         if let pendingFocus, let node = node(at: pendingFocus.path) {
             self.pendingFocus = nil
@@ -499,6 +514,39 @@ final class DocumentModel {
                 }
             }
         }
+        if !adoptsChange, collaboratorChangedActiveBlock() {
+            adoptsChange = true
+            Task { await adoptCollaboratorsChange() }
+        }
+    }
+
+    /// The engine's version of the block being edited differs from the one its editor text was made from (a
+    /// collaborator's change), and nothing of the user's waits for it or would break: no pending save, no Return or
+    /// Backspace on its way, no sheet holding ranges of the text, no marked text (dictation, Japanese input).
+    private func collaboratorChangedActiveBlock() -> Bool {
+        guard let active, let base = activeBase, overrides[active.ref.identity] == nil, typingSwitches == 0, !editsInSheet,
+              editorTextView?.markedTextRange == nil, let (_, node) = locate(active.ref)
+        else { return false }
+        return !looksTheSame(node, base)
+    }
+
+    /// Whether two versions of a block look the same in the editor; the engine's JSON can differ in details from the app's.
+    private func looksTheSame(_ a: PMNode, _ b: PMNode) -> Bool {
+        guard a.type == b.type, a.attrs == b.attrs else { return false }
+        if a.type == "codeBlock" { return a.plainText == b.plainText }
+        return Self.inlines(from: Self.editorText(from: a.children), base: activeFont)
+            == Self.inlines(from: Self.editorText(from: b.children), base: activeFont)
+    }
+
+    /// Shows a collaborator's change of the block being edited; the cursor moves with the text around it. From the
+    /// engine's current document: a document event from before the user's own last save would roll the editor back.
+    private func adoptCollaboratorsChange() async {
+        defer { adoptsChange = false }
+        guard let engine, let latest = await engine.currentDocument() else { return }
+        document = withOverrides(latest)
+        followMovedBlocks()
+        guard collaboratorChangedActiveBlock() else { return }
+        adoptActiveBlock(followingChange: true)
     }
 
     /// Focuses `path` once the operation that created it is applied; set earlier, `pendingFocus` could hit the old
@@ -572,17 +620,21 @@ final class DocumentModel {
     // MARK: - Active text
 
     func activate(_ ref: NodeRef, node: PMNode, cursor: CursorRequest = .end) {
-        guard isEditable else { return }
+        // Only text and code: the editor's text would replace any other block (a list, quote or image) on the next key.
+        guard isEditable, Self.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
         if active?.ref == ref { return }
         if active != nil { commitPendingNow() }
         let itemPath = enclosingItemPath(ref.path)
         activeBlockFrame = .zero
         activatedByTyping = typingSwitches > 0
         active = Active(ref: ref, type: node.type, attrs: node.attrs, itemPath: itemPath)
+        activeBase = node
         if node.type == "codeBlock" {
             activeCode = node.plainText
+            adoptedCode = activeCode
         } else {
             activeText = Self.editorText(from: node.children)
+            adoptedText = activeText
         }
         // The page's one editor keeps its selection from block to block; the old indices don't fit this text.
         activeSelection = AttributedTextSelection(insertionPoint: activeText.endIndex)
@@ -618,6 +670,7 @@ final class DocumentModel {
         guard active != nil else { return }
         commitPendingNow()
         active = nil
+        activeBase = nil
         editorHeight = nil
         slashQuery = nil
         showsPlusMenu = false
@@ -1071,6 +1124,11 @@ final class DocumentModel {
         let url: String
         let provider: String
         var id: String { "\(ref.identity)/\(index)" }
+        /// What "Open Link" opens in the in-app browser: web addresses only, as the web treats a mention with another
+        /// address as one without a link (Safari's view throws, ending the app, on any other).
+        var webURL: URL? {
+            URL(string: url).flatMap { ContentLinkRouter.opening(for: $0) == .browser ? $0 : nil }
+        }
     }
 
     var mentionActions: MentionTarget?
@@ -1312,8 +1370,10 @@ final class DocumentModel {
         guard let serverURL, let lookUpPage, let slugId = Self.pageSlugId(of: url, serverURL: serverURL) else { return true }
         let ref = active.ref
         Task {
-            // A page that can't be found (or not seen) stays a link, as on the web.
-            guard let page = await lookUpPage(slugId), self.active?.ref == ref, let range = activeRange(offset: offset, text: pasted)
+            // A page that can't be found (or not seen) stays a link, as on the web. So does one while a sheet holds the text:
+            // the link sheet keeps its range in it.
+            guard let page = await lookUpPage(slugId), self.active?.ref == ref, !self.editsInSheet,
+                  let range = activeRange(offset: offset, text: pasted)
             else { return }
             let linked = LinkedPage(id: page.id, slugId: page.slugId, title: page.title ?? "", anchor: url.fragment)
             let mention = Self.editorText(from: [pageMention(linked)])
@@ -1412,7 +1472,9 @@ final class DocumentModel {
         let start = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
         activeText.transform(updating: &activeSelection) { $0.replaceSubrange(range, with: run) }
         if cursorAtEnd {
-            let end = activeText.characters.index(activeText.startIndex, offsetBy: start + run.characters.count)
+            // Clamped: a run starting with a combining mark merges with the character before it, so the text can be
+            // shorter than both parts.
+            let end = activeText.characters.index(activeText.startIndex, offsetBy: min(start + run.characters.count, activeText.characters.count))
             activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: AttributeContainer())
         }
         scheduleCommit(debounce: .zero)
@@ -1942,7 +2004,7 @@ final class DocumentModel {
         commitTask = Task { [weak self] in
             try? await Task.sleep(for: debounce)
             guard !Task.isCancelled, let self else { return }
-            await self.commit(active.ref, node: node)
+            await self.commit(active.ref, node: node, base: self.takeBase(of: active.ref, sending: node))
         }
     }
 
@@ -1952,6 +2014,7 @@ final class DocumentModel {
         commitTask?.cancel()
         overrides[active.ref.identity] = nil
         self.active = nil
+        activeBase = nil
     }
 
     private func commitPendingNow() {
@@ -1959,22 +2022,34 @@ final class DocumentModel {
         commitTask?.cancel()
         commitTask = nil
         let ref = active.ref
-        Task { await commit(ref, node: node) }
+        // Taken now: the block activated next brings its own.
+        let base = takeBase(of: ref, sending: node)
+        Task { await commit(ref, node: node, base: base) }
     }
 
     func flush() async {
         commitTask?.cancel()
         commitTask = nil
         if let active, let node = currentActiveNode(), overrides[active.ref.identity] != nil {
-            await commit(active.ref, node: node)
+            await commit(active.ref, node: node, base: takeBase(of: active.ref, sending: node))
         }
     }
 
-    private func commit(_ ref: NodeRef, node: PMNode) async {
+    /// The base for a save of the active block (`activeBase`); the saved node becomes the next one, as the engine applies
+    /// saves in order. Nil for another block.
+    private func takeBase(of ref: NodeRef, sending node: PMNode) -> PMNode? {
+        guard active?.ref.identity == ref.identity else { return nil }
+        defer { activeBase = node }
+        return activeBase
+    }
+
+    private func commit(_ ref: NodeRef, node: PMNode, base: PMNode?) async {
         guard let engine else { return }
         let pending = overrides[ref.identity]
-        let saved = await engine.replaceBlock(ref.target, with: node)
+        let saved = await engine.replaceBlock(ref.target, with: node, base: base)
         saveRefused = !saved
+        // Not applied: the block keeps what it had.
+        if !saved, active?.ref.identity == ref.identity, activeBase == node { activeBase = base }
         if report(saved) {
             // Input typed during the save stored a newer override; it stays pending so its commit or `flush` writes it.
             if overrides[ref.identity] == pending { overrides[ref.identity] = nil }
@@ -2010,7 +2085,7 @@ final class DocumentModel {
             let titleInlines = Self.inlines(from: before + after, base: activeFont)
             let title = PMNode(type: active.type, attrs: active.attrs, content: titleInlines.isEmpty ? nil : titleInlines)
             overrides[active.ref.identity] = title
-            await commit(active.ref, node: title)
+            await commit(active.ref, node: title, base: takeBase(of: active.ref, sending: title))
             let newNode = PMNode(type: "paragraph")
             let newPath: [Int]
             let applied: Bool
@@ -2041,7 +2116,7 @@ final class DocumentModel {
                 return
             }
             overrides[active.ref.identity] = currentNode
-            await commit(active.ref, node: currentNode)
+            await commit(active.ref, node: currentNode, base: takeBase(of: active.ref, sending: currentNode))
             guard let item = node(at: itemPath) else { return }
             let attrs: [String: JSONValue]? = item.type == "taskItem" ? ["checked": false] : nil
             let newItem = PMNode(type: item.type, attrs: attrs, content: [PMNode(type: "paragraph", content: afterInlines.isEmpty ? nil : afterInlines)])
@@ -2054,7 +2129,7 @@ final class DocumentModel {
         }
 
         overrides[active.ref.identity] = currentNode
-        await commit(active.ref, node: currentNode)
+        await commit(active.ref, node: currentNode, base: takeBase(of: active.ref, sending: currentNode))
         let newNode = PMNode(type: "paragraph", content: afterInlines.isEmpty ? nil : afterInlines)
         var newPath = active.ref.path
         newPath[newPath.count - 1] += 1
@@ -2157,13 +2232,15 @@ final class DocumentModel {
         guard let previous = node(at: previousPath) else { return }
         if Self.editableTextTypes.contains(previous.type) {
             let merged = PMNode(type: previous.type, attrs: previous.attrs, content: (previous.children + currentInlines).isEmpty ? nil : previous.children + currentInlines)
-            let offset = previous.plainText.count
+            // In the editor's characters, the unit `.offset` counts in: a mention or a line break isn't its plain text.
+            let offset = Self.editorText(from: previous.children).characters.count
             overrides[active.ref.identity] = nil
             commitTask?.cancel()
             // Activate the previous block now with the merged text; the merged block goes afterwards.
             let previousRef = NodeRef(path: previousPath, node: previous)
             activate(previousRef, node: merged, cursor: .offset(offset))
-            guard report(await engine.replaceBlock(previousRef.target, with: merged)) else {
+            // Based on the block as the page showed it: a collaborator's edit of it since stays.
+            guard report(await engine.replaceBlock(previousRef.target, with: merged, base: previous)) else {
                 deactivate()
                 return
             }
@@ -2395,13 +2472,26 @@ final class DocumentModel {
         }
 
         // The new table has the cell's latest text; its pending commit could target a deleted cell and show an error.
+        let editedPath = active?.ref.path
         dropActive()
         if rows.isEmpty {
             report(await engine.deleteBlock(.path(position.tablePath)))
             return
         }
-        if report(await engine.replaceBlock(.path(position.tablePath), with: PMNode(type: "table", attrs: table.attrs, content: rows))) {
-            await focusAfterOperation(position.tablePath + [focusRow, focusColumn, 0], .end)
+        let newTable = PMNode(type: "table", attrs: table.attrs, content: rows)
+        if report(await engine.replaceBlock(.path(position.tablePath), with: newTable)) {
+            // A header toggle changes cell types, never paths, so editing stays in its block. Otherwise the cursor goes to
+            // the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
+            var focus = [focusRow, focusColumn]
+            if edit == .toggleHeaderRow || edit == .toggleHeaderColumn, let editedPath {
+                focus = Array(editedPath.dropFirst(position.tablePath.count))
+            } else {
+                while let node = node(at: focus, in: newTable), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock",
+                      !node.children.isEmpty {
+                    focus.append(0)
+                }
+            }
+            await focusAfterOperation(position.tablePath + focus, .end)
         }
     }
 
@@ -2419,23 +2509,47 @@ final class DocumentModel {
         adoptActiveBlock()
     }
 
-    /// Adopts the active block's type, attrs and content from the document (cursor kept); ends editing if it is gone.
-    private func adoptActiveBlock() {
+    /// Adopts the active block's type, attrs and content from the document; ends editing if it is gone. After undo or redo
+    /// the cursor keeps its offset, after a collaborator's change it moves with the text around it.
+    private func adoptActiveBlock(followingChange: Bool = false) {
         guard let current = active else { return }
         guard let (path, node) = locate(current.ref) else {
             deactivate()
             return
         }
-        let offset = activeText.characters.distance(from: activeText.startIndex, to: insertionIndex())
+        var offset = activeText.characters.distance(from: activeText.startIndex, to: insertionIndex())
         active = Active(ref: NodeRef(path: path, node: node), type: node.type, attrs: node.attrs, itemPath: enclosingItemPath(path))
+        activeBase = node
+        let text = node.type == "codeBlock" ? AttributedString(node.plainText) : Self.editorText(from: node.children)
+        if followingChange { offset = Self.offset(offset, movedFrom: Array(activeText.characters), to: Array(text.characters)) }
         if node.type == "codeBlock" {
             activeCode = node.plainText
             adoptedCode = activeCode
         } else {
-            activeText = Self.editorText(from: node.children)
+            activeText = text
             adoptedText = activeText
+        }
+        if followingChange {
+            // Right away, in the same update as the text: a cursor request would hide the caret meanwhile, on every change
+            // while a collaborator types.
+            let index = activeText.characters.index(activeText.startIndex, offsetBy: min(offset, activeText.characters.count))
+            activeSelection = AttributedTextSelection(insertionPoint: index)
+        } else if node.type != "codeBlock" {
             cursorRequest = .offset(offset)
         }
+    }
+
+    /// Where an offset in `old` lies in `new`, `new` being `old` with one stretch changed (a collaborator's edit): before
+    /// the change it stays, after it it moves by the change in length, inside it goes to the change's end.
+    static func offset(_ offset: Int, movedFrom old: [Character], to new: [Character]) -> Int {
+        let shorter = min(old.count, new.count)
+        var prefix = 0
+        while prefix < shorter, old[prefix] == new[prefix] { prefix += 1 }
+        var suffix = 0
+        while suffix < shorter - prefix, old[old.count - 1 - suffix] == new[new.count - 1 - suffix] { suffix += 1 }
+        if offset <= prefix { return offset }
+        if offset >= old.count - suffix { return offset + new.count - old.count }
+        return new.count - suffix
     }
 
     /// Path and node of a block: by its ID (stable when something before it changes), otherwise by path.
@@ -2491,7 +2605,13 @@ final class DocumentModel {
     static func inlineContent(of node: PMNode) -> [PMNode]? {
         switch node.type {
         case "paragraph", "heading", "detailsSummary": return node.content
-        case "codeBlock": return node.plainText.isEmpty ? nil : [PMNode(type: "text", text: node.plainText)]
+        case "codeBlock":
+            // The code's lines become line breaks, as on the web; a raw "\n" in text would count as Return.
+            let lines = node.plainText.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            let inlines = lines.enumerated().flatMap { index, line in
+                (index > 0 ? [PMNode(type: "hardBreak")] : []) + (line.isEmpty ? [] : [PMNode(type: "text", text: String(line))])
+            }
+            return inlines.isEmpty ? nil : inlines
         default:
             if let first = node.children.first { return inlineContent(of: first) }
             return nil
