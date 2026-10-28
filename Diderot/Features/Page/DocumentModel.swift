@@ -119,7 +119,8 @@ enum BlockTemplate: String, CaseIterable, Identifiable {
                 PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")]),
             ])
         case .codeBlock:
-            let text = inlines.map { PMNode(type: "doc", content: $0).plainText } ?? ""
+            // Line breaks become the code's lines, as the web's setBlockType does; mentions and other atoms drop out.
+            let text = inlines.map { $0.map { $0.type == "hardBreak" ? "\n" : $0.plainText }.joined() } ?? ""
             return PMNode(type: "codeBlock", attrs: ["language": .null], content: text.isEmpty ? nil : [PMNode(type: "text", text: text)])
         case .table:
             func cell(_ type: String) -> PMNode { PMNode(type: type, attrs: ["colspan": 1, "rowspan": 1], content: [PMNode(type: "paragraph")]) }
@@ -572,7 +573,8 @@ final class DocumentModel {
     // MARK: - Active text
 
     func activate(_ ref: NodeRef, node: PMNode, cursor: CursorRequest = .end) {
-        guard isEditable else { return }
+        // Only text and code: the editor's text would replace any other block (a list, quote or image) on the next key.
+        guard isEditable, Self.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
         if active?.ref == ref { return }
         if active != nil { commitPendingNow() }
         let itemPath = enclosingItemPath(ref.path)
@@ -1312,8 +1314,10 @@ final class DocumentModel {
         guard let serverURL, let lookUpPage, let slugId = Self.pageSlugId(of: url, serverURL: serverURL) else { return true }
         let ref = active.ref
         Task {
-            // A page that can't be found (or not seen) stays a link, as on the web.
-            guard let page = await lookUpPage(slugId), self.active?.ref == ref, let range = activeRange(offset: offset, text: pasted)
+            // A page that can't be found (or not seen) stays a link, as on the web. So does one while a sheet holds the text:
+            // the link sheet keeps its range in it.
+            guard let page = await lookUpPage(slugId), self.active?.ref == ref, !self.editsInSheet,
+                  let range = activeRange(offset: offset, text: pasted)
             else { return }
             let linked = LinkedPage(id: page.id, slugId: page.slugId, title: page.title ?? "", anchor: url.fragment)
             let mention = Self.editorText(from: [pageMention(linked)])
@@ -1412,7 +1416,9 @@ final class DocumentModel {
         let start = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
         activeText.transform(updating: &activeSelection) { $0.replaceSubrange(range, with: run) }
         if cursorAtEnd {
-            let end = activeText.characters.index(activeText.startIndex, offsetBy: start + run.characters.count)
+            // Clamped: a run starting with a combining mark merges with the character before it, so the text can be
+            // shorter than both parts.
+            let end = activeText.characters.index(activeText.startIndex, offsetBy: min(start + run.characters.count, activeText.characters.count))
             activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: AttributeContainer())
         }
         scheduleCommit(debounce: .zero)
@@ -2157,7 +2163,8 @@ final class DocumentModel {
         guard let previous = node(at: previousPath) else { return }
         if Self.editableTextTypes.contains(previous.type) {
             let merged = PMNode(type: previous.type, attrs: previous.attrs, content: (previous.children + currentInlines).isEmpty ? nil : previous.children + currentInlines)
-            let offset = previous.plainText.count
+            // In the editor's characters, the unit `.offset` counts in: a mention or a line break isn't its plain text.
+            let offset = Self.editorText(from: previous.children).characters.count
             overrides[active.ref.identity] = nil
             commitTask?.cancel()
             // Activate the previous block now with the merged text; the merged block goes afterwards.
@@ -2395,13 +2402,26 @@ final class DocumentModel {
         }
 
         // The new table has the cell's latest text; its pending commit could target a deleted cell and show an error.
+        let editedPath = active?.ref.path
         dropActive()
         if rows.isEmpty {
             report(await engine.deleteBlock(.path(position.tablePath)))
             return
         }
-        if report(await engine.replaceBlock(.path(position.tablePath), with: PMNode(type: "table", attrs: table.attrs, content: rows))) {
-            await focusAfterOperation(position.tablePath + [focusRow, focusColumn, 0], .end)
+        let newTable = PMNode(type: "table", attrs: table.attrs, content: rows)
+        if report(await engine.replaceBlock(.path(position.tablePath), with: newTable)) {
+            // A header toggle changes cell types, never paths, so editing stays in its block. Otherwise the cursor goes to
+            // the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
+            var focus = [focusRow, focusColumn]
+            if edit == .toggleHeaderRow || edit == .toggleHeaderColumn, let editedPath {
+                focus = Array(editedPath.dropFirst(position.tablePath.count))
+            } else {
+                while let node = node(at: focus, in: newTable), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock",
+                      !node.children.isEmpty {
+                    focus.append(0)
+                }
+            }
+            await focusAfterOperation(position.tablePath + focus, .end)
         }
     }
 
@@ -2491,7 +2511,13 @@ final class DocumentModel {
     static func inlineContent(of node: PMNode) -> [PMNode]? {
         switch node.type {
         case "paragraph", "heading", "detailsSummary": return node.content
-        case "codeBlock": return node.plainText.isEmpty ? nil : [PMNode(type: "text", text: node.plainText)]
+        case "codeBlock":
+            // The code's lines become line breaks, as on the web; a raw "\n" in text would count as Return.
+            let lines = node.plainText.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            let inlines = lines.enumerated().flatMap { index, line in
+                (index > 0 ? [PMNode(type: "hardBreak")] : []) + (line.isEmpty ? [] : [PMNode(type: "text", text: String(line))])
+            }
+            return inlines.isEmpty ? nil : inlines
         default:
             if let first = node.children.first { return inlineContent(of: first) }
             return nil

@@ -280,6 +280,56 @@ struct DocumentModelTests {
         while !model.activeText.runs.contains(where: { $0.link?.absoluteString == missing }) { try await Task.sleep(for: .milliseconds(10)) }
     }
 
+    /// A page title starting with a combining mark merges with the character before its mention, so the text gets shorter
+    /// than both parts: the cursor after the mention stays inside it (it trapped).
+    @Test(.timeLimit(.minutes(1))) func mentionOfTitleWithCombiningMarkKeepsTheCursorInside() async throws {
+        let paragraph = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "see ")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.serverURL = URL(string: "https://wiki.example.com")
+        let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"́Spec"}"#.utf8))
+        model.lookUpPage = { _ in target }
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+
+        #expect(model.pasteLink("https://wiki.example.com/p/spec-Ab12"))
+        // By its text: the merged mark leaves no clean run for the mention to be read back from.
+        while !String(model.activeText.characters).hasSuffix("Spec") { try await Task.sleep(for: .milliseconds(10)) }
+        guard case .insertionPoint(let cursor) = model.activeSelection.indices(in: model.activeText) else {
+            Issue.record("no insertion point")
+            return
+        }
+        #expect(cursor == model.activeText.endIndex)
+    }
+
+    /// While the link sheet holds the text, a pasted page link stays a link: the sheet keeps its range in that text, which
+    /// the shorter mention would end before.
+    @Test(.timeLimit(.minutes(1))) func pastedPageLinkStaysALinkWhileTheLinkSheetIsOpen() async throws {
+        let paragraph = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Hallo ")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.serverURL = URL(string: "https://wiki.example.com")
+        let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"Ziel"}"#.utf8))
+        var answer: CheckedContinuation<Page?, Never>?
+        model.lookUpPage = { _ in await withCheckedContinuation { answer = $0 } }
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+
+        let url = "https://wiki.example.com/p/ziel-Ab12"
+        #expect(model.pasteLink(url))
+        while answer == nil { try await Task.sleep(for: .milliseconds(10)) }
+        model.editsLink = true
+        answer?.resume(returning: target)
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(model.activeText.runs.contains { $0.link?.absoluteString == url })
+        #expect(!DocumentModel.inlines(from: model.activeText, base: .body).contains { $0.type == "mention" })
+    }
+
     /// "/bild" → Image drops the query before the picker opens, as on the web: gone on cancel, replaced by the uploads.
     @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func mediaCommandRemovesSlashQuery(uploads: Bool) async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
@@ -529,6 +579,32 @@ struct DocumentModelTests {
         model.syncFromEngine()  // the new table's own document event
 
         #expect(model.active?.ref == NodeRef(path: [0, 1, 0, 0], id: "c"))
+    }
+
+    /// A table action never leaves the cursor on a list (quote, image …) that starts a cell: typing rewrote that block
+    /// from the editor's text, and each Backspace took a list item.
+    @Test(.timeLimit(.minutes(1)), arguments: [DocumentModel.TableEdit.toggleHeaderRow, .deleteRow])
+    func tableEditFocusesOnlyText(edit: DocumentModel.TableEdit) async throws {
+        func row(_ id: String, _ text: String) -> PMNode {
+            PMNode(type: "tableRow", content: [PMNode(type: "tableCell", content: [PMNode(type: "bulletList", content: [
+                PMNode(type: "listItem", content: [PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)])]),
+            ])])])
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "table", content: [row("a", "Eins"), row("b", "Zwei")])]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        let line = try #require(model.node(at: [0, 0, 0, 0, 0, 0]))
+        model.activate(NodeRef(path: [0, 0, 0, 0, 0, 0], node: line), node: line)
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1))) }
+
+        await model.editTable(edit)
+
+        #expect(model.active?.type == "paragraph")
+        model.activeText.append(AttributedString("x"))
+        model.activeTextChanged()
+        await model.flush()
+        #expect(!engine.saved.contains { $0.type == "bulletList" })
     }
 
     /// Floating "+" → Date when its paragraph at the end can't be inserted: the date must not turn up later in a block
@@ -890,6 +966,81 @@ struct DocumentModelTests {
 
         #expect(engine.saved.map(\.plainText) == ["EinsZwei"])
         #expect(engine.deleted == [.id("b")])
+    }
+
+    /// Backspace at a block's start puts the cursor where the two texts meet, counted in the editor's characters: a
+    /// mention ("@Alice") or a line break isn't its plain text, and typing landed inside the sentence before.
+    @Test(.timeLimit(.minutes(1))) func joinPutsTheCursorWhereTheTextsMeet() async throws {
+        let alice = PMNode(type: "mention", attrs: ["id": "m1", "label": "Alice", "entityType": "user", "entityId": "u1"])
+        let bob = PMNode(type: "mention", attrs: ["id": "m2", "label": "Bob", "entityType": "user", "entityId": "u2"])
+        func text(_ value: String) -> PMNode { PMNode(type: "text", text: value) }
+        let cases: [(previous: [PMNode], current: [PMNode], offset: Int)] = [
+            ([text("Call "), alice, text(" about")], [text("the budget")], 17),
+            ([text("a"), PMNode(type: "hardBreak"), text("b")], [text("c")], 3),
+            ([text("Call "), alice, text(" and "), bob], [], 20),
+        ]
+        for (previous, current, offset) in cases {
+            let first = PMNode(type: "paragraph", attrs: ["id": "a"], content: previous)
+            let second = PMNode(type: "paragraph", attrs: ["id": "b"], content: current.isEmpty ? nil : current)
+            let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
+            let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+            let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+            model.syncFromEngine()
+            model.activate(NodeRef(path: [1], node: second), node: second)
+
+            #expect(model.backspaceAtStart())
+            while model.active?.ref.path != [0] { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(model.cursorRequest == .offset(offset))
+        }
+    }
+
+    /// Text ↔ code keeps line breaks, as the web's setBlockType does: Shift-Return lines become the code's lines and
+    /// back, and the converted text doesn't split into blocks on the next key.
+    @Test(.timeLimit(.minutes(1))) func convertingBetweenTextAndCodeKeepsLines() async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [
+            PMNode(type: "text", text: "SELECT *"), PMNode(type: "hardBreak"), PMNode(type: "text", text: "FROM t"),
+        ])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1))) }
+
+        await model.convert(NodeRef(path: [0], node: paragraph), to: .codeBlock)
+        let code = try #require(engine.saved.last)
+        #expect(code.type == "codeBlock")
+        #expect(code.plainText == "SELECT *\nFROM t")
+
+        await model.convert(NodeRef(path: [0], node: code), to: .paragraph)
+        let text = try #require(engine.saved.last)
+        #expect(text.children.map(\.type) == ["text", "hardBreak", "text"])
+
+        #expect(model.active?.type == "paragraph")
+        model.activeText.append(AttributedString("x"))
+        model.activeTextChanged()
+        await model.flush()
+        #expect(engine.inserted.isEmpty)
+    }
+
+    /// A formula written with Shift-Return stays whole while its paragraph is edited: its line break read as Return split
+    /// the paragraph and turned the formula into text.
+    @Test(.timeLimit(.minutes(1))) func formulaWithLineBreakSurvivesEditing() async throws {
+        let formula = PMNode(type: "mathInline", attrs: ["text": "a \\\\\nb"])
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p"], content: [
+            PMNode(type: "text", text: "x "), formula, PMNode(type: "text", text: " y"),
+        ])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        await model.flush()
+
+        #expect(engine.inserted.isEmpty)
+        #expect(engine.saved.last?.children.contains(formula) == true)
     }
 
     /// Return in an empty list item continues after the list and removes the item (here its whole list) once the cursor
