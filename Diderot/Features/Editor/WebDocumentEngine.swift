@@ -22,7 +22,9 @@ protocol DocumentEngine: AnyObject, Observable {
     func saveUnsentChanges() async
     /// The document straight from the engine (not debounced), e.g. for the reader on close.
     func currentDocument() async -> PMNode?
-    func replaceBlock(_ target: BlockTarget, with node: PMNode) async -> Bool
+    /// With `base`, the text block the edit started from: a collaborator's edit of the block since then stays, unless
+    /// it changed the same range (the engine's `rebase`).
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?) async -> Bool
     /// Replaces one block with several (unsync a synced block, merge columns, …).
     func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> Bool
     /// Without a target: at the end of the document, before the footnotes.
@@ -35,6 +37,12 @@ protocol DocumentEngine: AnyObject, Observable {
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> Bool
     func undo() async
     func redo() async
+}
+
+extension DocumentEngine {
+    func replaceBlock(_ target: BlockTarget, with node: PMNode) async -> Bool {
+        await replaceBlock(target, with: node, base: nil)
+    }
 }
 
 enum EngineStatus: Equatable {
@@ -236,8 +244,9 @@ final class WebDocumentEngine: DocumentEngine {
         participants = []
     }
 
-    func replaceBlock(_ target: BlockTarget, with node: PMNode) async -> Bool {
-        await replaceBlock(target, withNodes: [node])
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?) async -> Bool {
+        await call("return window.DocmostEngine.replaceBlockWith(target, json, base);",
+                   ["target": target.jsObject, "json": [Self.jsObject(node)], "base": base.map { Self.jsObject($0) } ?? NSNull()])
     }
 
     func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> Bool {

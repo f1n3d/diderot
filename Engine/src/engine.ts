@@ -6,6 +6,7 @@ import Collaboration from "@tiptap/extension-collaboration";
 import { initProseMirrorDoc } from "@tiptap/y-tiptap";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import * as Y from "yjs";
+import { rebase } from "./rebase";
 import { schemaExtensions } from "./schema";
 
 declare global {
@@ -125,12 +126,16 @@ class DocmostEngine {
 
   // MARK: Block operations
 
-  /** Replaces one block with one or more (e.g. unsyncing a synced block: its content replaces the wrapper). */
-  replaceBlockWith(target: Target, json: JSONContent[]): boolean {
+  /**
+   * Replaces one block with one or more (e.g. unsyncing a synced block: its content replaces the wrapper). With `base`,
+   * the text block the app's edit started from: a collaborator's edit since then stays (`rebase`).
+   */
+  replaceBlockWith(target: Target, json: JSONContent[], base?: JSONContent | null): boolean {
     return this.transact((editor) => {
       const found = this.locate(editor, target);
       if (!found) return false;
-      const nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
+      let nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
+      if (base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(editor.schema, base), nodes[0]) ?? nodes[0]];
       editor.view.dispatch(editor.state.tr.replaceWith(found.pos, found.pos + found.node.nodeSize, nodes));
       return true;
     });

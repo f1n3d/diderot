@@ -808,6 +808,72 @@ struct DocumentModelTests {
         #expect(model.errorMessage == String(localized: "The server refused the live connection. The page is read-only."))
     }
 
+    /// A collaborator's change of the block being edited shows in the editor once nothing of the user's is pending, and
+    /// the next key builds on it: the old text used to be written back over their sentence.
+    @Test(.timeLimit(.minutes(1))) func collaboratorsChangeOfTheActiveBlockShowsAndStays() async throws {
+        func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: text)]) }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("Hello")]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+
+        engine.document = PMNode(type: "doc", content: [paragraph("Hello world")])
+        model.syncFromEngine()
+        while String(model.activeText.characters) != "Hello world" { try await Task.sleep(for: .milliseconds(10)) }
+        // The cursor stays before their words, which came after it.
+        guard case .insertionPoint(let cursor) = model.activeSelection.indices(in: model.activeText) else {
+            Issue.record("no insertion point")
+            return
+        }
+        #expect(model.activeText.characters.distance(from: model.activeText.startIndex, to: cursor) == 5)
+
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        await model.flush()
+        #expect(engine.saved.map(\.plainText) == ["Hello world!"])
+    }
+
+    /// Input still pending when a collaborator's change arrives goes out with the block it was typed on as its base, so
+    /// the engine keeps their change (`rebase`); once the engine has both, the editor shows them.
+    @Test(.timeLimit(.minutes(1))) func inputPendingDuringACollaboratorsChangeIsSavedOnItsBase() async throws {
+        func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: text)]) }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("Hello")]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: line), node: line)
+
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        engine.document = PMNode(type: "doc", content: [paragraph("Hello world")])
+        model.syncFromEngine()
+        #expect(String(model.activeText.characters) == "Hello!")
+        await model.flush()
+        #expect(engine.saved.map(\.plainText) == ["Hello!"])
+        #expect(engine.bases.map { $0?.plainText } == ["Hello"])
+
+        engine.document = PMNode(type: "doc", content: [paragraph("Hello world!")])  // what the engine made of both
+        model.syncFromEngine()
+        while String(model.activeText.characters) != "Hello world!" { try await Task.sleep(for: .milliseconds(10)) }
+    }
+
+    /// Moving the cursor to another block writes nothing back when nothing was typed: the untouched block overwrote
+    /// what a collaborator typed there in the next 400 ms.
+    @Test(.timeLimit(.minutes(1))) func switchingBlocksWritesNothingBack() async throws {
+        let first = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
+        let second = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Zwei")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
+        let model = try Self.model(engine)
+
+        model.activate(NodeRef(path: [0], node: first), node: first)
+        model.activeTextChanged()  // the editor reporting the text it was given
+        model.activate(NodeRef(path: [1], node: second), node: second)
+        model.activeTextChanged()
+        try await Task.sleep(for: .milliseconds(600))
+
+        #expect(engine.saved.isEmpty)
+    }
+
     /// The mention list follows the cursor: set elsewhere without typing, the list closes, and a pick from a list still
     /// showing replaces nothing.
     @Test func mentionListClosesWhenTheCursorMoves() throws {
@@ -1256,8 +1322,9 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var opened: [String] = []
     /// "open" and "close" in order.
     private(set) var lifecycle: [String] = []
-    /// Blocks written with `replaceBlock(_:with:)`.
+    /// Blocks written with `replaceBlock(_:with:base:)`, and the bases passed with them.
     private(set) var saved: [PMNode] = []
+    private(set) var bases: [PMNode?] = []
     /// Blocks added with `insertBlock` or `insertBlocks`.
     private(set) var inserted: [(node: PMNode, target: BlockTarget?, position: BlockInsertPosition)] = []
     /// Targets of `replaceBlock(_:withNodes:)`.
@@ -1281,8 +1348,9 @@ final class FakeDocumentEngine: DocumentEngine {
         self.document = document
     }
 
-    func replaceBlock(_ target: BlockTarget, with node: PMNode) async -> Bool {
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?) async -> Bool {
         saved.append(node)
+        bases.append(base)
         whileInserting?()
         if holdsNextSave {
             holdsNextSave = false
