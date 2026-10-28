@@ -918,6 +918,32 @@ struct DocumentModelTests {
         #expect(engine.deleted == [.id("b")])
     }
 
+    /// Backspace at a block's start puts the cursor where the two texts meet, counted in the editor's characters: a
+    /// mention ("@Alice") or a line break isn't its plain text, and typing landed inside the sentence before.
+    @Test(.timeLimit(.minutes(1))) func joinPutsTheCursorWhereTheTextsMeet() async throws {
+        let alice = PMNode(type: "mention", attrs: ["id": "m1", "label": "Alice", "entityType": "user", "entityId": "u1"])
+        let bob = PMNode(type: "mention", attrs: ["id": "m2", "label": "Bob", "entityType": "user", "entityId": "u2"])
+        func text(_ value: String) -> PMNode { PMNode(type: "text", text: value) }
+        let cases: [(previous: [PMNode], current: [PMNode], offset: Int)] = [
+            ([text("Call "), alice, text(" about")], [text("the budget")], 17),
+            ([text("a"), PMNode(type: "hardBreak"), text("b")], [text("c")], 3),
+            ([text("Call "), alice, text(" and "), bob], [], 20),
+        ]
+        for (previous, current, offset) in cases {
+            let first = PMNode(type: "paragraph", attrs: ["id": "a"], content: previous)
+            let second = PMNode(type: "paragraph", attrs: ["id": "b"], content: current.isEmpty ? nil : current)
+            let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
+            let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+            let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+            model.syncFromEngine()
+            model.activate(NodeRef(path: [1], node: second), node: second)
+
+            #expect(model.backspaceAtStart())
+            while model.active?.ref.path != [0] { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(model.cursorRequest == .offset(offset))
+        }
+    }
+
     /// Text ↔ code keeps line breaks, as the web's setBlockType does: Shift-Return lines become the code's lines and
     /// back, and the converted text doesn't split into blocks on the next key.
     @Test(.timeLimit(.minutes(1))) func convertingBetweenTextAndCodeKeepsLines() async throws {

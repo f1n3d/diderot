@@ -2159,7 +2159,8 @@ final class DocumentModel {
         guard let previous = node(at: previousPath) else { return }
         if Self.editableTextTypes.contains(previous.type) {
             let merged = PMNode(type: previous.type, attrs: previous.attrs, content: (previous.children + currentInlines).isEmpty ? nil : previous.children + currentInlines)
-            let offset = previous.plainText.count
+            // In the editor's characters, the unit `.offset` counts in: a mention or a line break isn't its plain text.
+            let offset = Self.editorText(from: previous.children).characters.count
             overrides[active.ref.identity] = nil
             commitTask?.cancel()
             // Activate the previous block now with the merged text; the merged block goes afterwards.
