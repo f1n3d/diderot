@@ -572,7 +572,8 @@ final class DocumentModel {
     // MARK: - Active text
 
     func activate(_ ref: NodeRef, node: PMNode, cursor: CursorRequest = .end) {
-        guard isEditable else { return }
+        // Only text and code: the editor's text would replace any other block (a list, quote or image) on the next key.
+        guard isEditable, Self.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
         if active?.ref == ref { return }
         if active != nil { commitPendingNow() }
         let itemPath = enclosingItemPath(ref.path)
@@ -2395,13 +2396,26 @@ final class DocumentModel {
         }
 
         // The new table has the cell's latest text; its pending commit could target a deleted cell and show an error.
+        let editedPath = active?.ref.path
         dropActive()
         if rows.isEmpty {
             report(await engine.deleteBlock(.path(position.tablePath)))
             return
         }
-        if report(await engine.replaceBlock(.path(position.tablePath), with: PMNode(type: "table", attrs: table.attrs, content: rows))) {
-            await focusAfterOperation(position.tablePath + [focusRow, focusColumn, 0], .end)
+        let newTable = PMNode(type: "table", attrs: table.attrs, content: rows)
+        if report(await engine.replaceBlock(.path(position.tablePath), with: newTable)) {
+            // A header toggle changes cell types, never paths, so editing stays in its block. Otherwise the cursor goes to
+            // the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
+            var focus = [focusRow, focusColumn]
+            if edit == .toggleHeaderRow || edit == .toggleHeaderColumn, let editedPath {
+                focus = Array(editedPath.dropFirst(position.tablePath.count))
+            } else {
+                while let node = node(at: focus, in: newTable), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock",
+                      !node.children.isEmpty {
+                    focus.append(0)
+                }
+            }
+            await focusAfterOperation(position.tablePath + focus, .end)
         }
     }
 

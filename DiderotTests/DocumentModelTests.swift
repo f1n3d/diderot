@@ -531,6 +531,32 @@ struct DocumentModelTests {
         #expect(model.active?.ref == NodeRef(path: [0, 1, 0, 0], id: "c"))
     }
 
+    /// A table action never leaves the cursor on a list (quote, image …) that starts a cell: typing rewrote that block
+    /// from the editor's text, and each Backspace took a list item.
+    @Test(.timeLimit(.minutes(1)), arguments: [DocumentModel.TableEdit.toggleHeaderRow, .deleteRow])
+    func tableEditFocusesOnlyText(edit: DocumentModel.TableEdit) async throws {
+        func row(_ id: String, _ text: String) -> PMNode {
+            PMNode(type: "tableRow", content: [PMNode(type: "tableCell", content: [PMNode(type: "bulletList", content: [
+                PMNode(type: "listItem", content: [PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)])]),
+            ])])])
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "table", content: [row("a", "Eins"), row("b", "Zwei")])]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        let line = try #require(model.node(at: [0, 0, 0, 0, 0, 0]))
+        model.activate(NodeRef(path: [0, 0, 0, 0, 0, 0], node: line), node: line)
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1))) }
+
+        await model.editTable(edit)
+
+        #expect(model.active?.type == "paragraph")
+        model.activeText.append(AttributedString("x"))
+        model.activeTextChanged()
+        await model.flush()
+        #expect(!engine.saved.contains { $0.type == "bulletList" })
+    }
+
     /// Floating "+" → Date when its paragraph at the end can't be inserted: the date must not turn up later in a block
     /// the cursor moves to (here the line after a Return).
     @Test(.timeLimit(.minutes(1))) func failedEndInsertDropsInlineCommand() async throws {
