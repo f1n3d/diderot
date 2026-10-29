@@ -644,8 +644,10 @@ final class AppSession {
         return try await withThrowingTaskGroup(of: Bool.self) { group in
             group.addTask { try await self.finishSignIn(server: server, client: client, token: token); return true }
             group.addTask { try await Task.sleep(for: deadline); return false }
-            if try await group.next() == true { return true }
+            let signedIn = try await group.next() == true
+            // The group waits for both: a sleep left running used to hold every answered start until the deadline.
             group.cancelAll()
+            if signedIn { return true }
             // Done right before the cancel: then it counts.
             return (try? await group.next()) == true
         }

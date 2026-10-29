@@ -327,6 +327,19 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// A start with saved content ends as soon as the server answered, not at `startDeadline`: a switch to another
+    /// saved server used to take that long, and a link to a page there opened it only then.
+    @Test func answeredStartEndsBeforeTheDeadline() async throws {
+        _ = try await sessionOnA()
+        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        session.startDeadline = .seconds(10)
+        let start = ContinuousClock.now
+        await session.restore()
+        #expect(ContinuousClock.now - start < .seconds(5), "not the start deadline")
+        #expect(session.ready?.restoredOffline == false, "the server's answer")
+        await removeCaches()
+    }
+
     /// Without saved content there is nothing to show instead: the start waits for a slow server as before.
     @Test func slowStartWithoutSavedContentWaits() async throws {
         await removeCaches()
