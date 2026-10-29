@@ -15,6 +15,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 ## App Store
 
 - Voluntary tips as in-app purchases, as Swift Paperless does (decided on October 22, 2026; after version 1.1, decided on October 25, 2026). They need Apple's Paid Apps agreement with tax and bank details, the purchases themselves and their own review; the trader status under the Digital Services Act may change with them.
+- Screenshots for the iPhone Duo (outer display 1398×2034, inner 2007×2853 pixels): optional until April 2027, then required for apps built with the iOS 27.1 SDK (as of October 24, 2026). With them, the product page shows that the app is optimized for the Duo. How the app does on the Duo: under iPhone Duo.
 - The name "Diderot" has no current trademark entries in the EU and Germany (TMview, October 22, 2026); the few entries elsewhere weren't looked into. The app is offered in every country but mainland China.
 
 ## Editor
@@ -87,15 +88,17 @@ Deliberately not yet like the web (found in the code review on October 13, 2026)
 
 - Creating, editing and deleting templates stays on the web, like the workspace settings (decided on October 26, 2026). Without a license that has them, the app offers no templates; the web shows them disabled with an upgrade hint.
 
-## Other
+## iPhone Duo
 
-- iPhone Duo (checked on October 24, 2026, in the Xcode 27.1 simulator; Apple's guidance: the tech talk "Prepare your app for iPhone Duo"):
-  - Outer display (466×678 points, compact width as on the other iPhones): Home, pages, editing with the keyboard, comments (a new one scrolls into view) and databases work. iOS puts the bars' buttons in a column beside the status bar. After a size change with the keyboard up, it folds comments and the page menu into its own "More" button until the keyboard closes; a sheet's bar with its title and Done hides while the sheet is scrolled down.
-  - UI tests there (`DEVICE="iPhone Duo" Tools/run-uitests.sh …`; they find the bars' buttons in that column): still failing for the simulator, which doesn't pass the tests' hardware keys (arrows, ⌘B: test44, test2's bold check) and doesn't turn the outer display from the command line (Safari neither: test25's landscape step); and for the short or narrow display: test12 (the settings row lies below the visible part), test15 (Undo beyond the toolbar's visible part), test26 (the hiding bar moves the detail sheet's fields by its height), test61 (drags from the screen's middle, on the keyboard there), test67 (finding the web editor's link), test28 and test30 (the board ends at the column of buttons: the app centers the middle column in the free part, the test expects the board's middle; the drag onto the next column lands on the buttons).
-  - Inner display (669×951 points, regular width and height, still the iPhone idiom), tried at its size in a resizable session (`xcrun devicectl device appResize start --device <udid> --preferred-size 669x951`): the iPhone layout with the tab bar at the bottom and pages without it, the status pill with its words. The editor keeps the caret and the keyboard when the app moves to that size and back.
-  - Not tested: folding itself, which only Device Hub's buttons do (Xcode → Open Developer Tool → Device Hub). To try once by hand, with a page open in the editor.
-  - App Store: screenshots for the Duo are optional (outer display 1398×2034, inner 2007×2853 pixels) and required from April 2027 for apps built with the iOS 27.1 SDK; with them, the product page shows that the app is optimized for the Duo.
-  - Possible later: a sidebar on the inner display (`.defaultTabBarPlacement(.sidebar)`); with three tabs it adds little.
+Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the tech talk "Prepare your app for iPhone Duo"). Its App Store screenshots: under App Store.
+
+- Outer display (466×678 points, compact width as on the other iPhones): Home, pages, editing with the keyboard, comments (a new one scrolls into view) and databases work. iOS puts the bars' buttons in a column beside the status bar. After a size change with the keyboard up, it folds comments and the page menu into its own "More" button until the keyboard closes; a sheet's bar with its title and Done hides while the sheet is scrolled down.
+- UI tests there (`DEVICE="iPhone Duo" Tools/run-uitests.sh …`; they find the bars' buttons in that column): still failing for the simulator, which doesn't pass the tests' hardware keys (arrows, ⌘B: test44, test2's bold check) and doesn't turn the outer display from the command line (Safari neither: test25's landscape step); and for the short or narrow display: test12 (the settings row lies below the visible part), test15 (Undo beyond the toolbar's visible part), test26 (the hiding bar moves the detail sheet's fields by its height), test61 (drags from the screen's middle, on the keyboard there), test67 (finding the web editor's link), test28 and test30 (the board ends at the column of buttons: the app centers the middle column in the free part, the test expects the board's middle; the drag onto the next column lands on the buttons).
+- Inner display (669×951 points, regular width and height, still the iPhone idiom), tried at its size in a resizable session (`xcrun devicectl device appResize start --device <udid> --preferred-size 669x951`): the iPhone layout with the tab bar at the bottom and pages without it, the status pill with its words. The editor keeps the caret and the keyboard when the app moves to that size and back.
+- Not tested: folding itself, which only Device Hub's buttons do (Xcode → Open Developer Tool → Device Hub). To try once by hand, with a page open in the editor.
+- Possible later: a sidebar on the inner display (`.defaultTabBarPlacement(.sidebar)`); with three tabs it adds little.
+
+## Other
 
 - Inline comment, once on the iPhone (October 22, 2026, full UI run, test33): the comment was created and the app showed the marked passage as a link, but the mark never reached the server (not in the version history either). Three targeted repetitions on the iPhone (test33 alone, with test34/35, with test1 before) and two simulator runs were green; the store for unsent changes was empty. Cause open. If it happens again: check whether the engine refused the save ("The change could not be applied.") or the connection was briefly gone.
 - UI tests: two flaky spots, to investigate if they come back:
