@@ -616,7 +616,7 @@ struct PageView: View {
             centering.centerUntil = .distantPast
             return
         }
-        // Right after the tap the editor still changes (height, table bar); keep re-centering it for that long.
+        // Right after the tap the editor still changes (its height); keep re-centering it for that long.
         centering.centerUntil = .now + 0.8
         guard centering.keyboardTop == nil else { return }
         centering.task = Task { @MainActor in
@@ -680,7 +680,7 @@ struct PageView: View {
         }
     }
 
-    /// The active editor changed size or position (line wrap, slash/mention menu, table bar).
+    /// The active editor changed size or position (line wrap, slash/mention menu).
     private func activeFrameChanged() {
         guard let model, model.active != nil, model.activeBlockFrame.height > 0 else { return }
         if centering.isCentering {

@@ -1,14 +1,17 @@
 import SwiftUI
 import DocmostKit
 
-/// Editor keyboard toolbar. No pop-up menus (on device they hide behind the keyboard): "Block type" swaps in a row
-/// of buttons, "+" opens the insert menu below the block (as "/" does).
+/// Editor keyboard toolbar. No pop-up menus (on device they hide behind the keyboard): "Block type" and, in a table,
+/// "Table" swap in a row of buttons, "+" opens the insert menu below the block (as "/" does).
 struct EditorToolbar: View {
-    private enum Mode { case main, blockType }
+    private enum Mode { case main, blockType, table, tableFormat }
 
     @Bindable var model: DocumentModel
     @State private var mode: Mode = .main
     @State private var confirmsDelete = false
+    @State private var confirmsTableDelete = false
+    /// What the table format row's colors, alignments and "Clear" change.
+    @State private var formatScope = DocumentModel.TableScope.cell
 
     private var isCode: Bool { model.active?.type == "codeBlock" }
 
@@ -19,14 +22,21 @@ struct EditorToolbar: View {
                     switch mode {
                     case .main: mainRow
                     case .blockType: blockTypeRow
+                    case .table: tableRow
+                    case .tableFormat: tableFormatRow
                     }
                 }
                 .padding(.horizontal, 4)
             }
+            // Each row starts at its beginning ("Back" first), not where the last one was scrolled to.
+            .id(mode)
             iconButton("Done", "keyboard.chevron.compact.down", id: "editor-done") { model.deactivate() }
                 .padding(.leading, 6)
         }
-        .onChange(of: model.active) { _, _ in mode = .main }
+        // The table rows stay while the cursor goes from cell to cell, as their actions move it to new rows and columns.
+        .onChange(of: model.active) { _, _ in
+            if mode == .blockType || model.activeTablePosition == nil { mode = .main }
+        }
     }
 
     // MARK: - Rows
@@ -38,6 +48,9 @@ struct EditorToolbar: View {
         let inFootnote = model.active.map { model.insertLocation(of: $0) } == .footnote
         if !isFixedPart {
             modeButton(title: currentTypeTitle, id: "editor-block-type") { mode = .blockType }
+        }
+        if model.activeTablePosition != nil {
+            iconButton("Table", "tablecells", id: "editor-table") { mode = .table }
         }
         iconButton("Insert block", "plus", id: "editor-insert", active: model.showsPlusMenu) { model.togglePlusMenu() }
         divider
@@ -104,8 +117,121 @@ struct EditorToolbar: View {
         }
     }
 
+    /// The table's actions on the cell being edited, as in the web's table menus. Merging goes cell by cell (the app
+    /// has no cell selection); colors, alignment and "Clear" have a row of their own.
+    @ViewBuilder
+    private var tableRow: some View {
+        let table = model.activeTableState ?? DocumentModel.TableState()
+        iconButton("Back", "chevron.left", id: "editor-back") { mode = .main }
+        divider
+        tableButton("Add row above", "arrow.up.to.line", id: "table-insert-row-above", .insertRowAbove)
+        tableButton("Add row below", "arrow.down.to.line", id: "table-insert-row-below", .insertRowBelow)
+        tableButton("Add column left", "arrow.left.to.line", id: "table-insert-column-left", .insertColumnLeft)
+        tableButton("Add column right", "arrow.right.to.line", id: "table-insert-column-right", .insertColumnRight)
+        divider
+        iconButton("Color and alignment", "paintpalette", id: "table-format") {
+            formatScope = .cell
+            mode = .tableFormat
+        }
+        divider
+        tableButton("Header row", "rectangle.topthird.inset.filled", id: "table-header-row", .toggleHeaderRow, active: table.headerRow)
+        tableButton("Header column", "rectangle.leadingthird.inset.filled", id: "table-header-column", .toggleHeaderColumn,
+                    active: table.headerColumn)
+        tableButton("Header cell", "rectangle.inset.filled", id: "table-header-cell", .toggleHeaderCell, active: table.headerCell)
+        divider
+        tableButton("Merge with the cell to the right", "arrow.right.and.line.vertical.and.arrow.left", id: "table-merge-right", .mergeRight)
+            .disabled(!table.canMergeRight)
+        tableButton("Merge with the cell below", "arrow.down.and.line.horizontal.and.arrow.up", id: "table-merge-down", .mergeDown)
+            .disabled(!table.canMergeDown)
+        tableButton("Split cell", "square.split.2x2", id: "table-split", .split)
+            .disabled(!table.canSplit)
+        divider
+        tableButton("Move row up", "arrow.up.square", id: "table-move-row-up", .moveRowUp)
+            .disabled(!table.canMoveRowUp)
+        tableButton("Move row down", "arrow.down.square", id: "table-move-row-down", .moveRowDown)
+            .disabled(!table.canMoveRowDown)
+        tableButton("Move column left", "arrow.left.square", id: "table-move-column-left", .moveColumnLeft)
+            .disabled(!table.canMoveColumnLeft)
+        tableButton("Move column right", "arrow.right.square", id: "table-move-column-right", .moveColumnRight)
+            .disabled(!table.canMoveColumnRight)
+        tableButton("Sort A → Z", "chart.bar.xaxis.ascending", id: "table-sort-ascending", .sort(descending: false))
+            .disabled(!table.canSort)
+        tableButton("Sort Z → A", "chart.bar.xaxis.descending", id: "table-sort-descending", .sort(descending: true))
+            .disabled(!table.canSort)
+        divider
+        tableButton("Delete row", "minus.rectangle", id: "table-delete-row", .deleteRow)
+        tableButton("Delete column", "minus.rectangle.portrait", id: "table-delete-column", .deleteColumn)
+        iconButton("Delete table", "trash", id: "table-delete") { confirmsTableDelete = true }
+            .confirmationDialog("Delete this table?", isPresented: $confirmsTableDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { Task { await model.editTable(.deleteTable) } }
+            }
+    }
+
+    /// Colors, alignment and "Clear" for the cell, its row or its column.
+    @ViewBuilder
+    private var tableFormatRow: some View {
+        let table = model.activeTableState ?? DocumentModel.TableState()
+        // Of the cell: its row or column can have several.
+        let shows = formatScope == .cell
+        iconButton("Back", "chevron.left", id: "editor-back") { mode = .table }
+        divider
+        scopeButton("Cell", .cell)
+        scopeButton("Row", .row)
+        scopeButton("Column", .column)
+        divider
+        ForEach(DocumentModel.TableColor.allCases, id: \.self) { color in
+            colorButton(color, active: shows && table.color == color)
+        }
+        divider
+        tableButton("Align left", "text.alignleft", id: "table-align-left", .align(.left, formatScope), active: shows && table.align == .left)
+        tableButton("Align center", "text.aligncenter", id: "table-align-center", .align(.center, formatScope), active: shows && table.align == .center)
+        tableButton("Align right", "text.alignright", id: "table-align-right", .align(.right, formatScope), active: shows && table.align == .right)
+        divider
+        tableButton("Clear", "eraser", id: "table-clear", .clear(formatScope))
+    }
+
     private var divider: some View {
         Divider().frame(height: 20)
+    }
+
+    private func tableButton(_ title: LocalizedStringResource, _ symbol: String, id: String, _ edit: DocumentModel.TableEdit,
+                             active: Bool = false) -> some View {
+        iconButton(title, symbol, id: id, active: active) { Task { await model.editTable(edit) } }
+    }
+
+    private func scopeButton(_ title: LocalizedStringResource, _ scope: DocumentModel.TableScope) -> some View {
+        let active = formatScope == scope
+        return Button { formatScope = scope } label: {
+            TableScopeIcon(scope: scope)
+                .frame(width: 30, height: 30)
+                .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(title))
+        .accessibilityIdentifier("table-scope-\(scope.rawValue)")
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    /// A swatch in the color the cell shows (`TableCellView.background`).
+    private func colorButton(_ color: DocumentModel.TableColor, active: Bool) -> some View {
+        Button { Task { await model.editTable(.background(color, formatScope)) } } label: {
+            Group {
+                if color == .none {
+                    Image(systemName: "circle.slash")
+                } else {
+                    Circle()
+                        .fill(HighlightPalette.color(name: color.name, hex: color.hex))
+                        .overlay(Circle().strokeBorder(Color(.separator)))
+                        .frame(width: 20, height: 20)
+                }
+            }
+            .frame(width: 30, height: 30)
+            .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(color.title))
+        .accessibilityIdentifier("table-color-\(color.rawValue)")
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// All toolbar symbols in the same regular weight (the toolbar would draw them bolder).
@@ -230,6 +356,35 @@ struct EditorToolbar: View {
         let enabled = isHighlighted
         EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setHighlight(!enabled, in: &$0) }
         model.activeTextChanged()
+    }
+}
+
+/// A 3 × 3 grid with the scope's part filled: the middle cell, row or column.
+private struct TableScopeIcon: View {
+    let scope: DocumentModel.TableScope
+
+    var body: some View {
+        Canvas { context, size in
+            let gap: CGFloat = 1.5
+            let side = (min(size.width, size.height) - 2 * gap) / 3
+            for row in 0..<3 {
+                for column in 0..<3 {
+                    let rect = CGRect(x: CGFloat(column) * (side + gap), y: CGFloat(row) * (side + gap), width: side, height: side)
+                    let path = Path(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 1)
+                    let filled = switch scope {
+                    case .cell: row == 1 && column == 1
+                    case .row: row == 1
+                    case .column: column == 1
+                    }
+                    if filled {
+                        context.fill(path, with: .foreground)
+                    } else {
+                        context.stroke(path, with: .foreground, lineWidth: 1)
+                    }
+                }
+            }
+        }
+        .frame(width: 18, height: 18)
     }
 }
 

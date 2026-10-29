@@ -183,6 +183,11 @@ public enum ContentParser {
         min(max(cell.int("colspan") ?? 1, 1), 1_000)
     }
 
+    /// The rows a table cell spans, bounded like `colspan` (the layout ends it at the table's last row).
+    public static func rowspan(of cell: PMNode) -> Int {
+        min(max(cell.int("rowspan") ?? 1, 1), 1_000)
+    }
+
     private static func listItems(_ list: PMNode, path: String, start: Int?, state: inout State) -> [ListItem] {
         list.children.enumerated().map { index, item in
             let itemPath = "\(path).\(index)"
@@ -201,6 +206,7 @@ public enum ContentParser {
                     id: cell.string("id") ?? "p\(cellPath)",
                     isHeader: cell.type == "tableHeader",
                     colspan: colspan(of: cell),
+                    rowspan: rowspan(of: cell),
                     colwidth: colwidth?.isEmpty == false ? colwidth : nil,
                     backgroundColor: cell.string("backgroundColor"),
                     backgroundColorName: cell.string("backgroundColorName"),

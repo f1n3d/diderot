@@ -27,14 +27,14 @@ struct ContentParserTests {
     }
 
     /// Crafted numbers stay in bounds: a list's start near Int.max numbers from 1 (browsers count lists in 32 bits), a
-    /// huge colspan spans 1,000 columns, and widths such as "nan%" are no width. They trapped or took the app's memory.
+    /// huge colspan or rowspan spans 1,000, and widths such as "nan%" are no width. They trapped or took the app's memory.
     @Test func craftedNumbersStayInBounds() throws {
         let json = try JSONDecoder().decode(JSONValue.self, from: Data(#"""
         {"type": "doc", "content": [
           {"type": "orderedList", "attrs": {"start": 9223372036854775000}, "content": [
             {"type": "listItem", "content": [{"type": "paragraph"}]}, {"type": "listItem", "content": [{"type": "paragraph"}]}]},
           {"type": "table", "content": [{"type": "tableRow", "content": [
-            {"type": "tableCell", "attrs": {"colspan": 5e18}, "content": [{"type": "paragraph"}]}]}]}
+            {"type": "tableCell", "attrs": {"colspan": 5e18, "rowspan": 5e18}, "content": [{"type": "paragraph"}]}]}]}
         ]}
         """#.utf8))
         let doc = ContentDocument(json: json)
@@ -42,6 +42,7 @@ struct ContentParserTests {
         #expect(items.map(\.number) == [1, 2])
         guard case .table(let table) = doc.blocks[1].kind else { Issue.record("expected table"); return }
         #expect(table.rows.first?.cells.first?.colspan == 1_000)
+        #expect(table.rows.first?.cells.first?.rowspan == 1_000)
         #expect(ContentParser.listStart(of: PMNode(type: "orderedList", attrs: ["start": -3])) == -3)
         for text in ["nan%", "nan", "-inf", "inf%"] {
             #expect(Length(json: .string(text)) == nil, "\(text)")
@@ -220,6 +221,7 @@ struct ContentParserTests {
 
         guard case .table(let merged) = doc.blocks[3].kind else { Issue.record("expected table"); return }
         #expect(merged.rows[0].cells[0].colspan == 2)
+        #expect(merged.rows[0].cells.map(\.rowspan) == [1, 2])
         #expect(merged.rows[0].cells[0].colwidth == [150, 150])
         #expect(merged.columnCount == 3)
 

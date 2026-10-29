@@ -518,6 +518,46 @@
         }
       }
     },
+    "Add column left": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spalte links hinzufügen"
+          }
+        }
+      }
+    },
+    "Add column right": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spalte rechts hinzufügen"
+          }
+        }
+      }
+    },
+    "Add row above": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile oben hinzufügen"
+          }
+        }
+      }
+    },
+    "Add row below": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile unten hinzufügen"
+          }
+        }
+      }
+    },
     "Add to Favorites": {
       "localizations": {
         "de": {
@@ -534,6 +574,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Administrator"
+          }
+        }
+      }
+    },
+    "Align center": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zentrieren"
+          }
+        }
+      }
+    },
+    "Align left": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Links ausrichten"
+          }
+        }
+      }
+    },
+    "Align right": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechts ausrichten"
           }
         }
       }
@@ -819,6 +889,16 @@
         }
       }
     },
+    "Cell": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zelle"
+          }
+        }
+      }
+    },
     "Change Link": {
       "localizations": {
         "de": {
@@ -865,6 +945,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Datei auswählen"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leeren"
           }
         }
       }
@@ -940,6 +1030,26 @@
         }
       }
     },
+    "Color and alignment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbe und Ausrichtung"
+          }
+        }
+      }
+    },
+    "Column": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spalte"
+          }
+        }
+      }
+    },
     "Column %lld of %lld": {
       "localizations": {
         "de": {
@@ -952,26 +1062,6 @@
           "stringUnit": {
             "state": "new",
             "value": "Column %1$lld of %2$lld"
-          }
-        }
-      }
-    },
-    "Column left": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Spalte links"
-          }
-        }
-      }
-    },
-    "Column right": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Spalte rechts"
           }
         }
       }
@@ -1453,6 +1543,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diesen synchronisierten Block löschen? Seiten, die ihn einbetten, zeigen dann, dass es ihn nicht mehr gibt."
+          }
+        }
+      }
+    },
+    "Delete this table?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Tabelle löschen?"
           }
         }
       }
@@ -2133,6 +2233,16 @@
         }
       }
     },
+    "Header cell": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopfzelle"
+          }
+        }
+      }
+    },
     "Header column": {
       "localizations": {
         "de": {
@@ -2785,6 +2895,26 @@
         }
       }
     },
+    "Merge with the cell below": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit der Zelle darunter zusammenführen"
+          }
+        }
+      }
+    },
+    "Merge with the cell to the right": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit der Zelle rechts zusammenführen"
+          }
+        }
+      }
+    },
     "Mermaid diagram": {
       "localizations": {
         "de": {
@@ -2851,6 +2981,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nach rechts verschieben"
+          }
+        }
+      }
+    },
+    "Move column left": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spalte nach links verschieben"
+          }
+        }
+      }
+    },
+    "Move column right": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spalte nach rechts verschieben"
+          }
+        }
+      }
+    },
+    "Move row down": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile nach unten verschieben"
+          }
+        }
+      }
+    },
+    "Move row up": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile nach oben verschieben"
           }
         }
       }
@@ -3723,6 +3893,16 @@
         }
       }
     },
+    "Pink": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rosa"
+          }
+        }
+      }
+    },
     "Please enter a valid server address.": {
       "localizations": {
         "de": {
@@ -4213,22 +4393,12 @@
         }
       }
     },
-    "Row above": {
+    "Row": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zeile oben"
-          }
-        }
-      }
-    },
-    "Row below": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zeile unten"
+            "value": "Zeile"
           }
         }
       }
@@ -4673,12 +4843,32 @@
         }
       }
     },
+    "Sort A → Z": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A → Z sortieren"
+          }
+        }
+      }
+    },
     "Sort Subpages": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Unterseiten sortieren"
+          }
+        }
+      }
+    },
+    "Sort Z → A": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Z → A sortieren"
           }
         }
       }
@@ -4695,6 +4885,16 @@
     },
     "Spaces": {
       "shouldTranslate": false
+    },
+    "Split cell": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zelle teilen"
+          }
+        }
+      }
     },
     "Status": {
       "localizations": {

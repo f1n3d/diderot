@@ -55,6 +55,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
     - "+" for the insert list below the block
     - bold, italic, underline, strikethrough, inline code, highlight, link, code block
     - line break, undo and redo through the Yjs history like the web editor, duplicate, delete
+    - in a table, "Table" for the web's table and cell actions on the cell with the cursor: add, move and delete rows and columns, header row, column and cell, merge with the next cell or the one below and split again, sort a column A → Z or Z → A, delete the table, and a row of its own for colors, alignment and clearing the cell, its row or its column. They stay while the cursor moves with them.
   - Formats stay while typing on and are visible in the editor.
   - Move blocks by holding and dragging, or with "Arrange Blocks" in the page's menu. While a block is being edited, holding belongs to the text, as in a text editor: the magnifier moves the cursor, and in another text block the cursor goes where the finger was. The title is inline, the icon comes from the emoji keyboard; status pill and collaborator avatars.
   - Everything is live through an invisible TipTap/Yjs engine (`Engine/`). It loads its own page only, no frames: a YouTube embed there contacts nobody.
@@ -70,7 +71,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - 11 embeds: the link is checked, and the embed shows as a card that opens in the browser
 
   Status and math open their editor with a tap. The floating "+" offers the same entries in groups.
-- @-mentions of pages and people; links on the selection, on existing links or to pages; callout type and code language from a bar; tables with rows, columns, header row and header column.
+- @-mentions of pages and people; links on the selection, on existing links or to pages; callout type and code language from a bar; tables with merged cells, colors and alignment as on the web.
 - Offline reading from the cache; German and English interface.
 
 ## Sign-in
