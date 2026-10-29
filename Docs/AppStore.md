@@ -70,6 +70,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Templates: hold "+" for a new page from a template (needs a Docmost license with templates)
 > • An empty page becomes a database or a kanban board with one tap (needs a Docmost license with databases)
 > • Images, videos and PDFs a page takes from another website load when you tap them, or right away with a new setting
+> • Tables: every table action in the keyboard toolbar, wherever the cursor is in the table: merge and split cells, colors and alignment, move rows and columns, sort a column. Merged cells show as on the web
 >
 > For Docmost 0.97:
 > • Tabs: read and switch them; while editing, add, rename, move and delete them
@@ -142,6 +143,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Vorlagen: „+“ gedrückt halten für eine neue Seite aus einer Vorlage (braucht eine Docmost-Lizenz mit Vorlagen)
 > • Eine leere Seite wird mit einem Tippen zur Datenbank oder zum Kanban-Board (braucht eine Docmost-Lizenz mit Datenbanken)
 > • Bilder, Videos und PDFs, die eine Seite von einer anderen Website holt, laden nach einem Tippen, oder mit einer neuen Einstellung sofort
+> • Tabellen: alle Tabellenaktionen in der Tastaturleiste, wo immer der Cursor in der Tabelle steht: Zellen verbinden und teilen, Farben und Ausrichtung, Zeilen und Spalten verschieben, eine Spalte sortieren. Verbundene Zellen sehen aus wie im Web
 >
 > Für Docmost 0.97:
 > • Registerkarten: lesen und wechseln; beim Bearbeiten hinzufügen, umbenennen, verschieben und löschen
