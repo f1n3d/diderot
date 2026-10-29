@@ -204,6 +204,7 @@ public struct TableBlock: Sendable, Hashable {
         public let id: String
         public let isHeader: Bool
         public let colspan: Int
+        public let rowspan: Int
         public let colwidth: [Double]?
         public let backgroundColor: String?
         public let backgroundColorName: String?

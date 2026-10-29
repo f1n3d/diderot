@@ -35,6 +35,10 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Splits a list, quote or callout after `child`: the children below go into a new one of the same kind right after.
     func splitContainer(after child: BlockTarget) async -> Bool
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> Bool
+    /// Runs a table command (`TableCommand` in Engine/src/tables.ts) on a cell of the table at `target`, given by its
+    /// row and its index in the row. Returns the cell for the cursor afterwards the same way, empty when the table is
+    /// gone, nil when the command didn't apply.
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]?
     func undo() async
     func redo() async
 }
@@ -295,6 +299,18 @@ final class WebDocumentEngine: DocumentEngine {
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> Bool {
         await call("return window.DocmostEngine.setAttributes(target, attrs);",
                    ["target": target.jsObject, "attrs": Self.jsObject(attributes)])
+    }
+
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]? {
+        guard let page else { return nil }
+        do {
+            let result = try await page.callJavaScript("return window.DocmostEngine.tableCommand(target, cell, command) ?? null;",
+                                                       arguments: ["target": target.jsObject, "cell": cell, "command": Self.jsObject(command)])
+            return (result as? [NSNumber])?.map(\.intValue)
+        } catch {
+            AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     func undo() async { _ = await call("return window.DocmostEngine.undo();", [:]) }

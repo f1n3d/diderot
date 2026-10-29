@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json --pretty false",
-    "check": "node tools/run.mjs tools/check.ts && node tools/run.mjs tools/rebase-check.ts",
+    "check": "node tools/run.mjs tools/check.ts && node tools/run.mjs tools/rebase-check.ts && node tools/run.mjs tools/table-check.ts",
     "observe": "node tools/run.mjs --docmost tools/observe-docmost.ts",
     "compare": "node tools/run.mjs --docmost tools/compare-docmost.ts"
   },

@@ -41,7 +41,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
   - A page opened offline, whose title you change and leave with "Back" after the network returns, briefly opens a live connection in the background (web users see you as present for about 15 s). Other late reloads follow the same pattern.
 - Editing at the same time (review findings on F8 and F10, October 15, 2026):
   - Blocks without an ID of their own (code block, toggle title, synced embed) are recognized only by position and type. If a block of the same type slides into the old place (two code blocks or toggles in a row), the app still overwrites the neighbor. The real fix: an ID for such blocks, e.g. from the Yjs position. Media, math and diagrams have no ID either: inserting a block above makes the math flash, the PDF jumps to page 1 and a paused video starts over (review finding on F164).
-  - Without a type check remain: deleting columns, replacing empty toggle content on Return, checking a task, editing a table, list type, attributes; undo and redo find such blocks only by position.
+  - Without a type check remain: deleting columns, replacing empty toggle content on Return, checking a task, list type, attributes; undo and redo find such blocks only by position.
 - Offline and background (review findings on F182 and F183, October 15, 2026):
   - With the same page open offline in two iPad windows, the second window can delete or overwrite the first one's saved changes when leaving.
   - Changes not yet sent stay on the device after signing out, until the same person signs in there again (October 22, 2026). A server signed out of is no longer in the list, so they can then only be deleted together with the app.

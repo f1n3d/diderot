@@ -8,6 +8,7 @@ import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from
 import * as Y from "yjs";
 import { rebase } from "./rebase";
 import { schemaExtensions } from "./schema";
+import { runTableCommand, type TableCommand } from "./tables";
 
 declare global {
   interface Window {
@@ -216,6 +217,25 @@ class DocmostEngine {
       editor.view.dispatch(editor.state.tr.setNodeMarkup(found.pos, undefined, { ...found.node.attrs, ...attrs }));
       return true;
     });
+  }
+
+  /**
+   * Runs a table command on a cell (row, index in the row) of the table at `target`, as the web's table menus do
+   * (src/tables.ts). Returns the cell for the cursor afterwards the same way, [] when the table is gone, undefined when
+   * the command didn't apply.
+   */
+  tableCommand(target: Target, cell: [number, number], command: TableCommand): number[] | undefined {
+    let focus: number[] | undefined;
+    this.transact((editor) => {
+      const found = this.locate(editor, target);
+      if (!found) return false;
+      const result = runTableCommand(editor.state, found.pos, cell, command);
+      if (!result) return false;
+      if (result.tr?.docChanged) editor.view.dispatch(result.tr);
+      focus = result.focus ?? [];
+      return true;
+    });
+    return focus;
   }
 
   undo(): boolean {

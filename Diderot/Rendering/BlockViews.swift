@@ -503,24 +503,21 @@ struct PageBreakView: View {
     }
 }
 
-/// Simple table: column widths from `colwidth`, `colspan` via `gridCellColumns`; `rowspan` is ignored.
+/// Table: cells on their grid (`TableGrid`, merged cells too), column widths from `colwidth` or the content.
 struct TableView: View {
     let table: TableBlock
 
     var body: some View {
+        let grid = TableGrid(table: table)
         ScrollView(.horizontal, showsIndicators: true) {
-            Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
-                ForEach(table.rows) { row in
-                    GridRow {
-                        ForEach(row.cells) { cell in
-                            TableCellView(cell: cell)
-                                .gridCellColumns(cell.colspan)
-                        }
+            TableGridLayout {
+                ForEach(Array(table.rows.enumerated()), id: \.element.id) { rowIndex, row in
+                    ForEach(Array(row.cells.enumerated()), id: \.element.id) { cellIndex, cell in
+                        TableCellView(cell: cell)
+                            .layoutValue(key: TableCellArea.self, value: grid.areas[rowIndex][cellIndex])
                     }
                 }
             }
-            // Rows keep their content height; otherwise the grid splits its height evenly between the stretching cells.
-            .fixedSize(horizontal: false, vertical: true)
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(.separator)))
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }

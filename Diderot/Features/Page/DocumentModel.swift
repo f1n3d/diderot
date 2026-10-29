@@ -51,7 +51,7 @@ enum CursorRequest: Equatable {
     case start, end
     case offset(Int)
     /// A tap, relative to the block's text (top left of its first line): the text position there, once the editor
-    /// shows the block. Not the window: a table's bar appears above it on activation and moves the text down.
+    /// shows the block. Not the window: the page moves the block meanwhile, to the middle of the space above the keyboard.
     case point(CGPoint)
 }
 
@@ -368,6 +368,9 @@ final class DocumentModel {
     @ObservationIgnored private var unsavedAtEnd: (ref: NodeRef, node: PMNode)?
     private var commitTask: Task<Void, Never>?
     private var pendingFocus: (path: [Int], cursor: CursorRequest)?
+    /// A table edit is under way. It puts the cursor into a cell itself, so a document event meanwhile neither ends
+    /// editing (the keyboard and its table row would go and come back) nor takes the edit for a collaborator's change.
+    @ObservationIgnored private var editsTable = false
     /// The block became active through Return or Backspace in the previous one: the page keeps its place and only
     /// keeps the caret visible, while a tapped block is centered.
     @ObservationIgnored private(set) var activatedByTyping = false
@@ -562,7 +565,7 @@ final class DocumentModel {
                 }
             }
         }
-        if !adoptsChange, collaboratorChangedActiveBlock() {
+        if !adoptsChange, !editsTable, collaboratorChangedActiveBlock() {
             adoptsChange = true
             Task { await adoptCollaboratorsChange() }
         }
@@ -626,7 +629,7 @@ final class DocumentModel {
         if let active, let id = active.ref.id, node(at: active.ref.path)?.string("id") != id {
             if let path = path(where: { $0.string("id") == id }) {
                 self.active = Active(ref: NodeRef(path: path, id: id), type: active.type, attrs: active.attrs, itemPath: enclosingItemPath(path))
-            } else {
+            } else if !editsTable {
                 // A collaborator deleted it. Its editor used to vanish with it; the page's one editor stays, so end here.
                 overrides[active.ref.identity] = nil
                 commitTask?.cancel()
@@ -635,7 +638,7 @@ final class DocumentModel {
         }
         // Without an id (code block, toggle title), another block type or none at the path means a collaborator
         // added or removed a block before it; its input would replace that block, so editing ends unsaved.
-        if let active, active.ref.id == nil, node(at: active.ref.path)?.type != active.type {
+        if let active, active.ref.id == nil, node(at: active.ref.path)?.type != active.type, !editsTable {
             overrides[active.ref.identity] = nil
             commitTask?.cancel()
             deactivate()
@@ -2447,9 +2450,144 @@ final class DocumentModel {
         return TablePosition(tablePath: table, row: path[table.count], column: path[table.count + 1])
     }
 
-    enum TableEdit {
+    /// The cells a format edit changes: the cell being edited, its row or its column (the web's cell menu and its row
+    /// and column handles).
+    enum TableScope: String, CaseIterable {
+        case cell, row, column
+    }
+
+    /// The web's cell colors (Docmost's `TABLE_COLORS`); a cell keeps the name in `backgroundColorName` as the web does.
+    enum TableColor: String, CaseIterable {
+        case none, blue, green, yellow, red, pink, gray, purple
+
+        init(name: String?) {
+            self = name.flatMap { TableColor(rawValue: $0.lowercased()) } ?? .none
+        }
+
+        /// As the web stores it ("Blue"); none for the default.
+        var name: String? { self == .none ? nil : rawValue.capitalized }
+
+        var hex: String? {
+            switch self {
+            case .none: nil
+            case .blue: "#b4d5ff"
+            case .green: "#acf5d2"
+            case .yellow: "#fef1b4"
+            case .red: "#ffbead"
+            case .pink: "#ffc7fe"
+            case .gray: "#eaecef"
+            case .purple: "#c1b7f2"
+            }
+        }
+
+        var title: LocalizedStringResource {
+            switch self {
+            case .none: "Default"
+            case .blue: "Blue"
+            case .green: "Green"
+            case .yellow: "Yellow"
+            case .red: "Red"
+            case .pink: "Pink"
+            case .gray: "Gray"
+            case .purple: "Purple"
+            }
+        }
+    }
+
+    /// The keyboard toolbar's table actions, run by the engine as the web's table menus run them.
+    enum TableEdit: Equatable {
         case insertRowAbove, insertRowBelow, insertColumnLeft, insertColumnRight, deleteRow, deleteColumn, deleteTable
-        case toggleHeaderRow, toggleHeaderColumn
+        case toggleHeaderRow, toggleHeaderColumn, toggleHeaderCell
+        /// With the neighbor, and every cell the rectangle around both takes in; splitting undoes a merge.
+        case mergeRight, mergeDown, split
+        case moveRowUp, moveRowDown, moveColumnLeft, moveColumnRight
+        /// The rows by their cells in the cell's column.
+        case sort(descending: Bool)
+        case background(TableColor, TableScope)
+        case align(TextAlign, TableScope)
+        case clear(TableScope)
+
+        /// The engine's command (`TableCommand` in Engine/src/tables.ts).
+        var engineCommand: [String: JSONValue] {
+            switch self {
+            case .insertRowAbove: ["name": "addRowBefore"]
+            case .insertRowBelow: ["name": "addRowAfter"]
+            case .insertColumnLeft: ["name": "addColumnBefore"]
+            case .insertColumnRight: ["name": "addColumnAfter"]
+            case .deleteRow: ["name": "deleteRow"]
+            case .deleteColumn: ["name": "deleteColumn"]
+            case .deleteTable: ["name": "deleteTable"]
+            case .toggleHeaderRow: ["name": "toggleHeaderRow"]
+            case .toggleHeaderColumn: ["name": "toggleHeaderColumn"]
+            case .toggleHeaderCell: ["name": "toggleHeaderCell"]
+            case .mergeRight: ["name": "mergeRight"]
+            case .mergeDown: ["name": "mergeDown"]
+            case .split: ["name": "split"]
+            case .moveRowUp: ["name": "moveRowUp"]
+            case .moveRowDown: ["name": "moveRowDown"]
+            case .moveColumnLeft: ["name": "moveColumnLeft"]
+            case .moveColumnRight: ["name": "moveColumnRight"]
+            case .sort(let descending): ["name": "sort", "descending": .bool(descending)]
+            case .background(let color, let scope):
+                ["name": "background", "scope": .string(scope.rawValue), "color": color.hex.map(JSONValue.string) ?? .null,
+                 "colorName": color.name.map(JSONValue.string) ?? .null]
+            case .align(let align, let scope): ["name": "align", "scope": .string(scope.rawValue), "align": .string(align.rawValue)]
+            case .clear(let scope): ["name": "clear", "scope": .string(scope.rawValue)]
+            }
+        }
+
+        /// The cursor goes to the cell the engine names: in the new row or column, next to the deleted one. Otherwise it
+        /// stays in its block wherever that went (a moved row, a merged cell), or in the cell when its block is gone.
+        var movesCursor: Bool {
+            switch self {
+            case .insertRowAbove, .insertRowBelow, .insertColumnLeft, .insertColumnRight, .deleteRow, .deleteColumn: true
+            default: false
+            }
+        }
+    }
+
+    /// What the keyboard toolbar's table rows show for the cell being edited.
+    struct TableState {
+        var headerRow = false
+        var headerColumn = false
+        var headerCell = false
+        var canMergeRight = false
+        var canMergeDown = false
+        var canSplit = false
+        var canMoveRowUp = false
+        var canMoveRowDown = false
+        var canMoveColumnLeft = false
+        var canMoveColumnRight = false
+        var canSort = false
+        var color = TableColor.none
+        /// Of the block being edited.
+        var align = TextAlign.left
+    }
+
+    var activeTableState: TableState? {
+        guard let position = activeTablePosition, let table = node(at: position.tablePath),
+              let cell = node(at: [position.row, position.column], in: table)
+        else { return nil }
+        let grid = TableGrid(table: table)
+        guard grid.areas.indices.contains(position.row), grid.areas[position.row].indices.contains(position.column) else { return nil }
+        let area = grid.areas[position.row][position.column]
+        let headers = activeTableHeaders
+        return TableState(
+            headerRow: headers.row, headerColumn: headers.column, headerCell: cell.type == "tableHeader",
+            canMergeRight: grid.canMerge(row: position.row, index: position.column, right: true),
+            canMergeDown: grid.canMerge(row: position.row, index: position.column, right: false),
+            // By its attributes, as the engine splits.
+            canSplit: ContentParser.colspan(of: cell) > 1 || ContentParser.rowspan(of: cell) > 1,
+            canMoveRowUp: area.top > 0, canMoveRowDown: area.bottom < grid.height,
+            canMoveColumnLeft: area.left > 0, canMoveColumnRight: area.right < grid.width,
+            // As the engine (and the web) sort: no merged cells, and text to sort by in a row that isn't all headers.
+            canSort: !grid.hasMergedCells && table.children.count > 1 && table.children.contains { row in
+                !row.children.allSatisfy { $0.type == "tableHeader" } && row.children.indices.contains(area.left)
+                    && !row.children[area.left].plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            },
+            color: TableColor(name: cell.string("backgroundColorName")),
+            align: active?.attrs?["textAlign"]?.stringValue.flatMap(TextAlign.init(rawValue:)) ?? .left
+        )
     }
 
     /// Whether the active table's first row / first column consists of header cells.
@@ -2461,86 +2599,36 @@ final class DocumentModel {
     }
 
     func editTable(_ edit: TableEdit) async {
-        guard let engine, let position = activeTablePosition, let table = latestNode(at: position.tablePath) else { return }
-        var rows = table.children
-        guard rows.indices.contains(position.row) else { return }
-        var focusRow = position.row
-        var focusColumn = position.column
-
-        func emptyCell(like cell: PMNode?, type: String) -> PMNode {
-            var attrs: [String: JSONValue] = ["colspan": 1, "rowspan": 1]
-            if let width = cell?.attr("colwidth") { attrs["colwidth"] = width }
-            return PMNode(type: type, attrs: attrs, content: [PMNode(type: "paragraph")])
-        }
-
-        switch edit {
-        case .insertRowAbove, .insertRowBelow:
-            let template = rows[position.row]
-            let cells = template.children.map { emptyCell(like: $0, type: "tableCell") }
-            let index = edit == .insertRowAbove ? position.row : position.row + 1
-            rows.insert(PMNode(type: "tableRow", content: cells), at: index)
-            focusRow = index
-        case .insertColumnLeft, .insertColumnRight:
-            let index = edit == .insertColumnLeft ? position.column : position.column + 1
-            rows = rows.map { row in
-                var cells = row.children
-                let reference = cells.indices.contains(position.column) ? cells[position.column] : cells.last
-                cells.insert(emptyCell(like: reference, type: reference?.type ?? "tableCell"), at: min(index, cells.count))
-                return PMNode(type: row.type, attrs: row.attrs, content: cells)
-            }
-            focusColumn = index
-        case .deleteRow:
-            rows.remove(at: position.row)
-            focusRow = min(position.row, rows.count - 1)
-        case .deleteColumn:
-            rows = rows.map { row in
-                var cells = row.children
-                if cells.indices.contains(position.column) { cells.remove(at: position.column) }
-                return PMNode(type: row.type, attrs: row.attrs, content: cells)
-            }
-            focusColumn = max(0, min(position.column, (rows.first?.children.count ?? 1) - 1))
-            if rows.first?.children.isEmpty ?? true { rows = [] }
-        case .deleteTable:
-            rows = []
-        case .toggleHeaderRow:
-            let makeHeader = !(rows.first?.children.allSatisfy { $0.type == "tableHeader" } ?? false)
-            let first = rows[0]
-            rows[0] = PMNode(type: first.type, attrs: first.attrs, content: first.children.map {
-                PMNode(type: makeHeader ? "tableHeader" : "tableCell", attrs: $0.attrs, content: $0.content)
-            })
-        case .toggleHeaderColumn:
-            let makeHeader = !rows.allSatisfy { $0.children.first?.type == "tableHeader" }
-            rows = rows.map { row in
-                var cells = row.children
-                if let cell = cells.first {
-                    cells[0] = PMNode(type: makeHeader ? "tableHeader" : "tableCell", attrs: cell.attrs, content: cell.content)
-                }
-                return PMNode(type: row.type, attrs: row.attrs, content: cells)
-            }
-        }
-
-        // The new table has the cell's latest text; its pending commit could target a deleted cell and show an error.
-        let editedPath = active?.ref.path
-        dropActive()
-        if rows.isEmpty {
-            report(await engine.deleteBlock(.path(position.tablePath)))
+        guard let engine, activeTablePosition != nil, !editsTable else { return }
+        editsTable = true
+        defer { editsTable = false }
+        // The cell's typed text goes first: the edit can move its block or remove it.
+        await flush()
+        guard let position = activeTablePosition else { return }
+        let focus = await engine.tableCommand(.path(position.tablePath, type: "table"), cell: [position.row, position.column],
+                                              command: edit.engineCommand)
+        guard report(focus != nil), let focus, let latest = await engine.currentDocument() else { return }
+        document = withOverrides(latest)
+        // The table is gone: deleted, or its only row or column.
+        guard !focus.isEmpty else {
+            deactivate()
             return
         }
-        let newTable = PMNode(type: "table", attrs: table.attrs, content: rows)
-        if report(await engine.replaceBlock(.path(position.tablePath), with: newTable)) {
-            // A header toggle changes cell types, never paths, so editing stays in its block. Otherwise the cursor goes to
-            // the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
-            var focus = [focusRow, focusColumn]
-            if edit == .toggleHeaderRow || edit == .toggleHeaderColumn, let editedPath {
-                focus = Array(editedPath.dropFirst(position.tablePath.count))
-            } else {
-                while let node = node(at: focus, in: newTable), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock",
-                      !node.children.isEmpty {
-                    focus.append(0)
-                }
-            }
-            await focusAfterOperation(position.tablePath + focus, .end)
+        if !edit.movesCursor, let active, active.ref.id != nil, locate(active.ref) != nil {
+            // The block stays edited with its cursor, in its new place and with what changed (its alignment). Input
+            // typed meanwhile stays: its save keeps the engine's changes (`rebase`).
+            if overrides[active.ref.identity] == nil { adoptActiveBlock() } else { followMovedBlocks() }
+            return
         }
+        // To the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
+        var path = position.tablePath + focus
+        while let node = node(at: path), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock", !node.children.isEmpty {
+            path.append(0)
+        }
+        pendingFocus = (path, .end)
+        syncFromEngine()
+        pendingFocus = nil
+        if active?.ref.path != path { deactivate() }
     }
 
     func undo() async { await stepHistory(redo: false) }

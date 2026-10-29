@@ -489,17 +489,42 @@ import XCTest
         snapshot(app, "79-4-opened")
     }
 
-    /// Insert a table and add a row below via the table bar above it.
+    /// Insert a table and add a row below with "Table" in the keyboard toolbar.
     func test8_TableInsertRow() {
         let app = launchPage()
         appendBlock(app, labels: ["Table", "Tabelle"], missing: "Table menu item missing", editable: "First cell doesn't become editable")
-        let insert = app.buttons["table-insert-row-below"]
-        XCTAssertTrue(insert.waitForExistence(timeout: 8), "Table bar missing")
         app.typeText("Zelle\(stamp)")
         Thread.sleep(forTimeInterval: 0.6)
-        insert.tap()
+        tapToolbarButton(app, "editor-table")
+        tapToolbarButton(app, "table-insert-row-below")
         activeEditor(app, timeout: 10, "New row doesn't become editable")
         snapshot(app, "8-table")
+        finishEditing(app)
+    }
+
+    /// The table's actions in the keyboard toolbar stay while the cursor moves with them: merge the first header cell
+    /// with the next one, color it, add a row below and type there. The script checks the server state ("Table toolbar").
+    func test80_TableToolbar() {
+        let app = launchPage()
+        appendBlock(app, labels: ["Table", "Tabelle"], missing: "Table menu item missing", editable: "First cell doesn't become editable")
+        app.typeText("Kopf\(stamp)")
+        Thread.sleep(forTimeInterval: 0.6)
+        tapToolbarButton(app, "editor-table")
+        let split = app.buttons["table-split"]
+        XCTAssertTrue(split.waitForExistence(timeout: 5) && !split.isEnabled, "A single cell offers splitting")
+        tapToolbarButton(app, "table-merge-right")
+        let splits = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: split)
+        wait(for: [splits], timeout: 8)
+        snapshot(app, "80-1-merged")
+        tapToolbarButton(app, "table-format")
+        tapToolbarButton(app, "table-color-blue")
+        snapshot(app, "80-2-format")
+        tapToolbarButton(app, "editor-back")
+        tapToolbarButton(app, "table-insert-row-below")
+        Thread.sleep(forTimeInterval: 0.6)
+        activeEditor(app, timeout: 10, "New row doesn't become editable").typeText("Neu\(stamp)")
+        XCTAssertTrue(app.buttons["table-insert-row-below"].exists, "The table row left the toolbar when the cursor moved to the new row")
+        snapshot(app, "80-3-new-row")
         finishEditing(app)
     }
 

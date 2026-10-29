@@ -554,8 +554,8 @@ struct DocumentModelTests {
         }
     }
 
-    /// Row below in a table: an older document event arrives while the new table is on its way, with the next row still
-    /// at the new row's path. The new row still gets the cursor.
+    /// Row below in a table: an older document event arrives while the engine adds the row, with the next row still at
+    /// the new row's path. The new row still gets the cursor.
     @Test func tableRowFocusesNewRowDespiteOlderEvent() async throws {
         func table(_ rows: [(id: String, text: String?)]) -> PMNode {
             PMNode(type: "doc", content: [PMNode(type: "table", content: rows.map { row in
@@ -570,23 +570,27 @@ struct DocumentModelTests {
         model.syncFromEngine()
         let cell = try #require(model.node(at: [0, 0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0, 0], node: cell), node: cell)
+        engine.tableFocus = [1, 0]
         engine.whileInserting = {
-            model.syncFromEngine()  // an event from before the new table
+            model.syncFromEngine()  // an event from before the new row
             engine.document = table([("a", "Eins"), ("c", nil), ("b", "Zwei")])
         }
 
         await model.editTable(.insertRowBelow)
-        model.syncFromEngine()  // the new table's own document event
+        model.syncFromEngine()  // the new row's own document event
 
+        let command = try #require(engine.tableCommands.first)
+        #expect(command.target == .path([0], type: "table") && command.cell == [0, 0] && command.command == ["name": "addRowAfter"])
         #expect(model.active?.ref == NodeRef(path: [0, 1, 0, 0], id: "c"))
     }
 
     /// A table action never leaves the cursor on a list (quote, image …) that starts a cell: typing rewrote that block
-    /// from the editor's text, and each Backspace took a list item.
+    /// from the editor's text, and each Backspace took a list item. A header row keeps the cursor in its paragraph; a
+    /// deleted row moves it into the list of the next one.
     @Test(.timeLimit(.minutes(1)), arguments: [DocumentModel.TableEdit.toggleHeaderRow, .deleteRow])
     func tableEditFocusesOnlyText(edit: DocumentModel.TableEdit) async throws {
-        func row(_ id: String, _ text: String) -> PMNode {
-            PMNode(type: "tableRow", content: [PMNode(type: "tableCell", content: [PMNode(type: "bulletList", content: [
+        func row(_ id: String, _ text: String, header: Bool = false) -> PMNode {
+            PMNode(type: "tableRow", content: [PMNode(type: header ? "tableHeader" : "tableCell", content: [PMNode(type: "bulletList", content: [
                 PMNode(type: "listItem", content: [PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)])]),
             ])])])
         }
@@ -596,11 +600,13 @@ struct DocumentModelTests {
         model.syncFromEngine()
         let line = try #require(model.node(at: [0, 0, 0, 0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0, 0, 0, 0], node: line), node: line)
-        engine.whileInserting = { engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1))) }
+        let rows = edit == .deleteRow ? [row("b", "Zwei")] : [row("a", "Eins", header: true), row("b", "Zwei")]
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [PMNode(type: "table", content: rows)]) }
 
         await model.editTable(edit)
 
         #expect(model.active?.type == "paragraph")
+        #expect(model.active?.ref.id == (edit == .deleteRow ? "b" : "a"))
         model.activeText.append(AttributedString("x"))
         model.activeTextChanged()
         await model.flush()
@@ -1405,7 +1411,8 @@ struct DocumentModelTests {
     }
 }
 
-/// Stand-in for the web engine: changes nothing and records what it is asked to open, save, insert, replace or delete.
+/// Stand-in for the web engine: changes nothing and records what it is asked to open, save, insert, replace, delete or
+/// do to a table.
 final class FakeDocumentEngine: DocumentEngine {
     var status = EngineStatus.synced
     var document: PMNode?
@@ -1436,6 +1443,10 @@ final class FakeDocumentEngine: DocumentEngine {
     var failsNextInsert = false
     /// Saves fail, like a server refusing them.
     var refusesSaves = false
+    /// Table commands, with the table and the cell they ran on.
+    private(set) var tableCommands: [(target: BlockTarget, cell: [Int], command: [String: JSONValue])] = []
+    /// What `tableCommand` returns: the cell for the cursor afterwards; nil refuses the command.
+    var tableFocus: [Int]? = [0, 0]
 
     init(document: PMNode) {
         self.document = document
@@ -1491,6 +1502,11 @@ final class FakeDocumentEngine: DocumentEngine {
         return true
     }
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> Bool { true }
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]? {
+        tableCommands.append((target, cell, command))
+        whileInserting?()
+        return tableFocus
+    }
     func undo() async {}
     func redo() async {}
 }

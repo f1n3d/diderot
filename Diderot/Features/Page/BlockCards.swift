@@ -563,7 +563,7 @@ struct CalloutNodeView: View {
     }
 }
 
-/// Floating capsule bar above the active block (callout type, code language, table and column actions).
+/// Floating capsule bar above the active block (callout type, code language, column actions).
 struct FloatingBlockBar<Content: View>: View {
     var verticalPadding: CGFloat = 3
     @ViewBuilder let content: Content
@@ -940,33 +940,20 @@ struct TableNodeView: View {
     private var isActive: Bool { model.activeTablePosition?.tablePath == ref.path }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if isActive {
-                TableActionBar(model: model)
-            }
-            tableGrid
-        }
-    }
-
-    private var tableGrid: some View {
+        let grid = TableGrid(table: node)
         ScrollView(.horizontal, showsIndicators: true) {
             HStack(alignment: .top, spacing: 4) {
-                Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
-                    ForEach(NodeEntry.entries(node.children, parentPath: ref.path)) { row in
-                        GridRow {
-                            ForEach(NodeEntry.entries(row.node.children, parentPath: row.ref.path)) { cell in
-                                TableCellNodeView(model: model, cell: cell)
-                                    .gridCellColumns(ContentParser.colspan(of: cell.node))
-                            }
+                TableGridLayout {
+                    ForEach(Array(NodeEntry.entries(node.children, parentPath: ref.path).enumerated()), id: \.element.id) { rowIndex, row in
+                        ForEach(Array(NodeEntry.entries(row.node.children, parentPath: row.ref.path).enumerated()), id: \.element.id) { cellIndex, cell in
+                            TableCellNodeView(model: model, cell: cell)
+                                .layoutValue(key: TableCellArea.self, value: grid.areas[rowIndex][cellIndex])
                         }
                     }
                 }
-                // Rows keep their content height; otherwise the grid splits its height evenly between the
-                // stretching cells and cuts off long text and further paragraphs (as in the reader's TableView).
-                .fixedSize(horizontal: false, vertical: true)
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(.separator)))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                // While active, the bar above has the table's actions.
+                // While a cell is edited, the keyboard toolbar has the table's actions.
                 if model.isEditable, !isActive {
                     BlockActionsButton {
                         model.deactivate()
@@ -1026,53 +1013,6 @@ struct BlockActionsButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Block actions")
         .accessibilityIdentifier("block-actions")
-    }
-}
-
-/// Floating bar above the active table: insert and delete rows/columns, toggle header row/column.
-private struct TableActionBar: View {
-    let model: DocumentModel
-
-    var body: some View {
-        let headers = model.activeTableHeaders
-        FloatingBlockBar(verticalPadding: 4) {
-            action("Row above", "arrow.up.to.line", id: "table-insert-row-above", .insertRowAbove)
-            action("Row below", "arrow.down.to.line", id: "table-insert-row-below", .insertRowBelow)
-            action("Column left", "arrow.left.to.line", id: "table-insert-column-left", .insertColumnLeft)
-            action("Column right", "arrow.right.to.line", id: "table-insert-column-right", .insertColumnRight)
-            Divider().frame(height: 18)
-            action("Header row", "rectangle.topthird.inset.filled", id: "table-header-row", .toggleHeaderRow, active: headers.row)
-            action("Header column", "rectangle.leadingthird.inset.filled", id: "table-header-column", .toggleHeaderColumn, active: headers.column)
-            Divider().frame(height: 18)
-            action("Delete row", "minus.circle", id: "table-delete-row", .deleteRow, destructive: true)
-            action("Delete column", "minus.circle", id: "table-delete-column", .deleteColumn, destructive: true)
-            action("Delete table", "trash", id: "table-delete", .deleteTable, destructive: true, iconOnly: true)
-        }
-        .accessibilityIdentifier("table-actions")
-    }
-
-    private func action(_ title: LocalizedStringKey, _ symbol: String, id: String, _ edit: DocumentModel.TableEdit,
-                        active: Bool = false, destructive: Bool = false, iconOnly: Bool = false) -> some View {
-        Button {
-            Task { await model.editTable(edit) }
-        } label: {
-            Group {
-                if iconOnly {
-                    Image(systemName: symbol)
-                } else {
-                    Label(title, systemImage: symbol).labelStyle(.titleAndIcon)
-                }
-            }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(destructive ? Color.red : active ? Color.accentColor : Color.primary)
-                .padding(.horizontal, 8)
-                .frame(height: 30)
-                .background(active ? Color.accentColor.opacity(0.15) : Color.clear, in: Capsule())
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityIdentifier(id)
     }
 }
 
