@@ -439,22 +439,27 @@ struct AppSessionRaceTests {
 
     /// A write queued while a's server didn't answer goes nowhere after a switch to b, with a notice: it used to reach b,
     /// taking a's content there.
-    @Test func queuedWriteAfterASwitchIsDropped() async throws {
+    @Test(.timeLimit(.minutes(1))) func queuedWriteAfterASwitchIsDropped() async throws {
         let (model, session) = try await editableBase()
         let other = StoredSession(serverURL: b, token: "b")
-        let queued = Mutex<Task<Void, Never>?>(nil)
+        let queued = Mutex<Bool?>(nil)
         StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
-            // While a's server takes its time, a second change waits in the queue; then the user switches to b.
-            queued.withLock { $0 = Task { await model.setCell(rowId: "r1", propertyId: "p2", to: .string("zwei")) } }
-            await Task.yield()
+            // While a's server takes its time, the second change waits in the queue (shown, not yet sent); then the
+            // user switches to b.
+            queued.withLock { $0 = model.row(id: "r1")?.cells["p2"] == .string("zwei") }
             StubURLProtocol.body.withLock { $0 = nil }  // b's own answers for the switch
             await session.switchTo(other)
             StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "eins"}}}"# }
         } }
         StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "eins"}}}"# }
-        await model.setCell(rowId: "r1", propertyId: "p1", to: .string("eins"))
-        await queued.withLock { $0 }?.value
+        // Tasks on the main actor start in order, so the second change queues behind the first before the first's
+        // request goes out.
+        let first = Task { await model.setCell(rowId: "r1", propertyId: "p1", to: .string("eins")) }
+        let second = Task { await model.setCell(rowId: "r1", propertyId: "p2", to: .string("zwei")) }
+        await first.value
+        await second.value
         StubURLProtocol.body.withLock { $0 = nil }
+        #expect(queued.withLock { $0 } == true, "the second change waited in the queue")
         #expect(session.ready?.server.url == b)
         #expect(model.toast == String(localized: "Not saved: the app has switched to another server."))
         await removeCaches()
