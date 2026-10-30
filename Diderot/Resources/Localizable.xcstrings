@@ -979,6 +979,16 @@
         }
       }
     },
+    "Close": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen"
+          }
+        }
+      }
+    },
     "Code": {
       "localizations": {
         "de": {
@@ -3639,6 +3649,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Im Browser öffnen"
+          }
+        }
+      }
+    },
+    "Opens it full screen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet es im Vollbild"
           }
         }
       }

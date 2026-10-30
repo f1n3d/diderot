@@ -14,6 +14,7 @@ struct ContentDocumentView: View {
                 FootnotesView(footnotes: document.footnotes)
             }
         }
+        .mediaViewer { document }
     }
 }
 

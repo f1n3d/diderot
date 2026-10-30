@@ -23,6 +23,24 @@ import XCTest
         return app
     }
 
+    /// Opens a fixture page (Tools/seed-fixtures.py) through the space's search.
+    private func openFixture(_ title: String) -> XCUIApplication {
+        let app = launch(openPage: false)
+        let slug = environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo"
+        let space = app.buttons["space-\(slug)"]
+        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card “\(slug)” not on the home screen")
+        space.tap()
+        let search = app.textFields["space-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 20), "Search field in the space not found")
+        search.tap()
+        search.typeText(title)
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'search-result-' AND label CONTAINS %@", title)).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 20), "“\(title)” missing (Tools/seed-fixtures.py)")
+        result.tap()
+        waitForSync(app)
+        return app
+    }
+
     private func waitForSync(_ app: XCUIApplication) {
         let pill = element(app, "page-status")
         XCTAssertTrue(pill.waitForExistence(timeout: 40), "Page didn't load")
@@ -1216,19 +1234,7 @@ import XCTest
     /// A version opened from "Page History" loads its media like the page itself: the image of "Fixture: Media"
     /// (Tools/seed-fixtures.py, which leaves a version with the image) appears instead of a spinner.
     func test49_HistoryVersionShowsImage() throws {
-        let app = launch(openPage: false)
-        let slug = environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo"
-        let space = app.buttons["space-\(slug)"]
-        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card “\(slug)” not on the home screen")
-        space.tap()
-        let search = app.textFields["space-search"]
-        XCTAssertTrue(search.waitForExistence(timeout: 20), "Search field in the space not found")
-        search.tap()
-        search.typeText("Fixture: Media")
-        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'search-result-' AND label CONTAINS %@", "Fixture: Media")).firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: 20), "“Fixture: Media” missing (Tools/seed-fixtures.py)")
-        result.tap()
-        waitForSync(app)
+        let app = openFixture("Fixture: Media")
         app.buttons["page-more"].tap()
         let history = button(app, labels: ["Page History", "Seitenverlauf"])
         XCTAssertTrue(history.waitForExistence(timeout: 5), "Page menu shows no “Page History”")
@@ -1242,10 +1248,41 @@ import XCTest
         version.tap()
         // Only inside the version: the page behind the sheet shows the same image.
         let header = NSPredicate(format: "label BEGINSWITH 'Version from' OR label BEGINSWITH 'Version vom'")
-        let image = app.scrollViews.containing(header).images["Gradient test image"]
+        let image = app.scrollViews.containing(header).buttons["Gradient test image"]
         let loaded = image.waitForExistence(timeout: 20)
         snapshot(app, "49-version")
         XCTAssertTrue(loaded, "Image in the version doesn't load")
+    }
+
+    /// A tap on an image opens it full screen with the page's other images and diagrams, as the web's lightbox: it
+    /// offers sharing once loaded, swipes to the next and closes when pulled down.
+    func test81_ImageViewer() {
+        let app = openFixture("Fixture: Media")
+        let image = app.buttons["Gradient test image"]
+        XCTAssertTrue(image.waitForExistence(timeout: 20), "Image on the page doesn't load")
+        image.tap()
+        let counter = app.staticTexts["media-viewer-counter"]
+        XCTAssertTrue(counter.waitForExistence(timeout: 5), "The image doesn't open full screen")
+        // "1 of 6", "1 von 6".
+        func shown() -> (number: Int, total: Int) {
+            let numbers = counter.label.split(separator: " ").compactMap { Int($0) }
+            return numbers.count == 2 ? (numbers[0], numbers[1]) : (0, 0)
+        }
+        XCTAssertEqual(shown().number, 1, "The viewer doesn't begin with the tapped image: \(counter.label)")
+        XCTAssertGreaterThanOrEqual(shown().total, 2, "The viewer doesn't hold the page's other images: \(counter.label)")
+        let share = app.buttons["media-viewer-share"]
+        XCTAssertTrue(share.waitForExistence(timeout: 20), "The image doesn't load full screen")
+        snapshot(app, "81-viewer")
+
+        app.swipeLeft()
+        let second = NSPredicate { _, _ in shown().number == 2 }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: second, object: nil)], timeout: 5), .completed,
+                       "Swiping doesn't show the next image: \(counter.label)")
+        // The fixture's second image is the same file: it shows once loaded, then a pull closes the viewer.
+        XCTAssertTrue(share.waitForExistence(timeout: 20), "The second image doesn't load")
+        app.swipeDown()
+        XCTAssertTrue(counter.waitForNonExistence(timeout: 5), "Pulling down doesn't close the viewer")
+        XCTAssertTrue(image.waitForExistence(timeout: 5), "The page doesn't show again")
     }
 
     // MARK: - Insert ("/" and "+")

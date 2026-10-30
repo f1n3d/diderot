@@ -15,6 +15,7 @@ struct PresentationView: View {
     @Environment(ReaderNavigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    private let document: ContentDocument
     /// The page's blocks and footnotes, and what each does to the slides.
     private let items: [SlideItem]
     private let roles: [SlideLayout.Role]
@@ -38,6 +39,7 @@ struct PresentationView: View {
         self.pageId = pageId
         self.title = title
         self.openLink = openLink
+        self.document = document
         var items = document.blocks.map(SlideItem.block)
         if !document.footnotes.isEmpty { items.append(.footnotes(document.footnotes)) }
         self.items = items
@@ -149,6 +151,7 @@ struct PresentationView: View {
             }
         }
         .opensExternalLinks()
+        .mediaViewer { document }
         .environment(\.renderContext, RenderContext(session: session, pageId: pageId))
         .environment(\.linkPreviews, session.linkPreviews)
         .environment(slideNavigation)
