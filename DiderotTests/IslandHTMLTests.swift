@@ -33,7 +33,8 @@ struct IslandHTMLTests {
         let page = WebPage()
         for try await _ in page.load(html: IslandHTML.mermaid(code), baseURL: IslandHTML.baseURL) {}
         var state = ""
-        for _ in 0..<50 where state.isEmpty {
+        // Up to 20 s: beside the other tests (or on GitHub's runners) a web process draws far slower than alone.
+        for _ in 0..<200 where state.isEmpty {
             state = try await page.callJavaScript("""
                 const d = document.getElementById("d");
                 return d.querySelector("svg") ? "drawn" : (d.className === "error" ? "error: " + d.textContent : "");
