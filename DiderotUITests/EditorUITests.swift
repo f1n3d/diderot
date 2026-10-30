@@ -75,7 +75,7 @@ import XCTest
         func freeArea() -> ClosedRange<CGFloat> {
             let top = app.navigationBars.firstMatch.frame.maxY + 8
             var bottom = app.windows.firstMatch.frame.maxY - 8
-            for blocker in [app.keyboards.firstMatch, app.buttons["page-add-block"]] where blocker.exists {
+            for blocker in [app.keyboards.firstMatch, app.buttons["page-add-block"], app.buttons["space-new-page"]] where blocker.exists {
                 bottom = min(bottom, blocker.frame.minY - 8)
             }
             return top...max(top, bottom)
@@ -85,8 +85,14 @@ import XCTest
                 app.swipeUp()
                 continue
             }
-            let area = freeArea(), y = element.frame.minY + element.frame.height * anchor.dy
-            if area.contains(y), element.isHittable { return true }
+            let area = freeArea(), frame = element.frame, y = frame.minY + frame.height * anchor.dy
+            if area.contains(y) {
+                // Caught between two layouts, `isHittable` fails the test (“Activation point invalid”): asked once the
+                // element stays put. It also tells whether something lies over the element (a tree row under the "+").
+                Thread.sleep(forTimeInterval: 0.1)
+                guard element.frame == frame else { continue }
+                if element.isHittable { return true }
+            }
             // Move that point to the middle of the free area, without momentum.
             let shift = max(-300, min(300, (area.lowerBound + area.upperBound) / 2 - y))
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
@@ -142,6 +148,12 @@ import XCTest
         Thread.sleep(forTimeInterval: 0.6)
         editor.typeKey("b", modifierFlags: .command)
         Thread.sleep(forTimeInterval: 0.6)
+        // While iOS hides and brings back the on-screen keyboard after a hardware key, a synthesized one can get lost
+        // on its way: the editor keeps the keyboard focus but never sees ⌘ or B (logged in the app, 1 of 8 runs under
+        // load). Only if nothing changed, ⌘B goes again.
+        if !bold.wait(for: \.isSelected, toEqual: true, timeout: 3) {
+            editor.typeKey("b", modifierFlags: .command)
+        }
         XCTAssertTrue(bold.wait(for: \.isSelected, toEqual: true, timeout: 3), "The Bold button doesn't show the bold from ⌘B")
         snapshot(app, "2-typed")
         finishEditing(app)
@@ -464,16 +476,16 @@ import XCTest
         let targetRow = element(app, "tree-row-" + target.identifier.dropFirst("page-".count))
 
         /// Drags "Baum-Quelle" to `dy` of the "Baum-Ziel" row (0 its top, 1 its bottom), held there for `hold` seconds.
-        func drag(to dy: CGFloat, hold: TimeInterval = 0) {
+        /// Let go at once, a busy simulator could end the touch before the drag took over: the row lifted and dropped
+        /// back in its place.
+        func drag(to dy: CGFloat, hold: TimeInterval = 0.5) {
+            // Both rows clear of the list's bottom: a row cut off there still counts as hittable, and the drag began
+            // on nothing.
+            XCTAssertTrue(scrollTo(source, in: app), "“Baum-Quelle” not visible next to “Baum-Ziel”")
             XCTAssertTrue(scrollTo(targetRow, in: app), "“Baum-Ziel” not in the tree")
-            XCTAssertTrue(source.isHittable, "“Baum-Quelle” not visible next to “Baum-Ziel”")
             let start = source.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
             let end = targetRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: dy))
-            if hold > 0 {
-                start.press(forDuration: 1.2, thenDragTo: end, withVelocity: .default, thenHoldForDuration: hold)
-            } else {
-                start.press(forDuration: 1.2, thenDragTo: end)
-            }
+            start.press(forDuration: 1.2, thenDragTo: end, withVelocity: .default, thenHoldForDuration: hold)
         }
         /// Waits until the tree shows the move (it reloads once the server has it).
         func expect(_ description: String, _ shown: @escaping () -> Bool) {
@@ -1192,7 +1204,13 @@ import XCTest
         edit.tap()
         let link = app.webViews.links["Beispielseite"]
         XCTAssertTrue(link.waitForExistence(timeout: 40), "The web editor doesn't show the page")
-        for _ in 0..<8 where !link.isHittable { app.webViews.firstMatch.swipeUp() }
+        // By its frame: for a link below the screen, `isHittable` can fail the test instead of answering (“Activation
+        // point invalid”).
+        func onScreen() -> Bool {
+            let frame = link.frame
+            return !frame.isEmpty && app.windows.firstMatch.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+        }
+        for _ in 0..<8 where !onScreen() { app.webViews.firstMatch.swipeUp() }
         // Its popover opens below it: lift it into the upper half, clear of WebKit's bar above the keyboard.
         let middle = app.windows.firstMatch.frame.midY
         if link.frame.midY > middle {
@@ -1725,7 +1743,10 @@ import XCTest
         editor = activeEditor(app, "No editor in the second item")
         let second = "Unten\(stamp)"
         editor.typeText(second)
-        for _ in second { editor.typeKey(.leftArrow, modifierFlags: []) }
+        // To the item's start with a tap left of its text, as on a phone: of eleven ← keys, one sometimes got lost
+        // while iOS hid and brought back the on-screen keyboard after the first (⌘← never reaches the editor).
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0)).tap()
+        Thread.sleep(forTimeInterval: 0.6)
         editor.typeText(XCUIKeyboardKey.delete.rawValue)
         Thread.sleep(forTimeInterval: 1.2)
         snapshot(app, "44-list-join")
