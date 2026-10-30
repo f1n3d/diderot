@@ -48,6 +48,7 @@ struct DiagramView: View {
             if let markup {
                 WebIslandView(html: IslandHTML.svg(markup), minHeight: 80)
                     .accessibilityLabel(media.name ?? String(localized: "Diagram"))
+                    .opensFullScreen(ViewerMedia(src: media.src, title: media.name, isDiagram: true))
             } else if let url = context.mediaURL(media.src), !context.loadsByItself(url), !loadsFromOtherServer {
                 OtherServerCard(icon: "pencil.and.outline", title: media.name ?? media.kind.title, url: url) { loadsFromOtherServer = true }
             } else if failed {
@@ -69,15 +70,19 @@ struct DiagramView: View {
         guard let loader = context.imageLoader, let url = context.mediaURL(media.src) else { return fail() }
         guard context.loadsByItself(url) || loadsFromOtherServer else { return }
         do {
-            let data = try await loader.data(for: url)
-            guard let text = String(data: data, encoding: .utf8), text.contains("<svg") else { return fail() }
-            // Keep only the <svg> element (drop the XML prolog).
-            markup = text[text.range(of: "<svg")!.lowerBound...].description
+            guard let svg = Self.svg(in: try await loader.data(for: url)) else { return fail() }
+            markup = svg
             loadedSrc = media.src
         } catch {
             // Scrolling past or opening another page cancels the download; it starts again on return.
             if !Task.isCancelled { fail() }
         }
+    }
+
+    /// The file's `<svg>` element (without the XML prolog); nil if it has none.
+    nonisolated static func svg(in data: Data) -> String? {
+        guard let text = String(data: data, encoding: .utf8), let start = text.range(of: "<svg") else { return nil }
+        return String(text[start.lowerBound...])
     }
 }
 

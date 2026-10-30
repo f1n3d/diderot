@@ -131,9 +131,17 @@ nonisolated enum IslandHTML {
         """
     }
 
-    static func svg(_ markup: String) -> String {
-        """
-        <!doctype html><html><head>\(baseStyle)</head><body><img src="data:image/svg+xml;base64,\(Data(markup.utf8).base64EncodedString())" alt=""></body></html>
+    /// `zoomable`: full screen (`MediaViewer`), it fits the view and zooms up to 4×, as on the web.
+    static func svg(_ markup: String, zoomable: Bool = false) -> String {
+        // The later viewport takes effect.
+        let fullScreen = zoomable ? """
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4">
+        <style>html, body { height: 100%; overflow: visible; touch-action: pan-x pan-y pinch-zoom; }
+               body { display: flex; align-items: center; justify-content: center; padding: 0; }
+               img { max-height: 100%; -webkit-touch-callout: none; -webkit-user-select: none; }</style>
+        """ : ""
+        return """
+        <!doctype html><html><head>\(baseStyle)\(fullScreen)</head><body><img src="data:image/svg+xml;base64,\(Data(markup.utf8).base64EncodedString())" alt=""></body></html>
         """
     }
 

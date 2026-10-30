@@ -33,6 +33,7 @@ struct ContentImageView: View {
                 .aspectRatio(contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .accessibilityLabel(image.alt ?? String(localized: "Image"))
+                .opensFullScreen(ViewerMedia(src: image.src, title: image.alt, isDiagram: false))
         } else if let url, !context.loadsByItself(url), !loadsFromOtherServer {
             OtherServerCard(icon: "photo", title: image.alt ?? String(localized: "Image"), url: url) { loadsFromOtherServer = true }
         } else {
