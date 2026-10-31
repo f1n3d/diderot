@@ -7,7 +7,7 @@ import { Editor, type AnyExtension, type JSONContent } from "@tiptap/core";
 import { Fragment, Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { EditorState, type Transaction } from "@tiptap/pm/state";
 import { docmostExtensions } from "./docmost-reference";
-import { schemaExtensions } from "../src/schema";
+import { editorOptions, schemaExtensions } from "../src/schema";
 
 let seed = Number(process.env.SEED ?? 1);
 const rounds = Number(process.env.ROUNDS ?? 500);
@@ -23,7 +23,7 @@ function setup(extensions: AnyExtension[]) {
   const repeatable = extensions.map((extension) =>
     extension.name === "uniqueID" ? extension.configure({ generateID: () => `id${++counter.next}` }) : extension,
   );
-  return { editor: new Editor({ extensions: repeatable, content: { type: "doc", content: [{ type: "paragraph" }] } }), counter };
+  return { editor: new Editor({ ...editorOptions, extensions: repeatable, content: { type: "doc", content: [{ type: "paragraph" }] } }), counter };
 }
 const sides = [setup(docmostExtensions), setup(schemaExtensions)];
 

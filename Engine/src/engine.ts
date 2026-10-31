@@ -3,11 +3,11 @@
 import { Editor, getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import Collaboration from "@tiptap/extension-collaboration";
-import { initProseMirrorDoc } from "@tiptap/y-tiptap";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import * as Y from "yjs";
+import { bindingChanges, checkBlocks } from "./guards";
 import { rebase } from "./rebase";
-import { schemaExtensions } from "./schema";
+import { editorOptions, schemaExtensions } from "./schema";
 import { runTableCommand, type TableCommand } from "./tables";
 
 declare global {
@@ -145,6 +145,7 @@ class DocmostEngine {
       if (!found) return false;
       let nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
       if (base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(editor.schema, base), nodes[0]) ?? nodes[0]];
+      checkBlocks(nodes);
       editor.view.dispatch(editor.state.tr.replaceWith(found.pos, found.pos + found.node.nodeSize, nodes));
       return true;
     });
@@ -154,6 +155,7 @@ class DocmostEngine {
   insertBlocks(target: Target | null, json: JSONContent[], position: "before" | "after" = "after"): boolean {
     return this.transact((editor) => {
       const nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
+      checkBlocks(nodes);
       let pos: number;
       if (!target) {
         pos = editor.state.doc.content.size;
@@ -248,25 +250,10 @@ class DocmostEngine {
 
   // MARK: Internal
 
-  /**
-   * Binds the editor after the first sync. Its first render deletes whatever the schema can't hold (unknown types or
-   * marks, content a newer Docmost allows in more places) and syncs that to the server, so the render runs on a copy
-   * first; a page that would lose content closes the connection instead.
-   */
+  /** Binds the editor after the first sync; a page that binding would change (`bindingChanges`) closes instead. */
   private attachEditor(): boolean {
     const ydoc = this.provider!.document;
-    const copy = new Y.Doc();
-    Y.applyUpdate(copy, Y.encodeStateAsUpdate(ydoc));
-    let lossy = false;
-    copy.on("update", () => (lossy = true));
-    try {
-      const { doc } = initProseMirrorDoc(copy.getXmlFragment("default"), getSchema(schemaExtensions));
-      // Binding also fits the top level into the schema's order and drops what doesn't fit.
-      if (doc.childCount > 0 && !doc.type.validContent(doc.content)) lossy = true;
-    } catch {
-      lossy = true; // Unreadable content (malformed Yjs) would make binding throw too.
-    }
-    if (lossy) {
+    if (bindingChanges(ydoc, getSchema(schemaExtensions))) {
       this.close();
       emit("unsupported", { error: "unsupported content" });
       return false;
@@ -274,6 +261,7 @@ class DocmostEngine {
     // UniqueID adds missing block ids on the provider's "synced"; sync is done, so this stand-in fires it at once.
     const synced = { on: (_event: string, run: () => void) => run(), off() {} };
     this.editor = new Editor({
+      ...editorOptions,
       element: this.host,
       editable: true,
       extensions: [...schemaExtensions, Collaboration.configure({ document: ydoc, provider: synced })],
