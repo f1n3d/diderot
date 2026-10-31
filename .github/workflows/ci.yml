@@ -1,6 +1,7 @@
-# Checks the editor engine against Docmost's document format, builds the app and runs the DocmostKit and app unit tests
-# for every pull request to main and every push to main.
+# Checks the editor engine against Docmost's document format and the project files, builds the app and runs the
+# DocmostKit and app unit tests for every pull request to main and every push to main.
 # The UI tests need the local dev Docmost instance, so they stay local (Tools/run-uitests.sh).
+# Actions are pinned to a commit (Dependabot proposes updates, .github/dependabot.yml).
 name: CI
 
 on:
@@ -10,10 +11,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# A newer push to the same branch or pull request cancels the check still running for it.
+# A newer push to the same pull request cancels the check still running for it. Runs on main finish, so every merged
+# commit keeps its result.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -24,7 +26,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Select Xcode 27.1
         run: |
@@ -33,18 +35,45 @@ jobs:
           if [ -n "$xcode" ]; then sudo xcode-select --switch "$xcode"; fi
           xcodebuild -version
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
 
-      - name: Engine format check
-        # The engine's own extensions must match Docmost's document format (Engine/FORMAT.md).
+      - name: Engine checks
+        # The engine's own extensions must match Docmost's document format (Engine/FORMAT.md), the sources and the check
+        # tools must type-check (esbuild only strips types), and the committed engine.js must be the build of Engine/src.
+        # Corepack takes pnpm's version from Engine/package.json.
         working-directory: Engine
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
         run: |
-          corepack pnpm@12.10.1 install --frozen-lockfile
-          corepack pnpm@12.10.1 run check
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm run check
+          corepack pnpm run typecheck
+          node build.mjs
+          git diff --exit-code -- ../Diderot/Resources/Engine/engine.js
+
+      - name: Project checks
+        # Tools/check-project.sh: translations, project.yml against the Xcode project, shellcheck. The tools in the versions
+        # it was last run with on the Mac (xcodegen --version, shellcheck --version), checked against their release files.
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+          SHELLCHECK_VERSION: v0.11.0
+          SHELLCHECK_SHA256_AARCH64: 56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79
+          SHELLCHECK_SHA256_X86_64: 3c89db4edcab7cf1c27bff178882e0f6f27f7afdf54e859fa041fca10febe4c6
+        run: |
+          tools="$RUNNER_TEMP/tools"
+          mkdir -p "$tools"
+          curl -fsSL -o "$tools/xcodegen.zip" "https://github.com/yonaskolb/XcodeGen/releases/download/$XCODEGEN_VERSION/xcodegen.zip"
+          echo "$XCODEGEN_SHA256  $tools/xcodegen.zip" | shasum -a 256 -c
+          unzip -q "$tools/xcodegen.zip" -d "$tools"
+          if [ "$(uname -m)" = arm64 ]; then arch=aarch64 sum=$SHELLCHECK_SHA256_AARCH64; else arch=x86_64 sum=$SHELLCHECK_SHA256_X86_64; fi
+          curl -fsSL -o "$tools/shellcheck.tar.xz" \
+            "https://github.com/koalaman/shellcheck/releases/download/$SHELLCHECK_VERSION/shellcheck-$SHELLCHECK_VERSION.darwin.$arch.tar.xz"
+          echo "$sum  $tools/shellcheck.tar.xz" | shasum -a 256 -c
+          tar -xJf "$tools/shellcheck.tar.xz" -C "$tools"
+          PATH="$tools/xcodegen/bin:$tools/shellcheck-$SHELLCHECK_VERSION:$PATH" Tools/check-project.sh
 
       - name: DocmostKit tests
         # The live tests need a Docmost server.
@@ -64,7 +93,7 @@ jobs:
 
       - name: Keep the test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: TestResults
           path: TestResults.xcresult

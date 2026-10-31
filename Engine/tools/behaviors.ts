@@ -3,6 +3,7 @@
 import { Editor, type AnyExtension, type JSONContent } from "@tiptap/core";
 import { EditorState, NodeSelection, type Transaction } from "@tiptap/pm/state";
 import { Node as PMNode } from "@tiptap/pm/model";
+import { editorOptions } from "../src/schema";
 
 type Path = number[];
 type Step =
@@ -360,7 +361,7 @@ function withNamedTabIds(content: unknown, scenario: Scenario) {
 
 /** The lengths and letters of the ids 1,000 new tabs get, and whether they all differ. */
 export function describeTabIds(extensions: AnyExtension[]) {
-  const editor = new Editor({ extensions, content: { type: "doc", content: [{ type: "paragraph" }] } });
+  const editor = new Editor({ ...editorOptions, extensions, content: { type: "doc", content: [{ type: "paragraph" }] } });
   const state = EditorState.create({ schema: editor.schema, doc: editor.state.doc, plugins: editor.extensionManager.plugins });
   const tabs = PMNode.fromJSON(editor.schema, { type: "tabs", content: Array.from({ length: 1000 }, () => ({ type: "tab", content: [{ type: "tabLabel" }, { type: "tabPanel", content: [{ type: "paragraph" }] }] })) });
   const { state: next } = state.applyTransaction(state.tr.insert(0, tabs));
@@ -376,7 +377,7 @@ export function describeTabIds(extensions: AnyExtension[]) {
 /** What creating an editor on a document does to its tabs (the tabs extension's onCreate hook). */
 export function describeTabsOnCreate(extensions: AnyExtension[]) {
   const doc = [tabs(tab("One"), tab("Two", ""), tab("Three", "t3"), tab("Four", "t3")), p("b")];
-  const editor = new Editor({ extensions, content: { type: "doc", content: doc } });
+  const editor = new Editor({ ...editorOptions, extensions, content: { type: "doc", content: doc } });
   const result = withNamedTabIds(editor.getJSON().content, { name: "onCreate", doc, steps: [] });
   editor.destroy();
   return result;
@@ -388,7 +389,7 @@ export function runScenarios(extensions: AnyExtension[]): Record<string, unknown
   const repeatable = extensions.map((extension) =>
     extension.name === "uniqueID" ? extension.configure({ generateID: () => `id${++counter}` }) : extension,
   );
-  const editor = new Editor({ extensions: repeatable, content: { type: "doc", content: [{ type: "paragraph" }] } });
+  const editor = new Editor({ ...editorOptions, extensions: repeatable, content: { type: "doc", content: [{ type: "paragraph" }] } });
   const results: Record<string, unknown> = {};
   for (const scenario of scenarios) {
     counter = 0;

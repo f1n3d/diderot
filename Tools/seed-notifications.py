@@ -14,12 +14,16 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BASE = os.environ.get("DOCMOST_SEED_URL", "http://localhost:3000")
+# The second user gets a fixed password: only ever on a dev instance on this Mac.
+if urllib.parse.urlsplit(BASE).hostname not in ("localhost", "127.0.0.1", "::1"):
+    sys.exit(f"{BASE} is no local dev instance: this script creates a user with a fixed password there.")
 TESTER_EMAIL = "kollegin@docmost.local"
 TESTER_PASSWORD = "kollegin-dev-123"
 TESTER_NAME = "Test-Kollegin"

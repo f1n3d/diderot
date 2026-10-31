@@ -3,11 +3,11 @@
 import { Editor, getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import Collaboration from "@tiptap/extension-collaboration";
-import { initProseMirrorDoc } from "@tiptap/y-tiptap";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import * as Y from "yjs";
+import { bindingChanges, checkBlocks } from "./guards";
 import { rebase } from "./rebase";
-import { schemaExtensions } from "./schema";
+import { editorOptions, schemaExtensions } from "./schema";
 import { runTableCommand, type TableCommand } from "./tables";
 
 declare global {
@@ -43,6 +43,8 @@ class DocmostEngine {
   private editor?: Editor;
   private updateTimer?: number;
   private host?: HTMLElement;
+  /** Set by `fail`: edits are refused from then on. */
+  private failed = false;
 
   open(options: OpenOptions) {
     this.close();
@@ -103,6 +105,18 @@ class DocmostEngine {
     this.provider = undefined;
     this.socket = undefined;
     this.host = undefined;
+    this.failed = false;
+  }
+
+  /**
+   * An error once the editor is bound may leave it out of step with the shared document (the binding threw halfway), and
+   * the next edit would write the editor's state over what others wrote. Refuses edits from then on; the app closes the
+   * engine, keeping what the server hasn't confirmed, and opens it again.
+   */
+  fail(reason: string) {
+    if (!this.editor || this.failed) return;
+    this.failed = true;
+    emit("failed", { error: reason });
   }
 
   /**
@@ -145,6 +159,7 @@ class DocmostEngine {
       if (!found) return false;
       let nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
       if (base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(editor.schema, base), nodes[0]) ?? nodes[0]];
+      checkBlocks(nodes);
       editor.view.dispatch(editor.state.tr.replaceWith(found.pos, found.pos + found.node.nodeSize, nodes));
       return true;
     });
@@ -154,6 +169,7 @@ class DocmostEngine {
   insertBlocks(target: Target | null, json: JSONContent[], position: "before" | "after" = "after"): boolean {
     return this.transact((editor) => {
       const nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
+      checkBlocks(nodes);
       let pos: number;
       if (!target) {
         pos = editor.state.doc.content.size;
@@ -239,60 +255,57 @@ class DocmostEngine {
   }
 
   undo(): boolean {
-    return this.editor?.commands.undo() ?? false;
+    return this.transact((editor) => editor.commands.undo());
   }
 
   redo(): boolean {
-    return this.editor?.commands.redo() ?? false;
+    return this.transact((editor) => editor.commands.redo());
   }
 
   // MARK: Internal
 
-  /**
-   * Binds the editor after the first sync. Its first render deletes whatever the schema can't hold (unknown types or
-   * marks, content a newer Docmost allows in more places) and syncs that to the server, so the render runs on a copy
-   * first; a page that would lose content closes the connection instead.
-   */
+  /** Binds the editor after the first sync; a page that binding would change (`bindingChanges`) closes instead. */
   private attachEditor(): boolean {
     const ydoc = this.provider!.document;
-    const copy = new Y.Doc();
-    Y.applyUpdate(copy, Y.encodeStateAsUpdate(ydoc));
-    let lossy = false;
-    copy.on("update", () => (lossy = true));
-    try {
-      const { doc } = initProseMirrorDoc(copy.getXmlFragment("default"), getSchema(schemaExtensions));
-      // Binding also fits the top level into the schema's order and drops what doesn't fit.
-      if (doc.childCount > 0 && !doc.type.validContent(doc.content)) lossy = true;
-    } catch {
-      lossy = true; // Unreadable content (malformed Yjs) would make binding throw too.
-    }
-    if (lossy) {
+    if (bindingChanges(ydoc, getSchema(schemaExtensions))) {
       this.close();
       emit("unsupported", { error: "unsupported content" });
       return false;
     }
     // UniqueID adds missing block ids on the provider's "synced"; sync is done, so this stand-in fires it at once.
     const synced = { on: (_event: string, run: () => void) => run(), off() {} };
-    this.editor = new Editor({
-      element: this.host,
-      editable: true,
-      extensions: [...schemaExtensions, Collaboration.configure({ document: ydoc, provider: synced })],
-      onUpdate: () => this.scheduleDocument(150),
-    });
+    try {
+      this.editor = new Editor({
+        ...editorOptions,
+        element: this.host,
+        editable: true,
+        extensions: [...schemaExtensions, Collaboration.configure({ document: ydoc, provider: synced })],
+        onUpdate: () => this.scheduleDocument(150),
+      });
+    } catch (error) {
+      // Bound halfway at most: closed, and the app takes it for a start that failed.
+      emit("error", { error: String(error) });
+      this.close();
+      emit("failed", { error: "editor didn't start" });
+      return false;
+    }
     return true;
   }
 
   private transact(operation: (editor: Editor) => boolean): boolean {
-    if (!this.editor) {
-      emit("error", { error: "engine not open" });
+    if (!this.editor || this.failed) {
+      emit("error", { error: this.editor ? "engine failed" : "engine not open" });
       return false;
     }
+    const before = this.editor.state;
     try {
       const applied = operation(this.editor);
       if (applied) this.scheduleDocument(0);
       return applied;
     } catch (error) {
       emit("error", { error: String(error) });
+      // Thrown once the editor had taken the change: by the binding, while writing it into the shared document.
+      if (this.editor?.state !== before) this.fail("change failed halfway");
       return false;
     }
   }
@@ -351,7 +364,12 @@ class DocmostEngine {
   }
 }
 
-window.addEventListener("error", (event) => emit("error", { error: `uncaught: ${event.message}` }));
+// The binding applies the server's changes to the editor synchronously, so an exception from it arrives here; a rejected
+// promise comes from the connection's own work (reconnecting, tokens) and leaves the editor as it was.
+window.addEventListener("error", (event) => {
+  emit("error", { error: `uncaught: ${event.message}` });
+  window.DocmostEngine?.fail("uncaught error");
+});
 window.addEventListener("unhandledrejection", (event) => emit("error", { error: `unhandled rejection: ${String(event.reason)}` }));
 window.DocmostEngine = new DocmostEngine();
 emit("ready");

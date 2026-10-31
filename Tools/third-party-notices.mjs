@@ -1,26 +1,26 @@
 // Writes the license notices of the third-party code the app ships: THIRD_PARTY_NOTICES.md for the repository and
 // Diderot/Resources/ThirdPartyNotices.json for the app's Licenses page. It covers the packages esbuild bundles into
 // the editor engine (from Engine/node_modules), and KaTeX and Mermaid in Diderot/Resources/Islands with the packages
-// Mermaid bundles, which npm installs into Tools/.cache/islands for their license texts.
+// Mermaid bundles, which npm installs into Tools/.cache/islands for their license texts (Tools/islands.mjs).
 //
 //   node Tools/third-party-notices.mjs      (after `corepack pnpm install` in Engine/)
 import { createRequire } from "node:module";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { installed, versions as islandVersions } from "./islands.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const engine = path.join(root, "Engine");
 const islandFiles = path.join(root, "Diderot/Resources/Islands");
-const islandVersions = { katex: "0.19.0", mermaid: "12.1.0" };
 const { build } = createRequire(path.join(engine, "package.json"))("esbuild");
 
 /**
  * Name, version, license and license text of the package in `dir`, with its NOTICE file if it has one, and for
- * weak copyleft licenses (EPL, MPL, LGPL) where its source code is, as they require.
+ * weak copyleft licenses (EPL, MPL, LGPL) where its source code is, as they require. Without the version when the
+ * package isn't the one shipped but its license text (`withVersion` false).
  */
-function describe(dir) {
+function describe(dir, withVersion = true) {
   const manifest = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
   const read = (pattern) => {
     const file = fs.readdirSync(dir).find((name) => pattern.test(name));
@@ -32,11 +32,12 @@ function describe(dir) {
   const notice = read(/^notice(\.(md|txt))?$/i);
   if (notice) text += `\n\nNOTICE\n\n${notice}`;
   const repository = typeof manifest.repository === "string" ? manifest.repository : manifest.repository?.url;
+  const version = withVersion ? manifest.version : "";
   if (/EPL|MPL|LGPL/.test(license) && repository) {
     const url = repository.replace(/^git\+/, "").replace(/^git:/, "https:").replace(/\.git$/, "");
-    text = `The source code of ${manifest.name} ${manifest.version} is available under ${license} at ${url}.\n\n${text}`;
+    text = `The source code of ${[manifest.name, version].filter(Boolean).join(" ")} is available under ${license} at ${url}.\n\n${text}`;
   }
-  return { name: manifest.name, version: manifest.version, license, text };
+  return { name: manifest.name, version, license, text };
 }
 
 /** Packages with the same license text as one entry, sorted by name. */
@@ -73,21 +74,23 @@ for (const output of Object.values(result.metafile.outputs)) {
     if (match && input.bytesInOutput > 0) packageDirs.add(path.resolve(engine, match[1]));
   }
 }
-const enginePackages = [...packageDirs].map(describe);
+const enginePackages = [...packageDirs].map((dir) => describe(dir));
 
-// Mermaid's bundle contains its dependencies: npm installs them once for their license texts.
-const cache = path.join(root, "Tools/.cache/islands");
-const modules = path.join(cache, "node_modules");
-if (!fs.existsSync(path.join(modules, "mermaid/package.json"))) {
-  fs.mkdirSync(cache, { recursive: true });
-  execFileSync("npm", ["install", "--prefix", cache, "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund",
-    `mermaid@${islandVersions.mermaid}`], { stdio: "inherit" });
-}
+// Mermaid's bundle contains its dependencies as Mermaid's own build put them in, at the versions of Mermaid's lockfile
+// then: npm installs them for their license texts, and they are listed without the versions npm resolves today.
+const modules = installed(root, "mermaid");
 const mermaidDependencies = fs.readdirSync(modules)
   .flatMap((name) => (name.startsWith("@") ? fs.readdirSync(path.join(modules, name)).map((sub) => `${name}/${sub}`) : [name]))
   // Tools/build-islands.mjs leaves elkjs out of the bundle.
   .filter((name) => !name.startsWith(".") && !name.startsWith("@types/") && name !== "mermaid" && name !== "elkjs")
-  .map((name) => describe(path.join(modules, name)));
+  .map((name) => describe(path.join(modules, name), false));
+// The packages the bundle names in its own license comments must be among them.
+const bundled = new Set();
+for (const block of fs.readFileSync(path.join(islandFiles, "mermaid.min.js"), "utf8").split("Bundled license information:").slice(1)) {
+  for (const match of block.slice(0, block.indexOf("*/")).matchAll(/^\s*((?:@[\w.-]+\/)?[\w.-]+)\/[\w./-]+\.m?js:$/gm)) bundled.add(match[1]);
+}
+const unlisted = [...bundled].filter((name) => name !== "mermaid" && !mermaidDependencies.some((item) => item.name === name));
+if (!bundled.size || unlisted.length) throw new Error(`mermaid.min.js bundles packages npm didn't install: ${unlisted.join(", ") || "(no license comments found)"}`);
 
 const island = (name) => ({
   name, version: islandVersions[name], license: "MIT", text: fs.readFileSync(path.join(islandFiles, `${name}-license.txt`), "utf8").trim(),

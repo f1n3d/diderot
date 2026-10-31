@@ -22,6 +22,12 @@ import {
   Tabs, TableCell, TableHeader, TrailingNode, TransclusionReference, TransclusionSource, Video, newBlockId,
 } from "./extensions";
 
+/**
+ * For every `new Editor`: TipTap adds a `textDirection` of its own (without a direction) beside the one the list below
+ * has for the format, and warns about the duplicate name.
+ */
+export const editorOptions = { enableCoreExtensions: { textDirection: false } } as const;
+
 export const schemaExtensions: AnyExtension[] = [
   coreExtensions.TextDirection.configure({ direction: "auto" }),
   StarterKit.configure({

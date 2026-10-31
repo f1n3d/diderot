@@ -366,6 +366,8 @@ final class DocumentModel {
     @ObservationIgnored private var saveRefused = false
     /// The active block's input that the engine's ended web process took with it; written once the engine syncs again.
     @ObservationIgnored private var unsavedAtEnd: (ref: NodeRef, node: PMNode)?
+    /// The engine was opened again after an error (`EngineFailure.engineError`); another one leaves the page read-only.
+    @ObservationIgnored private var restartedAfterError = false
     private var commitTask: Task<Void, Never>?
     private var pendingFocus: (path: [Int], cursor: CursorRequest)?
     /// A table edit is under way. It puts the cursor into a cell itself, so a document event meanwhile neither ends
@@ -412,6 +414,21 @@ final class DocumentModel {
                 self.deactivate()
                 self.readOnlyReason = .noPermission
                 self.errorMessage = String(localized: "You can no longer edit this page. Changes the server didn't take stay on this device until you can edit it again.")
+            // As after a web process that ended, once per page: a reopened engine binds the shared document afresh, and
+            // input it hadn't saved goes in once it is back. Again, or before the page was live: read-only until `resume`.
+            case .engineError:
+                if let active = self.active, self.overrides[active.ref.identity] != nil, let node = self.currentActiveNode() {
+                    self.unsavedAtEnd = (active.ref, node)
+                }
+                if self.isLive, !self.restartedAfterError {
+                    self.restartedAfterError = true
+                    self.suspend()
+                    self.resume()
+                } else {
+                    self.deactivate()
+                    self.readOnlyReason = .notConnected
+                    self.errorMessage = String(localized: "The editor stopped after an error. The page is read-only; pull down to try again.")
+                }
             }
         }
         // Restart only if live: a page that left reopens on return; one still opening tries again when the app becomes

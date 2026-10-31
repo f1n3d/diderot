@@ -13,6 +13,13 @@ const leftOutScenarios = new Set(["footnotes trigger: no change before a referen
 
 let differences = 0;
 
+// TipTap's warnings (e.g. two extensions of one name) count as differences: one left standing would hide new ones.
+const warn = console.warn;
+console.warn = (...args: unknown[]) => {
+  differences++;
+  warn(...args);
+};
+
 function expected(name: string): Record<string, unknown> {
   const { docmost, ...data } = JSON.parse(fs.readFileSync(`spec/${name}.json`, "utf8"));
   console.log(`spec/${name}.json: Docmost ${docmost}`);

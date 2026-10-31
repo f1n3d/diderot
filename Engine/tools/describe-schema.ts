@@ -2,6 +2,7 @@
 // in schema order with the spec fields that shape documents: content, groups, attributes and their defaults, …) and
 // the plugins and hooks that can change documents. Two sets that describe the same hold the same documents.
 import { Editor, getExtensionField, getSchema, type AnyExtension } from "@tiptap/core";
+import { editorOptions } from "../src/schema";
 
 type Described = Record<string, unknown>;
 
@@ -50,7 +51,7 @@ export function describeSchema(extensions: AnyExtension[]) {
  * dispatch. Unnamed plugins are TipTap's input and paste rules, which act only on typing and pasting.
  */
 export function describeDocumentPlugins(extensions: AnyExtension[]) {
-  const editor = new Editor({ extensions, content: { type: "doc", content: [{ type: "paragraph" }] } });
+  const editor = new Editor({ ...editorOptions, extensions, content: { type: "doc", content: [{ type: "paragraph" }] } });
   const plugins = editor.extensionManager.plugins
     // Keys are numbered per process: "name$", "name$1", …
     .map((plugin) => ({ plugin, key: (plugin as unknown as { key: string }).key.replace(/\$\d*$/, "") }))

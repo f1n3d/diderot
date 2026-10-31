@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["src", "tools"],
+  "exclude": ["tools/docmost-reference.ts", "tools/observe-docmost.ts", "tools/compare-docmost.ts"]
+}

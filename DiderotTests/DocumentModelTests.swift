@@ -1408,6 +1408,61 @@ struct DocumentModelTests {
         #expect(engine.opened == ["p"])
         #expect(model.isEditable)
     }
+
+    /// An error in the engine once loaded: it closes, keeping what the server hadn't confirmed, and opens again, and the
+    /// input it hadn't saved goes in when it is back. The error used to be only logged.
+    @Test(.timeLimit(.minutes(1))) func engineErrorOpensTheEngineAgainWithTheInput() async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
+        let document = PMNode(type: "doc", content: [paragraph])
+        let engine = FakeDocumentEngine(document: document)
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeText.append(AttributedString(" neu"))
+        model.activeTextChanged()
+
+        // As the web engine does: it closes, then reports it, and refuses what comes meanwhile.
+        engine.status = .idle
+        engine.document = nil
+        engine.refusesSaves = true
+        engine.onFailure?(.engineError)
+        #expect(model.active == nil)
+        #expect(!model.isEditable)
+        while engine.saved.isEmpty || engine.opened.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        engine.refusesSaves = false
+        engine.document = document
+        model.syncFromEngine()
+
+        #expect(engine.opened == ["p"])
+        #expect(model.isEditable)
+        while engine.saved.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.saved.map(\.plainText) == ["Eins neu", "Eins neu"])
+    }
+
+    /// A second engine error on the page leaves it read-only with a message; the engine opens again only on a refresh.
+    @Test(.timeLimit(.minutes(1))) func secondEngineErrorLeavesThePageReadOnly() async throws {
+        let document = PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])])
+        let engine = FakeDocumentEngine(document: document)
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        engine.status = .idle
+        engine.document = nil
+        engine.onFailure?(.engineError)
+        while engine.opened.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        engine.document = document
+        model.syncFromEngine()
+        #expect(model.isEditable)
+
+        engine.status = .idle
+        engine.document = nil
+        engine.onFailure?(.engineError)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(engine.opened == ["p"])
+        #expect(!model.isEditable)
+        #expect(model.errorMessage == String(localized: "The editor stopped after an error. The page is read-only; pull down to try again."))
+    }
 }
 
 /// Stand-in for the web engine: changes nothing and records what it is asked to open, save, insert, replace, delete or

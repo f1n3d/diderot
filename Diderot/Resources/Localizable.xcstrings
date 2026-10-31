@@ -1,7 +1,9 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "": {},
+    "": {
+      "shouldTranslate": false
+    },
     " ": {
       "shouldTranslate": false
     },
@@ -222,7 +224,9 @@
         }
       }
     },
-    "%lld": {},
+    "%lld": {
+      "shouldTranslate": false
+    },
     "%lld Columns": {
       "localizations": {
         "de": {
@@ -5226,6 +5230,16 @@
         }
       }
     },
+    "The editor stopped after an error. The page is read-only; pull down to try again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Editor wurde nach einem Fehler angehalten. Die Seite ist nur lesbar; zieh nach unten, um es erneut zu versuchen."
+          }
+        }
+      }
+    },
     "The link is applied to the selected text.": {
       "localizations": {
         "de": {
@@ -6126,7 +6140,9 @@
     "https://wiki.example.com/s/…/p/…": {
       "shouldTranslate": false
     },
-    "https://…": {},
+    "https://…": {
+      "shouldTranslate": false
+    },
     "wiki.example.com": {
       "shouldTranslate": false
     },
