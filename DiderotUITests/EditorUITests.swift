@@ -56,6 +56,10 @@ import XCTest
         let end = CGVector(dx: 1, dy: 0.85)
         XCTAssertTrue(scrollTo(block, in: app, anchor: end), "Block “\(text)” not found")
         block.coordinate(withNormalizedOffset: end).withOffset(CGVector(dx: -2, dy: 0)).tap()
+        // A tap while the keyboard folds in or out (`waitForKeyboard`) can miss the block.
+        if !app.textViews["active-editor"].firstMatch.waitForExistence(timeout: 3) {
+            block.coordinate(withNormalizedOffset: end).withOffset(CGVector(dx: -2, dy: 0)).tap()
+        }
         return activeEditor(app, "Editor doesn't appear after tapping “\(text)”")
     }
 
@@ -68,10 +72,22 @@ import XCTest
         XCTAssertTrue(editor.waitForNonExistence(timeout: 8), "Editor didn't close")
     }
 
+    /// Waits until the on-screen keyboard is on the screen, or gone. After keys that XCUITest types, iOS can fold it below
+    /// the screen and bring it back a moment later: the simulator's keyboard daemon turns on automatic minimization once
+    /// it sees a hardware keyboard attach while the keyboard is up (the Simulator app connects the Mac's; XCUITest's typing
+    /// counts too). Meanwhile its keys can't be tapped, and the page's free area isn't what it will be.
+    private func waitForKeyboard(_ app: XCUIApplication, timeout: TimeInterval = 4) {
+        let keyboard = app.keyboards.firstMatch
+        let bottom = app.windows.firstMatch.frame.maxY
+        let settled = NSPredicate { _, _ in !keyboard.exists || keyboard.frame.minY < bottom }
+        _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: settled, object: nil)], timeout: timeout)
+    }
+
     /// Scrolls until the point at `anchor` (unit coordinates of the element) lies in the page's free area: below the
     /// navigation bar, above the keyboard and the floating "+". A block that only peeks in at an edge counts as
     /// hittable for XCUITest, but a tap at a given point of it can miss.
     private func scrollTo(_ element: XCUIElement, in app: XCUIApplication, anchor: CGVector = CGVector(dx: 0.5, dy: 0.5)) -> Bool {
+        waitForKeyboard(app)
         func freeArea() -> ClosedRange<CGFloat> {
             let top = app.navigationBars.firstMatch.frame.maxY + 8
             var bottom = app.windows.firstMatch.frame.maxY - 8
@@ -909,6 +925,7 @@ import XCTest
         editor.typeText("\n")
         editor = activeEditor(app, "No editor in the new item")
         Thread.sleep(forTimeInterval: 1.0)
+        waitForKeyboard(app)
         XCTAssertTrue(app.keyboards.keys["A"].exists, "The new item doesn't start with a capital")
         app.keyboards.keys["A"].tap()
         Thread.sleep(forTimeInterval: 0.5)
@@ -928,7 +945,8 @@ import XCTest
         waitForSync(app)
         var editor = edit(app, blockContaining: "Punkt eins")
         Thread.sleep(forTimeInterval: 1.0)
-        // Earlier tests in the run add to this item.
+        // Earlier tests in the run add to this item. Its editor in the block can still be empty a moment after the tap.
+        XCTAssertTrue(waitForText(editor, contains: "Punkt eins"), "The editor doesn't show the item's text")
         let original = editor.value as? String
         let tree = app.debugDescription
         let editorAt = tree.range(of: "'active-editor'")?.lowerBound
@@ -1211,9 +1229,14 @@ import XCTest
             return !frame.isEmpty && app.windows.firstMatch.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
         }
         for _ in 0..<8 where !onScreen() { app.webViews.firstMatch.swipeUp() }
-        // Its popover opens below it: lift it into the upper half, clear of WebKit's bar above the keyboard.
+        // Its popover opens below it: lift it into the upper half, clear of WebKit's bar above the keyboard. The keyboard
+        // folding in or out (`waitForKeyboard`) moves the page again, so until it stays there.
         let middle = app.windows.firstMatch.frame.midY
-        if link.frame.midY > middle {
+        for _ in 0..<4 {
+            let frame = link.frame
+            Thread.sleep(forTimeInterval: 0.3)
+            if link.frame == frame, frame.midY <= middle { break }
+            guard link.frame.midY > middle else { continue }
             let start = app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             let shift = max(-300, middle * 0.6 - link.frame.midY)
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: shift)), withVelocity: .slow, thenHoldForDuration: 0.1)
@@ -1225,6 +1248,8 @@ import XCTest
         snapshot(app, "67-web-editor-link")
         open.tap()
         let close = browserCloseButton(app)
+        // A tap while the page moves misses the popover's link.
+        if !close.waitForExistence(timeout: 3), open.exists { open.tap() }
         XCTAssertTrue(close.waitForExistence(timeout: 10), "A link opened in the web editor doesn't use the in-app browser")
         close.tap()
         XCTAssertTrue(link.waitForExistence(timeout: 5), "The web editor left the page")
@@ -1879,6 +1904,7 @@ import XCTest
         // keyboard or the cursor moves (BACKLOG).
         let space = app.keyboards.keys.matching(NSPredicate(format: "label IN %@", ["space", "Leerzeichen"])).firstMatch
         XCTAssertTrue(space.waitForExistence(timeout: 5), "No space key on the keyboard")
+        waitForKeyboard(app)
         space.tap()
         let typed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in ((editor.value as? String) ?? "").count > title.count }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [typed], timeout: 5), .completed, "The space typed after the mention is lost: “\(editor.value ?? "")”")
