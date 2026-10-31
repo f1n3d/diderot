@@ -181,7 +181,8 @@ export TEST_RUNNER_DOCMOST_UITEST_ALT_SERVER="${DOCMOST_UITEST_ALT_SERVER-$ALT_S
 # SHOTS_DIR=<folder>: also store test screenshots there (simulator only; the folder is on the Mac).
 if [ -n "${SHOTS_DIR:-}" ]; then
   mkdir -p "$SHOTS_DIR"
-  export TEST_RUNNER_DOCMOST_SHOTS_DIR="$(cd "$SHOTS_DIR" && pwd)"
+  TEST_RUNNER_DOCMOST_SHOTS_DIR="$(cd "$SHOTS_DIR" && pwd)"
+  export TEST_RUNNER_DOCMOST_SHOTS_DIR
 fi
 
 # While working, the touched area's tests; before a version or merge, the whole suite (no AREA, no ONLY).
@@ -195,7 +196,7 @@ case "${AREA:-}" in
   seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test33_Comments,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
   server) ONLY="ServerUITests" ;;
-  *) echo "Unknown AREA “$AREA”: schnell, editor, bloecke, seiten, datenbanken or server" >&2; exit 1 ;;
+  *) echo "Unknown AREA '$AREA': schnell, editor, bloecke, seiten, datenbanken or server" >&2; exit 1 ;;
 esac
 
 ONLY_ARGS=()

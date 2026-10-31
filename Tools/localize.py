@@ -4,6 +4,8 @@
     Tools/localize.py --import <export>/de.xcloc/Localized\\ Contents/de.xliff   # add new keys from an export
     Tools/localize.py --apply translations.json                                    # apply {"Key": "Translation", …}
     Tools/localize.py --missing                                                    # list keys without a German translation
+                                                                                   # (exits 1 if any; mark keys that need none, such as
+                                                                                   # numbers or URLs, "Don't Translate" in Xcode)
 
 Create an export: xcodebuild -exportLocalizations -project Diderot.xcodeproj -localizationPath <dir> -exportLanguage de
 """
@@ -87,7 +89,8 @@ def main():
         keys = missing(catalog)
         print(f"{len(keys)} keys without a German translation")
         for key in keys:
-            print("  " + key)
+            print("  " + repr(key))
+        return 1 if keys else 0
     return 0
 
 

@@ -1,0 +1,11 @@
+# Proposes updates of the GitHub Actions that CI pins to a commit (.github/workflows/ci.yml), at most one pull request a
+# month. The engine's npm packages are left out: TipTap and Yjs follow Docmost's versions (Engine/FORMAT.md).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

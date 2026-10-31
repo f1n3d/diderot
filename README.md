@@ -102,7 +102,7 @@ Please report bugs as a [GitHub issue](https://github.com/f1n3d/diderot/issues/n
 | `DiderotUITests/` | UI tests (XCTest) against the dev instance, in their own scheme `DiderotUI`. |
 | `Design/` | The icon's source, `diderot_icon.png`; `Tools/icon/prepare-icon.swift` makes the app icon and the images for GitHub from it. |
 | `Docs/` | Background documentation, e.g. [sign-in and authentication](Docs/SignIn.md); the [privacy policy](Docs/Privacy.md) and the [App Store texts](Docs/AppStore.md); and the images for GitHub: the icon above and the link preview (`social-preview.png`, uploaded by hand under Settings › General › Social preview). |
-| `Tools/` | Scripts for the simulator, devices, dev content, the app icon and the third-party notices. |
+| `Tools/` | Scripts for the simulator, devices, dev content, the app icon, the project checks and the third-party notices. |
 | `BACKLOG.md` | Open points for later. |
 
 ## Development
@@ -153,8 +153,11 @@ ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh
 AREA=schnell Tools/run-uitests.sh <pageId>   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
 PORT=3001 Tools/run-uitests.sh <pageId>      # against a second dev instance with a newer Docmost (tests of its content skip on older servers)
 
-# Check the editor engine against Docmost's format and rebuild it
+# Check the editor engine against Docmost's format, type-check it and rebuild it
 Tools/build-engine.sh
+
+# The project checks CI runs besides the tests: translations, project.yml against the Xcode project, shellcheck
+Tools/check-project.sh
 
 # Install on the connected iPhone (developer mode, Apple ID in Xcode)
 AUTOLOGIN=1 Tools/run-device.sh

@@ -4,9 +4,10 @@
   "private": true,
   "description": "Headless TipTap/Yjs engine behind Diderot's native editor, with its own extensions for Docmost's document format (FORMAT.md)",
   "type": "module",
+  "packageManager": "pnpm@12.10.1",
   "scripts": {
     "build": "node build.mjs",
-    "typecheck": "tsc -p tsconfig.json --pretty false",
+    "typecheck": "tsc -p tsconfig.json --pretty false && tsc -p tsconfig.tools.json --pretty false",
     "check": "node tools/run.mjs tools/check.ts && node tools/run.mjs tools/rebase-check.ts && node tools/run.mjs tools/table-check.ts && node tools/run.mjs tools/guards-check.ts",
     "observe": "node tools/run.mjs --docmost tools/observe-docmost.ts",
     "compare": "node tools/run.mjs --docmost tools/compare-docmost.ts"
@@ -44,6 +45,7 @@
     "@tiptap/extension-ordered-list": "3.31.3",
     "@tiptap/react": "3.31.3",
     "@tiptap/suggestion": "3.31.3",
+    "@types/node": "24.19.2",
     "esbuild": "0.27.3",
     "highlight.js": "11.11.1",
     "image-dimensions": "2.5.0",

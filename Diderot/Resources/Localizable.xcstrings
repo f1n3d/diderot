@@ -1,7 +1,9 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "": {},
+    "": {
+      "shouldTranslate": false
+    },
     " ": {
       "shouldTranslate": false
     },
@@ -222,7 +224,9 @@
         }
       }
     },
-    "%lld": {},
+    "%lld": {
+      "shouldTranslate": false
+    },
     "%lld Columns": {
       "localizations": {
         "de": {
@@ -6136,7 +6140,9 @@
     "https://wiki.example.com/s/…/p/…": {
       "shouldTranslate": false
     },
-    "https://…": {},
+    "https://…": {
+      "shouldTranslate": false
+    },
     "wiki.example.com": {
       "shouldTranslate": false
     },
