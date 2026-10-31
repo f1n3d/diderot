@@ -101,6 +101,40 @@ struct APIClientTests {
         }
     }
 
+    /// A 400 or 401 from a reverse proxy or sign-in gateway in front of Docmost is a plain server error: a 401 used to sign
+    /// out (the server session stayed valid), a 400 to drop a kept title.
+    @Test func signOutAndRefusalNeedDocmostsErrorBody() async throws {
+        MockURLProtocol.respond(with: .init(status: 401, body: Data("<html>Authentication required</html>".utf8)))
+        await #expect(throws: APIError.server(status: 401, message: nil)) {
+            try await TestSupport.mockClient().send(Endpoints.Users.me)
+        }
+        MockURLProtocol.respond(with: .init(status: 400, body: Data(#"{"error":"bad_request"}"#.utf8)))
+        await #expect(throws: APIError.server(status: 400, message: nil)) {
+            try await TestSupport.mockClient().send(Endpoints.Users.me)
+        }
+    }
+
+    /// A request to the server doesn't follow a redirect: URLSession would send its body (a password, page content) on
+    /// to another host or plain HTTP, and drop its token. The error names where the server points.
+    @Test func requestsToTheServerDontFollowRedirects() async throws {
+        let elsewhere = URL(string: "http://elsewhere.example/api/users/me")!
+        MockURLProtocol.respond(with: .init(status: 307, body: Data(#"{"data":{},"success":true,"status":200}"#.utf8), redirect: elsewhere))
+        await #expect(throws: APIError.server(status: 307, message: "The server redirects to \(elsewhere.absoluteString).")) {
+            try await TestSupport.mockClient().send(Endpoints.Auth.logout)
+        }
+        #expect(MockURLProtocol.recordedRequests.map(\.url) == [TestSupport.baseURL.appending(path: "api/auth/logout")])
+    }
+
+    /// A file on another host, which page content may link, still follows a redirect (CDNs use them); it carries no token.
+    @Test func filesOnOtherHostsFollowRedirects() async throws {
+        let image = URL(string: "https://cdn.example/image.png")!, moved = URL(string: "https://cdn2.example/image.png")!
+        MockURLProtocol.respond(with: .init(status: 302, body: Data("png".utf8), redirect: moved))
+        let (data, response) = try await TestSupport.mockClient().fetchFile(at: image)
+        #expect(data == Data("png".utf8))
+        #expect(response.url == moved)
+        #expect(MockURLProtocol.recordedRequests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil })
+    }
+
     @Test func mapsNotFoundAndThrottled() async throws {
         MockURLProtocol.respond(with: .init(status: 404, body: try TestSupport.fixture("error-404")))
         await #expect(throws: APIError.notFound(message: "Space not found")) {
