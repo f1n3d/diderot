@@ -338,10 +338,9 @@ struct DocumentModelTests {
         model.syncFromEngine()
         let paragraph = try #require(model.node(at: [0]))
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
-        /// Waits up to a second for the `count`-th save, then delivers the engine's document event for it.
+        /// Waits for the `count`-th save, then delivers the engine's document event for it.
         func waitForSave(_ count: Int) async throws {
-            for _ in 0..<100 where engine.saved.count < count { try await Task.sleep(for: .milliseconds(10)) }
-            try #require(engine.saved.count >= count)
+            while engine.saved.count < count { try await Task.sleep(for: .milliseconds(10)) }
             engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1)))
             model.syncFromEngine()
         }
@@ -393,7 +392,7 @@ struct DocumentModelTests {
 
     /// A math block or embed from its sheet goes in only after the sheet has closed (switching editors while it slides
     /// away can leave a UIKit animation running), and only once: a later cancelled sheet adds nothing.
-    @Test(arguments: [false, true]) func sheetBlockWaitsForDismissal(embed: Bool) async throws {
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func sheetBlockWaitsForDismissal(embed: Bool) async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
@@ -410,7 +409,7 @@ struct DocumentModelTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(engine.replaced.isEmpty)
         model.editorSheetDismissed()
-        for _ in 0..<100 where engine.replaced.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        while engine.replaced.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         model.editorSheetDismissed()  // a later sheet, cancelled
         try await Task.sleep(for: .milliseconds(50))
         #expect(engine.replaced == [.id("a")])
@@ -731,8 +730,7 @@ struct DocumentModelTests {
         model.activeTextChanged()
         engine.refusesSaves = true
         model.activate(NodeRef(path: [1], node: second), node: second)
-        while engine.saved.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        try await Task.sleep(for: .milliseconds(50))
+        while model.errorMessage == nil { try await Task.sleep(for: .milliseconds(10)) }
 
         #expect(model.document.children.first?.plainText == "Eins")
         #expect(model.errorMessage != nil)
@@ -748,9 +746,7 @@ struct DocumentModelTests {
         engine.refusesSaves = true
         model.activeText.append(AttributedString("\n"))
         model.activeTextChanged()
-        while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(model.errorMessage != nil)
+        while model.errorMessage == nil { try await Task.sleep(for: .milliseconds(10)) }
 
         engine.refusesSaves = false
         model.activeText.append(AttributedString("x"))
@@ -844,6 +840,8 @@ struct DocumentModelTests {
         model.syncFromEngine()  // the engine's document event for the change
 
         try await Task.sleep(for: .seconds(3))
+        // A busy main actor (a full parallel run) can hold the offline save back longer.
+        while status == .disconnected, engine.lifecycle.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.lifecycle == (status == .synced ? [] : ["save after 1"]))
     }
 
@@ -885,6 +883,7 @@ struct DocumentModelTests {
         model.leave()
         model.resume()
         model.uploadEnded()
+        while !engine.lifecycle.contains("open") { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(100))
         #expect(engine.lifecycle == ["close", "open"])
     }
@@ -1126,7 +1125,7 @@ struct DocumentModelTests {
         }
 
         #expect(model.backspaceAtStart())
-        while engine.saved.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        while engine.saved.isEmpty || engine.deleted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(200))
 
         #expect(engine.saved.map(\.plainText) == ["EinsZwei"])

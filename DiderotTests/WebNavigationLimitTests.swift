@@ -60,7 +60,7 @@ struct WebNavigationLimitTests {
         let page = WebPage(configuration: configuration, navigationDecider: limit)
         for try await _ in page.load(html: "<p></p>", baseURL: server) {}
         _ = try await page.callJavaScript("window.open('/p/abc', '_blank', 'noopener,noreferrer'); return true")
-        for _ in 0..<20 where opened.isEmpty { try await Task.sleep(for: .milliseconds(50)) }
+        for _ in 0..<400 where opened.isEmpty { try await Task.sleep(for: .milliseconds(50)) }
         #expect(opened == [URL(string: "https://wiki.example.com/p/abc")!])
     }
 
@@ -68,23 +68,25 @@ struct WebNavigationLimitTests {
     /// neither a request nor an image reaches anywhere else; without it, the same script would.
     @Test func islandsReachNothingBeyondTheBundle() async throws {
         let reachOut = "fetch('diderot-test://fetch/').catch(() => {}); new Image().src = 'diderot-test://image/'; return true"
-        func requests(_ html: String, until rendered: String) async throws -> [String] {
+        func requests(_ html: String, until rendered: String, expected: Int = 0) async throws -> [String] {
             let log = RequestLog()
             var configuration = WebPage.Configuration()
             configuration.urlSchemeHandlers[URLScheme("diderot-test")!] = log
             let page = WebPage(configuration: configuration)
             for try await _ in page.load(html: html, baseURL: IslandHTML.baseURL) {}
             var done = false
-            for _ in 0..<50 where !done {
+            for _ in 0..<200 where !done {
                 done = try await page.callJavaScript("return \(rendered)") as? Bool == true
                 if !done { try await Task.sleep(for: .milliseconds(100)) }
             }
             #expect(done, "Not rendered: \(rendered)")
             _ = try await page.callJavaScript(reachOut)
+            // The requests that go out are waited for; those that mustn't get a second to show up.
+            for _ in 0..<200 where log.urls.withLock({ $0.count }) < expected { try await Task.sleep(for: .milliseconds(100)) }
             try await Task.sleep(for: .seconds(1))
             return log.urls.withLock { $0.map(\.absoluteString).sorted() }
         }
-        #expect(try await requests("<p></p>", until: "true") == ["diderot-test://fetch/", "diderot-test://image/"])
+        #expect(try await requests("<p></p>", until: "true", expected: 2) == ["diderot-test://fetch/", "diderot-test://image/"])
         #expect(try await requests(IslandHTML.math("x^2", displayMode: true), until: "document.querySelector('.katex') !== null").isEmpty)
         #expect(try await requests(IslandHTML.mermaid("graph TD; A-->B"), until: "document.querySelector('#d svg') !== null").isEmpty)
     }
