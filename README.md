@@ -94,7 +94,7 @@ Please report bugs as a [GitHub issue](https://github.com/f1n3d/diderot/issues/n
 | `Config/` | `Info.plist` (among others `NSAllowsLocalNetworking` for the dev instance and the `diderot://` URL scheme), build settings, and `Local.xcconfig.example` for your signing team. |
 | `Diderot/` | The app target (SwiftUI). A synced folder: new files are part of the project automatically. `App/MainTabView` is the frame (one navigation stack per tab); `Features/` holds home, spaces, reader, editor, search, favorites, notifications and settings. |
 | `Diderot/Resources/Localizable.xcstrings` | String catalog (English as the base, German translated). |
-| `Diderot/Resources/Islands/` | KaTeX and Mermaid for the web view islands. `Tools/build-islands.mjs` builds Mermaid without the ELK layout engine; a diagram asking for ELK is laid out with Mermaid's default, dagre. |
+| `Diderot/Resources/Islands/` | KaTeX and Mermaid for the web view islands, built by `Tools/build-islands.mjs` from their npm packages (versions in `Tools/islands.mjs`): KaTeX's fonts as woff2 only, Mermaid without the ELK layout engine; a diagram asking for ELK is laid out with Mermaid's default, dagre. |
 | `Diderot/Resources/Engine/engine.js` | The bundled editor engine (TipTap, Yjs and the Hocuspocus provider with Docmost's document format), built from `Engine/` and checked in. |
 | `Engine/` | The editor engine's sources (TypeScript, pnpm, esbuild), with its own extensions for Docmost's document format: [Engine/FORMAT.md](Engine/FORMAT.md). |
 | `Packages/DocmostKit/` | The platform-neutral core: API client, models, content format, auth, cache. `swift test` runs it directly on the Mac. |
@@ -173,7 +173,7 @@ Tools/seed-demo.py [--language de] [--reset]   # space "Product Team" by the dem
 Tools/seed-demo.py --env .env.demo              # the same on the demo instance for Apple's App Review (settings in .env.demo, see the script)
 Tools/screenshots.sh                            # App Store screenshots of the demo space, iPhone 18 Pro Max and iPad Pro 13-inch, English and German, in Tools/screenshots/
 
-# Rebuild Mermaid for the islands (without ELK), then the notices
+# Rebuild KaTeX and Mermaid for the islands (Mermaid without ELK), then the notices
 node Tools/build-islands.mjs
 
 # Rewrite THIRD_PARTY_NOTICES.md and the app's licenses page after changing bundled libraries

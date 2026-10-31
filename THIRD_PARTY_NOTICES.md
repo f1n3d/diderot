@@ -387,7 +387,7 @@ SOFTWARE.
 
 Diderot/Resources/Islands/mermaid.min.js, with the packages it bundles.
 
-### @antfu/install-pkg 2.1.0
+### @antfu/install-pkg
 
 License: MIT
 
@@ -415,7 +415,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### @braintree/sanitize-url 7.1.2
+### @braintree/sanitize-url
 
 License: MIT
 
@@ -443,7 +443,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### @chevrotain/cst-dts-gen 13.2.0, @chevrotain/gast 13.2.0, @chevrotain/regexp-to-ast 13.2.0, @chevrotain/types 13.2.0, @chevrotain/utils 13.2.0, chevrotain 13.2.0
+### @chevrotain/cst-dts-gen, @chevrotain/gast, @chevrotain/regexp-to-ast, @chevrotain/types, @chevrotain/utils, chevrotain
 
 License: Apache-2.0
 
@@ -651,7 +651,7 @@ Apache License
    limitations under the License.
 ````
 
-### @iconify/types 2.0.0
+### @iconify/types
 
 License: MIT
 
@@ -679,7 +679,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### @iconify/utils 3.1.7
+### @iconify/utils
 
 License: MIT
 
@@ -707,7 +707,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### @mermaid-js/parser 2.0.1
+### @mermaid-js/parser
 
 License: MIT
 
@@ -735,7 +735,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### @upsetjs/venn.js 2.0.0
+### @upsetjs/venn.js
 
 License: MIT
 
@@ -764,7 +764,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### commander 7.2.0
+### commander
 
 License: MIT
 
@@ -793,7 +793,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### cose-base 1.0.3
+### cose-base
 
 License: MIT
 
@@ -821,7 +821,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### cytoscape 3.34.4
+### cytoscape
 
 License: MIT
 
@@ -847,7 +847,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### cytoscape-cose-bilkent 4.1.0
+### cytoscape-cose-bilkent
 
 License: MIT
 
@@ -873,7 +873,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### cytoscape-fcose 2.2.0
+### cytoscape-fcose
 
 License: MIT
 
@@ -899,7 +899,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### d3 7.9.0, d3-array 3.2.4
+### d3, d3-array
 
 License: ISC
 
@@ -919,7 +919,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-axis 3.0.0, d3-brush 3.0.0, d3-chord 3.0.1, d3-dispatch 3.0.1, d3-drag 3.0.0, d3-force 3.0.0, d3-hierarchy 3.1.2, d3-interpolate 3.0.1, d3-polygon 3.0.1, d3-quadtree 3.0.1, d3-random 3.0.1, d3-scale 4.0.2, d3-selection 3.0.0, d3-time-format 4.1.0, d3-timer 3.0.1, d3-transition 3.0.1, d3-zoom 3.0.0
+### d3-axis, d3-brush, d3-chord, d3-dispatch, d3-drag, d3-force, d3-hierarchy, d3-interpolate, d3-polygon, d3-quadtree, d3-random, d3-scale, d3-selection, d3-time-format, d3-timer, d3-transition, d3-zoom
 
 License: ISC
 
@@ -939,7 +939,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-color 3.1.0, d3-shape 3.2.0, d3-time 3.1.0
+### d3-color, d3-shape, d3-time
 
 License: ISC
 
@@ -959,7 +959,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-contour 4.0.2
+### d3-contour
 
 License: ISC
 
@@ -979,7 +979,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-delaunay 6.0.4
+### d3-delaunay
 
 License: ISC
 
@@ -1000,7 +1000,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-dsv 3.0.1
+### d3-dsv
 
 License: ISC
 
@@ -1020,7 +1020,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-ease 3.0.1
+### d3-ease
 
 License: BSD-3-Clause
 
@@ -1055,7 +1055,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### d3-fetch 3.0.1
+### d3-fetch
 
 License: ISC
 
@@ -1075,7 +1075,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-format 3.1.2
+### d3-format
 
 License: ISC
 
@@ -1095,7 +1095,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-geo 3.1.1
+### d3-geo
 
 License: ISC
 
@@ -1136,7 +1136,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### d3-path 3.1.0
+### d3-path
 
 License: ISC
 
@@ -1156,7 +1156,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### d3-sankey 0.12.3
+### d3-sankey
 
 License: BSD-3-Clause
 
@@ -1190,7 +1190,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### d3-scale-chromatic 3.1.0
+### d3-scale-chromatic
 
 License: ISC
 
@@ -1225,7 +1225,7 @@ CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 ````
 
-### dagre-d3-es 7.0.14
+### dagre-d3-es
 
 License: MIT
 
@@ -1255,7 +1255,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ````
 
-### dayjs 1.11.23
+### dayjs
 
 License: MIT
 
@@ -1283,7 +1283,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### delaunator 5.1.0
+### delaunator
 
 License: ISC
 
@@ -1305,12 +1305,12 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### dompurify 3.4.17
+### dompurify
 
 License: (MPL-2.0 OR Apache-2.0)
 
 ````
-The source code of dompurify 3.4.17 is available under (MPL-2.0 OR Apache-2.0) at https://github.com/cure53/DOMPurify.
+The source code of dompurify is available under (MPL-2.0 OR Apache-2.0) at https://github.com/cure53/DOMPurify.
 
 Apache License
                            Version 2.0, January 2004
@@ -1515,7 +1515,7 @@ Apache License
    limitations under the License.
 ````
 
-### es-toolkit 1.52.0
+### es-toolkit
 
 License: MIT
 
@@ -1585,7 +1585,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### hachure-fill 0.5.2
+### hachure-fill
 
 License: MIT
 
@@ -1613,7 +1613,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### iconv-lite 0.6.3
+### iconv-lite
 
 License: MIT
 
@@ -1640,7 +1640,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### import-meta-resolve 4.2.0
+### import-meta-resolve
 
 License: MIT
 
@@ -1721,7 +1721,7 @@ IN THE SOFTWARE.
 """
 ````
 
-### internmap 2.0.3
+### internmap
 
 License: ISC
 
@@ -1741,7 +1741,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 ````
 
-### katex 0.16.47
+### katex
 
 License: MIT
 
@@ -1769,7 +1769,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### khroma 2.1.0
+### khroma
 
 License: MIT
 
@@ -1797,7 +1797,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### layout-base 1.0.2
+### layout-base
 
 License: MIT
 
@@ -1825,7 +1825,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### lodash-es 4.18.1
+### lodash-es
 
 License: MIT
 
@@ -1879,7 +1879,7 @@ licenses; we recommend you read them, as their terms may differ from the
 terms above.
 ````
 
-### marked 16.4.2
+### marked
 
 License: MIT
 
@@ -1958,7 +1958,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### package-manager-detector 1.9.0
+### package-manager-detector
 
 License: MIT
 
@@ -1986,7 +1986,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### path-data-parser 0.1.0, points-on-curve 0.2.0
+### path-data-parser, points-on-curve
 
 License: MIT
 
@@ -2014,7 +2014,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### points-on-path 0.2.1
+### points-on-path
 
 License: MIT
 
@@ -2042,7 +2042,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### robust-predicates 3.0.3
+### robust-predicates
 
 License: Unlicense
 
@@ -2073,7 +2073,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org>
 ````
 
-### roughjs 4.6.6
+### roughjs
 
 License: MIT
 
@@ -2101,7 +2101,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### rw 1.3.3
+### rw
 
 License: BSD-3-Clause
 
@@ -2134,7 +2134,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ````
 
-### safer-buffer 2.1.2
+### safer-buffer
 
 License: MIT
 
@@ -2162,7 +2162,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### stylis 4.4.0
+### stylis
 
 License: MIT
 
@@ -2190,7 +2190,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### tinyexec 1.3.1
+### tinyexec
 
 License: MIT
 
@@ -2218,7 +2218,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### ts-dedent 2.3.0
+### ts-dedent
 
 License: MIT
 
@@ -2246,7 +2246,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### uuid 14.0.3
+### uuid
 
 License: MIT
 
