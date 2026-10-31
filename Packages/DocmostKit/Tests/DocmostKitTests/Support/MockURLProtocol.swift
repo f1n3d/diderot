@@ -10,6 +10,8 @@ final class MockURLProtocol: URLProtocol {
         var body: Data = Data()
         /// Fails the request with this error instead of answering.
         var error: URLError?
+        /// Redirects there with `status` (e.g. 307) first; a request to it gets status 200 and `body`.
+        var redirect: URL?
     }
 
     private static let state = Mutex<(response: Response?, requests: [URLRequest])>((nil, []))
@@ -52,6 +54,24 @@ final class MockURLProtocol: URLProtocol {
         }
         if let error = response.error {
             client?.urlProtocol(self, didFailWithError: error)
+            return
+        }
+        if let redirect = response.redirect {
+            guard url == redirect else {
+                let moved = HTTPURLResponse(url: url, statusCode: response.status, httpVersion: "HTTP/1.1",
+                                            headerFields: ["Location": redirect.absoluteString])!
+                var next = request
+                next.url = redirect
+                client?.urlProtocol(self, wasRedirectedTo: next, redirectResponse: moved)
+                // A session that refuses the redirect gets the redirect itself as the answer, as from the network.
+                client?.urlProtocol(self, didReceive: moved, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocolDidFinishLoading(self)
+                return
+            }
+            let http = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: response.headers)!
+            client?.urlProtocol(self, didReceive: http, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: response.body)
+            client?.urlProtocolDidFinishLoading(self)
             return
         }
         let http = HTTPURLResponse(url: url, statusCode: response.status, httpVersion: "HTTP/1.1", headerFields: response.headers)!

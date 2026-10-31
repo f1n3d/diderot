@@ -70,8 +70,12 @@ final class BaseModel {
     var isOffline = false
     /// Text a failed save didn't get to the server, by "rowId/propertyId": its field shows it again, not the old value.
     private(set) var unsavedDrafts: [String: String] = [:]
-    /// The sign-in this database was opened with: after a server switch, its queued writes must not reach the new server.
-    @ObservationIgnored private let token: String?
+    /// The sign-in this database was opened with. Its requests and cache stay with it: after a switch or sign-out a
+    /// queued write doesn't reach the new server, and a late answer doesn't go into its cache.
+    @ObservationIgnored private let owner: ReadySession?
+
+    /// The server this database was opened on; its file uploads are staged in that server's folder (`UploadFile`).
+    var serverURL: URL? { owner?.server.url }
 
     private struct PendingWrite {
         let id = UUID()
@@ -83,7 +87,7 @@ final class BaseModel {
     init(pageId: String, session: AppSession) {
         self.pageId = pageId
         self.session = session
-        self.token = session.ready?.token
+        self.owner = session.ready
         self.selectedViewId = UserDefaults.standard.string(forKey: Self.viewKey(pageId))
     }
 
@@ -110,11 +114,11 @@ final class BaseModel {
     // MARK: - Loading
 
     func load() async {
-        guard let ready = session.ready else { return }
+        guard owner != nil else { return }
         // Opening offline, the page itself says it shows the saved version.
         let isOpening = state.value == nil
         if state.value == nil {
-            if let cached = await ready.cache.read(Base.self, key: CacheKey.base(pageId)) {
+            if let cached = await ownSession?.cache.read(Base.self, key: CacheKey.base(pageId)) {
                 state = .loaded(cached)
                 await restoreSnapshot()
             } else {
@@ -122,16 +126,15 @@ final class BaseModel {
             }
         }
         do {
-            let pageId = pageId
-            let base = try await session.perform { try await ready.client.send(Endpoints.Bases.info(pageId: pageId)) }
+            let base = try await send(Endpoints.Bases.info(pageId: pageId))
             state = .loaded(base)
-            await ready.cache.write(base, key: CacheKey.base(pageId))
+            await ownSession?.cache.write(base, key: CacheKey.base(pageId))
             await loadRows()
         } catch let error as APIError where error.isGone {
             // Deleted for good or access removed: show that instead of the saved copy, and drop the copy and its rows.
             let keys = [CacheKey.base(pageId)] + views.map { CacheKey.baseView(pageId, viewId: $0.id) }
             state = .failed(error)
-            for key in keys { await ready.cache.remove(key: key) }
+            for key in keys { await ownSession?.cache.remove(key: key) }
         } catch {
             let isOffline = if case .network = error as? APIError { true } else { false }
             if state.value == nil { state = .failed(error) } else { showRowsError(error, notice: !(isOpening && isOffline)) }
@@ -252,7 +255,20 @@ final class BaseModel {
     }
 
     private func fetch(filter: JSONValue?, sorts: JSONValue?, cursor: String?) async throws -> BaseRowsPage {
-        try await session.send(Endpoints.Bases.rows(pageId: pageId, filter: filter, sorts: sorts, cursor: cursor))
+        try await send(Endpoints.Bases.rows(pageId: pageId, filter: filter, sorts: sorts, cursor: cursor))
+    }
+
+    /// One request with the sign-in this database was opened with (`AppSession.send(_:on:)`); each request checks it
+    /// again, so a flow's second request doesn't follow a switch either.
+    private func send<Response>(_ endpoint: Endpoint<Response>) async throws -> Response {
+        guard let owner else { throw CancellationError() }
+        return try await session.send(endpoint, on: owner)
+    }
+
+    /// The app's session while it is still the one this database was opened with; nil after a switch or sign-out.
+    private var ownSession: ReadySession? {
+        guard let owner, session.isStillCurrent(owner) else { return nil }
+        return session.ready
     }
 
     private func merge(_ references: BaseReferences?) {
@@ -273,7 +289,7 @@ final class BaseModel {
     }
 
     var readOnlyReason: ReadOnlyReason? {
-        guard session.ready?.entitlements.has("bases") == true else { return .license }
+        guard ownSession?.entitlements.has("bases") == true else { return .license }
         guard base?.canEdit == true else { return .permission }
         return isOffline ? .offline : nil
     }
@@ -288,10 +304,7 @@ final class BaseModel {
     /// the loaded rows or the view's filter, as the web does). False if it can't be loaded.
     func fetchRowIfNeeded(_ id: String) async -> Bool {
         if row(id: id) != nil { return true }
-        guard let ready = session.ready else { return false }
-        let pageId = pageId
-        guard let row = try? await session.perform({ try await ready.client.send(Endpoints.Bases.rowInfo(pageId: pageId, rowId: id)) })
-        else { return false }
+        guard let row = try? await send(Endpoints.Bases.rowInfo(pageId: pageId, rowId: id)) else { return false }
         offBoardRows[row.id] = row
         return true
     }
@@ -366,7 +379,7 @@ final class BaseModel {
         let pageId = pageId
         do {
             let created = try await enqueue {
-                try await self.session.send(Endpoints.Bases.createRow(pageId: pageId, cells: cells, position: position))
+                try await self.send(Endpoints.Bases.createRow(pageId: pageId, cells: cells, position: position))
             }
             // Switched tabs meanwhile: the new view shows the row only if its own load found it; no sheet opens there.
             guard selectedView == view else { return nil }
@@ -397,7 +410,7 @@ final class BaseModel {
         deletedRowIds.insert(rowId)
         let pageId = pageId
         do {
-            _ = try await enqueue { try await self.session.send(Endpoints.Bases.deleteRow(pageId: pageId, rowId: rowId)) }
+            _ = try await enqueue { try await self.send(Endpoints.Bases.deleteRow(pageId: pageId, rowId: rowId)) }
             await storeSnapshot()
         } catch {
             deletedRowIds.remove(rowId)
@@ -419,14 +432,14 @@ final class BaseModel {
     /// Uploads a staged file (`UploadFile`) and adds it to the cell; the staged copy goes afterwards.
     func attachFile(rowId: String, propertyId: String, file: UploadFile) async {
         defer { file.remove() }
-        guard canEdit, let client = session.client else { return }
+        guard canEdit, let owner else { return }
         isUploading = true
         defer { isUploading = false }
         let pageId = pageId
         let mimeType = file.mimeType
         do {
-            let attachment = try await session.perform {
-                try await client.uploadAttachment(pageId: pageId, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
+            let attachment = try await session.perform(on: owner) {
+                try await $0.uploadAttachment(pageId: pageId, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
             }
             let files = row(id: rowId)?.cells[propertyId]?.arrayValue ?? []
             await setCell(rowId: rowId, propertyId: propertyId, to: .array(files + [BaseValue.file(attachment, mimeType: mimeType)]))
@@ -450,15 +463,15 @@ final class BaseModel {
             let result = try await enqueue {
                 // Onto the server's current options, not the copy loaded with the screen (there are no live updates): the
                 // server replaces the whole list, so options others added, renamed or recolored meanwhile would go.
-                let current = try await self.session.send(Endpoints.Bases.info(pageId: pageId)).property(id: propertyId)
+                let current = try await self.send(Endpoints.Bases.info(pageId: pageId)).property(id: propertyId)
                 let options = BaseValue.typeOptions((current ?? property).typeOptions, adding: choice)
-                return try await self.session.send(Endpoints.Bases.updateProperty(pageId: pageId, propertyId: propertyId, typeOptions: options))
+                return try await self.send(Endpoints.Bases.updateProperty(pageId: pageId, propertyId: propertyId, typeOptions: options))
             }
             // A reload may have brought a newer base meanwhile.
             base = self.base ?? base
             base.replace(result.property)
             state = .loaded(base)
-            await session.ready?.cache.write(base, key: CacheKey.base(pageId))
+            await ownSession?.cache.write(base, key: CacheKey.base(pageId))
             return choice
         } catch {
             toast = error.userMessage
@@ -470,7 +483,7 @@ final class BaseModel {
     func suggestPeople(_ query: String) async -> [SearchSuggestions.UserSuggestion] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let endpoint = Endpoints.Search.suggest(query: trimmed, users: true, pages: false, limit: trimmed.isEmpty ? 10 : 25)
-        return (try? await session.send(endpoint))?.users ?? []
+        return (try? await send(endpoint))?.users ?? []
     }
 
     /// Page search (web parity): pages in the database's space first.
@@ -479,7 +492,7 @@ final class BaseModel {
         let endpoint = Endpoints.Search.suggest(
             query: trimmed, users: false, pages: true, spaceId: base?.spaceId, limit: trimmed.isEmpty ? 5 : 25
         )
-        return (try? await session.send(endpoint))?.pages ?? []
+        return (try? await send(endpoint))?.pages ?? []
     }
 
     /// Records picked people and pages so cells show their names right away.
@@ -492,7 +505,7 @@ final class BaseModel {
     /// `keeping`: a field's text, kept in `unsavedDrafts` if the save fails, before the row shows its old value again.
     private func write(rowId: String, cells: [String: JSONValue], position: String?, keeping draft: (key: String, text: String)? = nil) async {
         // Not `canEdit`: a field that saves as the database turns read-only offline still tries, so its text is kept.
-        guard base?.canEdit == true, session.ready?.entitlements.has("bases") == true, let current = row(id: rowId) else { return }
+        guard base?.canEdit == true, ownSession?.entitlements.has("bases") == true, let current = row(id: rowId) else { return }
         let view = selectedView
         if confirmedRows[rowId] == nil { confirmedRows[rowId] = current }
         let pending = PendingWrite(rowId: rowId, cells: cells, position: position)
@@ -501,7 +514,7 @@ final class BaseModel {
         let pageId = pageId
         do {
             let saved = try await enqueue {
-                try await self.session.send(Endpoints.Bases.updateRow(pageId: pageId, rowId: rowId, cells: cells, position: position))
+                try await self.send(Endpoints.Bases.updateRow(pageId: pageId, rowId: rowId, cells: cells, position: position))
             }
             pendingWrites.removeAll { $0.id == pending.id }
             confirmedRows[rowId] = saved
@@ -577,24 +590,18 @@ final class BaseModel {
         columns[index].list.rows.insert(row, at: insertAt)
     }
 
-    /// Appends an operation to the write queue and waits for its result.
+    /// Appends an operation to the write queue and waits for its result. A write that waited past a switch or sign-out
+    /// doesn't go out: each request checks the session the database was opened with (`send`).
     private func enqueue<Output: Sendable>(
         _ operation: @escaping @MainActor @Sendable () async throws -> Output
     ) async throws -> Output {
         let previous = writeQueue
         let task = Task { @MainActor in
             await previous?.value
-            // Switched to another server meanwhile: the write would take its content there.
-            guard self.session.ready?.token == self.token else { throw SwitchedServer() }
             return try await operation()
         }
         writeQueue = Task { _ = try? await task.value }
         return try await task.value
-    }
-
-    /// A queued write after a switch to another server, dropped.
-    private struct SwitchedServer: LocalizedError {
-        var errorDescription: String? { String(localized: "Not saved: the app has switched to another server.") }
     }
 
     // MARK: - Cache
@@ -604,7 +611,7 @@ final class BaseModel {
     }
 
     private func storeSnapshot() async {
-        guard let cache = session.ready?.cache, let key = snapshotKey(), let view = selectedView else { return }
+        guard let cache = ownSession?.cache, let key = snapshotKey(), let view = selectedView else { return }
         let snapshot = BaseViewSnapshot(
             table: view.kind == .kanban ? nil : table, columns: view.kind == .kanban ? columns : nil, users: users, pages: pages
         )
@@ -612,7 +619,7 @@ final class BaseModel {
     }
 
     private func restoreSnapshot() async {
-        guard let cache = session.ready?.cache, let key = snapshotKey(),
+        guard let cache = ownSession?.cache, let key = snapshotKey(),
               let snapshot = await cache.read(BaseViewSnapshot.self, key: key), key == snapshotKey()
         else { return }
         if let cached = snapshot.table { table = cached }

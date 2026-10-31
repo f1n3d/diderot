@@ -5280,6 +5280,16 @@
         }
       }
     },
+    "The server redirects to %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server leitet auf %@ um."
+          }
+        }
+      }
+    },
     "The server refused the live connection. The page is read-only.": {
       "localizations": {
         "de": {

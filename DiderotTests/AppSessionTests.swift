@@ -66,8 +66,6 @@ struct ServerVersionTests {
 /// deleted one back; a second window must not restore the session again. Serialized: the tests share `StubURLProtocol`.
 @Suite(.serialized)
 struct AppSessionRaceTests {
-    // shortcut: sign-out also deletes the downloads, which can rarely break `TempFileTests` in a parallel Xcode run,
-    // give both suites one serialized parent suite if it does.
     private let a = URL(string: "https://a.example.com")!, b = URL(string: "https://b.example.com")!
     private let store = SessionStore(keychain: MemorySecretStore())
 
@@ -211,15 +209,75 @@ struct AppSessionRaceTests {
     @Test func failedSignInStepsKeepTheSignInScreen() async throws {
         let session = try await sessionOnA()
         session.handleUnauthorized()
+        let server = try #require(session.server)
         let writes = Mutex(0)
         withObservationTracking { _ = session.state } onChange: { writes.withLock { $0 += 1 } }
-        await #expect(throws: APIError.self) { try await session.signIn(withToken: "not-a-token") }
+        await #expect(throws: APIError.self) { try await session.signIn(withToken: "not-a-token", at: server) }
         #expect(writes.withLock { $0 } == 0, "no switch to “authenticating” and back")
         // Without the transfer token from the first step, the MFA step fails before any request.
         let challenge = try JSONDecoder().decode(MFAChallenge.self, from: Data(#"{"userHasMfa": true}"#.utf8))
-        await #expect(throws: APIError.self) { try await session.completeMFA(challenge, code: "123456") }
+        await #expect(throws: APIError.self) { try await session.completeMFA(challenge, code: "123456", at: server) }
         let signedOut = if case .signedOut(let server) = session.state { server.url == a } else { false }
         #expect(signedOut)
+        await removeCaches()
+    }
+
+    /// The sign-in screen of a sends its password or MFA code after a link switched the app to b: nothing goes to b, and
+    /// b stays signed in. Both used to go to b, whose answer showed b's sign-in screen.
+    @Test func signInForAServerNoLongerShownChangesNothing() async throws {
+        let session = try await sessionOnA()
+        session.handleUnauthorized()
+        let server = try #require(session.server)
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        StubURLProtocol.requests.withLock { $0 = [] }
+        await #expect(throws: CancellationError.self) {
+            try await session.signIn(email: "u1@example.com", password: "secret", at: server)
+        }
+        let challenge = try JSONDecoder().decode(MFAChallenge.self, from: Data(#"{"userHasMfa": true}"#.utf8))
+        await #expect(throws: CancellationError.self) { try await session.completeMFA(challenge, code: "123456", at: server) }
+        #expect(session.ready?.server.url == b)
+        #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.contains("/api/auth/") || $0.contains("/api/mfa/") })
+        await removeCaches()
+    }
+
+    /// The app switches to b while a's sign-in waits for the server: its failure leaves b alone, where it used to show
+    /// a's sign-in screen again. Links wait meanwhile, as such a switch would come from one.
+    @Test func lateSignInAnswerKeepsTheSwitch() async throws {
+        let session = try await sessionOnA()
+        session.handleUnauthorized()
+        let server = try #require(session.server)
+        #expect(session.opensLinks, "on the sign-in screen")
+        let other = StoredSession(serverURL: b, token: "b")
+        let opensLinks = Mutex<Bool?>(nil)
+        StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/auth/login" }
+        defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+            opensLinks.withLock { $0 = session.opensLinks }
+            await session.switchTo(other)
+        } }
+        // The stub's answer has no token: the sign-in fails.
+        await #expect(throws: APIError.self) { try await session.signIn(email: "u1@example.com", password: "secret", at: server) }
+        #expect(opensLinks.withLock { $0 } == false, "while signing in")
+        #expect(session.ready?.server.url == b)
+        await removeCaches()
+    }
+
+    /// a's server rejects the stored sign-in at the start, after the saved selection moved to b: a's sign-in goes, b's
+    /// stays. The current one went, by then b's.
+    @Test func rejectedStartRemovesItsOwnSignIn() async throws {
+        try store.save(StoredSession(serverURL: b, token: "b"))
+        try store.save(StoredSession(serverURL: a, token: "a"))
+        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let store = store, b = b
+        StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+        defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { _ = try? store.select(serverURL: b) } }
+        StubURLProtocol.status.withLock { $0 = 401 }
+        StubURLProtocol.body.withLock { $0 = #"{"statusCode": 401, "message": "Unauthorized"}"# }
+        await session.restore()
+        StubURLProtocol.status.withLock { $0 = 200 }
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(try store.loadAccounts().sessions.map(\.serverURL) == [b])
         await removeCaches()
     }
 
@@ -247,7 +305,6 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
-    /// A request of a ends with 401 after the switch to b, e.g. because a's token was revoked meanwhile.
     /// An editor engine still open after a switch to b asks for a fresh collab token for its page on a: it gets none,
     /// where it used to get b's token for a's socket.
     @Test func collabTokenOnlyForTheEnginesOwnSession() async throws {
@@ -259,6 +316,7 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// A request of a ends with 401 after the switch to b, e.g. because a's token was revoked meanwhile.
     @Test func lateUnauthorizedAnswerKeepsTheSwitch() async throws {
         let session = try await sessionOnA()
         let other = StoredSession(serverURL: b, token: "b")
@@ -268,6 +326,34 @@ struct AppSessionRaceTests {
         }
         #expect(session.ready?.server.url == b)
         #expect(try store.loadAccounts().sessions.map(\.serverURL) == [b, a])
+        await removeCaches()
+    }
+
+    /// The same for a request bound to a's session.
+    @Test func lateUnauthorizedAnswerOfABoundRequestKeepsTheSwitch() async throws {
+        let session = try await sessionOnA()
+        let owner = try #require(session.ready)
+        let other = StoredSession(serverURL: b, token: "b")
+        _ = try? await session.perform(on: owner) { _ async throws -> Void in
+            await session.switchTo(other)
+            throw APIError.unauthorized(message: nil)
+        }
+        #expect(session.ready?.server.url == b)
+        #expect(try store.loadAccounts().sessions.map(\.serverURL) == [b, a])
+        await removeCaches()
+    }
+
+    /// A request bound to a's session doesn't go out once the app has switched to b: a flow's second request, with the
+    /// user's note or title, went to b.
+    @Test func boundRequestAfterASwitchDoesntGoOut() async throws {
+        let session = try await sessionOnA()
+        let owner = try #require(session.ready)
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        StubURLProtocol.requests.withLock { $0 = [] }
+        await #expect(throws: SwitchedServer.self) {
+            try await session.send(Endpoints.Pages.appendMarkdown(pageId: "p1", "Notiz"), on: owner)
+        }
+        #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.hasSuffix("/api/pages/update") })
         await removeCaches()
     }
 
@@ -475,6 +561,56 @@ struct AppSessionRaceTests {
         #expect(queued.withLock { $0 } == true, "the second change waited in the queue")
         #expect(session.ready?.server.url == b)
         #expect(model.toast == String(localized: "Not saved: the app has switched to another server."))
+        await removeCaches()
+    }
+
+    /// The user switches to b while a's server reads the options for a new choice: nothing goes to b, where a's option
+    /// list used to go, and b's cache gets none of a's database.
+    @Test(.timeLimit(.minutes(1))) func choiceAddedDuringASwitchStaysOnItsServer() async throws {
+        let business = try JSONDecoder().decode(Entitlements.self, from: Data(#"{"tier": "business", "features": ["bases"]}"#.utf8))
+        await DiskCache(scope: a.absoluteString).write(business, key: CacheKey.entitlements)
+        let session = try await sessionOnA()
+        let model = BaseModel(pageId: "base-\(UUID().uuidString)", session: session)
+        let base = #"{"data": {"id": "b", "permissions": {"canEdit": true}, "properties": [{"id": "s", "name": "S", "type": "select"}], "views": [{"id": "v1", "name": "A", "type": "table", "position": "a"}]}}"#
+        StubURLProtocol.body.withLock { $0 = base }
+        await model.load()
+        let other = StoredSession(serverURL: b, token: "b")
+        StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/bases/info" }
+        defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+            StubURLProtocol.body.withLock { $0 = nil }  // b's own answers for the switch
+            await session.switchTo(other)
+            StubURLProtocol.body.withLock { $0 = base }
+        } }
+        StubURLProtocol.requests.withLock { $0 = [] }
+        let choice = await model.addChoice(named: "Neu", to: "s")
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(choice == nil)
+        #expect(session.ready?.server.url == b)
+        #expect(StubURLProtocol.requests.withLock { $0 }.contains("a.example.com/api/bases/info"), "the options were read")
+        #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.hasPrefix("b.example.com/api/bases") })
+        #expect(model.toast == String(localized: "Not saved: the app has switched to another server."))
+        #expect(await DiskCache(scope: b.absoluteString).read(Base.self, key: CacheKey.base(model.pageId)) == nil)
+        await removeCaches()
+    }
+
+    /// A change a's server confirms after the switch to b leaves b's cache alone: the late answer stored a's rows there.
+    @Test(.timeLimit(.minutes(1))) func writeAnsweredAfterASwitchLeavesTheNewCacheAlone() async throws {
+        let (model, session) = try await editableBase()
+        let other = StoredSession(serverURL: b, token: "b")
+        StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/bases/rows/update" }
+        defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+            StubURLProtocol.body.withLock { $0 = nil }  // b's own answers for the switch
+            await session.switchTo(other)
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "eins"}}}"# }
+        } }
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "eins"}}}"# }
+        await model.setCell(rowId: "r1", propertyId: "p1", to: .string("eins"))
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(session.ready?.server.url == b)
+        let key = CacheKey.baseView(model.pageId, viewId: "v1")
+        #expect(await DiskCache(scope: b.absoluteString).read(BaseViewSnapshot.self, key: key) == nil)
         await removeCaches()
     }
 
@@ -1082,11 +1218,14 @@ private nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendabl
     static let unanswered = Mutex(0)
     static let body = Mutex<String?>(nil)
     static let status = Mutex(200)
+    /// Host and path of every request, for tests that check where requests went (they empty it first).
+    static let requests = Mutex<[String]>([])
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        Self.requests.withLock { $0.append((request.url?.host ?? "") + (request.url?.path ?? "")) }
         if Self.offline.withLock({ $0 }) {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return

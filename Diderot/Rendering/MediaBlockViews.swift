@@ -256,13 +256,15 @@ struct AttachmentBlockView: View {
     }
 
     private func open() async {
-        guard let client = context.client, let url = context.mediaURL(media.src) else { return }
+        guard let client = context.client, let server = context.baseURL, let url = context.mediaURL(media.src) else { return }
         isDownloading = true
         errorMessage = nil
         defer { isDownloading = false }
         do {
             let (data, _) = try await client.fetchFile(at: url)
-            localURL = try TempFile.write(data, folder: ["attachments", media.attachmentId ?? UUID().uuidString], name: media.name ?? url.lastPathComponent)
+            localURL = try TempFile.write(
+                data, server: server, folder: ["attachments", media.attachmentId ?? UUID().uuidString], name: media.name ?? url.lastPathComponent
+            )
         } catch {
             errorMessage = error.userMessage
         }

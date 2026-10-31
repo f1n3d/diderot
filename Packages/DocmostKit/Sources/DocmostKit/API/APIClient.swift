@@ -105,7 +105,9 @@ public actor APIClient {
             try output.write(contentsOf: tail)
         }
         let request = uploadRequest(boundary: boundary)
-        let (responseData, _) = try await execute(request, path: "files/upload") { try await self.session.upload(for: request, fromFile: body) }
+        let (responseData, _) = try await execute(request, path: "files/upload") {
+            try await self.session.upload(for: request, fromFile: body, delegate: $0)
+        }
         return try decode(Attachment.self, from: responseData, unwrapsEnvelope: false)
     }
 
@@ -167,18 +169,23 @@ public actor APIClient {
         return (scheme, url.host()?.lowercased(), url.port ?? (scheme == "http" ? 80 : 443))
     }
 
-    /// `send`: how the request goes out, if not as `session.data(for:)` (an upload from a file).
+    /// `send`: how the request goes out, if not as `session.data(for:delegate:)` (an upload from a file); it gets the
+    /// delegate to pass on.
     private func execute(
-        _ request: URLRequest, path: String, send: (() async throws -> (Data, URLResponse))? = nil
+        _ request: URLRequest, path: String, send: ((URLSessionTaskDelegate?) async throws -> (Data, URLResponse))? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let started = ContinuousClock.now
         let method = request.httpMethod ?? "GET"
+        // Requests to the server don't follow redirects: Docmost sends none, and URLSession would send a request's body
+        // and cookie (a password, the MFA cookie, page content) on to wherever one points, another host or plain HTTP
+        // included, and drop its token, so the server's 401 would sign out. Files on other hosts follow them.
+        let delegate = request.url.map { origin(of: $0) == origin(of: baseURL) } == true ? RedirectRefusal() : nil
         do {
             let (data, response): (Data, URLResponse)
             if let send {
-                (data, response) = try await send()
+                (data, response) = try await send(delegate)
             } else {
-                (data, response) = try await session.data(for: request)
+                (data, response) = try await session.data(for: request, delegate: delegate)
             }
             guard let http = response as? HTTPURLResponse else {
                 throw APIError.invalidResponse
@@ -186,6 +193,9 @@ public actor APIClient {
             log(method: method, path: path, status: http.statusCode, started: started, error: nil)
             if let date = http.value(forHTTPHeaderField: "Date").flatMap({ try? Date($0, strategy: .http) }) {
                 clockOffset.withLock { $0 = date.timeIntervalSinceNow }
+            }
+            if (300..<400).contains(http.statusCode), let location = http.value(forHTTPHeaderField: "Location") {
+                throw APIError.server(status: http.statusCode, message: String(localized: "The server redirects to \(location).", bundle: .main))
             }
             guard (200..<300).contains(http.statusCode) else {
                 throw APIError.from(status: http.statusCode, data: data)
@@ -231,6 +241,15 @@ public actor APIClient {
         guard let logger else { return }
         let seconds = started.duration(to: .now) / .seconds(1)
         logger(APIRequestLog(method: method, path: path, status: status, duration: seconds, error: error))
+    }
+}
+
+/// Hands a redirect back as the response instead of following it (see `APIClient.execute`).
+private final class RedirectRefusal: NSObject, URLSessionTaskDelegate {
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
+    ) async -> URLRequest? {
+        nil
     }
 }
 

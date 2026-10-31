@@ -59,7 +59,7 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Data safety outside the editor | R7 (with R55), R8, R10, R11, R17, R18, R20, R21, R25, R38, R41, R44 | unit tests | low to medium |
+| **B** Data safety outside the editor | R7 (with R55), R8, R17, R18, R20, R38, R41 | unit tests | low to medium |
 | **C** Data safety in the editor | R1, R2, R3, R5, R6, R9, R19, R22, R23, R26 | unit tests and UI tests | medium |
 | **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
@@ -193,34 +193,6 @@ R55 merges the three copies of the draft handling first.
 
 ## 2. Security and privacy
 
-### R10 [medium] ✔ The API client has no redirect policy
-
-**Where:** `APIClient.swift:48` (URLSession without delegate), `:80`, `:171–205`.
-
-**Problem:** On 307/308, request bodies go again to whatever host the redirect names: the password, the manual `Cookie: mfaToken` header, page content. `fetchFile` checks only the first request's origin before sending `Authorization`.
-
-Whether URLSession keeps the bearer header across hosts is undocumented and untested (?), and both outcomes are bad:
-
-- If it keeps it, the token reaches the other host.
-- If it drops it, a redirect within the same server gets a 401, and the user is signed out (R11).
-
-**Fix:** A per-request delegate (`session.data(for:delegate:)`) that refuses redirects leaving the server's origin or going to http, for requests that carry credentials. Add a `MockURLProtocol` test using `wasRedirectedTo:`.
-
-### R11 [medium] ✔ Any 401 signs out, also one from a proxy, and the server session stays valid
-
-**Where:** `APIError.swift`, `from(status:data:)`; `AppSession.swift:522–545`; `UnsentChanges.swift:53–57`.
-
-**Problem:** A 403 or 404 counts only with Docmost's error JSON, so that a proxy or captive portal can't trigger it. A 400 or 401 counts with any body.
-
-**Scenarios:**
-
-- **401:** A 401 from a reverse proxy or login gateway in front of Docmost runs `handleUnauthorized()`. That deletes the sign-in from the Keychain but queues no server logout, so the token stays valid on the server.
-- **400:** A 400 from such an intermediary becomes `.validation`. `UnsentTitle.isFinal` then drops the kept title.
-
-**Relevance:** Common in company setups.
-
-**Fix:** Require `body?.statusCode == status` for 400 and 401 too, else `.server`.
-
 ### R12 [low] ✔ SSO token capture checks only name and domain
 
 **Where:** `BrowserLoginView.swift:97–110`, `:55–56`; `AppSession.swift:370–377`.
@@ -341,27 +313,6 @@ FavoritesStore (`:45–51`) and NotificationsStore (`:50–58`) already fixed th
 
 **Fix:** A `toast` or error property on the stores, like `PageActionRunner.toast`.
 
-### R21 [medium] ○ Links during a sign-in, and multi-step flows across a server switch
-
-**Where:** `AppSession.swift:221`, `:239`, `:248`, `:258`, `:280`, `:391–395`, `:630`; `RootView.swift:43`; `AppNavigation.swift:19–29`; `AppSession.swift:522–536`.
-
-**Problems:**
-
-- **Links:** Incoming links queue only while the state is `.restoring`. During `.authenticating` or a connect, a `diderot://open?url=` link to another saved server starts `switchTo` at once. The still-running sign-in then writes `state` unchecked; `finishSignIn` checks staleness only with `replacing`.
-  - Result: Server B's page opens, then A's answer sets `.signedOut(A)` (kicking the user out of B) or `.ready(A)`.
-  - `signIn(withToken:)` and `completeMFA` take the server from the current state, not from their own flow. `restore()` calls `clear()` after an await (`:237`).
-- **Multi-step flows:** `send` picks the client when called, and `perform` blames a 401 on whichever session is current then. Such flows can send their second request, with the user's title or note text, to a server switched to meanwhile:
-  - keep title → update (`PageView.swift:1204–1212`)
-  - info → appendMarkdown (`PageEditingSheets.swift:56–57`)
-  - info → updateProperty (`BaseModel.swift:453–455`; R44)
-- **Staleness checks:** Five different ways: `isStillCurrent`, raw token comparison, `ServerInfo` comparison, relying on the view's `.id` rebuild, and nothing before sign-in completes.
-
-**Fix:**
-
-- Queue links unless the state is `.ready` or `.signedOut`.
-- Pass the flow's `ServerInfo` into the sign-in methods, and stop when it's no longer current.
-- A gateway bound to one session for multi-step flows (S3).
-
 ### R38 [low] ○ Comment errors are lost when the sheet closes
 
 **Where:** `CommentsView.swift:248–281`.
@@ -402,14 +353,6 @@ FavoritesStore (`:45–51`) and NotificationsStore (`:50–58`) already fixed th
 
 **Fix:** `.environment(\.showsCommentMarks, false)` in HistoryView, and the existing notice toast for `.never` links.
 
-### R44 [low] ○ Database: a write can reach the server switched to
-
-**Where:** `BaseModel.swift:450–456`, `:461`, `:588`, `:607`, `:615`.
-
-**Problem:** `enqueue` checks the token once, but `addChoice` then makes two requests through the late-bound `session.send`. A switch during `bases/info` sends server A's option list to server B. `storeSnapshot`, `restoreSnapshot` and `addChoice` also look up `session.ready?.cache` late, so a write finishing after a switch stores A's rows in B's cache. The comments at `:73` and `:587` say exactly this is prevented.
-
-**Fix:** Capture the `ReadySession` in `init` and use its client and cache throughout. Check `isStillCurrent` again before the second request.
-
 ### R45 [low] ○ Kanban column requests aren't cancelled
 
 **Where:** `BaseModel.swift:181–191`.
@@ -447,14 +390,6 @@ FavoritesStore (`:45–51`) and NotificationsStore (`:50–58`) already fixed th
 **Problem:** Signing out, and `removeLocalData` without the `hasEntries` confirmation, delete the web editor's data store. That includes the web client's IndexedDB Yjs cache, which can hold edits that didn't reach the server (comment at `:119–121`).
 
 **Confirm:** Edit offline in the web editor, then sign out.
-
-#### R25 [low] ○ `removeLocalData` affects every server
-
-**Where:** `AppSession.swift:318–328`, `:573–581`, `:682–686`; `TempFile.swift:18–22`; `UploadFile.swift:16`.
-
-**Problem:** It deletes `tmp/{attachments,exports,uploads}` and `URLCache.shared` for all servers, also when removing another server or using "Clear Saved Content". `uploads` holds the staged files a running upload reads, so removing server B in one window can break an upload or a Quick Look preview in another.
-
-**Fix:** Temp folders per server, and `uploads` only on signing out of that server.
 
 #### R26 [low] ? A closing engine can look editable again
 
@@ -519,7 +454,7 @@ So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine(
 
 **Problems:**
 
-- If the upload's body file can't be created (disk full, or `tmp/uploads` deleted mid-upload, R25), the user sees "Invalid response from server."
+- If the upload's body file can't be created (disk full, or the staged file deleted by signing out mid-upload), the user sees "Invalid response from server."
 - `execute` turns every non-network error into `.invalidResponse`.
 - The multipart `filename` escapes `"` but not line breaks.
 - The file-based upload the app uses has no test.
@@ -789,7 +724,7 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Topic | Today | Target |
 |---|---|---|
 | Loading | About 14 hand-written loaders; the same ~12-line `.loading … CancellationError … .failed` block about 12 times. Only 4 guard against overlapping loads (FavoritesStore, NotificationsStore, RecentPagesView, PageTreeStore). The rest differ in offline cache and refresh-error handling. AsyncContentView is full-screen only, so 5 places hand-roll it (HomeView 108–138, NotificationsPopover 55–99, SpaceView 194–221 and 226–266, BaseScreen 124–133). | An `@Observable RemoteValue<Value>`: state, generation counter, optional cache key, cancellation, refresh error. Plus an inline layout for AsyncContentView. (M) |
-| Session binding | Three call styles: `session.send`, `session.perform { client.send }`, and bare `client.send` without 401 handling (BaseScreen.swift:228, BaseFieldEditors.swift:492). "Still current?" is checked five ways (R21). `RenderContext` gives block views the raw `APIClient` and token, so their requests skip the 401 handling. | A gateway bound to one `ReadySession`, with its own 401 handling. Rule: capture the session once, check again between requests. (S–M) |
+| Session binding | Four call styles: `session.send`, `session.perform { client.send }`, bare `client.send` without 401 handling (BaseScreen.swift:228, BaseFieldEditors.swift:492), and `send(_:on:)`/`perform(on:)`, bound to one `ReadySession` (databases, title, note, collab token). `session.perform` blames a 401 on the session current when it starts, not on the one whose client sent the request. `RenderContext` gives block views the raw `APIClient` and token, so their requests skip the 401 handling. | Every request through the bound calls. Rule: capture the session once, check again between requests. (S–M) |
 | Server identity | Three forms: lowercased `StoredAccounts.key` (Keychain, web editor stores), the raw URL string (offline cache, unsent changes), host plus default port (links). The normaliser keeps host case and an explicit `:443`, so re-adding a server with another spelling strands its unsent changes (○). `UnsentChanges` builds its folder from DiskCache's private layout (`docmost-cache/` + `safeName`), so a cache refactor would orphan every user's unsent changes. | `ServerKey` and `Origin` types in DocmostKit; canonicalise in the normaliser (lowercase host, drop default ports); a fixed path for the unsent store. (S–M) |
 | Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes, with an API that swallows every error (R8, M55). | A small store of its own that throws and updates atomically. (S–M) |
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |

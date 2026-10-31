@@ -138,8 +138,7 @@ final class WebDocumentEngine: DocumentEngine {
     /// A fresh collab token for a page opened with `owner`; none once a switch or sign-out replaced that session: another
     /// server's token would go to this page's socket.
     static func collabToken(session: AppSession, owner: ReadySession) async -> String? {
-        guard session.isStillCurrent(owner) else { return nil }
-        return try? await session.perform { try await owner.client.send(Endpoints.Auth.collabToken) }.token
+        try? await session.send(Endpoints.Auth.collabToken, on: owner).token
     }
 
     /// Dropped without `close` (its page view went away first): the page would stay connected, and show the user as

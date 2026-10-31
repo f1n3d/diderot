@@ -13,17 +13,23 @@ nonisolated struct UploadFile: Sendable {
     let fileName: String
     let mimeType: String
 
-    /// One folder per upload under tmp/uploads (`TempFile.removeAll` clears what a crash left).
-    static let folder = FileManager.default.temporaryDirectory.appending(path: "uploads", directoryHint: .isDirectory)
+    /// One folder per upload in the server's temporary folder (`TempFile`); signing out of the server deletes what a
+    /// crash left there.
+    static func folder(server: URL) -> URL {
+        TempFile.directory(server: server).appending(path: "uploads", directoryHint: .isDirectory)
+    }
 
-    private static func stagingFolder() throws -> URL {
-        let folder = folder.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    /// A library video's first stop: its import (`VideoFile`) can't know the server, so `photo` moves it on.
+    private static let incoming = FileManager.default.temporaryDirectory.appending(path: "incoming", directoryHint: .isDirectory)
+
+    private static func newFolder(in parent: URL) throws -> URL {
+        let folder = parent.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }
 
-    private static func staged(_ data: Data, fileName: String, mimeType: String) throws -> UploadFile {
-        let url = try stagingFolder().appending(path: "file")
+    private static func staged(_ data: Data, fileName: String, mimeType: String, server: URL) throws -> UploadFile {
+        let url = try newFolder(in: folder(server: server)).appending(path: "file")
         try data.write(to: url, options: .completeFileProtection)
         return UploadFile(fileURL: url, fileName: fileName, mimeType: mimeType)
     }
@@ -38,7 +44,7 @@ nonisolated struct UploadFile: Sendable {
         let url: URL
         static var transferRepresentation: some TransferRepresentation {
             FileRepresentation(importedContentType: .movie) { received in
-                let copy = try UploadFile.stagingFolder().appending(path: "original.\(received.file.pathExtension)")
+                let copy = try UploadFile.newFolder(in: UploadFile.incoming).appending(path: "original.\(received.file.pathExtension)")
                 try FileManager.default.copyItem(at: received.file, to: copy)
                 return VideoFile(url: copy)
             }
@@ -48,11 +54,14 @@ nonisolated struct UploadFile: Sendable {
     /// Library photo or video, without its location: the photo picker hands it over "with location" unless that is
     /// switched off, and everyone who can read the page could download it. Images other than JPEG, PNG and GIF upload
     /// as JPEG: the web client can't show HEIC/HEIF.
-    @concurrent static func photo(_ item: PhotosPickerItem) async throws -> UploadFile? {
+    @concurrent static func photo(_ item: PhotosPickerItem, server: URL) async throws -> UploadFile? {
         let type = item.supportedContentTypes.first
         if let type, type.conforms(to: .movie) {
             guard let video = try await item.loadTransferable(type: VideoFile.self) else { return nil }
-            let shared = try await withoutLocation(videoAt: video.url, type: type)
+            defer { try? FileManager.default.removeItem(at: video.url.deletingLastPathComponent()) }
+            let staged = try newFolder(in: folder(server: server)).appending(path: video.url.lastPathComponent)
+            try FileManager.default.moveItem(at: video.url, to: staged)
+            let shared = try await withoutLocation(videoAt: staged, type: type)
             return UploadFile(fileURL: shared, fileName: "Video-\(stamp()).\(shared.pathExtension)",
                               mimeType: type.preferredMIMEType ?? "video/quicktime")
         }
@@ -69,7 +78,7 @@ nonisolated struct UploadFile: Sendable {
         } else {
             data = try withoutLocation(image: data)
         }
-        return try staged(data, fileName: "Bild-\(stamp()).\(ext)", mimeType: mime)
+        return try staged(data, fileName: "Bild-\(stamp()).\(ext)", mimeType: mime, server: server)
     }
 
     /// The image without its location; one without a location stays as it is. A JPEG keeps its encoding (only its
@@ -135,15 +144,15 @@ nonisolated struct UploadFile: Sendable {
     }
 
     /// JPEG from the camera.
-    static func camera(_ data: Data) throws -> UploadFile {
-        try staged(data, fileName: "Foto-\(stamp()).jpg", mimeType: "image/jpeg")
+    static func camera(_ data: Data, server: URL) throws -> UploadFile {
+        try staged(data, fileName: "Foto-\(stamp()).jpg", mimeType: "image/jpeg", server: server)
     }
 
     /// File from the file importer (security-scoped URL), copied file to file.
-    @concurrent static func file(at url: URL) async throws -> UploadFile {
+    @concurrent static func file(at url: URL, server: URL) async throws -> UploadFile {
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        let copy = try stagingFolder().appending(path: "file")
+        let copy = try newFolder(in: folder(server: server)).appending(path: "file")
         try FileManager.default.copyItem(at: url, to: copy)
         try? (copy as NSURL).setResourceValue(URLFileProtection.complete, forKey: .fileProtectionKey)
         let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"

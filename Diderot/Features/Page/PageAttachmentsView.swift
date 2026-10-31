@@ -96,14 +96,14 @@ struct PageAttachmentsView: View {
     }
 
     private func open(_ attachment: Attachment) async {
-        guard let client = session.client,
+        guard let client = session.client, let server = session.server?.url,
               let url = RenderContext(session: session, pageId: page.id).mediaURL(attachment.fileURLPath) else { return }
         opening = attachment.id
         errorMessage = nil
         defer { opening = nil }
         do {
             let (data, _) = try await client.fetchFile(at: url)
-            preview = try TempFile.write(data, folder: ["attachments", attachment.id], name: attachment.fileName)
+            preview = try TempFile.write(data, server: server, folder: ["attachments", attachment.id], name: attachment.fileName)
         } catch {
             errorMessage = error.userMessage
         }

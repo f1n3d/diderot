@@ -93,10 +93,10 @@ struct LoginView: View {
                 BrowserLoginView(server: server, startURL: url)
             }
             .sheet(item: $mfaChallenge) { challenge in
-                MFACodeView(challenge: challenge)
+                MFACodeView(challenge: challenge, server: server)
             }
             .sheet(item: $ldapProvider) { provider in
-                LDAPLoginView(provider: provider)
+                LDAPLoginView(provider: provider, server: server)
             }
         }
     }
@@ -137,7 +137,7 @@ struct LoginView: View {
         errorMessage = nil
         Task {
             do {
-                let outcome = try await session.signIn(email: email.trimmingCharacters(in: .whitespaces), password: password)
+                let outcome = try await session.signIn(email: email.trimmingCharacters(in: .whitespaces), password: password, at: server)
                 if case .mfaRequired(let challenge) = outcome {
                     if challenge.needsSetup {
                         errorMessage = AppSessionError.mfaSetupRequired.localizedDescription
@@ -145,6 +145,8 @@ struct LoginView: View {
                         mfaChallenge = challenge
                     }
                 }
+            } catch is CancellationError {
+                // The app shows another server now: this screen is closing.
             } catch {
                 errorMessage = error.userMessage
                 password = ""
@@ -163,6 +165,7 @@ struct MFACodeView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     let challenge: MFAChallenge
+    let server: ServerInfo
     @State private var code = ""
     @State private var errorMessage: String?
     @State private var isVerifying = false
@@ -207,8 +210,9 @@ struct MFACodeView: View {
         Task {
             defer { isVerifying = false }
             do {
-                try await session.completeMFA(challenge, code: code)
+                try await session.completeMFA(challenge, code: code, at: server)
                 dismiss()
+            } catch is CancellationError {
             } catch {
                 errorMessage = error.userMessage
             }
@@ -221,6 +225,7 @@ struct LDAPLoginView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     let provider: AuthProvider
+    let server: ServerInfo
     @State private var username = ""
     @State private var password = ""
     @State private var errorMessage: String?
@@ -253,7 +258,7 @@ struct LDAPLoginView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
             .sheet(item: $mfaChallenge) { challenge in
-                MFACodeView(challenge: challenge)
+                MFACodeView(challenge: challenge, server: server)
             }
         }
     }
@@ -265,7 +270,7 @@ struct LDAPLoginView: View {
         Task {
             defer { isSubmitting = false }
             do {
-                let outcome = try await session.signInWithLDAP(providerId: provider.id, username: username, password: password)
+                let outcome = try await session.signInWithLDAP(providerId: provider.id, username: username, password: password, at: server)
                 switch outcome {
                 case .signedIn: dismiss()
                 case .mfaRequired(let challenge):
@@ -275,6 +280,7 @@ struct LDAPLoginView: View {
                         mfaChallenge = challenge
                     }
                 }
+            } catch is CancellationError {
             } catch {
                 errorMessage = error.userMessage
             }

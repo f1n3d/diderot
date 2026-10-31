@@ -52,13 +52,14 @@ public enum APIError: Error, Sendable, Equatable {
         let body = try? JSONDecoding.makeDecoder().decode(ServerErrorBody.self, from: data)
         let messages = body?.messages ?? []
         let first = messages.first
+        // Only Docmost's own answer, whose body names the status: a 400, 401, 403 or 404 from a reverse proxy, a sign-in
+        // gateway in front of Docmost or a captive portal must not sign out (the server session would stay valid), drop
+        // a kept title, or count as a page gone for good (that drops its saved copy).
         switch status {
-        case 400:
+        case 400 where body?.statusCode == 400:
             return .validation(messages: messages.isEmpty ? [String(localized: "Bad request.", bundle: .main)] : messages)
-        case 401:
+        case 401 where body?.statusCode == 401:
             return .unauthorized(message: first)
-        // Only Docmost's own answer: a 403 or 404 from a proxy or captive portal must not count as a page gone for
-        // good (that drops its saved copy).
         case 403 where body?.statusCode == 403:
             return .forbidden(message: first)
         case 404 where body?.statusCode == 404:

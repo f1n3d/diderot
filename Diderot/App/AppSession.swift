@@ -92,6 +92,11 @@ enum AppSessionError: LocalizedError {
     }
 }
 
+/// A request of a session that a server switch or sign-out has replaced (`AppSession.perform(on:)`): it didn't go out.
+struct SwitchedServer: LocalizedError {
+    var errorDescription: String? { String(localized: "Not saved: the app has switched to another server.") }
+}
+
 /// Sign-in state machine: `restoring → noServer → signedOut → authenticating → ready` (a restore can skip steps).
 /// Back from `ready`: sign-out and 401 to `signedOut`, switching servers to `restoring`, adding one to `noServer`.
 @MainActor
@@ -162,9 +167,13 @@ final class AppSession {
         return nil
     }
 
-    var isRestoring: Bool {
-        if case .restoring = state { return true }
-        return false
+    /// Links open only when signed in or on the sign-in screen (`RootView` keeps them until then): a switch while the
+    /// app restores, signs in or checks a new server would be undone by that step's late answer.
+    var opensLinks: Bool {
+        switch state {
+        case .ready, .signedOut: true
+        case .restoring, .noServer, .authenticating: false
+        }
     }
 
     /// `false` once a switch or sign-out replaced `session`; a late network answer for it must change nothing.
@@ -234,7 +243,8 @@ final class AppSession {
                 throw APIError.network(URLError(.timedOut))
             } catch let error as APIError where error.isSessionExpired {
                 AppLog.session.notice("Stored session rejected by server, signing out")
-                keychain("clear") { try sessionStore.clear() }
+                // This sign-in, not the current one: that can have changed during the requests.
+                keychain("remove") { try sessionStore.remove(serverURL: stored.serverURL) }
                 reloadAccounts()
                 state = .signedOut(server)
                 return
@@ -347,54 +357,68 @@ final class AppSession {
         case mfaRequired(MFAChallenge)
     }
 
+    /// `server`: the sign-in screen's, for this and the methods below.
     @discardableResult
-    func signIn(email: String, password: String) async throws -> SignInOutcome {
-        try await signIn { client in
+    func signIn(email: String, password: String, at server: ServerInfo) async throws -> SignInOutcome {
+        try await signIn(at: server) { client in
             try await LoginFlow.loginWithPassword(client: client, email: email, password: password)
         }
     }
 
     @discardableResult
-    func signInWithLDAP(providerId: String, username: String, password: String) async throws -> SignInOutcome {
-        try await signIn { client in
+    func signInWithLDAP(providerId: String, username: String, password: String, at server: ServerInfo) async throws -> SignInOutcome {
+        try await signIn(at: server) { client in
             try await LoginFlow.loginWithLDAP(client: client, providerId: providerId, username: username, password: password)
         }
     }
 
     /// Second step after `.mfaRequired`.
-    func completeMFA(_ challenge: MFAChallenge, code: String) async throws {
-        try await signIn { .authenticated(token: try await LoginFlow.verifyMFA(client: $0, challenge: challenge, code: code)) }
+    func completeMFA(_ challenge: MFAChallenge, code: String, at server: ServerInfo) async throws {
+        try await signIn(at: server) { .authenticated(token: try await LoginFlow.verifyMFA(client: $0, challenge: challenge, code: code)) }
     }
 
     /// Sign-in via the embedded browser (SSO/MFA), which captured the `authToken` cookie.
-    func signIn(withToken token: String) async throws {
-        guard server != nil else { return }
+    func signIn(withToken token: String, at server: ServerInfo) async throws {
         // Before sign-in starts, so an invalid token never shows `.authenticating`.
         guard JWTClaims(token: token)?.isAccessToken == true else {
             throw APIError.unauthorized(message: String(localized: "The browser sign-in did not produce a valid session."))
         }
-        try await signIn { _ in .authenticated(token: token) }
+        try await signIn(at: server) { _ in .authenticated(token: token) }
     }
 
+    /// Signs in to the sign-in screen's server. Once the app shows another (a link switched servers), it doesn't start,
+    /// or ends without changing anything (`CancellationError`): the server switched to would get the other's token or
+    /// MFA code, and the late answer would sign out of it or replace it.
     @discardableResult
-    private func signIn(_ login: (APIClient) async throws -> LoginResult) async throws -> SignInOutcome {
-        guard let server else { return .signedIn }
+    private func signIn(at screen: ServerInfo, _ login: (APIClient) async throws -> LoginResult) async throws -> SignInOutcome {
+        // The state's copy: it can know more of the server (`loadWorkspaceInfo`).
+        guard case .signedOut(let server) = state, Self.isSameServer(server, as: screen) else { throw CancellationError() }
         state = .authenticating(server)
         do {
             let client = makeClient(for: server.url, token: nil)
             switch try await login(client) {
             case .authenticated(let token):
                 await client.setToken(token)
-                try await finishSignIn(server: server, client: client, token: token)
+                try await finishSignIn(server: server, client: client, token: token, signingIn: true)
                 return .signedIn
             case .mfaRequired(let challenge):
+                guard isSigningIn(at: server) else { throw CancellationError() }
                 state = .signedOut(server)
                 return .mfaRequired(challenge)
             }
         } catch {
-            state = .signedOut(server)
+            if isSigningIn(at: server) { state = .signedOut(server) }
             throw error
         }
+    }
+
+    private func isSigningIn(at server: ServerInfo) -> Bool {
+        guard case .authenticating(let current) = state else { return false }
+        return Self.isSameServer(current, as: server)
+    }
+
+    private static func isSameServer(_ server: ServerInfo, as other: ServerInfo) -> Bool {
+        StoredAccounts.key(for: server.url) == StoredAccounts.key(for: other.url)
     }
 
     /// Signs out of the current server and continues with another saved one, if any.
@@ -535,6 +559,24 @@ final class AppSession {
         return try await perform { try await client.send(endpoint) }
     }
 
+    /// Runs requests with `owner`'s client, for work bound to the session it started in: a flow's later requests, or
+    /// content that belongs to that server. Once a switch or sign-out has replaced `owner`, nothing goes out
+    /// (`SwitchedServer`): the new server would get the content. A 401 ends only `owner`.
+    func perform<T: Sendable>(on owner: ReadySession, _ operation: (APIClient) async throws -> T) async throws -> T {
+        guard isStillCurrent(owner) else { throw SwitchedServer() }
+        do {
+            return try await operation(owner.client)
+        } catch let error as APIError where error.isSessionExpired {
+            if isStillCurrent(owner) { handleUnauthorized() }
+            throw error
+        }
+    }
+
+    /// One request through `perform(on:)`.
+    func send<Response>(_ endpoint: Endpoint<Response>, on owner: ReadySession) async throws -> Response {
+        try await perform(on: owner) { try await $0.send(endpoint) }
+    }
+
     /// Handles a 401. Idempotent: concurrent 401s trigger only one transition.
     func handleUnauthorized() {
         guard case .ready(let session) = state else { return }
@@ -577,13 +619,16 @@ final class AppSession {
         await ready.cache.write(ready.currentUser, key: CacheKey.currentUser)
         await ready.cache.write(ready.entitlements, key: CacheKey.entitlements)
         if let version { await ready.cache.write(version, key: CacheKey.serverVersion) }
-        await removeLocalData(for: ready.server.url)
+        // Not its staged uploads: a running upload reads them.
+        await removeLocalData(for: ready.server.url, uploads: false)
     }
 
     // MARK: - Internal
 
-    /// `replacing`: the offline session that a reconnect loads fully.
-    private func finishSignIn(server: ServerInfo, client: APIClient, token: String, replacing: ReadySession? = nil) async throws {
+    /// `replacing`: the offline session that a reconnect loads fully. `signingIn`: a sign-in from the sign-in screen.
+    private func finishSignIn(
+        server: ServerInfo, client: APIClient, token: String, replacing: ReadySession? = nil, signingIn: Bool = false
+    ) async throws {
         async let me = client.send(Endpoints.Users.me)
         async let entitlements = client.send(Endpoints.Workspace.entitlements)
         async let version = client.send(Endpoints.Version.info)
@@ -621,8 +666,10 @@ final class AppSession {
             // Written again, as the license above: a version the server stopped naming would only age.
             if let serverVersion { await cache.write(serverVersion, key: CacheKey.serverVersion) }
         }
-        // A reconnect must not undo a switch or sign-out made meanwhile; no await from here to the `state` write.
+        // A reconnect must not undo a switch or sign-out made meanwhile, nor a sign-in a switch; no await from here to the
+        // `state` write.
         if let replacing, !isStillCurrent(replacing) { return }
+        if signingIn, !isSigningIn(at: server) { throw CancellationError() }
         let stored = StoredSession(serverURL: server.url, token: token, email: currentUser.user.email, workspaceName: currentUser.workspace.name)
         keychain("save") { try sessionStore.save(stored) }
         reloadAccounts()
@@ -679,8 +726,9 @@ final class AppSession {
 
     /// Removes what the offline cache doesn't cover: downloads, the system URL cache (files of older builds, logos and
     /// avatars) and the server's web editor data.
-    private func removeLocalData(for serverURL: URL) async {
-        TempFile.removeAll()
+    private func removeLocalData(for serverURL: URL, uploads: Bool = true) async {
+        TempFile.removeAll(server: serverURL, uploads: uploads)
+        // Holds only member avatars, of every server: it can't be cleared for one.
         URLCache.shared.removeAllCachedResponses()
         await WebEditorStores.remove(for: serverURL)
     }
@@ -755,8 +803,9 @@ final class AppSession {
     /// even if sign-in fails (the app then stays on the sign-in screen).
     private func debugAutoSignIn() async -> Bool {
         guard let serverText = DebugLaunch.server else { return false }
+        let server: ServerInfo
         do {
-            try await connect(to: serverText)
+            server = try await connect(to: serverText)
         } catch {
             AppLog.session.error("Debug server not reachable: \(error.userMessage, privacy: .public)")
             return false
@@ -764,7 +813,7 @@ final class AppSession {
         guard let email = DebugLaunch.email, let password = DebugLaunch.password, !DebugLaunch.browserLogin
         else { return true }
         do {
-            try await signIn(email: email, password: password)
+            try await signIn(email: email, password: password, at: server)
             AppLog.session.notice("Debug auto sign-in succeeded")
         } catch {
             AppLog.session.error("Debug auto sign-in failed: \(error.userMessage, privacy: .public)")
