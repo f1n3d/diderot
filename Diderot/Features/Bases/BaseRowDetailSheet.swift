@@ -220,10 +220,8 @@ private struct BaseTitleField: View {
     let editable: Bool
     /// New row: focus the title once, then reset.
     @Binding var autoFocus: Bool
-    @State private var draft = ""
-    @State private var original = ""
+    @State private var draft = BaseDraft()
     @FocusState private var focused: Bool
-    @Environment(\.scenePhase) private var scenePhase
 
     private var stored: String {
         base.primaryProperty.flatMap { row.cells[$0.id]?.stringValue } ?? ""
@@ -231,28 +229,20 @@ private struct BaseTitleField: View {
 
     var body: some View {
         if editable, let primary = base.primaryProperty {
-            TextField("Untitled", text: $draft, axis: .vertical)
+            TextField("Untitled", text: $draft.text, axis: .vertical)
                 .font(.title2.bold())
                 .focused($focused)
                 .submitLabel(.done)
-                .onAppear { showStored(primary) }
-                .onChange(of: draft) { _, text in
+                .onChange(of: draft.text) { _, text in
                     // Titles are single-line: Return ends the input instead of adding a line break.
                     if text.contains("\n") {
-                        draft = text.replacingOccurrences(of: "\n", with: "")
+                        draft.text = text.replacingOccurrences(of: "\n", with: "")
                         focused = false
                     }
                 }
-                .onChange(of: focused) { _, isFocused in
-                    if !isFocused { commit(primary) }
+                .baseDraft($draft, focused: focused, stored: stored, model: model, rowId: row.id, propertyId: primary.id) {
+                    .value(BaseValue.text($0))
                 }
-                .onChange(of: stored) { _, _ in
-                    guard !focused else { return }
-                    showStored(primary)
-                }
-                .onDisappear { commit(primary) }
-                // Typed but not yet committed when the app leaves (see `BaseTextFieldEditor`).
-                .onChange(of: scenePhase) { _, phase in if phase == .background, focused { commit(primary) } }
                 .task {
                     guard autoFocus else { return }
                     try? await Task.sleep(for: .milliseconds(450))
@@ -267,25 +257,6 @@ private struct BaseTitleField: View {
                 .foregroundStyle(stored.isEmpty ? .secondary : .primary)
                 .textSelection(.enabled)
                 .accessibilityIdentifier("base-row-title")
-        }
-    }
-
-    /// The stored title, or the one a failed save didn't get to the server (see `BaseTextFieldEditor`).
-    private func showStored(_ primary: BaseProperty) {
-        original = stored
-        draft = model.unsavedDraft(rowId: row.id, propertyId: primary.id) ?? stored
-    }
-
-    private func commit(_ primary: BaseProperty) {
-        guard draft != original else { return }
-        original = draft
-        let rowId = row.id
-        let value = BaseValue.text(draft)
-        let typed = draft
-        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
-        Task {
-            await model.setCell(rowId: rowId, propertyId: primary.id, to: value, typed: typed)
-            UIApplication.shared.endBackgroundTask(task)
         }
     }
 }

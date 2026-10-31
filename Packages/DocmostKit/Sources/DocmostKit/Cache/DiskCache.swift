@@ -33,7 +33,27 @@ public actor DiskCache {
 
     public func write<Value: Encodable & Sendable>(_ value: Value, key: String) {
         guard let data = try? encoder.encode(value) else { return }
-        store(data, at: fileURL(for: key, kind: "json"))
+        try? store(data, at: fileURL(for: key, kind: "json"))
+    }
+
+    /// The value, nil without one. Unlike `read` it throws for a file it can't read or decode, for data that must not be
+    /// lost: with `nil` for both, the next write would replace what couldn't be read.
+    public func readThrowing<Value: Decodable & Sendable>(_ type: Value.Type, key: String) throws -> Value? {
+        let url = fileURL(for: key, kind: "json")
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return nil }
+        return try decoder.decode(Value.self, from: Data(contentsOf: url))
+    }
+
+    /// Changes the value (`initial` if there is none) in one step: nothing else reaches this cache between the read and
+    /// the write. Throws, changing nothing, if the stored value can't be read or the new one can't be written.
+    @discardableResult
+    public func update<Value: Codable & Sendable, Result: Sendable>(
+        _ type: Value.Type, key: String, initial: Value, _ change: @Sendable (inout Value) throws -> Result
+    ) throws -> Result {
+        var value = try readThrowing(type, key: key) ?? initial
+        let result = try change(&value)
+        try store(encoder.encode(value), at: fileURL(for: key, kind: "json"))
+        return result
     }
 
     // MARK: - Raw data (images, files)
@@ -43,7 +63,7 @@ public actor DiskCache {
     }
 
     public func writeData(_ data: Data, key: String) {
-        store(data, at: fileURL(for: key, kind: "bin"))
+        try? store(data, at: fileURL(for: key, kind: "bin"))
     }
 
     // MARK: - Maintenance
@@ -85,13 +105,13 @@ public actor DiskCache {
 
     // MARK: - Internal
 
-    private func store(_ data: Data, at url: URL) {
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    private func store(_ data: Data, at url: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let protection: Data.WritingOptions = switch self.protection {
         case .whileUnlocked: .completeFileProtection
         case .afterFirstUnlock: .completeFileProtectionUntilFirstUserAuthentication
         }
-        try? data.write(to: url, options: [.atomic, protection])
+        try data.write(to: url, options: [.atomic, protection])
     }
 
     private func fileURL(for key: String, kind: String) -> URL {

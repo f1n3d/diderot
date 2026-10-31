@@ -237,6 +237,16 @@
         }
       }
     },
+    "%lld changes not saved, among them “%@”: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Änderungen nicht gespeichert, darunter „%@“: %@"
+          }
+        }
+      }
+    },
     "%lld files": {
       "localizations": {
         "de": {
@@ -5210,6 +5220,16 @@
         }
       }
     },
+    "The change goes to the server once it can be reached.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Änderung geht an den Server, sobald er erreichbar ist."
+          }
+        }
+      }
+    },
     "The database could not be created: %@": {
       "localizations": {
         "de": {
@@ -5578,6 +5598,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uhrzeit"
+          }
+        }
+      }
+    },
+    "Title not saved: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titel nicht gespeichert: %@"
           }
         }
       }
@@ -6188,6 +6218,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "—"
+          }
+        }
+      }
+    },
+    "“%@” not saved: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ nicht gespeichert: %@"
           }
         }
       }

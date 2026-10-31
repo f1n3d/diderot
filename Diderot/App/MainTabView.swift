@@ -21,6 +21,8 @@ struct MainTabView: View {
     @State private var recentlyOpened: RecentlyOpenedStore
     @State private var changes = ContentChanges()
     @State private var offline = OfflineMonitor()
+    /// Titles and database fields kept for the server that it refused for good.
+    @State private var droppedChanges: String?
 
     init(session: AppSession) {
         self._favorites = State(initialValue: FavoritesStore(session: session))
@@ -59,7 +61,7 @@ struct MainTabView: View {
             guard !isOffline else { return }
             Task {
                 await session.reconnectIfNeeded()
-                await sendUnsentTitles()
+                await sendUnsentChanges()
                 await session.sendPendingLogouts()
             }
         }
@@ -72,9 +74,9 @@ struct MainTabView: View {
         // Polls while the scene is active; SwiftUI cancels it when a server switch or sign-out removes the view.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
-            // Page titles kept while the server was away go out once it may be back: here (app active, or this view new
-            // after a sign-in or switch) and when the network returns (above).
-            await sendUnsentTitles()
+            // Page titles and database fields kept while the server was away go out once it may be back: here (app
+            // active, or this view new after a sign-in or switch) and when the network returns (above).
+            await sendUnsentChanges()
             while !Task.isCancelled {
                 await notifications.refreshUnreadCount()
                 try? await Task.sleep(for: NotificationsStore.pollInterval)
@@ -87,10 +89,14 @@ struct MainTabView: View {
         }
         // Here, not in HomeView: a tab switch or a page opened at launch hides Home and would cancel the first load.
         .task { await spaces.loadIfNeeded() }
+        .toast($droppedChanges)
     }
 
-    private func sendUnsentTitles() async {
-        for spaceId in await session.sendUnsentTitles() { changes.pageChanged(in: spaceId) }
+    private func sendUnsentChanges() async {
+        let titles = await session.sendUnsentTitles()
+        for spaceId in titles.spaces { changes.pageChanged(in: spaceId) }
+        let dropped = titles.dropped + (await session.sendUnsentCells())
+        if let notice = AppSession.DroppedChange.notice(for: dropped) { droppedChanges = notice }
     }
 
     /// A tab's navigation stack with every destination reachable from any view.

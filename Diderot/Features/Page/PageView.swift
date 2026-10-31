@@ -401,11 +401,9 @@ struct PageView: View {
             // on a database page.
             if phase != .active {
                 let savingTitle = phase == .background && titleFocused ? commitTitle() : nil
-                let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
-                Task {
+                BackgroundWork.run("Keep unsent changes") {
                     await model?.saveUnsentChanges()
                     await savingTitle?.value
-                    UIApplication.shared.endBackgroundTask(task)
                 }
             }
         }
@@ -1207,7 +1205,7 @@ struct PageView: View {
         savingTitle = trimmed
         return Task {
             // Replaces an older kept title, which then can't overwrite this one.
-            await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges)
+            let kept = await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges)
             do {
                 // With the page's session: a switch while the title was kept would take it to the other server.
                 _ = try await session.send(Endpoints.Pages.update(pageId: page.id, title: trimmed), on: pageSession)
@@ -1217,12 +1215,14 @@ struct PageView: View {
                 // The response lacks permissions and space info, so reload instead of replacing the page; on its own, so
                 // a background task doesn't wait for it.
                 Task { await load(force: true) }
-            } catch where UnsentTitle.isFinal(error) {
+            } catch where UnsentChanges.isFinal(error) {
                 await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
                 toast = error.userMessage
-            } catch {
+            } catch where kept {
                 unsentTitle = trimmed
                 toast = String(localized: "The title goes to the server once it can be reached.")
+            } catch {
+                toast = String(localized: "Title not saved: \(error.userMessage)")
             }
             savingTitle = nil
         }
@@ -1283,7 +1283,9 @@ struct PageView: View {
         unsentTitle = kept
         if !titleFocused { title = kept }
         guard !offline.isOffline else { return }
-        for spaceId in await session.sendUnsentTitles() { changes.pageChanged(in: spaceId) }
+        let sent = await session.sendUnsentTitles()
+        for spaceId in sent.spaces { changes.pageChanged(in: spaceId) }
+        if let notice = AppSession.DroppedChange.notice(for: sent.dropped) { toast = notice }
         guard await session.unsentTitle(pageId: page.id) == nil else { return }
         unsentTitle = nil
         await load(force: true)
