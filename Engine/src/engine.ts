@@ -43,6 +43,8 @@ class DocmostEngine {
   private editor?: Editor;
   private updateTimer?: number;
   private host?: HTMLElement;
+  /** Set by `fail`: edits are refused from then on. */
+  private failed = false;
 
   open(options: OpenOptions) {
     this.close();
@@ -103,6 +105,18 @@ class DocmostEngine {
     this.provider = undefined;
     this.socket = undefined;
     this.host = undefined;
+    this.failed = false;
+  }
+
+  /**
+   * An error once the editor is bound may leave it out of step with the shared document (the binding threw halfway), and
+   * the next edit would write the editor's state over what others wrote. Refuses edits from then on; the app closes the
+   * engine, keeping what the server hasn't confirmed, and opens it again.
+   */
+  fail(reason: string) {
+    if (!this.editor || this.failed) return;
+    this.failed = true;
+    emit("failed", { error: reason });
   }
 
   /**
@@ -241,11 +255,11 @@ class DocmostEngine {
   }
 
   undo(): boolean {
-    return this.editor?.commands.undo() ?? false;
+    return this.transact((editor) => editor.commands.undo());
   }
 
   redo(): boolean {
-    return this.editor?.commands.redo() ?? false;
+    return this.transact((editor) => editor.commands.redo());
   }
 
   // MARK: Internal
@@ -260,27 +274,38 @@ class DocmostEngine {
     }
     // UniqueID adds missing block ids on the provider's "synced"; sync is done, so this stand-in fires it at once.
     const synced = { on: (_event: string, run: () => void) => run(), off() {} };
-    this.editor = new Editor({
-      ...editorOptions,
-      element: this.host,
-      editable: true,
-      extensions: [...schemaExtensions, Collaboration.configure({ document: ydoc, provider: synced })],
-      onUpdate: () => this.scheduleDocument(150),
-    });
+    try {
+      this.editor = new Editor({
+        ...editorOptions,
+        element: this.host,
+        editable: true,
+        extensions: [...schemaExtensions, Collaboration.configure({ document: ydoc, provider: synced })],
+        onUpdate: () => this.scheduleDocument(150),
+      });
+    } catch (error) {
+      // Bound halfway at most: closed, and the app takes it for a start that failed.
+      emit("error", { error: String(error) });
+      this.close();
+      emit("failed", { error: "editor didn't start" });
+      return false;
+    }
     return true;
   }
 
   private transact(operation: (editor: Editor) => boolean): boolean {
-    if (!this.editor) {
-      emit("error", { error: "engine not open" });
+    if (!this.editor || this.failed) {
+      emit("error", { error: this.editor ? "engine failed" : "engine not open" });
       return false;
     }
+    const before = this.editor.state;
     try {
       const applied = operation(this.editor);
       if (applied) this.scheduleDocument(0);
       return applied;
     } catch (error) {
       emit("error", { error: String(error) });
+      // Thrown once the editor had taken the change: by the binding, while writing it into the shared document.
+      if (this.editor?.state !== before) this.fail("change failed halfway");
       return false;
     }
   }
@@ -339,7 +364,12 @@ class DocmostEngine {
   }
 }
 
-window.addEventListener("error", (event) => emit("error", { error: `uncaught: ${event.message}` }));
+// The binding applies the server's changes to the editor synchronously, so an exception from it arrives here; a rejected
+// promise comes from the connection's own work (reconnecting, tokens) and leaves the editor as it was.
+window.addEventListener("error", (event) => {
+  emit("error", { error: `uncaught: ${event.message}` });
+  window.DocmostEngine?.fail("uncaught error");
+});
 window.addEventListener("unhandledrejection", (event) => emit("error", { error: `unhandled rejection: ${String(event.reason)}` }));
 window.DocmostEngine = new DocmostEngine();
 emit("ready");

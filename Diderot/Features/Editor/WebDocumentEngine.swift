@@ -63,6 +63,9 @@ enum EngineFailure {
     /// The server takes no more edits from this user (write access lost, page moved or trashed): it ignores them, and the
     /// page used to stay editable and show "Saved".
     case readOnly
+    /// The engine hit an error once loaded and takes no more edits (`fail` in Engine/src/engine.ts): its editor and the
+    /// page's shared document may no longer match. It is closed by then, with what the server hadn't confirmed kept.
+    case engineError
 }
 
 struct EngineParticipant: Identifiable, Hashable, Decodable {
@@ -370,6 +373,17 @@ final class WebDocumentEngine: DocumentEngine {
             if case .loading = status, let pending = readyContinuation {
                 readyContinuation = nil
                 pending.resume(throwing: APIError.server(status: 0, message: event.error))
+            }
+        // Closed as leaving the page closes it, so what the server hasn't confirmed is kept; until the page opens it again,
+        // calls fail at once, as after a web process that ended.
+        case "failed":
+            AppLog.ui.error("Engine failed: \(event.error ?? "?", privacy: .public)")
+            let attempt = opens
+            Task {
+                await saveUnsentChanges()
+                guard opens == attempt else { return }
+                unload()
+                onFailure?(.engineError)
             }
         case "unsupported":
             AppLog.ui.error("Engine closed the page: \(event.error ?? "?", privacy: .public)")
