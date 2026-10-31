@@ -59,11 +59,10 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Engine and CI | R4, R28, T1, T2, T4, T5, T7 | Node (`pnpm run check`), CI | low |
 | **B** Data safety outside the editor | R7 (with R55), R8, R10, R11, R17, R18, R20, R21, R25, R38, R41, R44 | unit tests | low to medium |
 | **C** Data safety in the editor | R1, R2, R3, R5, R6, R9, R19, R22, R23, R26 | unit tests and UI tests | medium |
-| **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R46, R53, R58, R59 | unit tests, partly a device | low |
-| **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R47, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
+| **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
+| **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
 S1 comes before splitting DocumentModel (S2). Moving the structural edits into the engine removes about 600 lines from DocumentModel and fixes R1, R5 and R9 along the way. The split is smaller and safer after that.
@@ -117,27 +116,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 - Keep each text run's original mark JSON, as inline atoms already do, and write it back unchanged unless the user changed that mark.
 - Add a round-trip test over all fixtures and real web marks.
 
-### R4 [medium] ✔ The engine accepts schema-invalid nodes from the app
-
-**Where:** `engine.ts:146–148`, `:156`, `:217`.
-
-**Problem:** `PMNode.fromJSON` doesn't check content, and `tr.insert`/`replaceWith` check only the parent's direct content. `setAttributes` isn't checked at all; it took `indent: "x"`. The area review reproduced each case with the engine's schema, and each was applied:
-
-- a paragraph in a paragraph
-- a table with a paragraph child
-- an empty callout
-- details with the wrong children
-
-**Scenario:**
-
-1. A bug in a native block builder makes an invalid document. The app shows "Saved".
-2. y-tiptap deletes every element it can't create when the next web client binds the page (`y-tiptap.js:964–971`), for everyone.
-3. On its next open, the app finds unsupported content and opens the page read-only.
-
-DocumentModelTests use a fake engine, so they wouldn't notice such a bug.
-
-**Fix:** `node.check()` on every node built from native JSON, and on the result of `setAttributes`, inside `transact`. The engine then returns `false`. About two lines; test it in `pnpm run check`.
-
 ### R5 [medium] ✔ "Engine unavailable" is treated like "refused"
 
 **Where:** `WebDocumentEngine.swift:330–339`; `DocumentModel.swift:2097–2113`, `:419–428`.
@@ -146,7 +124,7 @@ DocumentModelTests use a fake engine, so they wouldn't notice such a bug.
 
 **Scenario:** Type in A, tap B while A's commit runs, the web process ends. A's text is gone, and the message ("could not be applied") is misleading.
 
-**Fix:** Three results (applied, refused, unavailable). On unavailable, keep the override and send it again after the restart.
+**Fix:** Three results (applied, refused, unavailable). On unavailable, keep the override and send it again after the restart. Undo and redo report their result too: the protocol returns `Void` today, so a refused undo goes unnoticed (moved here from R28).
 
 ### R6 [medium] ✔ "Saved" stays up although nothing is confirmed
 
@@ -272,7 +250,7 @@ Whether URLSession keeps the bearer header across hosts is undocumented and unte
 - **Internal schemes:** `url(for:)` passes any scheme through. `PageView.handle` checks `CommentLink` and `AtomLink` before routing.
   - An `href` of `docmost-atom://edit?block=…&type=integrationMention&index=0` in content opens another block's mention sheet, including Remove.
   - `docmost-comment:` and `docmost-internal:` hrefs open comments and pages.
-- **`diderot` scheme:** It isn't in `.never`, so a content link to it asks "Open in Another App?". iOS hands it back to the app, and `AppNavigation.handle` can switch to another saved server (R46).
+- **`diderot` scheme:** It isn't in `.never`, so a content link to it asks "Open in Another App?". iOS hands it back to the app, and `AppNavigation.handle` can switch to another saved server (R46, now in BACKLOG.md).
 
 **Fix:** Drop internal schemes in `url(for:)`, and add `diderot` to `.never`.
 
@@ -440,19 +418,6 @@ FavoritesStore (`:45–51`) and NotificationsStore (`:50–58`) already fixed th
 
 **Fix:** `withThrowingTaskGroup`.
 
-### R46 [low] ○ One navigation for all windows
-
-**Where:** `DiderotApp.swift:8`; `AppNavigation.swift:8`, `:24–27`; `MainTabView.swift:66–71`.
-
-**Problems:**
-
-- One `AppNavigation` serves every window, so a link (or the Open Link sheet in window A) opens in whichever window reacts first (?).
-- `pendingSelection` doesn't record its server. After a failed or raced switch, it applies to whatever server becomes ready ("not found").
-
-**What a crafted link can do:** Switch servers silently and close open pages in every window. It can't add a server, sign in anywhere new or open arbitrary URLs.
-
-**Fix:** Navigation per window, and store `(serverKey, selection)`.
-
 ---
 
 ## 4. Further findings
@@ -503,7 +468,7 @@ FavoritesStore (`:45–51`) and NotificationsStore (`:50–58`) already fixed th
 
 So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine()`, can set `isLive` again after `suspend()`. And when the view is gone (an upload after leaving), nothing syncs.
 
-**Confirm:** A test of `suspend()` followed by a document event; `isEditable` must stay false.
+**Confirm:** A test of `suspend()` followed by a document event; `isEditable` must stay false. Seen while fixing R28: a save refused after `suspend()`, for a block no longer edited, calls `syncFromEngine()`, which sets `isLive` again while the engine is still open.
 
 **Fix:** An engine → model `onDocument` callback, a side-effect-free `currentDocument()`, and a lifecycle enum.
 
@@ -514,18 +479,6 @@ So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine(
 **Problem:** `ContentChanges` keeps a single `lastChangedSpaceId`. `sendUnsentTitles` calls `pageChanged` in a loop, and SwiftUI coalesces that into one `onChange`. Every other space's open view keeps the old titles.
 
 **Fix:** Send `nil` ("all") when more than one space changed.
-
-#### R28 [low] ? Engine errors after loading vanish
-
-**Where:** `engine.ts:262–281`, `:354–355`; `WebDocumentEngine.swift:368–373`.
-
-**Problem:**
-
-- Exceptions outside `transact` (provider callbacks, the y-tiptap binding, timers) reach native code only as an `error` event, which is logged and otherwise ignored once loading has ended.
-- `new Editor` in `attachEditor` sits outside its try. If it throws in `onSynced`, `synced` is never emitted, and every later edit fails with "engine not open" behind the generic message.
-- Undo and redo results are dropped; the protocol returns `Void`.
-
-**Fix:** After loading, route window `error` and `unhandledrejection` to `onFailure` (page read-only, unsent changes kept).
 
 #### R29 [low] ○ Tree drag & drop: position logic in the view, untested, without the safeguards
 
@@ -679,14 +632,6 @@ So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine(
 
 - Non-API errors reach the user as Cocoa text through `localizedDescription` (e.g. `KeyError`, `CancellationError`), and the three BaseFieldEditors places skip `userMessage`.
 - `BaseModel.load` lacks the `CancellationError` branch. Leaving a database without a cached copy while it loads shows "Something went wrong" briefly on return.
-
-#### R47 [low] ○ Image downloads aren't cancelled
-
-**Where:** `ImageLoader.swift:34–43`.
-
-**Problem:** The shared download and decode run in an unstructured `Task` that callers await. Cancelling a caller never cancels it, so flinging past 100 photos downloads and decodes all of them.
-
-**Fix:** Count waiters per key, and cancel when the last one is cancelled.
 
 #### R51 [low] ○ `@State` initial values are built on every redraw
 
@@ -848,8 +793,6 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Server identity | Three forms: lowercased `StoredAccounts.key` (Keychain, web editor stores), the raw URL string (offline cache, unsent changes), host plus default port (links). The normaliser keeps host case and an explicit `:443`, so re-adding a server with another spelling strands its unsent changes (○). `UnsentChanges` builds its folder from DiskCache's private layout (`docmost-cache/` + `safeName`), so a cache refactor would orphan every user's unsent changes. | `ServerKey` and `Origin` types in DocmostKit; canonicalise in the normaliser (lowercase host, drop default ports); a fixed path for the unsent store. (S–M) |
 | Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes, with an API that swallows every error (R8, M55). | A small store of its own that throws and updates atomically. (S–M) |
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |
-| Media | Five loading state machines (ContentImageView, DiagramView, PDFBlockView, VideoBlockView, MediaViewerPage) plus two attachment downloaders, each handling failure, consent and cancellation differently (R14, R47, R50). | One loader keyed by URL. (M) |
-| Rendering | Two renderers per block type: the reader's `BlockView` on `Block`, the editor's `NodeView` on `PMNode`. Styling is copied (CalloutNodeView, BlockCards.swift:533, vs. CalloutView, BlockViews.swift:285), so is parsing (callout kind, indent clamp BlockCards :137 vs. ContentParser :239). They drift: a toggle is a DisclosureGroup in history, presentation and synced content but a card on the page, and task lists get "Checklist n of m" only in the editor. | One view per type built from `Block`, with editing hooks passed in. (L) |
 | Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema (R3). | One mark codec that keeps unknown attributes, plus a round-trip test over all fixtures. (M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links (R13). | (M) |
 | Showing errors | Toast, inline text, silent revert or only the log (R17, R20, R43). | One helper: toast plus VoiceOver announcement plus a generic message. (S) |
@@ -903,34 +846,6 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 ## 6. CI, tools, tests
 
-### T1 [medium] ✔ CI doesn't check what ships
-
-**Where:** `.github/workflows/ci.yml:40–47`.
-
-**Problem:**
-
-- CI runs `pnpm run check` but not `pnpm run typecheck`. esbuild only strips types, and `tsconfig` includes only `src`, so `Engine/tools/` is never type-checked.
-- Nothing checks that the committed `engine.js` is built from `Engine/src`. A PR changing `src` without rebuilding ships the old engine with green CI. The backlog's M47 mentions this check only as a stand-in for a CSP.
-
-**What makes the gates cheap:**
-
-- `node build.mjs` reproduces `engine.js` byte for byte (checked ✔).
-- `mermaid.min.js` rebuilds byte-identically from mermaid@12.1.0 with esbuild 0.27.3 (○).
-
-**Fix:** In CI, add `pnpm run typecheck` and `node build.mjs && git diff --exit-code Diderot/Resources/Engine/engine.js`. Further cheap gates, possibly in one Linux job:
-
-- string catalog completeness (`Tools/localize.py --missing` always exits 0; today only `''`, `%lld` and `https://…` lack German)
-- `xcodegen` drift (project.yml and the pbxproj agree today)
-- shellcheck
-
-### T2 [medium] ○ The guard for unknown content is untested
-
-**Where:** `engine.ts:256–283`.
-
-**Problem:** The lossy-content guard in `attachEditor` is the only thing that implements "unknown content stays intact", and nothing tests it. It relies on a y-tiptap internal (`initProseMirrorDoc` emitting a Yjs update when it drops content), so a TipTap or y-tiptap update could switch it off silently. Today it flags unknown blocks (also nested), invalid nesting and unknown marks; unknown attributes pass (the backlog knows).
-
-**Fix:** Move the check into a pure function (like `rebase.ts`) and add an `attach-check.ts` to `pnpm run check`.
-
 ### T3 [medium] ✔ Selected UI test runs discard every API check
 
 **Where:** `Tools/run-uitests.sh:737`.
@@ -940,30 +855,6 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 **Also (○):** The script has 738 lines, about 600 of them inline Python, with 11 copies of `call()` and its own fractional indexing next to DocmostKit's tested one.
 
 **Fix:** Map each check to its test and count those of the tests that ran. Move the checks into a Python module or into the UI tests.
-
-### T4 [low] ✔/○ The license notices don't name what is bundled
-
-**Where:** `Tools/third-party-notices.mjs:16`, `:78–90`; `Tools/build-islands.mjs:17`.
-
-**Problems:**
-
-- The notices for Mermaid's dependencies list what npm resolves today. `THIRD_PARTY_NOTICES.md:1308` says DOMPurify 3.4.17, but `mermaid.min.js` contains 3.4.12 ✔; cytoscape 3.34.4 against 3.34.0 (○). So the MPL source note names the wrong version too.
-- `:81` reuses `Tools/.cache/islands` without checking its version, and the versions are hard-coded in two files (○).
-- KaTeX has no script: `katex.min.css` was rewritten by hand (font paths flattened, woff and ttf dropped), so a KaTeX security update is undocumented manual work (○).
-
-**Fix:**
-
-- One versions file.
-- The KaTeX copy and CSS rewrite in `build-islands.mjs`.
-- Mermaid's notice list from the bundle's "Bundled license information" comments.
-
-### T5 [low] ✔/○ `textDirection` is registered twice
-
-**Where:** `Engine/src/schema.ts:26`, and TipTap's `new Editor` (`@tiptap/core` `Editor.ts:477`).
-
-**Problem:** `pnpm run check` warns "Duplicate extension names found: ['textDirection']" ✔. The cause (○): the engine's list adds `coreExtensions.TextDirection`, and TipTap 3.31's `new Editor` always adds its own. Today both stay and the schema is identical; nothing is dropped or doubled. But the permanent warning hides any real duplicate.
-
-**Fix:** `enableCoreExtensions: { textDirection: false }` in `engine.ts` and in the tools' `new Editor` calls (checked by the area review: one instance, identical schema).
 
 ### T6 [low] ○ The test setup invites flakes
 
@@ -981,26 +872,6 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
   - the SSO cookie capture
   - the lossy-content guard
   - the tree drop positions
-
-### T7 [low] ✔/○ Supply chain and reproducibility
-
-**Problems:**
-
-- **CI:**
-  - Actions are pinned by tag, not commit SHA, and there's no Dependabot for actions or the engine's npm dependencies ✔. Mitigated: `contents: read`, no secrets, no deploy; `runs-on: xcode-27` is GitHub-hosted (○).
-  - `cancel-in-progress` also cancels runs on `main`, so a merged commit can end up without a result.
-- **Engine:** `Engine/package.json` has no `packageManager`, and `Tools/build-engine.sh` runs `corepack pnpm install` without `--frozen-lockfile` ✔. A local build can use another pnpm and rewrite the lockfile.
-- **Dev scripts (○, dev instance only):**
-  - The admin password goes on command lines (curl `-d`, devicectl's `--environment-variables`), visible in `ps`, and is spliced into JSON (breaks on `"` and `\`).
-  - The bearer token is cached in plain text (`Tools/.cache/seed-token.txt`, `~/Library/Caches/docmost-live-token.json`).
-  - `.env` is read five ways: `source` expands `$$`, and `seed-fixtures.py:39` doesn't strip quotes.
-  - `seed-notifications.py:24` creates a writer with a fixed password on any `DOCMOST_SEED_URL`.
-
-**Fix:**
-
-- Pin SHAs, add Dependabot, cancel in progress only for pull requests.
-- `"packageManager": "pnpm@12.10.1"` and `--frozen-lockfile`.
-- One Python helper for env, login and calls, using `curl --data @-`.
 
 ---
 
