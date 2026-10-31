@@ -1996,7 +1996,11 @@ import XCTest
         if (name.value(forKey: "hasKeyboardFocus") as? Bool) != true { name.tap() }
         // The field holds the web's name "Tab 3".
         name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "Dritter\(stamp)")
-        app.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["Rename", "Umbenennen"])).firstMatch.tap()
+        let rename = app.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["Rename", "Umbenennen"])).firstMatch
+        rename.tap()
+        // After the typed keys iOS brings the on-screen keyboard back and the alert moves up with it; a tap during that
+        // move misses "Rename".
+        if !app.alerts.firstMatch.waitForNonExistence(timeout: 3) { rename.tap() }
         let third = app.buttons["tab-Dritter\(stamp)"]
         XCTAssertTrue(third.waitForExistence(timeout: 8), "The renamed tab doesn't show")
         XCTAssertTrue(third.isSelected, "The new tab isn't the one shown")
