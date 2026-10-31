@@ -2,6 +2,8 @@
 
 Open points that deliberately come later. Done ones leave (the commits record them).
 
+The findings of the code review of October 31, 2026 that are still open, and the order to fix them: [Docs/CodeReview-2026-10-31.md](Docs/CodeReview-2026-10-31.md).
+
 ## Sign-in
 
 Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO through Authentik with password and TOTP tested against production. Background and decisions: [Docs/SignIn.md](Docs/SignIn.md). Postponed:
