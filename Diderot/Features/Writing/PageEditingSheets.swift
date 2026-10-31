@@ -45,7 +45,8 @@ struct AppendNoteSheet: View {
     }
 
     private func append() {
-        guard session.client != nil, !isSaving else { return }
+        // Both requests with this session: after a switch between them the note would go to the other server.
+        guard let owner = session.ready, !isSaving else { return }
         isSaving = true
         errorMessage = nil
         Task {
@@ -53,8 +54,9 @@ struct AppendNoteSheet: View {
             do {
                 // Without Redis sync the page silently stays unchanged, so compare with the append's Markdown answer.
                 // Not by block count: the server stores native edits ~10 s late, so new deletions could hide the note.
-                let before = try await session.send(Endpoints.Pages.info(pageId: page.id, format: "markdown"))
-                let appended = try await session.send(Endpoints.Pages.appendMarkdown(pageId: page.id, text.trimmingCharacters(in: .whitespacesAndNewlines)))
+                let before = try await session.send(Endpoints.Pages.info(pageId: page.id, format: "markdown"), on: owner)
+                let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let appended = try await session.send(Endpoints.Pages.appendMarkdown(pageId: page.id, note), on: owner)
                 if appended.content == before.content {
                     errorMessage = String(localized: "The server accepted the note but the page did not change. Collaboration sync may be disabled on this server.")
                     return

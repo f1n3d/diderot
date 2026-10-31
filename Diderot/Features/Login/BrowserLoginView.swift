@@ -101,7 +101,10 @@ struct BrowserLoginView: View {
         isFinishing = true
         await dataStore.httpCookieStore.deleteCookie(cookie)
         do {
-            try await session.signIn(withToken: cookie.value)
+            try await session.signIn(withToken: cookie.value, at: server)
+            dismiss()
+        } catch is CancellationError {
+            // The app shows another server now (a link switched to it): this sign-in is over.
             dismiss()
         } catch {
             errorMessage = error.userMessage

@@ -66,13 +66,14 @@ final class PageActionRunner {
     }
 
     func export(_ page: PageRef, format: Endpoints.Pages.ExportFormat, includeChildren: Bool, includeAttachments: Bool) async {
+        guard let server = session.server?.url else { return }
         await run { client in
             let (data, response) = try await client.sendRaw(
                 Endpoints.Pages.export(pageId: page.id, format: format, includeChildren: includeChildren, includeAttachments: includeAttachments)
             )
             let fallback = "\(page.displayTitle).\(includeChildren || includeAttachments ? "zip" : format.fileExtension)"
             let name = ContentDisposition.filename(from: response) ?? fallback
-            self.shareFile = try TempFile.write(data, folder: ["exports"], name: name)
+            self.shareFile = try TempFile.write(data, server: server, folder: ["exports"], name: name)
         }
     }
 

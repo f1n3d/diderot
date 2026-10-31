@@ -6,7 +6,8 @@ struct RootView: View {
     @Environment(AppNavigation.self) private var appNavigation
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppearanceSetting.key) private var appearance = AppearanceSetting.system
-    /// Link that arrived while restoring (e.g. the launch link), before the server is known.
+    /// Link that arrived while the app couldn't open it (`AppSession.opensLinks`), e.g. the launch link before the
+    /// server is known.
     @State private var queuedURL: URL?
 
     var body: some View {
@@ -40,10 +41,10 @@ struct RootView: View {
         }
         .onOpenURL { url in
             // `diderot://open?url=…`; the selection is applied once the main view exists.
-            if session.isRestoring { queuedURL = url } else { open(url) }
+            if session.opensLinks { open(url) } else { queuedURL = url }
         }
-        .onChange(of: session.isRestoring) { _, restoring in
-            guard !restoring, let url = queuedURL else { return }
+        .onChange(of: session.opensLinks) { _, opens in
+            guard opens, let url = queuedURL else { return }
             queuedURL = nil
             open(url)
         }

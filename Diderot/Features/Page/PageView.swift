@@ -306,7 +306,7 @@ struct PageView: View {
                 guard let model else { return }
                 let target = model.takeMediaTarget()
                 startUpload(in: model)
-                Task { await upload(1, to: target, in: model) { _ in try UploadFile.camera(data) } }
+                Task { await upload(1, to: target, in: model) { try UploadFile.camera(data, server: $1) } }
             }
             .ignoresSafeArea()
         }
@@ -1201,7 +1201,7 @@ struct PageView: View {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed != (page.title ?? ""), trimmed != savingTitle else { return nil }
         // Its session ended (401) or a link switched servers: the title waits for the next sign-in there, like the text.
-        guard session.ready?.token == pageSession.token else {
+        guard session.isStillCurrent(pageSession) else {
             return Task { await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges) }
         }
         savingTitle = trimmed
@@ -1209,7 +1209,8 @@ struct PageView: View {
             // Replaces an older kept title, which then can't overwrite this one.
             await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges)
             do {
-                _ = try await session.send(Endpoints.Pages.update(pageId: page.id, title: trimmed))
+                // With the page's session: a switch while the title was kept would take it to the other server.
+                _ = try await session.send(Endpoints.Pages.update(pageId: page.id, title: trimmed), on: pageSession)
                 await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
                 unsentTitle = nil
                 changes.pageChanged(in: page.spaceId)
@@ -1310,11 +1311,11 @@ struct PageView: View {
     }
 
     private func uploadPhotos(_ items: [PhotosPickerItem], to target: MediaTarget, in model: DocumentModel) async {
-        await upload(items.count, to: target, in: model) { try await UploadFile.photo(items[$0]) }
+        await upload(items.count, to: target, in: model) { try await UploadFile.photo(items[$0], server: $1) }
     }
 
     private func uploadFiles(at urls: [URL], to target: MediaTarget, in model: DocumentModel) async {
-        await upload(urls.count, to: target, in: model) { try await UploadFile.file(at: urls[$0]) }
+        await upload(urls.count, to: target, in: model) { try await UploadFile.file(at: urls[$0], server: $1) }
     }
 
     /// Counts an upload as soon as its picker closes; it always ends in `upload`. The model keeps its page's engine open
@@ -1325,18 +1326,19 @@ struct PageView: View {
     }
 
     /// Prepares, uploads and removes the files one at a time, so a large video isn't staged beside all the others, and
-    /// inserts them together at the target, in the page they were picked for.
-    private func upload(_ count: Int, to target: MediaTarget, in model: DocumentModel, file: (Int) async throws -> UploadFile?) async {
+    /// inserts them together at the target, in the page they were picked for. `file` stages the one at an index in the
+    /// server's folder (`UploadFile`).
+    private func upload(_ count: Int, to target: MediaTarget, in model: DocumentModel, file: (Int, URL) async throws -> UploadFile?) async {
         defer {
             uploads -= 1
             model.uploadEnded()
         }
-        guard let client = session.client else { return }
+        guard let client = session.client, let server = session.server?.url else { return }
         let pageId = model.page.id
         var attachments: [Attachment] = []
         for index in 0..<count {
             do {
-                guard let prepared = try await file(index) else { continue }
+                guard let prepared = try await file(index, server) else { continue }
                 defer { prepared.remove() }
                 attachments.append(try await session.perform {
                     try await client.uploadAttachment(pageId: pageId, fileName: prepared.fileName, mimeType: prepared.mimeType,

@@ -434,36 +434,18 @@ struct BaseFileEditor: View {
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             photoItem = nil
-            Task {
-                do {
-                    if let file = try await UploadFile.photo(item) { await upload(file) }
-                } catch {
-                    model.toast = error.localizedDescription
-                }
-            }
+            upload { try await UploadFile.photo(item, server: $0) }
         }
         .fullScreenCover(isPresented: $showsCamera) {
             CameraPicker { data in
-                Task {
-                    do {
-                        await upload(try UploadFile.camera(data))
-                    } catch {
-                        model.toast = error.localizedDescription
-                    }
-                }
+                upload { try UploadFile.camera(data, server: $0) }
             }
             .ignoresSafeArea()
         }
         .fileImporter(isPresented: $showsFileImporter, allowedContentTypes: [.item]) { result in
             switch result {
             case .success(let url):
-                Task {
-                    do {
-                        await upload(try await UploadFile.file(at: url))
-                    } catch {
-                        model.toast = error.localizedDescription
-                    }
-                }
+                upload { try await UploadFile.file(at: url, server: $0) }
             case .failure(let error):
                 model.toast = error.localizedDescription
             }
@@ -471,8 +453,16 @@ struct BaseFileEditor: View {
         .quickLookPreview($previewURL)
     }
 
-    private func upload(_ file: UploadFile) async {
-        await model.attachFile(rowId: rowId, propertyId: property.id, file: file)
+    /// Stages a file in the database's server folder (`UploadFile`) and adds it to the cell; a failure shows as a toast.
+    private func upload(_ stage: @escaping @Sendable (URL) async throws -> UploadFile?) {
+        guard let server = model.serverURL else { return }
+        Task {
+            do {
+                if let file = try await stage(server) { await model.attachFile(rowId: rowId, propertyId: property.id, file: file) }
+            } catch {
+                model.toast = error.localizedDescription
+            }
+        }
     }
 
     private func remove(_ file: FileEntry) {
@@ -490,7 +480,7 @@ struct BaseFileEditor: View {
         defer { downloading.remove(file.id) }
         do {
             let (data, _) = try await client.fetchFile(at: url)
-            previewURL = try TempFile.write(data, folder: ["attachments", file.id], name: file.name)
+            previewURL = try TempFile.write(data, server: baseURL, folder: ["attachments", file.id], name: file.name)
         } catch {
             model.toast = error.userMessage
         }
