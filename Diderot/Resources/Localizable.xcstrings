@@ -1730,6 +1730,16 @@
         }
       }
     },
+    "Double-tap to dismiss.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Schließen doppeltippen."
+          }
+        }
+      }
+    },
     "Draw.io (diagrams.net)": {
       "localizations": {
         "de": {
@@ -3442,6 +3452,16 @@
         }
       }
     },
+    "Not added to Favorites: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht zu den Favoriten hinzugefügt: %@"
+          }
+        }
+      }
+    },
     "Not completed": {
       "localizations": {
         "de": {
@@ -3489,6 +3509,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht in deiner Lizenz enthalten"
+          }
+        }
+      }
+    },
+    "Not marked as read: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht als gelesen markiert: %@"
+          }
+        }
+      }
+    },
+    "Not removed from Favorites: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht aus den Favoriten entfernt: %@"
           }
         }
       }

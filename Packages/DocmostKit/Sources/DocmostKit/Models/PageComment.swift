@@ -17,6 +17,14 @@ public struct PageComment: Codable, Sendable, Hashable, Identifiable {
     public var isInline: Bool { type == "inline" }
     public var isResolved: Bool { resolvedAt != nil }
     public var isReply: Bool { parentCommentId != nil }
+
+    /// The comment with `creator` if it has none: a write's answer names only the creator's ID.
+    public func withCreator(_ fallback: UserRef?) -> PageComment {
+        PageComment(
+            id: id, content: content, selection: selection, type: type, parentCommentId: parentCommentId, creatorId: creatorId,
+            resolvedAt: resolvedAt, editedAt: editedAt, createdAt: createdAt, creator: creator ?? fallback
+        )
+    }
 }
 
 /// Version entry from `pages/history`.

@@ -312,12 +312,20 @@ final class BaseModel {
 
     /// Current state of a row from the table or board.
     /// Makes a row available to the detail sheet, loading it by id if the view doesn't show it (a linked entry outside
-    /// the loaded rows or the view's filter, as the web does). False if it can't be loaded.
+    /// the loaded rows or the view's filter, as the web does). False if it can't be loaded, with a toast why: the link
+    /// opened nothing without a word.
     func fetchRowIfNeeded(_ id: String) async -> Bool {
         if row(id: id) != nil { return true }
-        guard let row = try? await send(Endpoints.Bases.rowInfo(pageId: pageId, rowId: id)) else { return false }
-        offBoardRows[row.id] = row
-        return true
+        do {
+            let row = try await send(Endpoints.Bases.rowInfo(pageId: pageId, rowId: id))
+            offBoardRows[row.id] = row
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            toast = error.userMessage
+            return false
+        }
     }
 
     func row(id: String) -> BaseRow? {
@@ -494,20 +502,21 @@ final class BaseModel {
         }
     }
 
-    /// People search (web parity): all workspace members; without a query, the first ten.
-    func suggestPeople(_ query: String) async -> [SearchSuggestions.UserSuggestion] {
+    /// People search (web parity): all workspace members; without a query, the first ten. Throws when the search fails,
+    /// which the picker showed as "No people found".
+    func suggestPeople(_ query: String) async throws -> [SearchSuggestions.UserSuggestion] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let endpoint = Endpoints.Search.suggest(query: trimmed, users: true, pages: false, limit: trimmed.isEmpty ? 10 : 25)
-        return (try? await send(endpoint))?.users ?? []
+        return try await send(endpoint).users ?? []
     }
 
-    /// Page search (web parity): pages in the database's space first.
-    func suggestPages(_ query: String) async -> [SearchSuggestions.PageSuggestion] {
+    /// Page search (web parity): pages in the database's space first. Throws as `suggestPeople` does.
+    func suggestPages(_ query: String) async throws -> [SearchSuggestions.PageSuggestion] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let endpoint = Endpoints.Search.suggest(
             query: trimmed, users: false, pages: true, spaceId: base?.spaceId, limit: trimmed.isEmpty ? 5 : 25
         )
-        return (try? await send(endpoint))?.pages ?? []
+        return try await send(endpoint).pages ?? []
     }
 
     /// Records picked people and pages so cells show their names right away.

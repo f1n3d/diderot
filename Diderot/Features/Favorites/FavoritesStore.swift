@@ -9,6 +9,9 @@ final class FavoritesStore {
     private(set) var pageIds: Set<String> = []
     private(set) var spaceIds: Set<String> = []
     private(set) var listState: LoadState<[Favorite]> = .idle
+    /// A change the server didn't take (`MainTabView` shows it): the star or the swiped-away row comes back, and used to
+    /// say nothing.
+    var toast: String?
     /// Counts list loads, so an older answer arriving last doesn't win.
     @ObservationIgnored private var listLoads = 0
     private unowned let session: AppSession
@@ -73,6 +76,7 @@ final class FavoritesStore {
         } catch {
             if wasFavorite { pageIds.insert(pageId) } else { pageIds.remove(pageId) }
             AppLog.ui.error("Favorite toggle failed: \(error.userMessage, privacy: .public)")
+            toast = Self.failure(error, removing: wasFavorite)
         }
     }
 
@@ -86,6 +90,13 @@ final class FavoritesStore {
         } catch {
             if wasFavorite { spaceIds.insert(spaceId) } else { spaceIds.remove(spaceId) }
             AppLog.ui.error("Favorite toggle failed: \(error.userMessage, privacy: .public)")
+            toast = Self.failure(error, removing: wasFavorite)
         }
+    }
+
+    private static func failure(_ error: Error, removing: Bool) -> String {
+        removing
+            ? String(localized: "Not removed from Favorites: \(error.userMessage)")
+            : String(localized: "Not added to Favorites: \(error.userMessage)")
     }
 }

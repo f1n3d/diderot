@@ -464,6 +464,7 @@ struct AppSessionRaceTests {
         StubURLProtocol.offline.withLock { $0 = true }
         await notifications.markRead(notification)
         #expect(notifications.listState.value?.first?.isUnread == true && notifications.unreadCount == 1)
+        #expect(notifications.toast?.hasPrefix(String(localized: "Not marked as read: \("")")) == true, "and says so")
         await notifications.markAllRead()
         #expect(notifications.listState.value?.first?.isUnread == true && notifications.unreadCount == 1)
         StubURLProtocol.offline.withLock { $0 = false }
@@ -511,7 +512,62 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
-    /// The user switches database views while the first view's rows load, and the second view's rows arrive first.
+    /// A favorite the server didn't take comes back and says so; it used to come back without a word.
+    @Test func failedFavoriteChangeSaysSo() async throws {
+        let session = try await sessionOnA()
+        let favorites = FavoritesStore(session: session)
+        StubURLProtocol.offline.withLock { $0 = true }
+        await favorites.togglePage("p1")
+        StubURLProtocol.offline.withLock { $0 = false }
+        #expect(!favorites.isFavorite(pageId: "p1"))
+        #expect(favorites.toast?.hasPrefix(String(localized: "Not added to Favorites: \("")")) == true)
+        withExtendedLifetime(session) {}
+        await removeCaches()
+    }
+
+    /// A slow comments load that ends after a newer one doesn't overwrite it: a comment just posted disappeared from the
+    /// list and the badge, and a deleted one came back.
+    @Test func lateCommentsAnswerKeepsTheNewerList() async throws {
+        let session = try await sessionOnA()
+        let comments = PageComments(pageId: "p1", session: session)
+        func list(_ ids: [String]) -> String {
+            #"{"data": {"items": [\#(ids.map { #"{"id": "\#($0)"}"# }.joined(separator: ", "))], "meta": {"hasNextPage": false}}}"#
+        }
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+            StubURLProtocol.body.withLock { $0 = list(["c1", "c2"]) }
+            await comments.load()
+            StubURLProtocol.body.withLock { $0 = list(["c1"]) }
+        } }
+        StubURLProtocol.body.withLock { $0 = list(["c1"]) }
+        await comments.load()
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(comments.state.value?.map(\.id) == ["c1", "c2"])
+        withExtendedLifetime(session) {}
+        await removeCaches()
+    }
+
+    /// A posted comment shows at once, with its author (the answer names only the author's ID): each change used to wait
+    /// for the whole list, an inline comment's mark with it. A deleted comment goes with its replies.
+    @Test func commentChangesShowAtOnce() async throws {
+        let session = try await sessionOnA()
+        let comments = PageComments(pageId: "p1", session: session)
+        StubURLProtocol.body.withLock {
+            $0 = #"{"data": {"items": [{"id": "c1"}, {"id": "r1", "parentCommentId": "c1"}], "meta": {"hasNextPage": false}}}"#
+        }
+        await comments.load()
+        // From here on the background reloads get no list: what shows is the changes' own answers.
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "c2", "creatorId": "u1"}}"# }
+        try await comments.create(text: "Neu", replyTo: nil)
+        #expect(comments.state.value?.map(\.id) == ["c1", "r1", "c2"])
+        #expect(comments.comment(id: "c2")?.creator?.id == "u1")
+        StubURLProtocol.body.withLock { $0 = #"{"success": true}"# }
+        try await comments.delete(try #require(comments.comment(id: "c1")))
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(comments.state.value?.map(\.id) == ["c2"])
+        withExtendedLifetime(session) {}
+        await removeCaches()
+    }
+
     /// A database is read-only offline, as pages are. A save that fails keeps the field's text for the next try: the old
     /// value used to come back, the input gone.
     @Test func failedSaveKeepsTheTypedText() async throws {
@@ -536,6 +592,19 @@ struct AppSessionRaceTests {
         #expect(model.unsavedDraft(rowId: "r1", propertyId: "p1") == nil)
         #expect(model.row(id: "r1")?.cells["p1"] == .string("neu"))
         #expect(try await keptCells(session).isEmpty, "saved, it no longer waits")
+        await removeCaches()
+    }
+
+    /// A failed people search throws instead of finding nobody (the picker said "No people found"), and a link to an entry
+    /// that can't be loaded says why: it opened nothing without a word.
+    @Test func failedDatabaseReadsSaySo() async throws {
+        let (model, session) = try await editableBase()
+        StubURLProtocol.offline.withLock { $0 = true }
+        await #expect(throws: APIError.self) { try await model.suggestPeople("") }
+        #expect(await !model.fetchRowIfNeeded("r9"))
+        StubURLProtocol.offline.withLock { $0 = false }
+        #expect(model.toast != nil)
+        withExtendedLifetime(session) {}
         await removeCaches()
     }
 
@@ -677,6 +746,7 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// The user switches database views while the first view's rows load, and the second view's rows arrive first.
     @Test func lateRowsAnswerKeepsTheNewView() async throws {
         let session = try await sessionOnA()
         let pageId = "base-\(UUID().uuidString)"

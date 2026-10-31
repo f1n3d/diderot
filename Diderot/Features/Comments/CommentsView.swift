@@ -23,7 +23,6 @@ struct CommentsView: View {
 
     @State private var tab = Tab.open
     @State private var isSending = false
-    @State private var errorMessage: String?
     @State private var highlighted: String?
     /// Thread just written in (a new one, or the one replied to), scrolled to above the composer.
     @State private var revealId: String?
@@ -186,7 +185,7 @@ struct CommentsView: View {
     @ViewBuilder
     private var composer: some View {
         // Without comment rights it still shows for editing own comments and for errors (e.g. from Delete).
-        if canComment || comments.composing != .new || errorMessage != nil {
+        if canComment || comments.composing != .new || comments.error != nil {
             VStack(spacing: 6) {
                 if comments.composing != .new {
                     HStack {
@@ -204,7 +203,7 @@ struct CommentsView: View {
                             .font(.caption)
                     }
                 }
-                if let errorMessage {
+                if let errorMessage = comments.error {
                     Text(errorMessage).font(.caption).foregroundStyle(.red)
                 }
                 HStack(alignment: .bottom, spacing: 8) {
@@ -241,7 +240,7 @@ struct CommentsView: View {
     private func compose(_ mode: Composing, text: String) {
         comments.composing = mode
         comments.draft = text
-        errorMessage = nil
+        comments.error = nil
         composerFocused = mode != .new
     }
 
@@ -250,7 +249,7 @@ struct CommentsView: View {
         guard !text.isEmpty, !isSending else { return }
         let mode = comments.composing
         isSending = true
-        errorMessage = nil
+        comments.error = nil
         Task {
             defer { isSending = false }
             do {
@@ -265,7 +264,7 @@ struct CommentsView: View {
                 composerFocused = false
                 if case .new = mode { tab = .open }
             } catch {
-                errorMessage = error.userMessage
+                comments.error = error.userMessage
             }
         }
     }
@@ -275,7 +274,7 @@ struct CommentsView: View {
             do {
                 try await action()
             } catch {
-                errorMessage = error.userMessage
+                comments.error = error.userMessage
             }
         }
     }

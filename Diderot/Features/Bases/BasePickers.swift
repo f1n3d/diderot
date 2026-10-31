@@ -161,6 +161,8 @@ struct BasePersonPicker: View {
     @State private var search = ""
     @State private var results: [SearchSuggestions.UserSuggestion] = []
     @State private var isLoading = false
+    /// Why the last search failed: shown instead of "none found".
+    @State private var searchError: String?
 
     var body: some View {
         if let property = model.base?.property(id: propertyId), let row = model.row(id: rowId) {
@@ -186,7 +188,9 @@ struct BasePersonPicker: View {
                             if !multiple { dismiss() }
                         }
                     }
-                    if others.isEmpty && !isLoading {
+                    if let searchError {
+                        Label(searchError, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                    } else if others.isEmpty && !isLoading {
                         Text("No people found").foregroundStyle(.secondary)
                     }
                 }
@@ -240,9 +244,15 @@ struct BasePersonPicker: View {
         guard !Task.isCancelled else { return }
         isLoading = true
         defer { isLoading = false }
-        let found = await model.suggestPeople(search)
-        guard !Task.isCancelled else { return }
-        results = found
+        do {
+            let found = try await model.suggestPeople(search)
+            guard !Task.isCancelled else { return }
+            results = found
+            searchError = nil
+        } catch is CancellationError {
+        } catch {
+            searchError = error.userMessage
+        }
     }
 }
 
@@ -257,6 +267,8 @@ struct BasePagePicker: View {
     @State private var search = ""
     @State private var results: [SearchSuggestions.PageSuggestion] = []
     @State private var isLoading = false
+    /// Why the last search failed: shown instead of "none found".
+    @State private var searchError: String?
 
     var body: some View {
         if let property = model.base?.property(id: propertyId), let row = model.row(id: rowId) {
@@ -304,7 +316,9 @@ struct BasePagePicker: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("base-page-\(page.id)")
                     }
-                    if results.isEmpty && !isLoading {
+                    if let searchError {
+                        Label(searchError, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                    } else if results.isEmpty && !isLoading {
                         Text("No pages found").foregroundStyle(.secondary)
                     }
                 }
@@ -330,8 +344,14 @@ struct BasePagePicker: View {
         guard !Task.isCancelled else { return }
         isLoading = true
         defer { isLoading = false }
-        let found = await model.suggestPages(search)
-        guard !Task.isCancelled else { return }
-        results = found
+        do {
+            let found = try await model.suggestPages(search)
+            guard !Task.isCancelled else { return }
+            results = found
+            searchError = nil
+        } catch is CancellationError {
+        } catch {
+            searchError = error.userMessage
+        }
     }
 }
