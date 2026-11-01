@@ -53,13 +53,12 @@ The debt sits in two places.
 - web view setup
 - media loading
 
-So a bug gets fixed in one place and stays in others. Example: the race fixed for favorites and notifications is still open in comments (R18).
+So a bug gets fixed in one place and stays in others. Example: the race fixed for favorites and notifications was still open in comments (R18, fixed in package B).
 
 ## Order of work
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Data safety outside the editor | R17, R18, R20, R38, R41 | unit tests | low to medium |
 | **C** Data safety in the editor | R1, R2, R3, R5, R6, R9, R19, R22, R23, R26 | unit tests and UI tests | medium |
 | **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
@@ -232,35 +231,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ## 3. Visible errors, accessibility, concurrency
 
-### R17 [medium] ✔ Toasts aren't announced to VoiceOver
-
-**Where:** `Toast.swift:4–25`.
-
-**Problem:** The toast is the main error channel; about 50 places set one, for example database writes, page actions and title saves. It disappears after 2.5 s and posts no announcement. The only announcement in the app is in `PresentationView.swift:164`.
-
-**Fix:** Post `AccessibilityNotification.Announcement` when a message appears. Keep error toasts until dismissed while VoiceOver runs.
-
-### R18 [medium] ✔ Comments: an older load overwrites a newer one
-
-**Where:** `PageComments.swift:64–76`, `:101–106`.
-
-**Problem:** `load()` has no generation guard, but up to five triggers can run it at once:
-
-- the badge (`PageView.swift:1073`)
-- every sheet open (`CommentsView.swift:56`)
-- refresh
-- the focus lookup
-- every write, through `change()`
-
-**Scenario:** A slow first load finishes after the reload that follows a post. The new comment disappears from the list and the badge, and the user posts it again. A deleted comment comes back, a resolved one returns to "Open".
-
-FavoritesStore (`:45–51`) and NotificationsStore (`:50–58`) already fixed this race.
-
-**Fix:**
-
-- A generation counter.
-- Apply the write's response locally and reload in the background. Today every write waits for a full paginated reload, and `InlineCommentSheet.swift:82–88` applies the comment mark only after it (relevant to the backlog's unexplained "mark never reached the server").
-
 ### R19 [medium] ○ The editor's error message is out of sight
 
 **Where:** `PageView.swift:501`.
@@ -268,22 +238,6 @@ FavoritesStore (`:45–51`) and NotificationsStore (`:50–58`) already fixed th
 **Problem:** `errorMessage` covers refused saves, lost write access and unsupported content. It is drawn below the last block, inside the scroll view, so someone editing near the top of a long page never sees it.
 
 **Fix:** A banner (`safeAreaInset`) or a toast.
-
-### R20 [low] ✔/○ Favorites and notifications fail silently
-
-**Where:** `FavoritesStore.swift:73–76`, `:86–89` ✔; `NotificationsStore.swift:81–88`, `:102–105` ○.
-
-**Problem:** A failed add, remove or mark-read reverts and only logs. The methods return `Void`, so none of the five callers can tell the user. In Favorites, the destructive swipe slides the row out and it silently comes back.
-
-**Fix:** A `toast` or error property on the stores, like `PageActionRunner.toast`.
-
-### R38 [low] ○ Comment errors are lost when the sheet closes
-
-**Where:** `CommentsView.swift:248–281`.
-
-**Problem:** Send, delete and resolve errors go into the sheet's `@State errorMessage`. The sheet can be closed while sending (no `interactiveDismissDisabled`, unlike `InlineCommentSheet.swift:70`), so a later failure is never shown.
-
-**Fix:** Keep the error in `PageComments`, next to the draft.
 
 ### R40 [low] ○ A start without the server or a cached user shows the sign-in screen without a word
 
@@ -297,17 +251,6 @@ FavoritesStore (`:45–51`) and NotificationsStore (`:50–58`) already fixed th
 - Signing in again replaces the token without ending the old server session.
 
 **Fix:** "Can't reach the server – Try Again" (runs `restore()` again), and retry when the network returns.
-
-### R41 [low] ○ `try?` on reads presents failures as empty results
-
-**Where:** `BaseModel.swift:293`, `:473`, `:482`.
-
-**Problem:**
-
-- `:293`: a link to a database entry opens nothing.
-- `:473`, `:482`: the pickers say "No people/pages found" when the request failed.
-
-**Fix:** An error row in the pickers; a toast for the link.
 
 ### R42 [low] ○ Comment marks in versions do nothing, and blocked links fail silently
 
@@ -686,7 +629,7 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |
 | Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema (R3). | One mark codec that keeps unknown attributes, plus a round-trip test over all fixtures. (M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links (R13). | (M) |
-| Showing errors | Toast, inline text, silent revert or only the log (R17, R20, R43). | One helper: toast plus VoiceOver announcement plus a generic message. (S) |
+| Showing errors | Toast (read out by VoiceOver since R17), inline text, silent revert or only the log (R43). | One helper: toast plus a generic message. (S) |
 
 ### S4 Time as a control mechanism
 

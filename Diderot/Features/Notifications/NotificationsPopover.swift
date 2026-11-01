@@ -44,6 +44,7 @@ struct NotificationsPopover: View {
             content
         }
         .frame(width: 360)
+        .toast($store.toast)
         .task { await store.loadList() }
         .onChange(of: store.filter) { _, _ in
             Task { await store.loadList() }

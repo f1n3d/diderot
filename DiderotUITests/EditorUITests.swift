@@ -1171,7 +1171,8 @@ import XCTest
         XCTAssertTrue(question.staticTexts["diderot-uitest://open"].exists, "The question doesn't show the address")
         snapshot(app, "64-other-app")
         question.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "Öffnen"])).firstMatch.tap()
-        let notice = app.staticTexts.matching(NSPredicate(format: "label IN %@", ["No app can open this link.", "Keine App kann diesen Link öffnen."])).firstMatch
+        // The toast is a button: with VoiceOver it stays until a double-tap dismisses it.
+        let notice = app.buttons.matching(NSPredicate(format: "label IN %@", ["No app can open this link.", "Keine App kann diesen Link öffnen."])).firstMatch
         XCTAssertTrue(notice.waitForExistence(timeout: 5), "Nothing says that no app could open the link")
 
         app.links["Skript"].tap()

@@ -90,6 +90,8 @@ struct MainTabView: View {
         // Here, not in HomeView: a tab switch or a page opened at launch hides Home and would cancel the first load.
         .task { await spaces.loadIfNeeded() }
         .toast($droppedChanges)
+        // A favorite's failed change, from any page, list or menu.
+        .toast($favorites.toast)
     }
 
     private func sendUnsentChanges() async {

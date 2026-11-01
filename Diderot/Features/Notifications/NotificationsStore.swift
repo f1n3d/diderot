@@ -14,6 +14,8 @@ final class NotificationsStore {
     var unreadOnly = NotificationsStore.storedUnreadOnly {
         didSet { UserDefaults.standard.set(unreadOnly, forKey: Self.unreadOnlyKey) }
     }
+    /// A mark the server didn't take (the popover shows it): the notification is unread again, which used to say nothing.
+    var toast: String?
     private unowned let session: AppSession
 
     static let pollInterval: Duration = .seconds(60)
@@ -80,6 +82,7 @@ final class NotificationsStore {
             _ = try await session.send(Endpoints.Notifications.markRead([notification.id]))
         } catch {
             AppLog.ui.error("Mark read failed: \(error.userMessage, privacy: .public)")
+            toast = String(localized: "Not marked as read: \(error.userMessage)")
             if let items = listState.value {
                 listState = .loaded(items.map { $0.id == notification.id ? notification : $0 })
             }
@@ -101,6 +104,7 @@ final class NotificationsStore {
             _ = try await session.send(Endpoints.Notifications.markAllRead)
         } catch {
             AppLog.ui.error("Mark all read failed: \(error.userMessage, privacy: .public)")
+            toast = String(localized: "Not marked as read: \(error.userMessage)")
             (listState, unreadCount) = before
             await loadList()
         }
