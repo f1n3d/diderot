@@ -48,7 +48,7 @@ public actor APIClient {
         self.session = URLSession(configuration: configuration)
     }
 
-    /// Server clock minus device clock, from the latest response's `Date` header (to the second); 0 before one.
+    /// Server clock minus device clock, from the latest API response's `Date` header (to the second); 0 before one.
     /// Server timestamps such as `updatedAt` compare with device times only after this correction.
     public nonisolated var serverClockOffset: TimeInterval { clockOffset.withLock { $0 } }
 
@@ -79,7 +79,7 @@ public actor APIClient {
         request.httpMethod = "GET"
         applyHeaders(to: &request, requiresAuth: origin(of: url) == origin(of: baseURL))
         // File names are user content and logs can be exported, so log only the folder (`/api/files/<id>`).
-        return try await execute(request, path: url.deletingLastPathComponent().path)
+        return try await execute(request, path: url.deletingLastPathComponent().path, readsClock: false)
     }
 
     /// Uploads a file to a page as `multipart/form-data`. `files/upload` answers without an envelope (`res.send`).
@@ -89,9 +89,8 @@ public actor APIClient {
         let boundary = "----DocmostBoundary" + UUID().uuidString
         let body = fileURL.deletingLastPathComponent().appending(path: "body-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: body) }
-        guard FileManager.default.createFile(atPath: body.path, contents: nil, attributes: [.protectionKey: FileProtectionType.complete]) else {
-            throw APIError.invalidResponse
-        }
+        // Its error says why, as reading the file's does: a full disk, or a sign-out that removed the staged file mid-upload.
+        try Data().write(to: body, options: .completeFileProtection)
         let output = try FileHandle(forWritingTo: body)
         do {
             defer { try? output.close() }
@@ -112,7 +111,8 @@ public actor APIClient {
     }
 
     private static func multipartFrame(boundary: String, pageId: String, fileName: String, mimeType: String) -> (head: Data, tail: Data) {
-        let safeName = fileName.replacingOccurrences(of: "\"", with: "_")
+        // A quote or a line break (any control character) would end the name, and what follows would count as headers.
+        let safeName = String(fileName.unicodeScalars.map { $0 == "\"" || $0.properties.generalCategory == .control ? "_" : Character($0) })
         let head = "--\(boundary)\r\nContent-Disposition: form-data; name=\"pageId\"\r\n\r\n\(pageId)\r\n"
             + "--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeName)\"\r\nContent-Type: \(mimeType)\r\n\r\n"
         return (Data(head.utf8), Data("\r\n--\(boundary)--\r\n".utf8))
@@ -170,9 +170,12 @@ public actor APIClient {
     }
 
     /// `send`: how the request goes out, if not as `session.data(for:delegate:)` (an upload from a file); it gets the
-    /// delegate to pass on.
+    /// delegate to pass on. `readsClock`: the response's `Date` header sets `serverClockOffset`. API calls and uploads
+    /// go to the server and no cache answers them; a file can come from another host, or from the session's cache with
+    /// the `Date` of its first download.
     private func execute(
-        _ request: URLRequest, path: String, send: ((URLSessionTaskDelegate?) async throws -> (Data, URLResponse))? = nil
+        _ request: URLRequest, path: String, readsClock: Bool = true,
+        send: ((URLSessionTaskDelegate?) async throws -> (Data, URLResponse))? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let started = ContinuousClock.now
         let method = request.httpMethod ?? "GET"
@@ -191,7 +194,7 @@ public actor APIClient {
                 throw APIError.invalidResponse
             }
             log(method: method, path: path, status: http.statusCode, started: started, error: nil)
-            if let date = http.value(forHTTPHeaderField: "Date").flatMap({ try? Date($0, strategy: .http) }) {
+            if readsClock, let date = http.value(forHTTPHeaderField: "Date").flatMap({ try? Date($0, strategy: .http) }) {
                 clockOffset.withLock { $0 = date.timeIntervalSinceNow }
             }
             if (300..<400).contains(http.statusCode), let location = http.value(forHTTPHeaderField: "Location") {
@@ -210,8 +213,9 @@ public actor APIClient {
             log(method: method, path: path, status: nil, started: started, error: error.localizedDescription)
             throw APIError.network(error)
         } catch {
+            // Not the server's doing (an upload's body file gone, say): the error keeps its cause.
             log(method: method, path: path, status: nil, started: started, error: error.localizedDescription)
-            throw APIError.invalidResponse
+            throw error
         }
     }
 

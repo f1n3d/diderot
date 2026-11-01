@@ -120,9 +120,24 @@ struct VideoBlockView: View {
                 options[AVURLAssetHTTPCookiesKey] = [cookie]
             }
             let asset = AVURLAsset(url: url, options: options)
+            AVAudioSession.preparePlayback()
             player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
         }
         .onDisappear { player?.pause() }
+    }
+}
+
+extension AVAudioSession {
+    /// Audio and video in pages play with the Ring/Silent switch on, as in Safari: the default category (`.soloAmbient`)
+    /// muted them. Only the category is set: other apps' audio stops once a player starts, as before, not here.
+    static func preparePlayback() {
+        let session = sharedInstance()
+        guard session.category != .playback else { return }
+        do {
+            try session.setCategory(.playback)
+        } catch {
+            AppLog.ui.error("Audio session not set for playback: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 

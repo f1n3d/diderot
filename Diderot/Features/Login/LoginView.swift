@@ -96,9 +96,13 @@ struct LoginView: View {
                 }
             }
             .onAppear {
+                #if DEBUG
                 if DebugLaunch.browserLogin {
                     browserLoginURL = server.url.appending(path: "login")
-                } else if !requiresSso {
+                    return
+                }
+                #endif
+                if !requiresSso {
                     focusedField = .email
                 }
             }

@@ -35,9 +35,17 @@ struct PageView: View {
     /// The session the page loaded in: an edited title waits in its store when that session ends (401) or a link switches
     /// to another server, as the page's text does.
     @State private var pageSession: ReadySession?
-    @State private var showsWebLayout = DebugLaunch.webLayout
+    // A debug launch opens the web layout or a sheet at once (`DOCMOST_DEBUG_WEB`, `DOCMOST_DEBUG_ROUTE`).
+    #if DEBUG
+    private static var launchesWebLayout: Bool { DebugLaunch.webLayout }
+    private static var launchRoute: String? { DebugLaunch.route }
+    #else
+    private static let launchesWebLayout = false
+    private static let launchRoute: String? = nil
+    #endif
+    @State private var showsWebLayout = PageView.launchesWebLayout
     @State private var webHTML: String?
-    @State private var showsComments = DebugLaunch.route == "comments"
+    @State private var showsComments = PageView.launchRoute == "comments"
     @State private var comments: PageComments?
     /// Comment the sheet jumps to on open (tap on a highlighted passage).
     @State private var commentsFocusId: String?
@@ -45,10 +53,10 @@ struct PageView: View {
     @State private var browsing: URL?
     /// The page's space; its settings say whether readers may comment.
     @State private var space: Space?
-    @State private var showsHistory = DebugLaunch.route == "history"
+    @State private var showsHistory = PageView.launchRoute == "history"
     @State private var showsEmojiPicker = false
     @State private var showsAppendNote = false
-    @State private var showsWebEditor = DebugLaunch.route == "webeditor"
+    @State private var showsWebEditor = PageView.launchRoute == "webeditor"
     @State private var showsArrange = false
     /// The page for the presentation mode, as it was when it opened (as on the web).
     @State private var presentation: Presentation?
@@ -994,9 +1002,11 @@ struct PageView: View {
                 if let slugId = page.slugId, slugId != page.id {
                     await cache.write(page, key: CacheKey.page(slugId))
                 }
+                #if DEBUG
                 if let target = DebugLaunch.scrollBlockId {
                     position.scrollTo(id: target, anchor: .top)
                 }
+                #endif
             } catch let error as APIError where error.isGone {
                 // Deleted for good or access removed: show that instead of the saved copy, and drop the copy.
                 let stale = state.value

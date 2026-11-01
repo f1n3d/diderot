@@ -59,7 +59,6 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **D** Hardening and privacy | R31, R32, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
@@ -115,51 +114,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 - The tree isn't updated locally, so a second drag before the reload uses stale keys (?).
 
 **Fix:** A `PageTreeStore.move` sharing one insertion helper with `moveCard`, applying the move locally, and messages for `KeyError`.
-
-### Security and robustness
-
-#### R31 [low] ○ The server clock offset comes from any response
-
-**Where:** `APIClient.swift:187–189`.
-
-**Problem:** The offset is taken from the `Date` header of every response, including other hosts through `fetchFile` and (?) cached responses. `LiveDocuments.swift:28` then picks or ignores the in-memory copy wrongly.
-
-**Fix:** Update it only from fresh responses of the own server.
-
-#### R32 [low] ○ Upload errors lose their cause, and the real upload path is untested
-
-**Where:** `APIClient.swift:92–94`, `:113`, `:202–204`.
-
-**Problems:**
-
-- If the upload's body file can't be created (disk full, or the staged file deleted by signing out mid-upload), the user sees "Invalid response from server."
-- `execute` turns every non-network error into `.invalidResponse`.
-- The multipart `filename` escapes `"` but not line breaks.
-- The file-based upload the app uses has no test.
-
-**Fix:** Pass the file error through, strip control characters, and test the file overload, including removal of the `body-*` file.
-
-#### R53 [low] ? Audio and video play silently with the Ring/Silent switch on
-
-**Where:** `MediaBlockViews.swift:91–126`.
-
-**Problem:** No `AVAudioSession` category is set, so the default `.soloAmbient` applies.
-
-**Fix:** `.playback` when playback starts. Check on a device.
-
-#### R58 [low] ○ No local network usage description
-
-**Where:** `Info.plist`.
-
-**Problem:** `NSLocalNetworkUsageDescription` is missing, although servers on the local network are supported.
-
-#### R59 [low] ○ Debug paths are guarded at each call site, not at the source
-
-**Where:** `DebugLaunch.swift:48–54`; `AppSession.swift:251`, `:633` among about 25 call sites.
-
-**Problem:** Release builds are safe today: every `DOCMOST_DEBUG_*` read goes through `raw()`, which returns nil in Release, and the auto-login, server pin and form filler are inside `#if DEBUG`. But about 25 call sites compile into Release and depend on that one function.
-
-**Fix:** Put `DebugLaunch` itself inside `#if DEBUG`, so the compiler enforces it.
 
 ### Performance: measure first
 
@@ -433,7 +387,6 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 - **AppSessionTests:** 1,100 lines of race tests for many features (session, notifications, favorites, search, engine, databases). They share static `StubURLProtocol` hooks, so they must run serially. They touch the real Caches folder, WebKit and temp files, and `restore()` asks the real network monitor. Split the file per feature and inject the transport and the environment.
 - **EditorUITests:** 2,198 lines; 60 tests share one page whose state accumulates. 118 `Thread.sleep` calls add up to about 105 s. Use pages per test and condition-based waits.
 - **Missing tests for risky paths:**
-  - the file-based upload
   - redirects
   - Keychain attributes
   - concurrent access to the unsent store
@@ -446,7 +399,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 ## 5. Checked and fine
 
 - ✔ **Keychain:** `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data protection keychain, no iCloud sync; an update falls back to an add.
-- ○ **Release builds:** every `DOCMOST_DEBUG_*` path (auto-login, server pin, form filler) is guarded (R59 makes it compiler-enforced).
+- ✔ **Release builds:** `DebugLaunch` exists only in debug builds, so the compiler keeps every `DOCMOST_DEBUG_*` path (auto-login, server pin, form filler, start routes) out of release builds.
 - ✔ **API client:** stores no cookies; `fetchFile` sends the bearer token only to the own origin.
 - ○ **Tokens and content:** no token in URLs or logs; token claims serve only display and expiry, and the server verifies the token.
 - ○ **Disk cache:** file names can't leave the cache folder. `TempFile` sanitises names; out-of-range numbers in content are clamped, and nesting is capped (decoded down to 100 levels of JSON, shown down to 32 nodes).

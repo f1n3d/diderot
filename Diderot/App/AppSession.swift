@@ -285,7 +285,7 @@ final class AppSession {
                     state = .ready(ReadySession(
                         server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,
                         token: stored.token, currentUser: cachedUser, entitlements: entitlements,
-                        serverVersion: DebugLaunch.serverVersion ?? version, restoredOffline: true
+                        serverVersion: Self.reportedVersion(version), restoredOffline: true
                     ))
                     // The sign-in stopped waiting: it goes on in the background, as when the network returns.
                     if answeredLate { Task { await reconnectIfNeeded() } }
@@ -799,7 +799,7 @@ final class AppSession {
         state = .ready(ReadySession(
             server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,
             token: token, currentUser: currentUser, entitlements: resolvedEntitlements,
-            serverVersion: DebugLaunch.serverVersion ?? serverVersion
+            serverVersion: Self.reportedVersion(serverVersion)
         ))
         AppLog.session.info("Signed in as \(currentUser.user.email, privacy: .private) at \(server.url.absoluteString, privacy: .public)")
     }
@@ -887,6 +887,15 @@ final class AppSession {
         if let pinned = Self.debugServerURL, let account = account(matching: pinned) { return account }
         #endif
         return accounts.first
+    }
+
+    /// The server's version, or the one a debug launch gives in its place (`DOCMOST_DEBUG_SERVER_VERSION`).
+    private static func reportedVersion(_ version: String?) -> String? {
+        #if DEBUG
+        DebugLaunch.serverVersion ?? version
+        #else
+        version
+        #endif
     }
 
     #if DEBUG

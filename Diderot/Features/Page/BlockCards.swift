@@ -284,7 +284,11 @@ struct PageEditor: View {
     /// and this editor lies outside it, so it came before the page's heading. On Return the keyboard then briefly
     /// hides, as focus moves to the next block's editor.
     static func editsInBlock(voiceOver: Bool) -> Bool {
+        #if DEBUG
         voiceOver || DebugLaunch.editsInBlock
+        #else
+        voiceOver
+        #endif
     }
 
     var body: some View {

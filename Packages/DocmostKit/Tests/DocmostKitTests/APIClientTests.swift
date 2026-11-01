@@ -51,6 +51,8 @@ struct APIClientTests {
         #expect(result == NoContent())
     }
 
+    /// From API responses only: a file can come from another host, or from the session's cache with the `Date` of its
+    /// first download (code review R31).
     @Test func serverClockOffsetComesFromTheDateHeader() async throws {
         let serverNow = Date.now.addingTimeInterval(3600)
         MockURLProtocol.respond(with: .init(headers: ["Date": serverNow.formatted(.http)], body: try TestSupport.fixture("void-response")))
@@ -58,6 +60,11 @@ struct APIClientTests {
         #expect(client.serverClockOffset == 0)
         _ = try await client.send(Endpoints.Auth.logout)
         #expect(abs(client.serverClockOffset - 3600) < 2)
+
+        MockURLProtocol.respond(with: .init(headers: ["Date": Date.now.addingTimeInterval(-7200).formatted(.http)], body: Data("file".utf8)))
+        _ = try await client.fetchFile(at: URL(string: "https://elsewhere.example/a.png")!)
+        _ = try await client.fetchFile(at: client.apiURL("files/a/b.png"))
+        #expect(abs(client.serverClockOffset - 3600) < 2, "A file's Date header set the offset")
     }
 
     @Test func versionRequestWaitsBriefly() async throws {

@@ -107,6 +107,25 @@ struct MediaBlockViewTests {
         #expect(OnceURLProtocol.requests.withLock { $0[server.host()!, default: 0] } == requests)
     }
 
+    /// Audio and video play with the Ring/Silent switch on, as in Safari (code review R53): the default category
+    /// (`.soloAmbient`) muted them. The player sets `.playback`, which the switch doesn't mute, before it can start.
+    @Test(arguments: ["video", "audio"])
+    func mediaPlaysWithTheSilentSwitchOn(type: String) async throws {
+        try AVAudioSession.sharedInstance().setCategory(.soloAmbient)
+        let server = URL(string: "https://silent-switch.docmost.invalid")!
+        let context = RenderContext(baseURL: server, client: nil, imageLoader: nil, token: nil, pageId: nil)
+        let file = URL.temporaryDirectory.appending(path: "silent-switch-\(type).caf")
+        let block = try #require(ContentParser.parse(PMNode(type: "doc", content: [PMNode(type: type, attrs: ["src": .string(file.absoluteString)])])).blocks.first)
+        let host = UIHostingController(rootView: BlockView(block: block).environment(\.renderContext, context))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        #expect(await poll { players(in: host).count == 1 })
+        #expect(AVAudioSession.sharedInstance().category == .playback)
+    }
+
     /// When an edit above shifts the blocks, another synced block takes this one's place: it shows the spinner while
     /// loading, not the previous one's content. One without an id says so at once, without a spinner.
     @Test(arguments: ["b", nil])

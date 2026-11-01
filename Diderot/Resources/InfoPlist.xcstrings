@@ -42,6 +42,23 @@
         }
       }
     },
+    "NSLocalNetworkUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit Docmost-Servern in deinem lokalen Netzwerk verbinden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to Docmost servers on your local network."
+          }
+        }
+      }
+    },
     "NSPhotoLibraryAddUsageDescription" : {
       "extractionState" : "manual",
       "localizations" : {
