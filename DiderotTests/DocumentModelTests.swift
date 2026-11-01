@@ -12,7 +12,7 @@ struct DocumentModelTests {
         engine.holdsNextSave = true
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
 
         model.activeText.append(AttributedString("!"))
@@ -35,14 +35,14 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph")]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         #expect(model.isBlank)
         #expect(await model.fill(with: template))
         #expect(engine.replaced == [.path([0], type: "paragraph")])
         #expect(engine.replacedWith == [template])
 
         engine.document = PMNode(type: "doc", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "x")])])
-        model.syncFromEngine()
+        engine.sendDocument()
         #expect(!model.isBlank)
         #expect(await model.fill(with: template) == false)
         #expect(engine.replacedWith.count == 1)
@@ -61,14 +61,14 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [list("bulletList", "Eins")]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let item = try #require(model.node(at: [0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0], node: item), node: item)
 
         model.activeText.append(AttributedString("!"))
         model.activeTextChanged()
         engine.whileInserting = {
-            model.syncFromEngine()  // an event from before the change
+            engine.sendDocument()  // an event from before the change
             let saved = engine.saved.last
             engine.document = PMNode(type: "doc", content: [saved?.type == "paragraph" ? list("bulletList", "Eins!") : saved].compactMap { $0 })
         }
@@ -81,7 +81,7 @@ struct DocumentModelTests {
 
         engine.whileInserting = nil
         engine.document = PMNode(type: "doc", content: [list("orderedList", "Eins! Zwei")])  // a collaborator's edit
-        model.syncFromEngine()
+        engine.sendDocument()
         await model.flush()  // leaving the page
 
         #expect(model.node(at: [0, 0, 0])?.plainText == "Eins! Zwei")
@@ -96,7 +96,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [details]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0, 0], node: title), node: title)
 
         model.activeText.insert(AttributedString("\n"), at: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 2))
@@ -117,7 +117,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "details", content: [title, content]), line]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
 
         if backspace {
             model.activate(NodeRef(path: [1], node: line), node: line)
@@ -143,20 +143,20 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", "Zwei")]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let first = try #require(model.node(at: [0]))
         model.activate(NodeRef(path: [0], node: first), node: first)
         engine.whileInserting = {
             // The commit's document event is handled first; then the engine holds the new paragraph.
             engine.document = PMNode(type: "doc", content: [paragraph("a", "Eins!"), paragraph("b", "Zwei")])
-            model.syncFromEngine()
+            engine.sendDocument()
             engine.document = PMNode(type: "doc", content: [paragraph("a", "Eins!"), paragraph("c", nil), paragraph("b", "Zwei")])
         }
 
         model.activeText.append(AttributedString("!\n"))
         model.activeTextChanged()
         while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        model.syncFromEngine()  // the insert's own document event
+        engine.sendDocument()  // the insert's own document event
 
         #expect(engine.saved.map(\.plainText) == ["Eins!"])
         #expect(model.active?.ref == NodeRef(path: [1], id: "c"))
@@ -175,8 +175,9 @@ struct DocumentModelTests {
             PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [block("paragraph")])]),
         ])
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let model = DocumentModel(page: page, initialDocument: nil, engine: FakeDocumentEngine(document: document), readOnlyReason: nil)
-        model.syncFromEngine()
+        let engine = FakeDocumentEngine(document: document)
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
         let text: [BlockTemplate] = [.paragraph, .heading1, .heading2, .heading3]
         let lists: [BlockTemplate] = [.bulletList, .orderedList, .taskList]
         let all = text + lists + [.quote, .callout, .toggle, .codeBlock]
@@ -199,7 +200,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph, code]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let url = try #require(URL(string: "https://example.com/a"))
 
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
@@ -236,7 +237,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph, item, cell, heading]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         func target(_ path: [Int]) throws -> DocumentModel.MentionTarget {
             DocumentModel.MentionTarget(ref: NodeRef(path: path, node: try #require(model.node(at: path))), index: 0, url: url, provider: "github")
         }
@@ -261,7 +262,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.serverURL = URL(string: "https://wiki.example.com")
         model.currentUserId = "u1"
         let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"Ziel"}"#.utf8))
@@ -292,7 +293,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.serverURL = URL(string: "https://wiki.example.com")
         let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"́Spec"}"#.utf8))
         model.lookUpPage = { _ in target }
@@ -316,7 +317,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.serverURL = URL(string: "https://wiki.example.com")
         let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"Ziel"}"#.utf8))
         var answer: CheckedContinuation<Page?, Never>?
@@ -340,14 +341,14 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let paragraph = try #require(model.node(at: [0]))
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         /// Waits for the `count`-th save, then delivers the engine's document event for it.
         func waitForSave(_ count: Int) async throws {
             while engine.saved.count < count { try await Task.sleep(for: .milliseconds(10)) }
             engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1)))
-            model.syncFromEngine()
+            engine.sendDocument()
         }
 
         model.activeText.append(AttributedString("/bild"))
@@ -370,7 +371,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
 
         model.performAtEnd(attachment ? .attachment : .image)
         await model.insertUploads([Attachment(id: "i", fileName: "i.png", mimeType: "image/png")], to: model.takeMediaTarget())
@@ -384,7 +385,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
 
         model.performAtEnd(.image)
         let first = model.takeMediaTarget()  // its picker closed, the upload runs
@@ -401,7 +402,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let paragraph = try #require(model.node(at: [0]))
         let ref = NodeRef(path: [0], node: paragraph)
         model.activate(ref, node: paragraph)
@@ -429,14 +430,14 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", nil)]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         engine.whileInserting = {
-            model.syncFromEngine()  // an event from before the insert
+            engine.sendDocument()  // an event from before the insert
             engine.document = PMNode(type: "doc", content: [paragraph("a", "Eins"), PMNode(type: "heading", attrs: ["id": "c", "level": 2]), paragraph("b", nil)])
         }
 
         await model.insertTemplate(.heading2, placement: .end)
-        model.syncFromEngine()  // the insert's own document event
+        engine.sendDocument()  // the insert's own document event
 
         #expect(model.active?.ref == NodeRef(path: [1], id: "c"))
     }
@@ -450,7 +451,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", nil)]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         engine.document = PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", "Kollege")])
 
         await model.insertTemplate(template, placement: .end)
@@ -472,15 +473,15 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         engine.whileInserting = {
-            model.syncFromEngine()  // an event from before the wrap
+            engine.sendDocument()  // an event from before the wrap
             engine.document = PMNode(type: "doc", content: [PMNode(type: "transclusionSource", content: [paragraph])])
         }
 
         await model.wrapActiveInSyncedBlock()
-        model.syncFromEngine()  // the wrap's own document event
+        engine.sendDocument()  // the wrap's own document event
 
         #expect(model.active?.ref == NodeRef(path: [0, 0], id: "a"))
     }
@@ -495,18 +496,18 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [list, paragraph("b", "Zwei")]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let item = try #require(model.node(at: [0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0], node: item), node: item)
         engine.whileInserting = {
-            model.syncFromEngine()  // an event from before the batch
+            engine.sendDocument()  // an event from before the batch
             engine.document = PMNode(type: "doc", content: [paragraph("c", nil), paragraph("b", "Zwei")])
         }
 
         model.activeText.append(AttributedString("\n"))
         model.activeTextChanged()
         while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        model.syncFromEngine()  // the batch's own document event
+        engine.sendDocument()  // the batch's own document event
 
         #expect(model.active?.ref == NodeRef(path: [0], id: "c"))
     }
@@ -523,7 +524,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "bulletList", content: [item])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0, 0, 1, 1, 0], node: line), node: line)
 
         model.activeText.append(AttributedString("\n"))
@@ -542,7 +543,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [line, nested])])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0, 0, 0], node: line), node: line)
 
         if backspace {
@@ -571,17 +572,17 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: table([("a", "Eins"), ("b", "Zwei")]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let cell = try #require(model.node(at: [0, 0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0, 0], node: cell), node: cell)
         engine.tableFocus = [1, 0]
         engine.whileInserting = {
-            model.syncFromEngine()  // an event from before the new row
+            engine.sendDocument()  // an event from before the new row
             engine.document = table([("a", "Eins"), ("c", nil), ("b", "Zwei")])
         }
 
         await model.editTable(.insertRowBelow)
-        model.syncFromEngine()  // the new row's own document event
+        engine.sendDocument()  // the new row's own document event
 
         let command = try #require(engine.tableCommands.first)
         #expect(command.target == .path([0], type: "table") && command.cell == [0, 0] && command.command == ["name": "addRowAfter"])
@@ -601,7 +602,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "table", content: [row("a", "Eins"), row("b", "Zwei")])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let line = try #require(model.node(at: [0, 0, 0, 0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0, 0, 0, 0], node: line), node: line)
         let rows = edit == .deleteRow ? [row("b", "Zwei")] : [row("a", "Eins", header: true), row("b", "Zwei")]
@@ -627,7 +628,7 @@ struct DocumentModelTests {
         engine.failsNextInsert = true
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
 
         model.performAtEnd(.date)
         while engine.failsNextInsert { try await Task.sleep(for: .milliseconds(10)) }
@@ -651,7 +652,7 @@ struct DocumentModelTests {
         engine.failsNextInsert = true
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
 
         await model.insertBlocks([PMNode(type: "horizontalRule")], placement: .end, focus: nil)
         #expect(model.errorMessage == String(localized: "The change could not be applied."))
@@ -668,7 +669,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", "Zwei")]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let first = try #require(model.node(at: [0]))
         model.activate(NodeRef(path: [0], node: first), node: first)
         model.activeText.append(AttributedString("!"))
@@ -683,7 +684,7 @@ struct DocumentModelTests {
         #expect(model.errorMessage == nil)
 
         engine.savesUnavailable = false
-        model.syncFromEngine()  // the reopened engine's first document
+        engine.sendDocument()  // the reopened engine's first document
         while engine.saved.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.saved.map(\.plainText) == ["Eins!", "Eins!"])
         #expect(engine.bases.last??.plainText == "Eins")
@@ -695,7 +696,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph")]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
 
         engine.historyResult = .refused
         await model.undo()
@@ -730,7 +731,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei"])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         engine.document = PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei und drei"])])
 
         await model.convertList(itemPath: [0, 1], to: .orderedList)
@@ -748,7 +749,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei"])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         engine.collaboratorEdit = { engine.document = PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei!"])]) }
 
         await model.convertList(itemPath: [0, 1], to: .orderedList)
@@ -773,7 +774,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         if fromSlash {
             model.activeText.insert(AttributedString("/datum"), at: model.activeText.startIndex)
@@ -796,7 +797,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
 
         model.activeText.characters.removeLast()  // Backspace over the space
@@ -824,7 +825,7 @@ struct DocumentModelTests {
         while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(100))
         engine.document = PMNode(type: "doc", content: [first, PMNode(type: "paragraph", attrs: ["id": "x"])])
-        model.syncFromEngine()
+        engine.sendDocument()
 
         #expect(model.active?.ref != NodeRef(path: [1], id: "x"))
     }
@@ -900,14 +901,14 @@ struct DocumentModelTests {
         model.activeText.append(AttributedString(" neu"))
         model.activeTextChanged()
         // The web process ends: the engine is closed and takes nothing, also not the save on leaving the block.
+        engine.status = .idle
         engine.document = nil
         engine.savesUnavailable = true
         engine.onTerminated?()
-        try await Task.sleep(for: .milliseconds(100))
+        while engine.opened.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
 
         engine.savesUnavailable = false
-        engine.document = document
-        model.syncFromEngine()
+        engine.sendDocument(document)  // the reopened engine's first document
         while engine.saved.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.saved.map(\.plainText) == ["Eins neu", "Eins neu"])
     }
@@ -933,10 +934,12 @@ struct DocumentModelTests {
         #expect(model.errorMessage == String(localized: "The server refused the live connection. The page is read-only."))
     }
 
-    /// Offline, changes go into the store for unsent changes without leaving the page, 2 s after the last one: they lived
-    /// only in the engine's web process until the page left or the app reached the background. Online nothing is saved.
-    @Test(.timeLimit(.minutes(1)), arguments: [EngineStatus.disconnected, .synced])
-    func offlineChangesAreKeptWhileThePageStaysOpen(status: EngineStatus) async throws {
+    /// Changes the server hasn't confirmed go into the store for unsent changes without leaving the page, 2 s after the
+    /// last one: they lived only in the engine's web process until the page left or the app reached the background.
+    /// Offline, and on a connection that died without notice, where the engine still says "synced" until it notices (it
+    /// was saved only offline). Confirmed, nothing is saved.
+    @Test(.timeLimit(.minutes(1)), arguments: [(EngineStatus.disconnected, 1), (.synced, 1), (.synced, 0)])
+    func unconfirmedChangesAreKeptWhileThePageStaysOpen(status: EngineStatus, unconfirmed: Int) async throws {
         func doc(_ text: String) -> PMNode {
             PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: text)])])
         }
@@ -948,13 +951,13 @@ struct DocumentModelTests {
         model.activeText.append(AttributedString("!"))
         model.activeTextChanged()
         await model.flush()
-        engine.document = doc("Hello!")
-        model.syncFromEngine()  // the engine's document event for the change
+        engine.unconfirmedChanges = unconfirmed
+        engine.sendDocument(doc("Hello!"))  // the engine's document event for the change
 
         try await Task.sleep(for: .seconds(3))
-        // A busy main actor (a full parallel run) can hold the offline save back longer.
-        while status == .disconnected, engine.lifecycle.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        #expect(engine.lifecycle == (status == .synced ? [] : ["save after 1"]))
+        // A busy main actor (a full parallel run) can hold the save back longer.
+        while unconfirmed > 0, engine.lifecycle.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.lifecycle == (unconfirmed == 0 ? [] : ["save after 1"]))
     }
 
     /// Reopening after a refused live connection closes the engine first, as leaving does: its unsent changes (e.g.
@@ -976,25 +979,27 @@ struct DocumentModelTests {
     @Test(.timeLimit(.minutes(1))) func leavingDuringAnUploadClosesAfterIt() async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
         let model = try Self.model(engine)
+        let uploads = HeldUploads(model)
 
-        model.uploadStarted()
-        model.uploadStarted()
+        uploads.start()
+        uploads.start()
         model.leave()
         #expect(model.isLive)
-        model.uploadEnded()
+        try await uploads.finish()
         try await Task.sleep(for: .milliseconds(100))
         #expect(!engine.lifecycle.contains("close"))
-        model.uploadEnded()
+        try await uploads.finish()
         while !engine.lifecycle.contains("close") { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.inserted.count == 2)
 
         engine.status = .idle  // closed, as the real engine is then
         model.resume()
         while !engine.lifecycle.contains("open") { try await Task.sleep(for: .milliseconds(10)) }
         engine.status = .synced
-        model.uploadStarted()
+        uploads.start()
         model.leave()
         model.resume()
-        model.uploadEnded()
+        try await uploads.finish()
         while !engine.lifecycle.contains("open") { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(100))
         #expect(engine.lifecycle == ["close", "open"])
@@ -1029,7 +1034,7 @@ struct DocumentModelTests {
         model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
 
         engine.document = PMNode(type: "doc", content: [paragraph("Hello world")])
-        model.syncFromEngine()
+        engine.sendDocument()
         while String(model.activeText.characters) != "Hello world" { try await Task.sleep(for: .milliseconds(10)) }
         // The cursor stays before their words, which came after it.
         guard case .insertionPoint(let cursor) = model.activeSelection.indices(in: model.activeText) else {
@@ -1056,14 +1061,14 @@ struct DocumentModelTests {
         model.activeText.append(AttributedString("!"))
         model.activeTextChanged()
         engine.document = PMNode(type: "doc", content: [paragraph("Hello world")])
-        model.syncFromEngine()
+        engine.sendDocument()
         #expect(String(model.activeText.characters) == "Hello!")
         await model.flush()
         #expect(engine.saved.map(\.plainText) == ["Hello!"])
         #expect(engine.bases.map { $0?.plainText } == ["Hello"])
 
         engine.document = PMNode(type: "doc", content: [paragraph("Hello world!")])  // what the engine made of both
-        model.syncFromEngine()
+        engine.sendDocument()
         while String(model.activeText.characters) != "Hello world!" { try await Task.sleep(for: .milliseconds(10)) }
     }
 
@@ -1119,7 +1124,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
 
         let beforeMention = model.activeText.characters.index(model.activeText.startIndex, offsetBy: 4)  // "see "
@@ -1141,7 +1146,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         let opened = model.activeText
 
@@ -1180,7 +1185,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [heading]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let ref = NodeRef(path: [0], node: heading)
         model.activate(ref, node: heading)
         let window = UIWindow(windowScene: try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene))
@@ -1204,13 +1209,13 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [divider, code]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [1], node: code), node: code)
 
         model.activeCode += "2"
         model.activeCodeChanged()
         engine.document = PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"]), divider, code])
-        model.syncFromEngine()
+        engine.sendDocument()
         try await Task.sleep(for: .milliseconds(600))  // longer than a save waits for more input
 
         #expect(model.active == nil)
@@ -1273,7 +1278,7 @@ struct DocumentModelTests {
             let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
             let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
             let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-            model.syncFromEngine()
+            engine.sendDocument()
             model.activate(NodeRef(path: [1], node: second), node: second)
 
             #expect(model.backspaceAtStart())
@@ -1291,7 +1296,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         engine.whileInserting = { engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1))) }
 
         await model.convert(NodeRef(path: [0], node: paragraph), to: .codeBlock)
@@ -1320,7 +1325,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
 
         model.activeText.append(AttributedString("!"))
@@ -1522,7 +1527,7 @@ struct DocumentModelTests {
     private static func model(_ engine: FakeDocumentEngine) throws -> DocumentModel {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         return model
     }
 
@@ -1534,16 +1539,16 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph, reference]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let ref = NodeRef(path: [1], node: reference)
         let above = PMNode(type: "paragraph", attrs: ["id": "b"])
         let content = [PMNode(type: "paragraph", attrs: ["id": "c"], content: [PMNode(type: "text", text: "Inhalt")])]
 
         engine.document = PMNode(type: "doc", content: [above, paragraph, reference])
-        model.syncFromEngine()
+        engine.sendDocument()
         await model.unsyncReference(reference, at: ref, content: content)
         engine.document = PMNode(type: "doc", content: [above, paragraph] + content)
-        model.syncFromEngine()
+        engine.sendDocument()
         await model.unsyncReference(reference, at: ref, content: content)
 
         #expect(engine.replaced == [.path([2], type: "transclusionReference")])
@@ -1556,7 +1561,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: document)
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
 
         // As the web engine does: it closes, then reports it.
@@ -1567,7 +1572,7 @@ struct DocumentModelTests {
         #expect(!model.isEditable)
         while engine.opened.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         engine.document = document
-        model.syncFromEngine()
+        engine.sendDocument()
 
         #expect(engine.opened == ["p"])
         #expect(model.isEditable)
@@ -1581,7 +1586,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: document)
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         model.activeText.append(AttributedString(" neu"))
         model.activeTextChanged()
@@ -1596,7 +1601,7 @@ struct DocumentModelTests {
         while engine.saved.isEmpty || engine.opened.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         engine.savesUnavailable = false
         engine.document = document
-        model.syncFromEngine()
+        engine.sendDocument()
 
         #expect(engine.opened == ["p"])
         #expect(model.isEditable)
@@ -1610,13 +1615,13 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: document)
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         engine.status = .idle
         engine.document = nil
         engine.onFailure?(.engineError)
         while engine.opened.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         engine.document = document
-        model.syncFromEngine()
+        engine.sendDocument()
         #expect(model.isEditable)
 
         engine.status = .idle
@@ -1627,14 +1632,149 @@ struct DocumentModelTests {
         #expect(!model.isEditable)
         #expect(model.errorMessage == String(localized: "The editor stopped after an error. The page is read-only; pull down to try again."))
     }
+
+    /// A document event that arrives after the page left keeps it read-only, as does the closing engine's last document:
+    /// each made the page count as live again, editable while its engine closed.
+    @Test(.timeLimit(.minutes(1))) func documentAfterLeavingKeepsThePageReadOnly() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        let closing = model.suspend()
+        engine.sendDocument()  // an event still on its way
+        #expect(!model.isEditable)
+        await closing.value
+        engine.sendDocument()  // the closing engine's last document
+        #expect(!model.isEditable)
+    }
+
+    /// Leaving the page while its engine opens: a document the opening engine sends before the close that follows keeps
+    /// the page read-only.
+    @Test(.timeLimit(.minutes(1))) func documentFromAnOpenBeforeItsCloseKeepsThePageReadOnly() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.status = .idle
+        var editableWhileOpening: Bool?
+        engine.whileOpening = {
+            engine.sendDocument()
+            editableWhileOpening = model.isEditable
+        }
+
+        model.resume()
+        await model.suspend().value
+
+        #expect(engine.lifecycle == ["open", "close"])
+        #expect(editableWhileOpening == false)
+        #expect(!model.isEditable)
+    }
+
+    /// A save refused after the page left, for the block it edited, keeps the page read-only, also when the refusal
+    /// arrives once the engine is closed: showing the engine's block again counted the page as live, editable with its
+    /// engine closed.
+    @Test(.timeLimit(.minutes(1))) func refusedSaveAfterLeavingKeepsThePageReadOnly() async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeText.append(AttributedString(" neu"))
+        model.activeTextChanged()
+        engine.refusesSaves = true
+        engine.holdsNextSave = true
+
+        await model.suspend().value
+        while engine.heldSave == nil { try await Task.sleep(for: .milliseconds(10)) }
+        engine.heldSave?.resume()
+        while model.errorMessage == nil { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.lifecycle == ["close"])
+        #expect(!model.isEditable)
+    }
+
+    /// An upload's error goes to the whole app, where it shows also once the page has closed: it went to the page's toast,
+    /// which closed with it.
+    @Test(.timeLimit(.minutes(1))) func uploadErrorIsToldAppWide() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        var notices: [String] = []
+        model.postAppNotice = { notices.append($0) }
+        let uploads = HeldUploads(model)
+        let error = APIError.server(status: 413, message: "Too large")
+        uploads.nextError = error
+
+        uploads.start()
+        #expect(model.uploads == 1)
+        model.leave()
+        while !engine.lifecycle.contains("close") { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(notices == [String(localized: "Not uploaded: \(error.userMessage)")])
+        #expect(engine.inserted.isEmpty)
+        #expect(model.uploads == 0)
+    }
+
+    /// An upload the page can no longer take (refused, the page went to the trash or became a database meanwhile) is told
+    /// to the whole app: the file reached the server, but not the page, without a word.
+    @Test(.timeLimit(.minutes(1))) func uploadThePageCannotTakeIsToldAppWide() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p","title":"Notizen"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        var notices: [String] = []
+        model.postAppNotice = { notices.append($0) }
+        let uploads = HeldUploads(model)
+        engine.failsNextInsert = true
+
+        uploads.start()
+        try await uploads.finish()
+        while notices.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+
+        let title = try #require(page.title)
+        #expect(notices == [String(localized: "The upload couldn't be added to “\(title)”.")])
+    }
+}
+
+/// Uploads through a model's `upload` that wait, as on their way to the server, until the test finishes them in order.
+final class HeldUploads {
+    private let model: DocumentModel
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    /// What the next upload throws instead of reaching the server.
+    var nextError: Error?
+
+    init(_ model: DocumentModel) {
+        self.model = model
+        model.serverURL = URL(string: "https://docs.example.com")!
+        model.sendUpload = { [self] file in
+            if let error = nextError {
+                nextError = nil
+                throw error
+            }
+            await withCheckedContinuation { waiting.append($0) }
+            return Attachment(id: UUID().uuidString, fileName: file.fileName, mimeType: file.mimeType)
+        }
+    }
+
+    /// One file, to the end of the page.
+    func start() {
+        model.upload(1, to: MediaTarget(placement: .end, asAttachment: true)) { _, _ in
+            UploadFile(fileURL: FileManager.default.temporaryDirectory.appending(path: "held-upload-\(UUID().uuidString)/file"),
+                       fileName: "a.pdf", mimeType: "application/pdf")
+        }
+    }
+
+    /// Lets the oldest upload finish, once it is on its way.
+    func finish() async throws {
+        while waiting.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        waiting.removeFirst().resume()
+    }
 }
 
 /// Stand-in for the web engine: changes nothing and records what it is asked to open, save, insert, replace, delete or
 /// do to a table.
 final class FakeDocumentEngine: DocumentEngine {
     var status = EngineStatus.synced
+    var unconfirmedChanges = 0
+    /// What the engine holds now (`currentDocument`); `sendDocument` sends it.
     var document: PMNode?
     var participants: [EngineParticipant] = []
+    var onDocument: (@MainActor (PMNode) -> Void)?
     var onFailure: (@MainActor (EngineFailure) -> Void)?
     var onTerminated: (@MainActor () -> Void)?
     private(set) var opened: [String] = []
@@ -1659,6 +1799,8 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var heldSave: CheckedContinuation<Void, Never>?
     /// Runs mid-insert or mid-replace (saves too): the test changes `document` and delivers events there.
     var whileInserting: (() -> Void)?
+    /// Runs during `open`, e.g. to send the opened engine's first document.
+    var whileOpening: (() -> Void)?
     /// The next `insertBlocks` is refused, like one at a block a collaborator just deleted.
     var failsNextInsert = false
     /// Saves fail, like a server refusing them.
@@ -1684,6 +1826,12 @@ final class FakeDocumentEngine: DocumentEngine {
 
     init(document: PMNode) {
         self.document = document
+    }
+
+    /// Sends `document` (set to `next` first, if given), as the engine sends one after a change.
+    func sendDocument(_ next: PMNode? = nil) {
+        if let next { document = next }
+        if let document { onDocument?(document) }
     }
 
     func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?, expected: PMNode?) async -> EngineResult {
@@ -1732,6 +1880,7 @@ final class FakeDocumentEngine: DocumentEngine {
     func open(pageId: String) async throws {
         opened.append(pageId)
         lifecycle.append("open")
+        whileOpening?()
     }
     func close() { lifecycle.append("close") }
     /// With the number of block saves before it.

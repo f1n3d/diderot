@@ -51,7 +51,7 @@ const waits = (changes: { at: number }[], times: number[]) =>
 expect("one change", [documentDelay], events([{ at: 0 }]));
 expect("changes in a row: one event after the last", [200 + documentDelay], events([{ at: 0 }, { at: 100 }, { at: 200 }]));
 expect("the app's own change", [10], events([{ at: 10, delay: 0 }]));
-expect("dropped when the app reads the page itself", [], events([{ at: 0 }], { cancels: [100] }));
+expect("dropped when the page closes", [], events([{ at: 0 }], { cancels: [100] }));
 
 // While someone types faster than one key per `documentDelay`, each event goes out `documentMaxWait` after the first
 // key it reports, and one after their last key.

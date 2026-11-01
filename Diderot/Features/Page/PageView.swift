@@ -14,6 +14,7 @@ struct PageView: View {
     @Environment(ContentChanges.self) private var changes
     @Environment(OfflineMonitor.self) private var offline
     @Environment(SpacesStore.self) private var spaces
+    @Environment(AppNotices.self) private var notices
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     /// Between `onAppear` and `onDisappear`: not under a pushed page or in another tab.
@@ -57,8 +58,6 @@ struct PageView: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showsCamera = false
     @State private var showsFileImporter = false
-    /// Running uploads (a second media command may start one during the first).
-    @State private var uploads = 0
     /// Height of the page view below the navigation bar (ignoring the keyboard); sizes the trailing space.
     @State private var scrollHeight: CGFloat = 0
     @State private var centering = CenteringState()
@@ -140,7 +139,8 @@ struct PageView: View {
             if let model {
                 // Own capsule without glass: inside the shared glass group the pill sits askew at the left edge.
                 ToolbarItem(placement: .topBarTrailing) {
-                    StatusPill(status: model.status, readOnlyReason: model.readOnlyReason, compact: horizontalSizeClass == .compact)
+                    StatusPill(status: model.status, readOnlyReason: model.readOnlyReason, unconfirmed: model.hasUnconfirmedChanges,
+                               compact: horizontalSizeClass == .compact)
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
@@ -168,7 +168,7 @@ struct PageView: View {
             }
         }
         .overlay {
-            if uploads > 0 {
+            if let model, model.uploads > 0 {
                 ProgressView("Uploading…")
                     .padding(20)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -293,8 +293,7 @@ struct PageView: View {
             guard !items.isEmpty, let model else { return }
             let target = model.takeMediaTarget()
             photoItems = []
-            startUpload(in: model)
-            Task { await uploadPhotos(items, to: target, in: model) }
+            model.upload(items.count, to: target) { try await UploadFile.photo(items[$0], server: $1) }
         }
         .fullScreenCover(item: $presentation) { presentation in
             PresentationView(pageId: presentation.pageId, title: presentation.title, document: presentation.document) { url in
@@ -305,8 +304,7 @@ struct PageView: View {
             CameraPicker { data in
                 guard let model else { return }
                 let target = model.takeMediaTarget()
-                startUpload(in: model)
-                Task { await upload(1, to: target, in: model) { try UploadFile.camera(data, server: $1) } }
+                model.upload(1, to: target) { try UploadFile.camera(data, server: $1) }
             }
             .ignoresSafeArea()
         }
@@ -315,8 +313,7 @@ struct PageView: View {
             case .success(let urls):
                 guard let model else { return }
                 let target = model.takeMediaTarget()
-                startUpload(in: model)
-                Task { await uploadFiles(at: urls, to: target, in: model) }
+                model.upload(urls.count, to: target) { try await UploadFile.file(at: urls[$0], server: $1) }
             case .failure(let error):
                 toast = error.localizedDescription
                 model?.cancelMedia()
@@ -361,15 +358,14 @@ struct PageView: View {
         // instead of its old content, and a refresh cancelled by opening a subpage runs again.
         .task(id: selection.pageId) { await load(force: state.value != nil) }
         .task(id: state.value?.id) { await showUnsentTitle() }
-        .onChange(of: model?.engine?.document) { _, _ in
-            model?.syncFromEngine()
-            #if DEBUG
-            if let model, model.isLive, !appliedDebugHooks {
+        #if DEBUG
+        .onChange(of: model?.isLive) { _, live in
+            if let model, live == true, !appliedDebugHooks {
                 appliedDebugHooks = true
                 Task { await model.applyDebugHooks() }
             }
-            #endif
         }
+        #endif
         .onChange(of: showsWebLayout) { _, enabled in
             if enabled { Task { await loadWebHTML() } }
         }
@@ -1086,9 +1082,13 @@ struct PageView: View {
         if page.isBase == true { return }
         let reason: DocumentModel.ReadOnlyReason? = page.isInTrash ? .trash : !page.canEdit ? .noPermission : offline.isOffline ? .offline
             : session.ready?.newerServerVersion.map { .newerServer($0) }
-        let live = LiveDocuments.document(for: page.id, newerThan: page.updatedAt, serverClockOffset: session.client?.serverClockOffset ?? 0)
+        let owner = pageSession.map(LiveDocuments.Owner.init)
+        let live = owner.flatMap { owner in
+            LiveDocuments.document(for: page.id, owner: owner, newerThan: page.updatedAt, serverClockOffset: session.client?.serverClockOffset ?? 0)
+        }
         let engine = reason == nil ? WebDocumentEngine(session: session) : nil
         let created = DocumentModel(page: page, initialDocument: live ?? (reason == nil || reason == .offline ? unsent : nil), engine: engine, readOnlyReason: reason)
+        created.liveOwner = owner
         created.currentUserId = session.ready?.currentUser.user.id
         created.canComment = canComment(on: page)
         created.canCreateBases = session.ready?.entitlements.has("bases") == true
@@ -1099,6 +1099,15 @@ struct PageView: View {
             Task { await previews.loadInstalled() }
         }
         created.serverURL = session.server?.url
+        if let pageSession {
+            // To the server the page came from, also after a switch: another server would get the file.
+            created.sendUpload = { [session] file in
+                try await session.perform(on: pageSession) { client in
+                    try await client.uploadAttachment(pageId: page.id, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
+                }
+            }
+        }
+        created.postAppNotice = { [notices] message in notices.post(message) }
         created.lookUpPage = { [session] slugId in try? await session.send(Endpoints.Pages.info(pageId: slugId)) }
         let changes = changes
         created.createBase = { [session] template in
@@ -1310,47 +1319,6 @@ struct PageView: View {
         case .pdf: [.pdf]
         default: [.item]
         }
-    }
-
-    private func uploadPhotos(_ items: [PhotosPickerItem], to target: MediaTarget, in model: DocumentModel) async {
-        await upload(items.count, to: target, in: model) { try await UploadFile.photo(items[$0], server: $1) }
-    }
-
-    private func uploadFiles(at urls: [URL], to target: MediaTarget, in model: DocumentModel) async {
-        await upload(urls.count, to: target, in: model) { try await UploadFile.file(at: urls[$0], server: $1) }
-    }
-
-    /// Counts an upload as soon as its picker closes; it always ends in `upload`. The model keeps its page's engine open
-    /// for it, also when the page leaves meanwhile (`DocumentModel.leave`).
-    private func startUpload(in model: DocumentModel) {
-        uploads += 1
-        model.uploadStarted()
-    }
-
-    /// Prepares, uploads and removes the files one at a time, so a large video isn't staged beside all the others, and
-    /// inserts them together at the target, in the page they were picked for. `file` stages the one at an index in the
-    /// server's folder (`UploadFile`).
-    private func upload(_ count: Int, to target: MediaTarget, in model: DocumentModel, file: (Int, URL) async throws -> UploadFile?) async {
-        defer {
-            uploads -= 1
-            model.uploadEnded()
-        }
-        guard let client = session.client, let server = session.server?.url else { return }
-        let pageId = model.page.id
-        var attachments: [Attachment] = []
-        for index in 0..<count {
-            do {
-                guard let prepared = try await file(index, server) else { continue }
-                defer { prepared.remove() }
-                attachments.append(try await session.perform {
-                    try await client.uploadAttachment(pageId: pageId, fileName: prepared.fileName, mimeType: prepared.mimeType,
-                                                      fileURL: prepared.fileURL)
-                })
-            } catch {
-                toast = error.userMessage
-            }
-        }
-        await model.insertUploads(attachments, to: target)
     }
 
     private func createSubpage() async {

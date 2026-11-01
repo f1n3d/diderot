@@ -3564,6 +3564,16 @@
         }
       }
     },
+    "Not uploaded: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht hochgeladen: %@"
+          }
+        }
+      }
+    },
     "Note": {
       "localizations": {
         "de": {
@@ -4547,6 +4557,16 @@
         }
       }
     },
+    "Saving": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichere"
+          }
+        }
+      }
+    },
     "Search": {
       "localizations": {
         "de": {
@@ -5428,6 +5448,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Papierkorb ist leer"
+          }
+        }
+      }
+    },
+    "The upload couldn't be added to “%@”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Upload ließ sich nicht in „%@“ einfügen."
           }
         }
       }

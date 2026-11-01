@@ -37,3 +37,15 @@ extension View {
         modifier(ToastModifier(message: message))
     }
 }
+
+/// The toast for work that outlives the screen it started on (titles and fields kept for the server, an upload that ends
+/// after its page closed), shown above every screen (`MainTabView`).
+@MainActor
+@Observable
+final class AppNotices {
+    var message: String?
+
+    func post(_ message: String) {
+        self.message = message
+    }
+}

@@ -32,7 +32,7 @@ export class DocumentSchedule {
     this.timer = this.clock.setTimeout(() => this.fire(), Math.min(delay, this.due - now));
   }
 
-  /** Drops the pending event: the app reads the page itself (`flush`), or the page closes. */
+  /** Drops the pending event: the page closes. */
   cancel() {
     if (this.timer !== undefined) this.clock.clearTimeout(this.timer);
     this.timer = undefined;

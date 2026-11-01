@@ -59,7 +59,7 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **C** Data safety in the editor | R3, R6, R22, R23, R26 | unit tests and UI tests | medium |
+| **C** Data safety in the editor | R3 | unit tests and UI tests | medium |
 | **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
@@ -85,19 +85,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 - Keep each text run's original mark JSON, as inline atoms already do, and write it back unchanged unless the user changed that mark.
 - Add a round-trip test over all fixtures and real web marks.
-
-### R6 [medium] ✔ "Saved" stays up although nothing is confirmed
-
-**Where:**
-
-- `hocuspocus-provider.esm.js:835–838`: Hocuspocus 4.5 emits `synced` only for `true`
-- `WebDocumentEngine.swift:353–361`: the status never drops back from `.synced`
-- `DocumentModel.swift:549`: plans the local save only when `status != .synced`
-- `PageSupportViews.swift:71`: the pill
-
-**Scenario:** On a half-open socket, the provider notices the dead connection only after `messageReconnectTimeout` (30 s). Until then the pill says "Saved", no local save runs, and the edits live only in the web process. If that process ends or the app crashes, they're lost. Going to the background is covered by PageView's scene-phase save.
-
-**Fix:** Forward `onUnsyncedChanges`, and drive the pill and the local saves from that count.
 
 ---
 
@@ -213,22 +200,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ### Data and lifecycle
 
-#### R22 [low] ○ The in-memory page cache is shared across accounts
-
-**Where:** `LiveDocuments.swift:13–30`; `PageView.swift:1091`.
-
-**Problem:** The cache is keyed by page id only and never cleared on sign-out or a server switch. It holds the engine document with unconfirmed edits. For 90 s, another account on the device (or the same server under a second address) is shown them; read-only viewers keep seeing them.
-
-**Fix:** Key it by server and user, and clear it when the session changes.
-
-#### R23 [low] ○ Upload errors are invisible after leaving the page
-
-**Where:** `PageView.swift:1078`, `:1085`, `:1329–1349`.
-
-**Problem:** Uploads outlive the page by design, but their errors go to the view's `toast` or the old model's `errorMessage`, invisible once the page is gone. `apply(page:)` calls `suspend()` instead of `leave()`, closing the engine under a running upload.
-
-**Fix:** An upload coordinator owned by the model, reporting through an app-level notice.
-
 #### R24 [low] ? Removing local data deletes the web editor's store without asking
 
 **Where:** `WebEditorView.swift:146–160` and `removeLocalData`.
@@ -236,22 +207,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 **Problem:** Signing out, and `removeLocalData` without the `hasEntries` confirmation, delete the web editor's data store. That includes the web client's IndexedDB Yjs cache, which can hold edits that didn't reach the server (comment at `:119–121`).
 
 **Confirm:** Edit offline in the web editor, then sign out.
-
-#### R26 [low] ? A closing engine can look editable again
-
-**Where:** `PageView.swift:364`; `WebDocumentEngine.swift:319–326`; `DocumentModel.swift:543–547`.
-
-**Problem:**
-
-- The model syncs only when the view forwards `engine.document` through `onChange`.
-- `currentDocument()` publishes the document as a side effect.
-- `syncFromEngine()` sets `isLive = true` without condition.
-
-So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine()`, can set `isLive` again after `suspend()`. And when the view is gone (an upload after leaving), nothing syncs.
-
-**Confirm:** A test of `suspend()` followed by a document event; `isEditable` must stay false. Seen while fixing R28: a save refused after `suspend()`, for a block no longer edited, calls `syncFromEngine()`, which sets `isLive` again while the engine is still open.
-
-**Fix:** An engine → model `onDocument` callback, a side-effect-free `currentDocument()`, and a lifecycle enum.
 
 #### R27 [low] ○ Several spaces changing at once refresh only one
 
@@ -528,7 +483,7 @@ After S1, split it in two steps.
 
 DocumentModelTests are a good safety net.
 
-**Then the stateful parts (L):** `EngineConnection` (lifecycle as an enum, unsent-save scheduling) and `ActiveTextSession` (text, selection, overrides, base, commit), behind a thin observable model.
+**Then the stateful parts (L):** `EngineConnection` (the lifecycle, an enum since package C, unsent-save scheduling, uploads) and `ActiveTextSession` (text, selection, overrides, base, commit), behind a thin observable model.
 
 #### PageView
 
@@ -536,7 +491,7 @@ DocumentModelTests are a good safety net.
 |---|---|
 | Keyboard centring (about 230 lines) into a coordinator or view modifier | M |
 | A `PageLoader` with a `Dependencies` struct, replacing nine properties set after init | M |
-| Title handling, uploads (into the model), page actions, link routing | S each |
+| Title handling, page actions, link routing | S each |
 
 #### BlockCards
 

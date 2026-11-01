@@ -83,6 +83,9 @@ class DocmostEngine {
         } catch {}
       },
       onClose: ({ event }) => emit("closed", { code: event?.code, reason: event?.reason }),
+      // Each change counts until the server confirms it, and so does the sync after each connect. "synced" comes once
+      // per connect: on a connection that died without notice it stays until the provider notices, after 30 s.
+      onUnsyncedChanges: ({ number }) => emit("unconfirmed", { count: number }),
     });
     // With the provider listening, so it counts them as unsent until the server confirms them; the sync sends them.
     if (options.unsent) Y.applyUpdate(this.provider.document, Uint8Array.from(atob(options.unsent), (char) => char.charCodeAt(0)));
@@ -140,10 +143,12 @@ class DocmostEngine {
     return this.editor?.getJSON() ?? { type: "doc", content: [] };
   }
 
-  /** Returns the document now, canceling the pending document event. */
-  flush(): JSONContent {
-    this.documents.cancel();
-    return this.getDocument();
+  /**
+   * The document now, for the app to read; null before the first sync (the editor is bound then). The pending document
+   * event still goes out: the app takes the document from events, and reading leaves them as they are.
+   */
+  currentDocument(): JSONContent | null {
+    return this.editor?.getJSON() ?? null;
   }
 
   // MARK: Block operations

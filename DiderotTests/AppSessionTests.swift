@@ -177,6 +177,35 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// The engine's last documents (`LiveDocuments`) belong to a user on a server, and signing out or switching servers
+    /// forgets them: keyed by page alone, another account on the device was shown edits the server may not have had.
+    @Test func engineDocumentsStayWithTheirUser() async throws {
+        let document = PMNode(type: "doc", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Entwurf")])])
+        let alice = LiveDocuments.Owner(server: a, userId: "u1")
+        func cached(_ owner: LiveDocuments.Owner) -> PMNode? {
+            LiveDocuments.document(for: "p", owner: owner, newerThan: nil, serverClockOffset: 0)
+        }
+        LiveDocuments.store(document, for: "p", owner: alice)
+        #expect(cached(LiveDocuments.Owner(server: a, userId: "u2")) == nil)
+        #expect(cached(LiveDocuments.Owner(server: b, userId: "u1")) == nil)
+        #expect(cached(alice) == document)
+
+        let session = try await sessionOnA()
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        #expect(cached(alice) == nil)
+
+        // Signed out of the only saved server, so no switch follows that would empty it too.
+        let only = SessionStore(keychain: MemorySecretStore())
+        try only.save(StoredSession(serverURL: a, token: "a"))
+        let alone = AppSession(sessionStore: only, protocolClasses: [StubURLProtocol.self])
+        await alone.restore()
+        try #require(alone.ready?.server.url == a)
+        LiveDocuments.store(document, for: "p", owner: alice)
+        await alone.signOut()
+        #expect(cached(alice) == nil)
+        await removeCaches()
+    }
+
     /// A link to the other saved server switches there only when it opens a page.
     @Test func linkToAnotherServerSwitchesOnlyForAPage() async throws {
         let session = try await sessionOnA()

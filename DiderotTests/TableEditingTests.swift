@@ -88,7 +88,7 @@ struct TableEditingTests {
         let engine = FakeDocumentEngine(document: document)
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+        engine.sendDocument()
         let path = [0, row, column, 0]
         let line = try #require(model.node(at: path))
         model.activate(NodeRef(path: path, node: line), node: line)
@@ -123,7 +123,7 @@ struct TableEditingTests {
         var activeMeanwhile: Bool?
         engine.whileInserting = {
             engine.document = self.document([[self.cell("b", "Zwei")]])
-            model.syncFromEngine()
+            engine.sendDocument()
             activeMeanwhile = model.active != nil
         }
 

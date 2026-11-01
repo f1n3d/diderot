@@ -258,12 +258,21 @@ final class DocumentModel {
         let itemPath: [Int]?
     }
 
+    /// Where the page's engine is: opening until its first document (from the start: it opens when the page appears),
+    /// live from then on, closing from `suspend` until it is closed. Documents count while it opens or is live: one still
+    /// on its way after `suspend`, or the closing engine's last, used to make the page live again, editable while its
+    /// engine closed.
+    enum Lifecycle {
+        case closed, opening, live, closing
+    }
+
     static let editableTextTypes: Set<String> = ["paragraph", "heading", "detailsSummary"]
 
     let page: Page
     let engine: (any DocumentEngine)?
     private(set) var document: PMNode
-    private(set) var isLive = false
+    private(set) var lifecycle = Lifecycle.closed
+    var isLive: Bool { lifecycle == .live }
     private(set) var readOnlyReason: ReadOnlyReason?
     private(set) var active: Active? {
         didSet { if (active != nil) != hasActiveBlock { hasActiveBlock = active != nil } }
@@ -315,6 +324,13 @@ final class DocumentModel {
     /// Media picker for the UI; `mediaPlacement` (where files go) stays until the upload; a cancel need not reset it.
     private(set) var pendingMedia: MediaRequest?
     private(set) var mediaPlacement: BlockPlacement?
+    /// Uploads running for this page (`upload`); the page shows "Uploading…", and `leave` keeps its engine open for them.
+    private(set) var uploads = 0
+    /// Sends a staged file to the server as an attachment of this page; set by the page view, bound to the session the
+    /// page opened in.
+    @ObservationIgnored var sendUpload: (@MainActor (UploadFile) async throws -> Attachment)?
+    /// Tells the whole app, also once the page is gone (an upload's error); set by the page view.
+    @ObservationIgnored var postAppNotice: (@MainActor (String) -> Void)?
     /// Open input sheet (status, math, embed); the active block stays active meanwhile.
     var editorSheet: EditorSheet?
     /// Block from the math or embed sheet, inserted once the sheet has closed (`editorSheetDismissed`): switching
@@ -395,10 +411,12 @@ final class DocumentModel {
         self.page = page
         self.document = initialDocument ?? PMNode(json: page.content ?? .null) ?? PMNode(type: "doc")
         self.engine = engine
+        if engine != nil { lifecycle = .opening }
         self.readOnlyReason = readOnlyReason
         if case .newerServer(let version) = readOnlyReason {
             errorMessage = String(localized: "This server runs Docmost \(version). This version of the app can only show its pages; you can edit them in the web editor.")
         }
+        engine?.onDocument = { [weak self] document in self?.engineSent(document) }
         engine?.onFailure = { [weak self] failure in
             guard let self else { return }
             switch failure {
@@ -425,6 +443,8 @@ final class DocumentModel {
                     self.resume()
                 } else {
                     self.deactivate()
+                    // It closed itself.
+                    if self.lifecycle != .closing { self.lifecycle = .closed }
                     self.readOnlyReason = .notConnected
                     self.errorMessage = String(localized: "The editor stopped after an error. The page is read-only; pull down to try again.")
                 }
@@ -435,7 +455,10 @@ final class DocumentModel {
         engine?.onTerminated = { [weak self] in
             guard let self else { return }
             keepActiveInput()
-            guard isLive else { return }
+            guard isLive else {
+                if lifecycle == .opening { lifecycle = .closed }
+                return
+            }
             suspend()
             resume()
         }
@@ -460,6 +483,8 @@ final class DocumentModel {
         return blocks.isEmpty || (!isEditable && blocks.count == 1 && blocks[0].type == "paragraph" && blocks[0].children.isEmpty)
     }
     var status: EngineStatus { engine?.status ?? .idle }
+    /// The server hasn't confirmed every change (`DocumentEngine.unconfirmedChanges`).
+    var hasUnconfirmedChanges: Bool { (engine?.unconfirmedChanges ?? 0) > 0 }
     var participants: [EngineParticipant] { engine?.participants ?? [] }
     var topLevel: [NodeEntry] { NodeEntry.entries(document.children, parentPath: []) }
     /// Top-level blocks without the footnotes list (always last); the arrange sheet's row indices refer to this list.
@@ -470,8 +495,15 @@ final class DocumentModel {
     /// Serializes engine open/close: leaving while it opens (or returning while it closes) never leaves it half-open.
     @ObservationIgnored private var engineStep: Task<Void, Never>?
     @ObservationIgnored private var unsentSave: Task<Void, Never>?
-    @ObservationIgnored private var runningUploads = 0
+    /// `suspend` calls whose close is still to come: the page stays closing until the last one is done, and an open
+    /// queued between them doesn't make it live.
+    @ObservationIgnored private var pendingCloses = 0
     @ObservationIgnored private var suspendsAfterUploads = false
+    /// The engine's document the page shows, without local input over it: a refused save for a block no longer edited
+    /// shows the block from it again.
+    @ObservationIgnored private var engineDocument: PMNode?
+    /// Whose cache (`LiveDocuments`) the engine's last document goes to on closing; set by the page view.
+    @ObservationIgnored var liveOwner: LiveDocuments.Owner?
 
     /// Opens the engine unless it is open: when the page appears, after `suspend`, and to retry a failed start.
     func resume() {
@@ -483,8 +515,9 @@ final class DocumentModel {
             // A refused live connection leaves the engine open with changes the server never confirmed (e.g. made
             // offline): closed as leaving does, it keeps them for the reopened engine to send.
             if engine.status != .idle { await stop() }
-            // Read-only until the reopened engine sends its document, even if one arrived while it was closing.
-            isLive = false
+            // Read-only until the reopened engine sends its document, even if one arrived while it was closing. Still
+            // closing if the page left meanwhile: that `suspend` closes it after this open.
+            if pendingCloses == 0 { lifecycle = .opening }
             if readOnlyReason == .notConnected {
                 readOnlyReason = nil
                 errorMessage = nil
@@ -492,6 +525,7 @@ final class DocumentModel {
             do {
                 try await engine.open(pageId: page.id)
             } catch {
+                if lifecycle == .opening { lifecycle = .closed }
                 readOnlyReason = .notConnected
                 errorMessage = error.userMessage
             }
@@ -501,22 +535,12 @@ final class DocumentModel {
     /// The page left the screen (closed, under a pushed page, tab switch). An upload still running goes into this page, so
     /// the engine stays open until the last one is in; otherwise as `suspend`.
     func leave() {
-        guard runningUploads > 0 else {
+        guard uploads > 0 else {
             suspend()
             return
         }
         deactivate()
         suspendsAfterUploads = true
-    }
-
-    /// An upload for this page started or ended (see `leave`).
-    func uploadStarted() { runningUploads += 1 }
-    func uploadEnded() {
-        runningUploads -= 1
-        if runningUploads == 0, suspendsAfterUploads {
-            suspendsAfterUploads = false
-            suspend()
-        }
     }
 
     /// Read-only until `resume` reopens the engine.
@@ -525,11 +549,14 @@ final class DocumentModel {
         // Commits pending input in a task queued ahead of the stop below, so the stored document includes it.
         deactivate()
         unsentSave?.cancel()
-        isLive = false
+        lifecycle = .closing
+        pendingCloses += 1
         let previous = engineStep
         let step = Task {
             await previous?.value
             await stop()
+            pendingCloses -= 1
+            if pendingCloses == 0 { lifecycle = .closed }
         }
         engineStep = step
         return step
@@ -542,8 +569,10 @@ final class DocumentModel {
         await engine.saveUnsentChanges()
     }
 
-    /// While the server can't confirm changes (offline), saves them like leaving the page does, 2 s after the last one:
-    /// until then they lived only in the engine's web process, gone if the app crashed or was swiped away.
+    /// Keeps changes the server hasn't confirmed as leaving the page does, 2 s after the last change while one is
+    /// unconfirmed: until then they lived only in the engine's web process, gone if the app crashed or was swiped away.
+    /// Keyed to the engine's status before, it missed a connection that died without notice: until the engine noticed
+    /// (after 30 s), the page said "Saved" and kept nothing.
     private func scheduleUnsentSave() {
         unsentSave?.cancel()
         unsentSave = Task { [weak self] in
@@ -553,20 +582,32 @@ final class DocumentModel {
             let previous = engineStep
             engineStep = Task {
                 await previous?.value
-                guard self.isLive, let engine = self.engine else { return }
+                guard self.isLive, let engine = self.engine, engine.unconfirmedChanges > 0 else { return }
                 await engine.saveUnsentChanges()
             }
         }
     }
 
-    /// Adopts the engine state; local, unconfirmed changes take precedence.
-    func syncFromEngine() {
-        guard let engine, let incoming = engine.document else { return }
+    /// A document the engine sent (`onDocument`); the first one after opening makes the page live.
+    private func engineSent(_ incoming: PMNode) {
+        guard lifecycle == .opening || lifecycle == .live else { return }
+        lifecycle = .live
+        adopt(incoming)
+    }
+
+    /// Shows the engine's document with local input over it.
+    private func show(_ incoming: PMNode) {
+        engineDocument = incoming
         document = withOverrides(incoming)
+    }
+
+    /// Adopts the engine's document; local, unconfirmed changes take precedence.
+    private func adopt(_ incoming: PMNode) {
+        show(incoming)
         followMovedBlocks()
-        isLive = true
-        // Every local change brings a document event, also those that bypass `commit` (inserts, moves, undo).
-        if engine.status != .synced { scheduleUnsentSave() }
+        // Every local change brings a document event, also those that bypass `commit` (inserts, moves, undo), and the
+        // engine counts it as unconfirmed before.
+        if let engine, engine.unconfirmedChanges > 0 { scheduleUnsentSave() }
         if !unsaved.isEmpty {
             let waiting = Array(unsaved.values)
             unsaved = [:]
@@ -621,7 +662,7 @@ final class DocumentModel {
     private func adoptCollaboratorsChange() async {
         defer { adoptsChange = false }
         guard let engine, let latest = await engine.currentDocument() else { return }
-        document = withOverrides(latest)
+        show(latest)
         followMovedBlocks()
         guard collaboratorChangedActiveBlock() else { return }
         adoptActiveBlock(followingChange: true)
@@ -630,9 +671,9 @@ final class DocumentModel {
     /// Focuses `path` once the operation that created it is applied; set earlier, `pendingFocus` could hit the old
     /// block in a document event still in flight (e.g. from the commit just before).
     private func focusAfterOperation(_ path: [Int], _ cursor: CursorRequest) async {
-        guard await engine?.currentDocument() != nil else { return }
+        guard let latest = await engine?.currentDocument() else { return }
         pendingFocus = (path, cursor)
-        syncFromEngine()
+        adopt(latest)
         // Not in the engine's current document (gone again at once): a later block there, e.g. a collaborator's, must
         // not jump into editing.
         pendingFocus = nil
@@ -688,9 +729,9 @@ final class DocumentModel {
     private func stop() async {
         await flush()
         if let engine {
-            // Until its first document (after the sync) the engine holds an empty editor, which would hide the page.
-            if engine.document != nil, let latest = await engine.currentDocument() {
-                LiveDocuments.store(latest, for: page.id)
+            // None before the engine's first document (after the sync): its empty editor would hide the page.
+            if let liveOwner, let latest = await engine.currentDocument() {
+                LiveDocuments.store(latest, for: page.id, owner: liveOwner)
             }
             await engine.close()
         }
@@ -1666,8 +1707,10 @@ final class DocumentModel {
     // MARK: Blocks
 
     /// Inserts blocks at `placement`, then moves the cursor per `focus`; without `focus`, editing ends.
-    func insertBlocks(_ nodes: [PMNode], placement: BlockPlacement, focus: InsertFocus?) async {
-        guard let engine, !nodes.isEmpty else { return }
+    @discardableResult
+    func insertBlocks(_ nodes: [PMNode], placement: BlockPlacement, focus: InsertFocus?) async -> EngineResult {
+        guard let engine else { return .unavailable }
+        guard !nodes.isEmpty else { return .applied }
         var anchor: NodeRef?
         switch placement {
         case .replaceOrAfter(let ref):
@@ -1683,7 +1726,7 @@ final class DocumentModel {
             }
             if let anchor, nodes == [PMNode(type: "paragraph")] {
                 await focusAfterOperation(anchor.path, .end)
-                return
+                return .applied
             }
         }
         let before = placement == .end
@@ -1691,7 +1734,7 @@ final class DocumentModel {
         var replacedBlock: PMNode?
         if !before, let candidate = anchor, let latest = latestNode(at: candidate.path), latest.type == "paragraph", latest.children.isEmpty {
             // Replaced only if empty in the engine too: a collaborator may just have typed there.
-            guard let block = await currentBlock(candidate) else { return }
+            guard let block = await currentBlock(candidate) else { return .refused }
             if block.latest.type == "paragraph", block.latest.children.isEmpty {
                 replace = true
                 replacedBlock = block.source
@@ -1750,6 +1793,7 @@ final class DocumentModel {
         if report(applied), let focusTarget {
             await focusAfterOperation(focusTarget.path, focusTarget.cursor)
         }
+        return applied
     }
 
     /// Inserts an empty `template` block and puts the cursor in its first text.
@@ -1831,10 +1875,44 @@ final class DocumentModel {
         return MediaTarget(placement: mediaPlacement ?? .end, asAttachment: pendingMedia?.action == .attachment)
     }
 
+    /// Prepares, uploads and removes the files one at a time, so a large video isn't staged beside all the others, and
+    /// inserts them together at `target`; `file` stages the one at an index in the server's folder (`UploadFile`). Run
+    /// here, not in the page's view: uploads outlive the page by design (`leave`), and their errors went to a toast that
+    /// closed with it. They go to the whole app now, as does an upload the page can no longer take (it went to the trash
+    /// or became a database meanwhile, its engine ended).
+    func upload(_ count: Int, to target: MediaTarget, file: @escaping @MainActor (Int, URL) async throws -> UploadFile?) {
+        uploads += 1
+        Task {
+            defer { uploadEnded() }
+            guard let serverURL, let sendUpload else { return }
+            var attachments: [Attachment] = []
+            for index in 0..<count {
+                do {
+                    guard let prepared = try await file(index, serverURL) else { continue }
+                    defer { prepared.remove() }
+                    attachments.append(try await sendUpload(prepared))
+                } catch {
+                    postAppNotice?(String(localized: "Not uploaded: \(error.userMessage)"))
+                }
+            }
+            guard !attachments.isEmpty, await insertUploads(attachments, to: target) != .applied else { return }
+            let title = page.title.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Untitled")
+            postAppNotice?(String(localized: "The upload couldn't be added to “\(title)”."))
+        }
+    }
+
+    private func uploadEnded() {
+        uploads -= 1
+        if uploads == 0, suspendsAfterUploads {
+            suspendsAfterUploads = false
+            suspend()
+        }
+    }
+
     /// Inserts uploads in selection order: as attachment cards after "File attachment" (like the web client),
     /// otherwise embedded by type.
-    func insertUploads(_ attachments: [Attachment], to target: MediaTarget) async {
-        guard !attachments.isEmpty else { return }
+    @discardableResult
+    func insertUploads(_ attachments: [Attachment], to target: MediaTarget) async -> EngineResult {
         await insertBlocks(attachments.map { $0.contentNode(asAttachment: target.asAttachment) }, placement: target.placement, focus: nil)
     }
 
@@ -2161,7 +2239,7 @@ final class DocumentModel {
             // Refused for a block no longer edited: its text must not stay over the saved one, nor be written later
             // into another block that takes its place.
             overrides[ref.identity] = nil
-            syncFromEngine()
+            if let engineDocument { adopt(engineDocument) }
         }
     }
 
@@ -2690,7 +2768,7 @@ final class DocumentModel {
         let focus = await engine.tableCommand(.path(position.tablePath, type: "table"), cell: [position.row, position.column],
                                               command: edit.engineCommand)
         guard report(focus != nil ? .applied : .refused), let focus, let latest = await engine.currentDocument() else { return }
-        document = withOverrides(latest)
+        show(latest)
         // The table is gone: deleted, or its only row or column.
         guard !focus.isEmpty else {
             deactivate()
@@ -2708,7 +2786,7 @@ final class DocumentModel {
             path.append(0)
         }
         pendingFocus = (path, .end)
-        syncFromEngine()
+        adopt(latest)
         pendingFocus = nil
         if active?.ref.path != path { deactivate() }
     }
@@ -2730,7 +2808,7 @@ final class DocumentModel {
         case .unavailable: return
         }
         guard let latest = await engine.currentDocument() else { return }
-        document = withOverrides(latest)
+        show(latest)
         adoptActiveBlock()
     }
 
