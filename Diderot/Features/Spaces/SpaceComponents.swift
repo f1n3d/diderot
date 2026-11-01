@@ -8,8 +8,8 @@ struct SpaceLogoView: View {
     var size: CGFloat = 36
 
     var body: some View {
-        RemoteThumbnail(url: baseURL.flatMap { ImageURL.resolve(space.logo, kind: .spaceIcon, baseURL: $0) }, size: size,
-                        shape: RoundedRectangle(cornerRadius: size * 0.25)) { initial }
+        RemoteThumbnail(url: baseURL.flatMap { ImageURL.resolve(space.logo, kind: .spaceIcon, baseURL: $0) }, server: baseURL,
+                        size: size, shape: RoundedRectangle(cornerRadius: size * 0.25)) { initial }
     }
 
     private var initial: some View {
@@ -25,9 +25,13 @@ struct SpaceLogoView: View {
     }
 }
 
-/// Remote avatar or logo at a fixed size and shape; placeholder without a URL, while loading and on failure.
+/// Remote avatar or logo at a fixed size and shape; placeholder without a URL, while loading and on failure. From another
+/// server only with Settings › "Load Content from Other Servers" on, as page media (`RenderContext.loadsByItself`): a
+/// logo from elsewhere told that host who opened the app and when.
 struct RemoteThumbnail<ClipShape: Shape, Placeholder: View>: View {
     let url: URL?
+    /// The server the avatar or logo belongs to.
+    let server: URL?
     let size: CGFloat
     let shape: ClipShape
     @ViewBuilder let placeholder: Placeholder
@@ -35,8 +39,13 @@ struct RemoteThumbnail<ClipShape: Shape, Placeholder: View>: View {
     @State private var image: UIImage?
     @State private var loaded: URL?
 
+    /// What it loads: `url` where it may load by itself.
+    var source: URL? {
+        url.flatMap { RenderContext.loadsByItself($0, server: server) ? $0 : nil }
+    }
+
     var body: some View {
-        if let url {
+        if let url = source {
             Group {
                 if let image {
                     Image(uiImage: image).resizable().scaledToFill()

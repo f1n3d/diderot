@@ -26,7 +26,7 @@ extension ContentDocument {
             items.map { ListItem(id: $0.id, number: $0.number, blocks: $0.blocks.map(commentBlock)) }
         }
         switch block.kind {
-        case .paragraph, .heading, .horizontalRule:
+        case .paragraph, .heading, .horizontalRule, .tooDeep:
             return block
         // The web shows a Mermaid source in a comment as plain code.
         case .codeBlock(let language, let code):
@@ -81,6 +81,8 @@ public struct Block: Sendable, Hashable, Identifiable {
         case base(pageId: String?)
         case pageBreak
         case unknown(type: String, [Block])
+        /// Content deeper than `ContentParser.maxDepth`, not shown.
+        case tooDeep
     }
 }
 

@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import SwiftUI
 import Testing
 import UniformTypeIdentifiers
 @testable import Diderot
@@ -26,17 +27,24 @@ struct ImageLoaderTests {
     }
 
     /// Media from another host loads only after a tap, unless Settings turns that on; the server's own always loads.
+    /// Avatars and logos follow the setting too: a workspace or space logo loaded from anywhere (code review R14).
     @Test func otherServersLoadOnlyWhenAllowed() {
         let server = URL(string: "https://wiki.example.com")!
         let key = RenderContext.loadsOtherServersKey
         defer { UserDefaults.standard.removeObject(forKey: key) }
+        func thumbnail(_ url: String) -> URL? {
+            RemoteThumbnail(url: URL(string: url), server: server, size: 24, shape: Circle()) { EmptyView() }.source
+        }
         UserDefaults.standard.set(false, forKey: key)
         #expect(RenderContext.loadsByItself(URL(string: "https://wiki.example.com/api/files/a/b.png")!, server: server))
         #expect(!RenderContext.loadsByItself(URL(string: "https://tracker.example.net/p.png")!, server: server))
         #expect(!RenderContext.loadsByItself(URL(string: "http://wiki.example.com/b.png")!, server: server), "another scheme is another origin")
         #expect(RenderContext.loadsByItself(URL.temporaryDirectory.appending(path: "clip.mov"), server: server), "a file on the device")
+        #expect(thumbnail("https://wiki.example.com/api/attachments/img/space-logo/a.png") != nil)
+        #expect(thumbnail("https://tracker.example.net/logo.png") == nil)
         UserDefaults.standard.set(true, forKey: key)
         #expect(RenderContext.loadsByItself(URL(string: "https://tracker.example.net/p.png")!, server: server))
+        #expect(thumbnail("https://tracker.example.net/logo.png") != nil)
     }
 
     /// A width from the document such as "nan%" or a huge negative number gives a bounded pixel width: turning it into an

@@ -3132,6 +3132,16 @@
     "Name": {
       "shouldTranslate": false
     },
+    "Nested too deeply to show": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu tief verschachtelt zum Anzeigen"
+          }
+        }
+      }
+    },
     "New Comment": {
       "localizations": {
         "de": {
