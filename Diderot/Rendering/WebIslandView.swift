@@ -70,7 +70,16 @@ struct WebIslandView: View {
     private func measureHeight(afterFonts: Bool = false) async throws {
         let script = (afterFonts ? "await document.fonts.ready; " : "") + "return Math.ceil(document.body.getBoundingClientRect().height);"
         let measured = try await page.callJavaScript(script)
-        height = max(CGFloat((measured as? NSNumber)?.doubleValue ?? 0), minHeight)
+        height = Self.height(measured: (measured as? NSNumber)?.doubleValue ?? 0, minHeight: minHeight)
+    }
+
+    /// At most this tall; the rest is cut off, as the island doesn't scroll. A diagram or picture from the page can be
+    /// any height, and a formula could ask for 1.7 million points before KaTeX's `maxSize`.
+    static let maxHeight: CGFloat = 10_000
+
+    static func height(measured: Double, minHeight: CGFloat) -> CGFloat {
+        guard measured.isFinite else { return minHeight }
+        return min(max(CGFloat(measured), minHeight), maxHeight)
     }
 }
 
@@ -95,6 +104,10 @@ nonisolated enum IslandHTML {
     </style>
     """
 
+    /// The largest size a formula may give anything, in em (KaTeX's default is unlimited): `\rule{1em}{100000em}` asked
+    /// for a web view about 1.7 million points tall.
+    static let mathMaxSize = 50
+
     static func math(_ latex: String, displayMode: Bool) -> String {
         """
         <!doctype html><html><head>\(baseStyle)
@@ -104,7 +117,7 @@ nonisolated enum IslandHTML {
         </head><body><div id="m"></div>
         <script>
           try {
-            katex.render(\(json(latex)), document.getElementById("m"), { displayMode: \(displayMode), throwOnError: false });
+            katex.render(\(json(latex)), document.getElementById("m"), { displayMode: \(displayMode), throwOnError: false, maxSize: \(mathMaxSize) });
           } catch (e) { Object.assign(document.getElementById("m"), { className: "error", textContent: String(e) }); }
         </script></body></html>
         """

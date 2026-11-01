@@ -48,16 +48,22 @@ struct BlockView: View {
             CalloutView(kind: kind, icon: icon, blocks: blocks)
         case .details(let open, let summary, let blocks):
             DetailsView(initiallyOpen: open, summary: summary, blocks: blocks)
+        // Another file starts afresh: a tap to load from another server, and the file shown, belong to one `src`. Media
+        // blocks have no id, so their view is the one at that place, which another block takes when blocks above come
+        // or go, or a collaborator changes the file.
         case .image(let image):
-            ContentImageView(image: image)
+            ContentImageView(image: image).id(image.src)
         case .media(let media):
-            switch media.kind {
-            case .video, .audio: VideoBlockView(media: media)
-            case .pdf: PDFBlockView(media: media)
-            case .attachment: AttachmentBlockView(media: media)
-            case .drawio, .excalidraw: DiagramView(media: media)
-            case .embed, .youtube: EmbedBlockView(media: media)
+            Group {
+                switch media.kind {
+                case .video, .audio: VideoBlockView(media: media)
+                case .pdf: PDFBlockView(media: media)
+                case .attachment: AttachmentBlockView(media: media)
+                case .drawio, .excalidraw: DiagramView(media: media)
+                case .embed, .youtube: EmbedBlockView(media: media)
+                }
             }
+            .id(media.src)
         case .table(let table):
             TableView(table: table)
         case .columns(let columns, let weights):
@@ -81,6 +87,8 @@ struct BlockView: View {
             PageBreakView()
         case .unknown(let type, let blocks):
             UnknownBlockView(type: type, blocks: blocks)
+        case .tooDeep:
+            TooDeepView()
         }
     }
 }
@@ -449,6 +457,15 @@ struct UnknownBlockView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
+    }
+}
+
+/// In place of content nested deeper than `ContentParser.maxDepth`.
+struct TooDeepView: View {
+    var body: some View {
+        Text("Nested too deeply to show")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
     }
 }
 

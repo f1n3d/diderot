@@ -5,7 +5,8 @@ import WebKit
 @testable import Diderot
 
 /// Web views stay on the pages the app loads into them: a tapped link goes outside, frames load only where allowed,
-/// and formula and diagram islands reach nothing beyond their bundled files.
+/// formula and diagram islands reach nothing beyond their bundled files, and the web layout takes images from elsewhere
+/// only when allowed.
 struct WebNavigationLimitTests {
     private let server = URL(string: "https://wiki.example.com")!
 
@@ -89,6 +90,28 @@ struct WebNavigationLimitTests {
         #expect(try await requests("<p></p>", until: "true", expected: 2) == ["diderot-test://fetch/", "diderot-test://image/"])
         #expect(try await requests(IslandHTML.math("x^2", displayMode: true), until: "document.querySelector('.katex') !== null").isEmpty)
         #expect(try await requests(IslandHTML.mermaid("graph TD; A-->B"), until: "document.querySelector('#d svg') !== null").isEmpty)
+    }
+
+    /// The web layout loads images from the server only, as the page does, unless Settings › "Load Content from Other
+    /// Servers" is on: one from elsewhere loaded by itself and told that host who read the page (code review R14).
+    @Test func webLayoutTakesImagesFromElsewhereOnlyWhenAllowed() async throws {
+        let home = URL(string: "diderot-test://home/")!
+        let body = "<img src='diderot-test://home/own.png'><img src='diderot-test://elsewhere/pixel.png'>"
+        func requests(loadsOtherServers: Bool) async throws -> [String] {
+            let log = RequestLog()
+            var configuration = WebPage.Configuration()
+            configuration.urlSchemeHandlers[URLScheme("diderot-test")!] = log
+            let page = WebPage(configuration: configuration)
+            let html = WebLayoutView.wrap(body, title: "Page", loadsOtherServers: loadsOtherServers)
+            for try await _ in page.load(html: html, baseURL: home) {}
+            // The requests that go out are waited for; those that mustn't get a second to show up.
+            let expected = loadsOtherServers ? 2 : 1
+            for _ in 0..<200 where log.urls.withLock({ $0.count }) < expected { try await Task.sleep(for: .milliseconds(100)) }
+            try await Task.sleep(for: .seconds(1))
+            return log.urls.withLock { $0.map(\.absoluteString).sorted() }
+        }
+        #expect(try await requests(loadsOtherServers: false) == ["diderot-test://home/own.png"])
+        #expect(try await requests(loadsOtherServers: true) == ["diderot-test://elsewhere/pixel.png", "diderot-test://home/own.png"])
     }
 }
 

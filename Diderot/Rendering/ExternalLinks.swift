@@ -3,9 +3,9 @@ import SwiftUI
 
 extension View {
     /// Opens the links tapped in here that leave the app as the web client in a browser does: web pages in the in-app
-    /// browser, mail, phone and messages through the system, another app only after asking, scripts and files never
-    /// (`ContentLinkRouter.opening(for:)`). Every sheet that shows links needs its own: a view can't present over a
-    /// sheet it shows.
+    /// browser, mail, phone and messages through the system, another app only after asking, scripts and files never,
+    /// saying so (`ContentLinkRouter.opening(for:)`). Every sheet that shows links needs its own: a view can't present
+    /// over a sheet it shows.
     func opensExternalLinks() -> some View {
         modifier(ExternalLinks())
     }
@@ -35,7 +35,7 @@ private struct ExternalLinks: ViewModifier {
                 case .browser: webPage = url
                 case .system: return .systemAction
                 case .askFirst: otherApp = url
-                case .never: break
+                case .never: notice = String(localized: "This link can't be opened.")
                 }
                 return .handled
             })

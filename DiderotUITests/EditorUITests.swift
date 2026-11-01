@@ -1176,6 +1176,9 @@ import XCTest
         XCTAssertTrue(notice.waitForExistence(timeout: 5), "Nothing says that no app could open the link")
 
         app.links["Skript"].tap()
+        // Says so, before the toast leaves (2.5 s).
+        let blocked = app.buttons.matching(NSPredicate(format: "label IN %@", ["This link can't be opened.", "Dieser Link lässt sich nicht öffnen."])).firstMatch
+        XCTAssertTrue(blocked.waitForExistence(timeout: 2), "Nothing says that a script link can't be opened")
         XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2), "A script link offers to open")
         XCTAssertFalse(close.exists, "A script link opens the in-app browser")
 
@@ -1296,6 +1299,27 @@ import XCTest
         let loaded = image.waitForExistence(timeout: 20)
         snapshot(app, "49-version")
         XCTAssertTrue(loaded, "Image in the version doesn't load")
+    }
+
+    /// A version shows its comment marks as text, as the presentation mode: they showed as links that opened nothing
+    /// (code review R42). "Fixture: Text & Marks" (Tools/seed-fixtures.py) has an open comment on "comment mark".
+    func test82_HistoryVersionShowsNoCommentLinks() throws {
+        let app = openFixture("Fixture: Text & Marks")
+        app.buttons["page-more"].tap()
+        let history = button(app, labels: ["Page History", "Seitenverlauf"])
+        XCTAssertTrue(history.waitForExistence(timeout: 5), "Page menu shows no “Page History”")
+        history.tap()
+        let version = app.cells.firstMatch
+        guard version.waitForExistence(timeout: 20) else {
+            throw XCTSkip("“Fixture: Text & Marks” has no version yet; the server saves one about 5 minutes after seeding")
+        }
+        version.tap()
+        // Only inside the version: the page behind the sheet shows the mark as a link.
+        let header = NSPredicate(format: "label BEGINSWITH 'Version from' OR label BEGINSWITH 'Version vom'")
+        let content = app.scrollViews.containing(header).firstMatch
+        let text = content.staticTexts.matching(NSPredicate(format: "label CONTAINS 'comment mark'")).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 20), "The version doesn't show the commented text")
+        XCTAssertFalse(content.links["comment mark"].exists, "The comment mark in the version is a link")
     }
 
     /// A tap on an image opens it full screen with the page's other images and diagrams, as the web's lightbox: it

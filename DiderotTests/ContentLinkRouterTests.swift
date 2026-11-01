@@ -57,6 +57,16 @@ struct ContentLinkRouterTests {
         #expect(ContentLinkRouter.destination(for: otherPort, serverURL: dev) == .external(otherPort))
     }
 
+    /// A link in a page never reaches the app's own schemes: tapped, they opened a comment, another block's atom sheet
+    /// with "Remove", or switched to another saved server (code review R13).
+    @Test func pageLinksNeverUseTheAppsSchemes() {
+        for href in ["docmost-atom://edit?block=b1&type=integrationMention&index=0", "docmost-comment://c1", "docmost-internal://page/x",
+                     "diderot://open?url=https%3A%2F%2Fother.example.com%2Fp%2Fx", "DOCMOST-ATOM://edit?block=b1", "Diderot:open"] {
+            #expect(ContentLinkRouter.url(for: href, baseURL: server) == nil, "\(href)")
+        }
+        #expect(ContentLinkRouter.url(for: "diderot-uitest://open", baseURL: server)?.absoluteString == "diderot-uitest://open")
+    }
+
     @Test func buildsURLsFromDocumentHrefs() {
         #expect(ContentLinkRouter.url(for: "#heading1", baseURL: server)?.absoluteString == "docmost-internal://anchor/heading1")
         #expect(ContentLinkRouter.url(for: "/s/demo/p/x-Ab12Cd34Ef", baseURL: server)?.absoluteString == "https://wiki.example.com/s/demo/p/x-Ab12Cd34Ef")
@@ -95,6 +105,7 @@ struct ContentLinkRouterTests {
             ("javascript:alert(1)", .never), ("JavaScript:alert(1)", .never), ("data:text/html,x", .never),
             ("vbscript:x", .never), ("file:///etc/hosts", .never), ("relative/path", .never),
             ("docmost-internal://user/u1", .never), ("docmost-comment://c1", .never), ("docmost-atom://edit?block=b", .never),
+            ("diderot://open?url=x", .never), ("DIDEROT://open", .never),
         ]
         for (text, opening) in cases {
             #expect(ContentLinkRouter.opening(for: try #require(URL(string: text))) == opening, "\(text)")
@@ -108,6 +119,19 @@ struct ContentLinkRouterTests {
         #expect(ContentLinkRouter.destination(for: anchor, serverURL: server) == .anchor("fn one"))
         let user = ContentLinkRouter.userURL(id: "u1")
         #expect(ContentLinkRouter.destination(for: user, serverURL: server) == .user(id: "u1"))
+    }
+
+    /// Ids from the page come back whole: a "/", "?", "#" or "%" in one cut it short or became the query or anchor,
+    /// and another page or user opened (code review R33).
+    @Test func idsComeBackWhole() {
+        for id in ["a/b", "a?b=c", "a#b", "a%2Fb", "a b", "ü"] {
+            let page = ContentLinkRouter.pageURL(slugId: id, anchor: "x \(id)")
+            #expect(ContentLinkRouter.destination(for: page, serverURL: server) == .page(slugId: id, anchor: "x \(id)"), "\(id)")
+            #expect(ContentLinkRouter.destination(for: ContentLinkRouter.userURL(id: id), serverURL: server) == .user(id: id), "\(id)")
+        }
+        // A web link's anchor as the anchor link's: decoded.
+        let web = URL(string: "https://wiki.example.com/p/Ab12Cd34Ef#a%20b")!
+        #expect(ContentLinkRouter.destination(for: web, serverURL: server) == .page(slugId: "Ab12Cd34Ef", anchor: "a b"))
     }
 
     @Test func webPageURLRoundTrips() {
