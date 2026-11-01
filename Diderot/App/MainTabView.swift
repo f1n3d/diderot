@@ -21,8 +21,7 @@ struct MainTabView: View {
     @State private var recentlyOpened: RecentlyOpenedStore
     @State private var changes = ContentChanges()
     @State private var offline = OfflineMonitor()
-    /// Titles and database fields kept for the server that it refused for good.
-    @State private var droppedChanges: String?
+    @State private var notices = AppNotices()
 
     init(session: AppSession) {
         self._favorites = State(initialValue: FavoritesStore(session: session))
@@ -53,6 +52,7 @@ struct MainTabView: View {
         .environment(recentlyOpened)
         .environment(changes)
         .environment(offline)
+        .environment(notices)
         // Above the floating tab bar, in its style; pages (no tab bar on iPhone) show their own status.
         .tabViewBottomAccessory(isEnabled: offline.isOffline || session.ready?.restoredOffline == true) {
             OfflineNotice(isOffline: offline.isOffline)
@@ -89,7 +89,8 @@ struct MainTabView: View {
         }
         // Here, not in HomeView: a tab switch or a page opened at launch hides Home and would cancel the first load.
         .task { await spaces.loadIfNeeded() }
-        .toast($droppedChanges)
+        // Titles and database fields kept for the server that it refused for good, uploads that failed or found no page.
+        .toast($notices.message)
         // A favorite's failed change, from any page, list or menu.
         .toast($favorites.toast)
     }
@@ -98,7 +99,7 @@ struct MainTabView: View {
         let titles = await session.sendUnsentTitles()
         for spaceId in titles.spaces { changes.pageChanged(in: spaceId) }
         let dropped = titles.dropped + (await session.sendUnsentCells())
-        if let notice = AppSession.DroppedChange.notice(for: dropped) { droppedChanges = notice }
+        if let notice = AppSession.DroppedChange.notice(for: dropped) { notices.post(notice) }
     }
 
     /// A tab's navigation stack with every destination reachable from any view.

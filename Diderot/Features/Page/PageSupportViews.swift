@@ -70,12 +70,21 @@ struct EditorMessageBanner: View {
     }
 }
 
-/// Live-editing status in the toolbar: saved, connecting, offline, read-only.
+/// Live-editing status in the toolbar: saved, saving, connecting, offline, read-only. "Saved" once the server confirmed
+/// every change; it used to show as soon as the engine synced, also while changes went into a connection that had died
+/// without notice, for the 30 s until the engine noticed.
 struct StatusPill: View {
     let status: EngineStatus
     let readOnlyReason: DocumentModel.ReadOnlyReason?
+    /// The server hasn't confirmed every change.
+    let unconfirmed: Bool
     /// Symbol only (narrow toolbar, e.g. iPhone portrait next to the comment button); the text remains for VoiceOver.
     var compact = false
+    /// Unconfirmed for longer than `savingDelay`: every change counts until the server confirms it a moment later, and
+    /// the pill would flicker with each one while someone types.
+    @State private var saving = false
+
+    static let savingDelay: Duration = .seconds(2)
 
     private var content: (symbol: String, text: LocalizedStringKey, tint: Color) {
         if let readOnlyReason {
@@ -87,6 +96,7 @@ struct StatusPill: View {
             }
         }
         switch status {
+        case .synced where saving: return ("icloud.and.arrow.up", "Saving", .secondary)
         case .synced: return ("checkmark.icloud", "Saved", .green)
         case .idle, .loading, .connecting, .connected: return ("arrow.triangle.2.circlepath.icloud", "Connecting", .secondary)
         case .disconnected, .failed: return ("icloud.slash", "Offline", .orange)
@@ -109,6 +119,14 @@ struct StatusPill: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(item.text))
         .accessibilityIdentifier("page-status")
+        .task(id: unconfirmed) {
+            guard unconfirmed else {
+                saving = false
+                return
+            }
+            try? await Task.sleep(for: Self.savingDelay)
+            if !Task.isCancelled { saving = true }
+        }
     }
 }
 

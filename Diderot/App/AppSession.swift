@@ -322,6 +322,7 @@ final class AppSession {
         if isCurrent(account), ready != nil { return }
         guard keychain("select", { try sessionStore.select(serverURL: account.serverURL) }) != nil else { return }
         AppLog.session.info("Switching to \(account.serverURL.absoluteString, privacy: .public)")
+        LiveDocuments.removeAll()
         state = .restoring
         await restore()
     }
@@ -433,6 +434,7 @@ final class AppSession {
         keychain("remove") { try sessionStore.remove(serverURL: session.server.url) }
         reloadAccounts()
         AppLog.session.info("Signed out")
+        LiveDocuments.removeAll()
         let next = nextAccountAfterSignOut()
         state = next == nil ? .signedOut(session.server) : .restoring
         await removeLocalData(for: session.server.url)

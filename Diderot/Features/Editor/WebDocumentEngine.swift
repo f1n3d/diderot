@@ -8,8 +8,14 @@ import DocmostKit
 @MainActor
 protocol DocumentEngine: AnyObject, Observable {
     var status: EngineStatus { get }
-    var document: PMNode? { get }
+    /// Changes the server hasn't confirmed yet: each one counts until it does, and so does the sync after each connect.
+    /// The status stays `synced` on a connection that died without notice, until the engine notices it (after 30 s).
+    var unconfirmedChanges: Int { get }
     var participants: [EngineParticipant] { get }
+    /// Each document the engine sends: after its first sync, then after changes, its own and others' (`DocumentSchedule`
+    /// in Engine/src/schedule.ts). The page took them from its view, which saw none once it was gone (an upload after
+    /// leaving), and `currentDocument()` sent one too, which made a closing page editable again.
+    var onDocument: (@MainActor (PMNode) -> Void)? { get set }
     /// The engine gave up on the page (see `EngineFailure`); the page stays read-only.
     var onFailure: (@MainActor (EngineFailure) -> Void)? { get set }
     /// The engine ended on its own (iOS ended its web process, e.g. for memory) and is closed; `open` restarts it.
@@ -20,7 +26,8 @@ protocol DocumentEngine: AnyObject, Observable {
     func close() async
     /// Keeps them like `close` while the page stays open: iOS may end the app in the background.
     func saveUnsentChanges() async
-    /// The document straight from the engine (not debounced), e.g. for the reader on close.
+    /// The document straight from the engine (not debounced), e.g. for the reader on close; nil before its first sync,
+    /// and without an engine. Reading changes nothing: documents reach the page through `onDocument`.
     func currentDocument() async -> PMNode?
     /// With `base`, the text block the edit started from: a collaborator's edit of the block since then stays, unless
     /// it changed the same range (the engine's `rebase`). With `expected`, the block a structural edit was built from:
@@ -146,8 +153,9 @@ enum EngineStep: Equatable {
 @Observable
 final class WebDocumentEngine: DocumentEngine {
     private(set) var status: EngineStatus = .idle
-    private(set) var document: PMNode?
+    private(set) var unconfirmedChanges = 0
     private(set) var participants: [EngineParticipant] = []
+    @ObservationIgnored var onDocument: (@MainActor (PMNode) -> Void)?
     @ObservationIgnored var onFailure: (@MainActor (EngineFailure) -> Void)?
     @ObservationIgnored var onTerminated: (@MainActor () -> Void)?
 
@@ -269,7 +277,7 @@ final class WebDocumentEngine: DocumentEngine {
     }
 
     /// Kept until the server confirms them; no answer (engine closed itself or failed) keeps what's stored. The
-    /// document only after the first sync: until then the engine's is empty, and the stored one still fits.
+    /// document only after the first sync (`currentDocument`): until then the stored one still fits.
     func saveUnsentChanges() async {
         guard let page, let unsentStore,
               let unsent = try? await page.callJavaScript("return window.DocmostEngine.unsentChanges();") as? String
@@ -280,7 +288,7 @@ final class WebDocumentEngine: DocumentEngine {
             await store.remove(key: CacheKey.unsentDocument(pageId))
         } else if let data = Data(base64Encoded: unsent) {
             await store.writeData(data, key: CacheKey.unsentChanges(pageId))
-            if document != nil, let current = await currentDocument() {
+            if let current = await currentDocument() {
                 await store.write(current, key: CacheKey.unsentDocument(pageId))
             }
         }
@@ -293,7 +301,7 @@ final class WebDocumentEngine: DocumentEngine {
         processWatch?.cancel()
         page = nil
         status = .idle
-        document = nil
+        unconfirmedChanges = 0
         participants = []
     }
 
@@ -355,12 +363,10 @@ final class WebDocumentEngine: DocumentEngine {
     }
 
     func currentDocument() async -> PMNode? {
-        guard let page else { return nil }
-        guard let result = try? await page.callJavaScript("return JSON.stringify(window.DocmostEngine.flush());") as? String,
-              let node = try? JSONDecoder().decode(PMNode.self, from: Data(result.utf8))
+        guard let page,
+              let result = try? await page.callJavaScript("return JSON.stringify(window.DocmostEngine.currentDocument());") as? String
         else { return nil }
-        document = node
-        return node
+        return try? JSONDecoder().decode(PMNode.self, from: Data(result.utf8))
     }
 
     // MARK: - Internal
@@ -401,7 +407,9 @@ final class WebDocumentEngine: DocumentEngine {
         case "synced":
             if event.synced == true { status = .synced }
         case "document":
-            if let document = event.document { self.document = document }
+            if let document = event.document { onDocument?(document) }
+        case "unconfirmed":
+            unconfirmedChanges = event.count ?? 0
         case "awareness":
             // The engine omits its own client.
             let me = session.ready?.currentUser.user
@@ -482,6 +490,8 @@ struct EngineEvent: Decodable {
     let type: String
     let status: String?
     let synced: Bool?
+    /// "unconfirmed": changes the server hasn't confirmed.
+    let count: Int?
     let error: String?
     let document: PMNode?
     let participants: Participants?
