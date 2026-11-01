@@ -54,6 +54,8 @@ struct HistoryView: View {
         // On the stack, not its root: pushed versions don't get values set inside the stack.
         .environment(\.renderContext, RenderContext(session: session, pageId: page.id))
         .environment(\.linkPreviews, session.linkPreviews)
+        // As in the presentation mode: a version's comments open nowhere, and its marks showed as links that did nothing.
+        .environment(\.showsCommentMarks, false)
         .environment(versionNavigation)
         .onAppear {
             let pageNavigation = navigation

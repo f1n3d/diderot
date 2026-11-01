@@ -59,7 +59,7 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **D** Hardening and privacy | R12, R13, R16, R24, R30–R33, R42, R53, R58, R59 | unit tests, partly a device | low |
+| **D** Hardening and privacy | R12, R16, R24, R30–R32, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
@@ -89,19 +89,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 - Queue a pending logout when the sign-in fails.
 - Disable Cancel while finishing.
 
-### R13 [low] ✔ Links in page content can trigger the app's internal actions
-
-**Where:** `ContentLinkRouter.swift:28–34`, `:64–72`; `InlineTextBuilder.swift:57`, `:106`; `PageView.swift:1408–1415`.
-
-**Problems:**
-
-- **Internal schemes:** `url(for:)` passes any scheme through. `PageView.handle` checks `CommentLink` and `AtomLink` before routing.
-  - An `href` of `docmost-atom://edit?block=…&type=integrationMention&index=0` in content opens another block's mention sheet, including Remove.
-  - `docmost-comment:` and `docmost-internal:` hrefs open comments and pages.
-- **`diderot` scheme:** It isn't in `.never`, so a content link to it asks "Open in Another App?". iOS hands it back to the app, and `AppNavigation.handle` can switch to another saved server (R46, now in BACKLOG.md).
-
-**Fix:** Drop internal schemes in `url(for:)`, and add `diderot` to `.never`.
-
 ### R16 [low] ○ Signing out keeps the server's offline cache
 
 **Where:** `AppSession.swift:401–412`; `Docs/Privacy.md:18`.
@@ -126,14 +113,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 - Signing in again replaces the token without ending the old server session.
 
 **Fix:** "Can't reach the server – Try Again" (runs `restore()` again), and retry when the network returns.
-
-### R42 [low] ○ Comment marks in versions do nothing, and blocked links fail silently
-
-**Where:** `HistoryView.swift:55–57`, `:127–136`; `InlineTextBuilder.swift:111–117`, `:221`; `ExternalLinks.swift:38`.
-
-**Problem:** Versions show comment marks as `docmost-comment:` links, because HistoryView doesn't set `showsCommentMarks` to false (PresentationView does). The history handler doesn't take them, and ExternalLinks drops `.never` links with `break`.
-
-**Fix:** `.environment(\.showsCommentMarks, false)` in HistoryView, and the existing notice toast for `.never` links.
 
 ### R45 [low] ○ Kanban column requests aren't cancelled
 
@@ -210,14 +189,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 - The file-based upload the app uses has no test.
 
 **Fix:** Pass the file error through, strip control characters, and test the file overload, including removal of the `body-*` file.
-
-#### R33 [low] ○ Link ids are interpolated raw
-
-**Where:** `ContentLinkRouter.swift:77–87`, `:101`.
-
-**Problem:** Ids are put into URLs as they are. A `/`, `?` or `#` in a slug id or user id is cut by `lastPathComponent` or read as query or fragment, and the link opens the wrong page or user. The force unwraps there can't fail.
-
-**Fix:** Percent-encode the id as the anchor branch does, or use `URLComponents`.
 
 #### R53 [low] ? Audio and video play silently with the Ring/Silent switch on
 
@@ -443,7 +414,7 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes. Kept titles and database fields use its throwing `readThrowing` and `update`; the rest of its API swallows every error (M55). | A small store of its own that throws and updates atomically. (S–M) |
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |
 | Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema. Since package C the editor writes marks back as stored while they show the same, line breaks' too with their direction, checked over all fixtures and the dev instances' marks (R3). | One mark codec for the reader and the editor. (M) |
-| Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links (R13). | (M) |
+| Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links, which can't use the app's schemes since R13. | (M) |
 | Showing errors | Toast (read out by VoiceOver since R17), the editor's banner (R19), inline text, silent revert or only the log (R43). | One helper: toast plus a generic message. (S) |
 
 ### S4 Time as a control mechanism
