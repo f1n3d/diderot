@@ -69,6 +69,8 @@ final class BaseModel {
     /// Set by the screen. Offline the database is read-only, as pages are: a save would fail at once.
     var isOffline = false
     /// Text a failed save didn't get to the server, by "rowId/propertyId": its field shows it again, not the old value.
+    /// Unless the server refused it for good, it is also kept for the server (`UnsentCell`), which this restores at the
+    /// first load.
     private(set) var unsavedDrafts: [String: String] = [:]
     /// The sign-in this database was opened with. Its requests and cache stay with it: after a switch or sign-out a
     /// queued write doesn't reach the new server, and a late answer doesn't go into its cache.
@@ -82,6 +84,14 @@ final class BaseModel {
         let rowId: String
         let cells: [String: JSONValue]
         let position: String?
+    }
+
+    /// A field's typed text in a save (`setCell`'s `typed`).
+    private struct TypedInput {
+        let propertyId: String
+        let text: String
+        /// An input a failed save kept for the field, which this one replaces.
+        let replacesKept: Bool
     }
 
     init(pageId: String, session: AppSession) {
@@ -118,6 +128,7 @@ final class BaseModel {
         // Opening offline, the page itself says it shows the saved version.
         let isOpening = state.value == nil
         if state.value == nil {
+            await restoreUnsent()
             if let cached = await ownSession?.cache.read(Base.self, key: CacheKey.base(pageId)) {
                 state = .loaded(cached)
                 await restoreSnapshot()
@@ -328,11 +339,15 @@ final class BaseModel {
     /// `typed`: the field's text, kept if the save fails (see `unsavedDrafts`).
     func setCell(rowId: String, propertyId: String, to value: JSONValue?, typed draft: String? = nil) async {
         guard let current = row(id: rowId) else { return }
-        let key = "\(rowId)/\(propertyId)"
-        unsavedDrafts[key] = nil
+        // The newest input replaces one a failed save kept, for the server too.
+        let replacesKept = unsavedDrafts.removeValue(forKey: "\(rowId)/\(propertyId)") != nil
         let value = value.flatMap { $0.isNull ? nil : $0 }
-        guard current.cells[propertyId] != value else { return }
-        await write(rowId: rowId, cells: [propertyId: value ?? .null], position: nil, keeping: draft.map { (key, $0) })
+        guard current.cells[propertyId] != value else {
+            if replacesKept { await forgetUnsent(rowId: rowId, propertyId: propertyId) }
+            return
+        }
+        let input = draft.map { TypedInput(propertyId: propertyId, text: $0, replacesKept: replacesKept) }
+        await write(rowId: rowId, cells: [propertyId: value ?? .null], position: nil, typed: input)
     }
 
     /// Moves a card into a column, before `anchorId` (after it if `below`) or to the end. Column and order change in
@@ -502,8 +517,9 @@ final class BaseModel {
     // MARK: Internal writes
 
     /// Cell patch and/or new position of a row: queued and shown immediately.
-    /// `keeping`: a field's text, kept in `unsavedDrafts` if the save fails, before the row shows its old value again.
-    private func write(rowId: String, cells: [String: JSONValue], position: String?, keeping draft: (key: String, text: String)? = nil) async {
+    /// `typed`: a field's text, which a failed save keeps (`unsavedDrafts`, `UnsentCell`) before the row shows its old
+    /// value again.
+    private func write(rowId: String, cells: [String: JSONValue], position: String?, typed input: TypedInput? = nil) async {
         // Not `canEdit`: a field that saves as the database turns read-only offline still tries, so its text is kept.
         guard base?.canEdit == true, ownSession?.entitlements.has("bases") == true, let current = row(id: rowId) else { return }
         let view = selectedView
@@ -519,10 +535,19 @@ final class BaseModel {
             pendingWrites.removeAll { $0.id == pending.id }
             confirmedRows[rowId] = saved
             if runningLoads > 0 { savedDuringLoad[rowId] = saved }
+            if let input, input.replacesKept { await forgetUnsent(rowId: rowId, propertyId: input.propertyId) }
         } catch {
             pendingWrites.removeAll { $0.id == pending.id }
             toast = failureMessage(error, cells: cells)
-            if let draft { unsavedDrafts[draft.key] = draft.text }
+            if let input {
+                unsavedDrafts["\(rowId)/\(input.propertyId)"] = input.text
+                // Kept for the server, like a page's title, unless it can never go (entry deleted, value refused).
+                if UnsentChanges.isFinal(error) {
+                    if input.replacesKept { await forgetUnsent(rowId: rowId, propertyId: input.propertyId) }
+                } else if await keepUnsent(rowId: rowId, propertyId: input.propertyId, value: cells[input.propertyId] ?? .null, typed: input.text) {
+                    toast = String(localized: "The change goes to the server once it can be reached.")
+                }
+            }
         }
         // Switched tabs meanwhile: update the row only where the new view shows it, never add it there.
         if let display = overlay(rowId: rowId), selectedView == view || row(id: rowId) != nil { place(display) }
@@ -602,6 +627,36 @@ final class BaseModel {
         }
         writeQueue = Task { _ = try? await task.value }
         return try await task.value
+    }
+
+    // MARK: - Kept for the server
+
+    /// Keeps a field's input for the server (`UnsentCell`; `AppSession.sendUnsentCells` sends it); false if it can't be
+    /// kept. In the store of the sign-in the database was opened with, also after a switch: it goes once that is back.
+    private func keepUnsent(rowId: String, propertyId: String, value: JSONValue, typed: String) async -> Bool {
+        guard let store = owner?.unsentChanges else { return false }
+        let cell = UnsentCell(basePageId: pageId, rowId: rowId, propertyId: propertyId, value: value, typed: typed,
+                              propertyName: base?.property(id: propertyId)?.name ?? "")
+        do {
+            try await store.update([String: UnsentCell].self, key: CacheKey.unsentCells, initial: [:]) { $0[cell.key] = cell }
+            return true
+        } catch {
+            AppLog.ui.error("Field not kept: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    private func forgetUnsent(rowId: String, propertyId: String) async {
+        let key = UnsentCell.key(basePageId: pageId, rowId: rowId, propertyId: propertyId)
+        try? await owner?.unsentChanges.update([String: UnsentCell].self, key: CacheKey.unsentCells, initial: [:]) { $0[key] = nil }
+    }
+
+    /// The inputs kept for this database's fields (`keepUnsent`): their fields show them until they reach the server.
+    private func restoreUnsent() async {
+        guard let cells = await owner?.unsentChanges.read([String: UnsentCell].self, key: CacheKey.unsentCells) else { return }
+        for cell in cells.values where cell.basePageId == pageId {
+            unsavedDrafts["\(cell.rowId)/\(cell.propertyId)"] = cell.typed
+        }
     }
 
     // MARK: - Cache

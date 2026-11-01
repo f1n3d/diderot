@@ -39,6 +39,31 @@ struct DiskCacheTests {
         #expect(DiskCache.safeName("https://wiki.example.com") == "https___wiki_example_com-7dc434cdcfb05899")
     }
 
+    /// For changes the server hasn't confirmed (the app's unsent titles): updates all count, also concurrent ones, and a
+    /// file that can't be read throws instead of looking empty, so an update doesn't replace it.
+    @Test func updatesInOneStepAndKeepsUnreadableFiles() async throws {
+        let base = FileManager.default.temporaryDirectory.appending(path: "docmost-cache-tests-\(UUID().uuidString)")
+        // Readable after the first unlock, as the app's store for unsent changes (the other class fails on some Macs).
+        let cache = DiskCache(scope: "https://wiki.example.com", baseDirectory: base, protection: .afterFirstUnlock)
+        defer { try? FileManager.default.removeItem(at: base) }
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for index in 0..<50 {
+                group.addTask { try await cache.update([String: Int].self, key: "counts", initial: [:]) { $0["\(index)"] = index } }
+            }
+            try await group.waitForAll()
+        }
+        #expect(try await cache.readThrowing([String: Int].self, key: "counts")?.count == 50)
+        #expect(try await cache.readThrowing([String: Int].self, key: "missing") == nil)
+
+        // A format change or a damaged file.
+        await cache.write("not a dictionary", key: "counts")
+        await #expect(throws: (any Error).self) { try await cache.readThrowing([String: Int].self, key: "counts") }
+        await #expect(throws: (any Error).self) {
+            try await cache.update([String: Int].self, key: "counts", initial: [:]) { $0["new"] = 1 }
+        }
+        #expect(await cache.read(String.self, key: "counts") == "not a dictionary", "left as it was")
+    }
+
     @Test func pruneRemovesOldAndOversizedEntries() async {
         let cache = makeCache()
         await cache.writeData(Data(repeating: 1, count: 1000), key: "big")

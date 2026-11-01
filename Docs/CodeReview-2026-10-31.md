@@ -59,7 +59,7 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Data safety outside the editor | R7 (with R55), R8, R17, R18, R20, R38, R41 | unit tests | low to medium |
+| **B** Data safety outside the editor | R17, R18, R20, R38, R41 | unit tests | low to medium |
 | **C** Data safety in the editor | R1, R2, R3, R5, R6, R9, R19, R22, R23, R26 | unit tests and UI tests | medium |
 | **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
@@ -138,42 +138,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 **Scenario:** On a half-open socket, the provider notices the dead connection only after `messageReconnectTimeout` (30 s). Until then the pill says "Saved", no local save runs, and the edits live only in the web process. If that process ends or the app crashes, they're lost. Going to the background is covered by PageView's scene-phase save.
 
 **Fix:** Forward `onUnsyncedChanges`, and drive the pill and the local saves from that count.
-
-### R7 [medium] ✔ Database edits: background task without expiration handler, drafts only in memory
-
-**Where:**
-
-- `beginBackgroundTask(expirationHandler: nil)` in `BaseFieldEditors.swift:254`, `:307`; `BaseRowDetailSheet.swift:285`; `PageView.swift:404`
-- `BaseModel.swift:72`: `unsavedDrafts` lives only in memory
-
-**Background:** Apple: "Failure to end the task explicitly will result in the termination of the app." ([documentation](https://developer.apple.com/documentation/uikit/uiapplication/beginbackgroundtask(expirationhandler:)))
-
-**Scenario:** The server sits behind a VPN that is off, and a request waits up to 30 s. The user leaves the app with an edited cell. iOS ends the app, and the typed text is gone without a message. A draft from a failed save is also lost at any later termination. Pages keep theirs in `UnsentChanges`.
-
-**Fix:**
-
-- One helper that ends the task in its expiration handler, for all four places.
-- Keep failed drafts in the per-user `UnsentChanges` store and send them again, like `sendUnsentTitles` does for titles.
-
-R55 merges the three copies of the draft handling first.
-
-### R8 [medium] ✔ Unsent titles: read-modify-write without serialisation
-
-**Where:** `AppSession.swift:34`, `:466–519`; `UnsentChanges.swift:11–15`; `DiskCache.swift:29–37`.
-
-**Problem:** `ReadySession.unsentChanges` makes a new `DiskCache` actor on every access. `keepUnsentTitle`, `forgetUnsentTitle` and `sendUnsentTitles` read the whole dictionary, await, then write it back.
-
-**Scenario:** Two iPad windows go to the background with edited titles, or a keep races a send. One title is lost; for good if its send fails too and the app is ended.
-
-**More problems:**
-
-- `DiskCache.read` returns `nil` for a decode or file error, just as for "no entry". After a format change or a corrupt file, the next `keepUnsentTitle` overwrites every kept title. M55 covers only failed writes.
-- Titles dropped as final (403, 400) during the background send are only logged (`:510`).
-
-**Fix:**
-
-- One store per server and user, with an atomic `update(key:_:)` and a read that throws.
-- Return the dropped titles so the UI can tell the user.
 
 ### R9 [low] ✔/○ Compound edits aren't atomic
 
@@ -595,14 +559,6 @@ So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine(
 - the descend-to-text loop twice (`:2625`, `:2783`)
 - toolbar format actions call `activeTextChanged()` (`EditorToolbar.swift:303–358`, `:492`, `:539`), and `onChange(of: activeText)` calls it again (`BlockCards.swift:349–354`)
 
-#### R55 [low] ○ Database drafts are handled in three copies
-
-**Where:** `BaseRowDetailSheet.swift:216–291`; `BaseFieldEditors.swift:131–260`, `:265–313`.
-
-**Problem:** Three copies of the same draft handling: commit on losing focus, on disappear and on scene phase, restore unsaved drafts, and the background task.
-
-**Fix:** One commit-on-blur modifier, before fixing R7.
-
 #### R56 [low] ○ Force unwraps that rely on lists in sync
 
 **Where:** `ContentParser.swift:94`; `SessionEndpoints.swift:47`, `:51`.
@@ -710,7 +666,7 @@ Split out, each S:
 
 - `ServerInfo`, `ReadySession` and `CacheKey` into their own files
 - `PendingLogouts`: the Keychain queue and its sender
-- an `UnsentTitles` actor (R8)
+- the kept titles and database fields and their senders
 - `AppSession+Debug`
 
 Then inject a small `SessionEnvironment` (cache and unsent-store factories, local data cleaner, network check) (M). About 350 lines remain: the state machine, switching and the request gateway.
@@ -726,7 +682,7 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Loading | About 14 hand-written loaders; the same ~12-line `.loading … CancellationError … .failed` block about 12 times. Only 4 guard against overlapping loads (FavoritesStore, NotificationsStore, RecentPagesView, PageTreeStore). The rest differ in offline cache and refresh-error handling. AsyncContentView is full-screen only, so 5 places hand-roll it (HomeView 108–138, NotificationsPopover 55–99, SpaceView 194–221 and 226–266, BaseScreen 124–133). | An `@Observable RemoteValue<Value>`: state, generation counter, optional cache key, cancellation, refresh error. Plus an inline layout for AsyncContentView. (M) |
 | Session binding | Four call styles: `session.send`, `session.perform { client.send }`, bare `client.send` without 401 handling (BaseScreen.swift:228, BaseFieldEditors.swift:492), and `send(_:on:)`/`perform(on:)`, bound to one `ReadySession` (databases, title, note, collab token). `session.perform` blames a 401 on the session current when it starts, not on the one whose client sent the request. `RenderContext` gives block views the raw `APIClient` and token, so their requests skip the 401 handling. | Every request through the bound calls. Rule: capture the session once, check again between requests. (S–M) |
 | Server identity | Three forms: lowercased `StoredAccounts.key` (Keychain, web editor stores), the raw URL string (offline cache, unsent changes), host plus default port (links). The normaliser keeps host case and an explicit `:443`, so re-adding a server with another spelling strands its unsent changes (○). `UnsentChanges` builds its folder from DiskCache's private layout (`docmost-cache/` + `safeName`), so a cache refactor would orphan every user's unsent changes. | `ServerKey` and `Origin` types in DocmostKit; canonicalise in the normaliser (lowercase host, drop default ports); a fixed path for the unsent store. (S–M) |
-| Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes, with an API that swallows every error (R8, M55). | A small store of its own that throws and updates atomically. (S–M) |
+| Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes. Kept titles and database fields use its throwing `readThrowing` and `update`; the rest of its API swallows every error (M55). | A small store of its own that throws and updates atomically. (S–M) |
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |
 | Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema (R3). | One mark codec that keeps unknown attributes, plus a round-trip test over all fixtures. (M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links (R13). | (M) |

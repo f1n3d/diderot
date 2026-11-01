@@ -125,6 +125,85 @@ struct BaseFieldRow: View {
     }
 }
 
+// MARK: - Typed drafts
+
+/// A database input's typed text and the stored value it started from (`baseDraft`).
+struct BaseDraft {
+    var text = ""
+    var original = ""
+}
+
+/// What a database input's typed text saves as.
+enum BaseDraftValue {
+    /// The cell's new value; nil clears it.
+    case value(JSONValue?)
+    /// Not valid, with the message why: the input shows the stored value again.
+    case invalid(String)
+}
+
+extension View {
+    /// The draft handling of a database cell's text input: it shows the stored value, or the text a failed save didn't
+    /// get to the server, and saves a change when the input loses focus, goes away or the app leaves. The save finishes
+    /// in the background (`BackgroundWork`).
+    func baseDraft(
+        _ draft: Binding<BaseDraft>, focused: Bool, stored: String, model: BaseModel, rowId: String, propertyId: String,
+        value: @escaping (String) -> BaseDraftValue
+    ) -> some View {
+        modifier(BaseDraftModifier(draft: draft, focused: focused, stored: stored, model: model, rowId: rowId,
+                                   propertyId: propertyId, value: value))
+    }
+}
+
+private struct BaseDraftModifier: ViewModifier {
+    @Binding var draft: BaseDraft
+    let focused: Bool
+    let stored: String
+    let model: BaseModel
+    let rowId: String
+    let propertyId: String
+    let value: (String) -> BaseDraftValue
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear(perform: showStored)
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused { commit() }
+            }
+            .onChange(of: stored) { _, _ in
+                guard !focused else { return }
+                showStored()
+            }
+            .onDisappear(perform: commit)
+            // Typed but not yet committed when the app leaves: iOS may end it in the background before the input loses
+            // focus.
+            .onChange(of: scenePhase) { _, phase in if phase == .background, focused { commit() } }
+    }
+
+    /// The stored value, or the text a failed save didn't get to the server: it stays in the input, the next commit sends
+    /// it again. A failed save used to put the old value back.
+    private func showStored() {
+        draft.original = stored
+        draft.text = model.unsavedDraft(rowId: rowId, propertyId: propertyId) ?? stored
+    }
+
+    private func commit() {
+        guard draft.text != draft.original else { return }
+        switch value(draft.text) {
+        case .invalid(let message):
+            draft.text = draft.original
+            model.toast = message
+        case .value(let cellValue):
+            draft.original = draft.text
+            let model = model, rowId = rowId, propertyId = propertyId, typed = draft.text
+            // Finished in the background too, when the app is leaving.
+            BackgroundWork.run("Save database field") {
+                await model.setCell(rowId: rowId, propertyId: propertyId, to: cellValue, typed: typed)
+            }
+        }
+    }
+}
+
 // MARK: - Text, URL, Email, Number
 
 /// Single-line field; saves on losing focus or Return, if changed.
@@ -134,14 +213,12 @@ struct BaseTextFieldEditor: View {
     let property: BaseProperty
     let stored: JSONValue?
     let displayRow: BaseRow
-    @State private var draft = ""
-    @State private var original = ""
+    @State private var draft = BaseDraft()
     @FocusState private var focused: Bool
-    @Environment(\.scenePhase) private var scenePhase
 
     private var kind: BaseProperty.Kind? { property.kind }
 
-    private var initialDraft: String {
+    private var storedText: String {
         kind == .number ? BaseValue.numberDraft(stored?.doubleValue) : (stored?.stringValue ?? "")
     }
 
@@ -161,7 +238,7 @@ struct BaseTextFieldEditor: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            TextField(placeholder, text: $draft, axis: kind == .text ? .vertical : .horizontal)
+            TextField(placeholder, text: $draft.text, axis: kind == .text ? .vertical : .horizontal)
                 .focused($focused)
                 .keyboardType(keyboard)
                 .textInputAutocapitalization(kind == .text ? .sentences : .never)
@@ -185,35 +262,18 @@ struct BaseTextFieldEditor: View {
                 .accessibilityLabel(kind == .email ? Text("Send Email") : Text("Open Link"))
             }
         }
-        .onAppear(perform: showStored)
-        .onChange(of: draft) { _, text in
+        .onChange(of: draft.text) { _, text in
             // Text is single-line but wraps: Return ends the input.
             if kind == .text, text.contains("\n") {
-                draft = text.replacingOccurrences(of: "\n", with: "")
+                draft.text = text.replacingOccurrences(of: "\n", with: "")
                 focused = false
             }
         }
-        .onChange(of: focused) { _, isFocused in
-            if !isFocused { commit() }
-        }
-        .onChange(of: stored) { _, _ in
-            guard !focused else { return }
-            showStored()
-        }
-        .onDisappear { commit() }
-        // Typed but not yet committed when the app leaves: iOS may end it in the background before the field loses focus.
-        .onChange(of: scenePhase) { _, phase in if phase == .background, focused { commit() } }
-    }
-
-    /// The stored value, or the text a failed save didn't get to the server: it stays in the field, the next commit sends
-    /// it again. A failed save used to put the old value back.
-    private func showStored() {
-        original = initialDraft
-        draft = model.unsavedDraft(rowId: rowId, propertyId: property.id) ?? original
+        .baseDraft($draft, focused: focused, stored: storedText, model: model, rowId: rowId, propertyId: property.id, value: value)
     }
 
     private var showsFormattedNumber: Bool {
-        kind == .number && !focused && stored?.doubleValue != nil && draft == original
+        kind == .number && !focused && stored?.doubleValue != nil && draft.text == draft.original
     }
 
     private var keyboard: UIKeyboardType {
@@ -226,35 +286,17 @@ struct BaseTextFieldEditor: View {
         }
     }
 
-    private func commit() {
-        guard draft != original else { return }
-        let value: JSONValue?
+    private func value(_ text: String) -> BaseDraftValue {
         switch kind {
         case .number:
-            switch BaseValue.parseNumber(draft) {
-            case .clear: value = nil
-            case .value(let number): value = BaseValue.number(number)
-            case .invalid:
-                draft = original
-                model.toast = String(localized: "Not a number")
-                return
+            switch BaseValue.parseNumber(text) {
+            case .clear: .value(nil)
+            case .value(let number): .value(BaseValue.number(number))
+            case .invalid: .invalid(String(localized: "Not a number"))
             }
-        case .url:
-            value = BaseValue.url(draft)
-        case .email:
-            value = BaseValue.email(draft)
-        default:
-            value = BaseValue.text(draft)
-        }
-        original = draft
-        let rowId = rowId
-        let propertyId = property.id
-        let typed = draft
-        // Finished in the background too, when the app is leaving.
-        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
-        Task {
-            await model.setCell(rowId: rowId, propertyId: propertyId, to: value, typed: typed)
-            UIApplication.shared.endBackgroundTask(task)
+        case .url: .value(BaseValue.url(text))
+        case .email: .value(BaseValue.email(text))
+        default: .value(BaseValue.text(text))
         }
     }
 }
@@ -267,48 +309,17 @@ struct BaseLongTextEditor: View {
     let rowId: String
     let property: BaseProperty
     let stored: JSONValue?
-    @State private var draft = ""
-    @State private var original = ""
+    @State private var draft = BaseDraft()
     @FocusState private var focused: Bool
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        TextField("Empty", text: $draft, axis: .vertical)
+        TextField("Empty", text: $draft.text, axis: .vertical)
             .lineLimit(1...12)
             .focused($focused)
-            .onAppear(perform: showStored)
-            .onChange(of: focused) { _, isFocused in
-                if !isFocused { commit() }
-            }
-            .onChange(of: stored) { _, _ in
-                guard !focused else { return }
-                showStored()
-            }
-            .onDisappear { commit() }
-            .onChange(of: scenePhase) { _, phase in if phase == .background, focused { commit() } }
+            .baseDraft($draft, focused: focused, stored: stored?.stringValue ?? "", model: model, rowId: rowId,
+                       propertyId: property.id) { .value(BaseValue.longText($0)) }
             .accessibilityLabel(Text(property.name))
             .accessibilityIdentifier("base-input-\(property.id)")
-    }
-
-    /// The stored text, or the one a failed save didn't get to the server (see `BaseTextFieldEditor`).
-    private func showStored() {
-        original = stored?.stringValue ?? ""
-        draft = model.unsavedDraft(rowId: rowId, propertyId: property.id) ?? original
-    }
-
-    private func commit() {
-        guard draft != original else { return }
-        original = draft
-        let value = BaseValue.longText(draft)
-        let rowId = rowId
-        let propertyId = property.id
-        let typed = draft
-        // Finished in the background too, when the app is leaving.
-        let task = UIApplication.shared.beginBackgroundTask(expirationHandler: nil)
-        Task {
-            await model.setCell(rowId: rowId, propertyId: propertyId, to: value, typed: typed)
-            UIApplication.shared.endBackgroundTask(task)
-        }
     }
 }
 

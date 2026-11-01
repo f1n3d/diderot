@@ -516,7 +516,7 @@ struct AppSessionRaceTests {
     /// value used to come back, the input gone.
     @Test func failedSaveKeepsTheTypedText() async throws {
         let (model, session) = try await editableBase()
-        defer { withExtendedLifetime(session) {} }  // the model holds it unowned
+        defer { UnsentChanges.removeAll(server: a) }
         #expect(model.canEdit)
         model.isOffline = true
         #expect(model.readOnlyReason == .offline)
@@ -527,13 +527,62 @@ struct AppSessionRaceTests {
         StubURLProtocol.status.withLock { $0 = 200 }
         #expect(model.unsavedDraft(rowId: "r1", propertyId: "p1") == "neu")
         #expect(model.row(id: "r1")?.cells["p1"] == nil, "the row shows what the server has")
+        #expect(model.toast == String(localized: "The change goes to the server once it can be reached."))
+        #expect(try await keptCells(session).map(\.typed) == ["neu"])
 
         StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "neu"}}}"# }
         await model.setCell(rowId: "r1", propertyId: "p1", to: .string("neu"), typed: "neu")
         StubURLProtocol.body.withLock { $0 = nil }
         #expect(model.unsavedDraft(rowId: "r1", propertyId: "p1") == nil)
         #expect(model.row(id: "r1")?.cells["p1"] == .string("neu"))
+        #expect(try await keptCells(session).isEmpty, "saved, it no longer waits")
         await removeCaches()
+    }
+
+    /// A typed input whose save failed waits on the device, like a page's title: the database opened again (also after
+    /// the app ended) shows it, and it goes out with the next try that reaches the server. It used to live only in memory.
+    @Test func keptInputGoesOutOnceTheServerAnswers() async throws {
+        let (model, session) = try await editableBase()
+        defer { UnsentChanges.removeAll(server: a) }
+        StubURLProtocol.status.withLock { $0 = 500 }
+        await model.setCell(rowId: "r1", propertyId: "p1", to: .string("neu"), typed: "neu")
+        StubURLProtocol.status.withLock { $0 = 200 }
+
+        let reopened = BaseModel(pageId: model.pageId, session: session)
+        await reopened.load()
+        #expect(reopened.unsavedDraft(rowId: "r1", propertyId: "p1") == "neu")
+
+        StubURLProtocol.requests.withLock { $0 = [] }
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "neu"}}}"# }
+        #expect(await session.sendUnsentCells().isEmpty)
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(StubURLProtocol.requests.withLock { $0 }.contains("a.example.com/api/bases/rows/update"))
+        #expect(try await keptCells(session).isEmpty)
+        await removeCaches()
+    }
+
+    /// A kept input for an entry deleted meanwhile can never go: it is dropped, and named for the notice.
+    @Test func keptInputOfAGoneEntryIsDropped() async throws {
+        let (model, session) = try await editableBase()
+        defer { UnsentChanges.removeAll(server: a) }
+        StubURLProtocol.status.withLock { $0 = 500 }
+        await model.setCell(rowId: "r1", propertyId: "p1", to: .string("neu"), typed: "neu")
+
+        StubURLProtocol.status.withLock { $0 = 404 }
+        StubURLProtocol.body.withLock { $0 = #"{"statusCode": 404, "message": "Row not found"}"# }
+        defer {
+            StubURLProtocol.status.withLock { $0 = 200 }
+            StubURLProtocol.body.withLock { $0 = nil }
+        }
+        let dropped = await session.sendUnsentCells()
+        #expect(dropped.map(\.name) == ["neu"] && dropped.map(\.reason) == ["Row not found"])
+        #expect(try await keptCells(session).isEmpty)
+        await removeCaches()
+    }
+
+    private func keptCells(_ session: AppSession) async throws -> [UnsentCell] {
+        let store = try #require(session.ready?.unsentChanges)
+        return Array((try await store.readThrowing([String: UnsentCell].self, key: CacheKey.unsentCells) ?? [:]).values)
     }
 
     /// A write queued while a's server didn't answer goes nowhere after a switch to b, with a notice: it used to reach b,
@@ -1118,18 +1167,19 @@ struct AppSessionRaceTests {
         await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: "s1")
 
         StubURLProtocol.offline.withLock { $0 = true }
-        #expect(await session.sendUnsentTitles().isEmpty)
+        #expect(await session.sendUnsentTitles().spaces.isEmpty)
         StubURLProtocol.offline.withLock { $0 = false }
         #expect(await session.unsentTitle(pageId: "p1") == "Neu")
 
         StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Neu"}}"# }
         defer { StubURLProtocol.body.withLock { $0 = nil } }
-        #expect(await session.sendUnsentTitles() == ["s1"])
+        #expect(await session.sendUnsentTitles().spaces == ["s1"])
         #expect(await session.unsentTitle(pageId: "p1") == nil)
         await removeCaches()
     }
 
-    /// A title for a page deleted (or out of reach) meanwhile can never go: it doesn't wait forever.
+    /// A title for a page deleted (or out of reach) meanwhile can never go: it doesn't wait forever, and is named for the
+    /// notice (it used to go only to the log).
     @Test func keptTitleOfAGonePageIsDropped() async throws {
         let session = try await sessionOnA()
         defer { UnsentChanges.removeAll(server: a) }
@@ -1141,8 +1191,36 @@ struct AppSessionRaceTests {
             StubURLProtocol.status.withLock { $0 = 200 }
             StubURLProtocol.body.withLock { $0 = nil }
         }
-        #expect(await session.sendUnsentTitles().isEmpty)
+        let sent = await session.sendUnsentTitles()
+        #expect(sent.spaces.isEmpty)
+        #expect(sent.dropped.map(\.name) == ["Neu"] && sent.dropped.map(\.reason) == ["Page not found"])
         #expect(await session.unsentTitle(pageId: "p1") == nil)
+        await removeCaches()
+    }
+
+    /// Titles kept at the same moment (two windows going to the background) all stay: each keep read the list, waited and
+    /// wrote it back, so one could drop another's.
+    @Test func titlesKeptAtOnceAllStay() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        // Started together, they take turns at every await.
+        let keeps = (0..<20).map { index in Task { await session.keepUnsentTitle("T\(index)", pageId: "p\(index)", spaceId: nil) } }
+        for keep in keeps { #expect(await keep.value) }
+        let kept = await session.ready?.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)
+        #expect(kept?.count == 20)
+        await removeCaches()
+    }
+
+    /// A list of kept titles the app can't read (a damaged file, or one of a later version) isn't replaced: it read as
+    /// empty, and the next title kept dropped every one in it.
+    @Test func unreadableKeptTitlesStay() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        let store = try #require(session.ready?.unsentChanges)
+        await store.write(["p1": "not a title"], key: CacheKey.unsentTitles)
+        #expect(await session.keepUnsentTitle("Neu", pageId: "p2", spaceId: nil) == false)
+        #expect(await session.sendUnsentTitles().spaces.isEmpty)
+        #expect(await store.read([String: String].self, key: CacheKey.unsentTitles) == ["p1": "not a title"])
         await removeCaches()
     }
 
