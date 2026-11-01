@@ -50,6 +50,20 @@ public enum DocmostAttributes {
         public typealias Value = String
         public static let name = "docmost.inlineNode"
     }
+
+    /// The marks of the node a run came from, as JSON, as the server stored them: each goes back as it was while the run
+    /// shows it the same (see `InlineAttributedText.marks(for:)`).
+    public enum StoredMarksAttribute: CodableAttributedStringKey {
+        public typealias Value = String
+        public static let name = "docmost.storedMarks"
+    }
+
+    /// The attributes of the hard break a line break came from, as JSON, as the server stored them (its text direction,
+    /// which the editor doesn't show): they go back with it.
+    public enum StoredBreakAttribute: CodableAttributedStringKey {
+        public typealias Value = String
+        public static let name = "docmost.storedBreak"
+    }
 }
 
 public struct DocmostAttributeScope: AttributeScope {
@@ -62,6 +76,8 @@ public struct DocmostAttributeScope: AttributeScope {
     public let commentResolved: DocmostAttributes.CommentResolvedAttribute
     public let linkProvider: DocmostAttributes.LinkProviderAttribute
     public let inlineNode: DocmostAttributes.InlineNodeAttribute
+    public let storedMarks: DocmostAttributes.StoredMarksAttribute
+    public let storedBreak: DocmostAttributes.StoredBreakAttribute
     public let foundation: AttributeScopes.FoundationAttributes
 }
 
@@ -93,14 +109,23 @@ public enum InlineAttributedText {
                 // it would count as Return and split the block.
                 var run = AttributedString(String((node.text ?? "").map { $0.isNewline ? lineBreak : $0 }))
                 apply(marks: node.marks ?? [], to: &run)
+                keep(node.marks, in: &run)
                 result.append(run)
             case "hardBreak":
-                result.append(AttributedString(String(lineBreak)))
+                // Formatting a range on the web formats the breaks in it, and setting its direction sets theirs.
+                var run = AttributedString(String(lineBreak))
+                apply(marks: node.marks ?? [], to: &run)
+                keep(node.marks, in: &run)
+                if let attrs = node.attrs, let data = try? JSONEncoder().encode(attrs) {
+                    run.docmost.storedBreak = String(decoding: data, as: UTF8.self)
+                }
+                result.append(run)
             default:
                 // Inline atom: display text with the atom's marks, plus the node as an attribute so it survives the
                 // round trip.
                 var run = AttributedString(displayText(for: node))
                 apply(marks: node.marks ?? [], to: &run)
+                keep(node.marks, in: &run)
                 if let data = try? JSONEncoder().encode(node), let json = String(data: data, encoding: .utf8) {
                     run.docmost.inlineNode = json + String(atomKeySeparator) + UUID().uuidString
                 }
@@ -133,10 +158,14 @@ public enum InlineAttributedText {
             }
             for run in text[range].runs {
                 let marks = marks(for: run)
-                // Hard breaks are separate nodes.
+                // Hard breaks are separate nodes, with the run's marks as text has them; one inserted in the app has no
+                // attributes, and the engine gives it the default direction.
+                let breakAttrs = run.docmost.storedBreak.flatMap {
+                    try? JSONDecoder().decode([String: JSONValue].self, from: Data($0.utf8))
+                }
                 let parts = String(text[run.range].characters).split(separator: lineBreak, omittingEmptySubsequences: false)
                 for (index, part) in parts.enumerated() {
-                    if index > 0 { nodes.append(PMNode(type: "hardBreak")) }
+                    if index > 0 { nodes.append(PMNode(type: "hardBreak", attrs: breakAttrs, marks: marks.isEmpty ? nil : marks)) }
                     if !part.isEmpty {
                         nodes.append(PMNode(type: "text", marks: marks.isEmpty ? nil : marks, text: String(part)))
                     }
@@ -179,7 +208,47 @@ public enum InlineAttributedText {
         if !intents.isEmpty { run.inlinePresentationIntent = intents }
     }
 
+    /// Remembers the node's marks as stored, for `marks(for:)`.
+    private static func keep(_ marks: [PMMark]?, in run: inout AttributedString) {
+        guard let marks, !marks.isEmpty, let data = try? JSONEncoder().encode(marks) else { return }
+        run.docmost.storedMarks = String(decoding: data, as: UTF8.self)
+    }
+
+    /// The run's marks: a stored one the run still shows as it was goes back unchanged, one the editor can't show (an
+    /// unknown mark, a text style without color) stays, and the rest is built from what the run shows now (a changed
+    /// link, a new format). All built from the attributes, they changed whenever the paragraph was edited: a link lost
+    /// `rel` and `title` and got `target` `_blank`, a highlight took its name's color (`#f9e79f` "yellow" became
+    /// `#faf594`), and the block's difference to its base grew, so the engine's rebase gave up more often.
     private static func marks(for run: AttributedString.Runs.Run) -> [PMMark] {
+        let shown = shownMarks(for: run)
+        guard let json = run.docmost.storedMarks, let stored = try? JSONDecoder().decode([PMMark].self, from: Data(json.utf8)) else {
+            return shown
+        }
+        var marks: [PMMark] = []
+        var added = shown
+        for mark in stored {
+            guard let back = shownMark(of: mark) else {
+                marks.append(mark)
+                continue
+            }
+            if let index = added.firstIndex(of: back) {
+                marks.append(mark)
+                added.remove(at: index)
+            }
+        }
+        return marks + added
+    }
+
+    /// What the editor makes of `mark` alone: the mark `shownMarks(for:)` builds back from the attributes it shows as;
+    /// nil if it shows as none.
+    private static func shownMark(of mark: PMMark) -> PMMark? {
+        var run = AttributedString(" ")
+        apply(marks: [mark], to: &run)
+        return run.runs.first.flatMap { shownMarks(for: $0).first }
+    }
+
+    /// The marks the run's attributes show.
+    private static func shownMarks(for run: AttributedString.Runs.Run) -> [PMMark] {
         var marks: [PMMark] = []
         let intents = run.inlinePresentationIntent ?? []
         if intents.contains(.stronglyEmphasized) { marks.append(PMMark(type: "bold")) }

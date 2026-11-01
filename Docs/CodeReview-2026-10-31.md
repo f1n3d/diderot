@@ -59,7 +59,6 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **C** Data safety in the editor | R3 | unit tests and UI tests | medium |
 | **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
@@ -68,27 +67,7 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ---
 
-## 1. Data loss and integrity
-
-### R3 [medium] ✔ Editing a paragraph rewrites its marks' attributes
-
-**Where:** `InlineAttributedText.swift:150–210` (DocmostKit).
-
-**Problem:** The marks are rebuilt from an attributed string, not kept:
-
-- **highlight:** `color` is recomputed from `colorName`, and an unknown name becomes `#faf594`. The recorded fixture `#f9e79f`/"yellow" comes back as `#faf594`.
-- **link:** `target` is forced to `_blank`, and `internal` is recomputed from the scheme. `rel`, `class` and `title` are dropped, and `href` is re-serialised through `URL(string:)` (non-ASCII percent-encoded, ?).
-
-**Scenario:** Web users see their formatting change. The difference to `base` also grows, so `rebase.ts` fails more often and the whole block replaces a collaborator's edit.
-
-**Fix:**
-
-- Keep each text run's original mark JSON, as inline atoms already do, and write it back unchanged unless the user changed that mark.
-- Add a round-trip test over all fixtures and real web marks.
-
----
-
-## 2. Security and privacy
+## 1. Security and privacy
 
 ### R12 [low] ✔ SSO token capture checks only name and domain
 
@@ -163,7 +142,7 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ---
 
-## 3. Visible errors, accessibility, concurrency
+## 2. Visible errors, accessibility, concurrency
 
 ### R40 [low] ○ A start without the server or a cached user shows the sign-in screen without a word
 
@@ -196,7 +175,7 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ---
 
-## 4. Further findings
+## 3. Further findings
 
 ### Data and lifecycle
 
@@ -423,7 +402,7 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ---
 
-## 5. Structure
+## 4. Structure
 
 ### S1 The editor's boundary to the engine (L, the biggest lever)
 
@@ -521,7 +500,7 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Server identity | Three forms: lowercased `StoredAccounts.key` (Keychain, web editor stores), the raw URL string (offline cache, unsent changes), host plus default port (links). The normaliser keeps host case and an explicit `:443`, so re-adding a server with another spelling strands its unsent changes (○). `UnsentChanges` builds its folder from DiskCache's private layout (`docmost-cache/` + `safeName`), so a cache refactor would orphan every user's unsent changes. | `ServerKey` and `Origin` types in DocmostKit; canonicalise in the normaliser (lowercase host, drop default ports); a fixed path for the unsent store. (S–M) |
 | Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes. Kept titles and database fields use its throwing `readThrowing` and `update`; the rest of its API swallows every error (M55). | A small store of its own that throws and updates atomically. (S–M) |
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |
-| Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema (R3). | One mark codec that keeps unknown attributes, plus a round-trip test over all fixtures. (M) |
+| Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema. Since package C the editor writes marks back as stored while they show the same, line breaks' too with their direction, checked over all fixtures and the dev instances' marks (R3). | One mark codec for the reader and the editor. (M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links (R13). | (M) |
 | Showing errors | Toast (read out by VoiceOver since R17), the editor's banner (R19), inline text, silent revert or only the log (R43). | One helper: toast plus a generic message. (S) |
 
@@ -572,7 +551,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 ---
 
-## 6. CI, tools, tests
+## 5. CI, tools, tests
 
 ### T3 [medium] ✔ Selected UI test runs discard every API check
 
@@ -596,14 +575,13 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
   - redirects
   - Keychain attributes
   - concurrent access to the unsent store
-  - real web marks
   - the SSO cookie capture
   - the lossy-content guard
   - the tree drop positions
 
 ---
 
-## 7. Checked and fine
+## 6. Checked and fine
 
 - ✔ **Keychain:** `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data protection keychain, no iCloud sync; an update falls back to an add.
 - ○ **Release builds:** every `DOCMOST_DEBUG_*` path (auto-login, server pin, form filler) is guarded (R59 makes it compiler-enforced).

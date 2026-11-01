@@ -146,6 +146,120 @@ struct InlineAttributedTextTests {
         #expect(InlineAttributedText.inlines(from: text) == inlines)
     }
 
+    /// Every mark goes back as Docmost stores it while its run shows it the same: in each recorded page and response, and
+    /// in every page of the 0.96 and 0.97 dev instances (`web-marks.json`). Built from the editor's attributes, marks
+    /// changed whenever their paragraph was edited: a link lost `rel`, `title` and 0.97's `integrationProvider: null` and
+    /// got `target` `_blank`, a placeholder in a link got percent-encoded, a highlight took its name's color, and empty
+    /// attributes went. Line breaks lost their direction (`dir`).
+    @Test func keepsEveryStoredMark() throws {
+        let urls = try #require(Bundle.module.urls(forResourcesWithExtension: "json", subdirectory: "Fixtures"))
+        var checked = 0
+        for url in urls {
+            let json = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: url))
+            for inlines in Self.inlineContents(of: json) {
+                #expect(InlineAttributedText.inlines(from: InlineAttributedText.attributedString(from: inlines)) == inlines,
+                        "\(url.lastPathComponent)")
+                checked += 1
+            }
+        }
+        #expect(checked > 150)
+    }
+
+    /// A mark its run no longer shows as stored is built anew, the run's other marks stay as stored: a changed link keeps
+    /// the highlight's own color, bolding part of the run keeps both marks on either part, a removed highlight goes.
+    @Test func editedMarkIsBuiltAnewTheOthersStay() throws {
+        let link = PMMark(type: "link", attrs: ["href": "https://docmost.com", "target": "_blank", "rel": "noopener noreferrer nofollow",
+                                                "class": .null, "title": .null, "internal": false, "integrationProvider": .null])
+        let highlight = PMMark(type: "highlight", attrs: ["color": "#f9e79f", "colorName": "yellow"])
+        let node = PMNode(type: "text", marks: [link, highlight], text: "Docmost")
+
+        var text = InlineAttributedText.attributedString(from: [node])
+        text.link = URL(string: "https://example.com")
+        let newLink = PMMark(type: "link", attrs: ["href": "https://example.com", "target": "_blank", "internal": false])
+        #expect(InlineAttributedText.inlines(from: text) == [PMNode(type: "text", marks: [highlight, newLink], text: "Docmost")])
+
+        text = InlineAttributedText.attributedString(from: [node])
+        let doc = try #require(text.range(of: "Doc"))
+        text[doc].inlinePresentationIntent = .stronglyEmphasized
+        #expect(InlineAttributedText.inlines(from: text) == [
+            PMNode(type: "text", marks: [link, highlight, PMMark(type: "bold")], text: "Doc"),
+            PMNode(type: "text", marks: [link, highlight], text: "most"),
+        ])
+
+        text = InlineAttributedText.attributedString(from: [node])
+        text.docmost.highlight = nil
+        #expect(InlineAttributedText.inlines(from: text) == [PMNode(type: "text", marks: [link], text: "Docmost")])
+    }
+
+    /// An atom's marks go back as stored too, as a mention linked on the web.
+    @Test func keepsStoredMarksOfAtoms() {
+        let link = PMMark(type: "link", attrs: ["href": "https://docmost.com", "target": .null, "rel": "noopener noreferrer nofollow",
+                                                "class": .null, "title": .null, "internal": false])
+        let mention = PMNode(type: "mention", attrs: ["id": "m1", "label": "Jane", "entityType": "user", "entityId": "u1"], marks: [link])
+        let inlines = [PMNode(type: "text", text: "Hi "), mention]
+        #expect(InlineAttributedText.inlines(from: InlineAttributedText.attributedString(from: inlines)) == inlines)
+    }
+
+    /// Marks the editor can't show (one it doesn't know, a text style without color) stay, also when the run's other
+    /// marks change; they were dropped.
+    @Test func keepsMarksTheEditorCannotShow() {
+        let unknown = PMMark(type: "kbd")
+        let style = PMMark(type: "textStyle", attrs: ["fontFamily": "serif"])
+        let node = PMNode(type: "text", marks: [unknown, style], text: "Taste")
+        var text = InlineAttributedText.attributedString(from: [node])
+        #expect(InlineAttributedText.inlines(from: text) == [node])
+
+        text.inlinePresentationIntent = .emphasized
+        #expect(InlineAttributedText.inlines(from: text) == [PMNode(type: "text", marks: [unknown, style, PMMark(type: "italic")], text: "Taste")])
+    }
+
+    /// A line break keeps its marks and direction as the web stores them: formatting a range there formats the breaks in
+    /// it, and setting the direction sets theirs (TipTap with the engine's schema). Both were dropped. Bolding the text
+    /// in the app bolds its break too, as on the web; a break inserted in the app has neither.
+    @Test func keepsMarksAndDirectionOfLineBreaks() {
+        let link = PMMark(type: "link", attrs: ["href": "https://docmost.com", "target": "_blank", "rel": "noopener noreferrer nofollow",
+                                                "class": .null, "title": .null, "internal": false, "integrationProvider": .null])
+        let inlines: [PMNode] = [
+            PMNode(type: "text", marks: [link, PMMark(type: "bold")], text: "Line one"),
+            PMNode(type: "hardBreak", attrs: ["dir": "rtl"], marks: [link, PMMark(type: "bold")]),
+            PMNode(type: "text", marks: [link, PMMark(type: "bold")], text: "line two"),
+        ]
+        #expect(InlineAttributedText.inlines(from: InlineAttributedText.attributedString(from: inlines)) == inlines)
+
+        var text = AttributedString("Eins" + String(InlineAttributedText.lineBreak) + "zwei")
+        #expect(InlineAttributedText.inlines(from: text) == [
+            PMNode(type: "text", text: "Eins"), PMNode(type: "hardBreak"), PMNode(type: "text", text: "zwei"),
+        ])
+        text.inlinePresentationIntent = .stronglyEmphasized
+        #expect(InlineAttributedText.inlines(from: text) == [
+            PMNode(type: "text", marks: [PMMark(type: "bold")], text: "Eins"),
+            PMNode(type: "hardBreak", marks: [PMMark(type: "bold")]),
+            PMNode(type: "text", marks: [PMMark(type: "bold")], text: "zwei"),
+        ])
+    }
+
+    /// Inline content in a recorded response: of each node holding text, but code blocks (not edited as inline content);
+    /// in `web-marks.json`, each node on its own.
+    private static func inlineContents(of json: JSONValue) -> [[PMNode]] {
+        if json.objectValue?["about"] != nil, let nodes = json.objectValue?["nodes"]?.arrayValue {
+            return nodes.compactMap { $0.objectValue?["node"].flatMap(PMNode.init(json:)) }.map { [$0] }
+        }
+        var found: [[PMNode]] = []
+        func walk(_ value: JSONValue) {
+            if let object = value.objectValue {
+                if let content = object["content"]?.arrayValue, object["type"]?.stringValue != "codeBlock",
+                   content.contains(where: { $0.objectValue?["type"]?.stringValue == "text" }) {
+                    found.append(content.compactMap(PMNode.init(json:)))
+                }
+                object.values.forEach(walk)
+            } else if let array = value.arrayValue {
+                array.forEach(walk)
+            }
+        }
+        walk(json)
+        return found
+    }
+
     @Test func mergesAdjacentRunsWithEqualMarks() {
         var text = AttributedString("ab")
         text.append(AttributedString("cd"))

@@ -5,6 +5,23 @@ import DocmostKit
 
 /// Typed text that continues a highlight carries only its background color; saving maps it back to the color name.
 struct EditorTextTests {
+    /// Showing a block in the editor and saving it keeps its marks as the server stores them: a link's `rel`, `class` and
+    /// `title` and 0.97's `integrationProvider: null`, a highlight's own color, empty attributes, a line break's marks and
+    /// direction (code review R3).
+    @Test func savingKeepsStoredMarks() {
+        let link = PMMark(type: "link", attrs: ["href": "https://docmost.com", "target": "_blank", "rel": "noopener noreferrer nofollow",
+                                                "class": .null, "title": .null, "internal": false, "integrationProvider": .null])
+        let inlines: [PMNode] = [
+            PMNode(type: "text", marks: [PMMark(type: "bold", attrs: [:])], text: "Fett "),
+            PMNode(type: "text", marks: [link], text: "Docmost"),
+            PMNode(type: "hardBreak", attrs: ["dir": "rtl"], marks: [link]),
+            PMNode(type: "text", marks: [link], text: "Wiki"),
+            PMNode(type: "text", text: " "),
+            PMNode(type: "text", marks: [PMMark(type: "highlight", attrs: ["color": "#f9e79f", "colorName": "yellow"])], text: "gelb"),
+        ]
+        #expect(DocumentModel.inlines(from: DocumentModel.editorText(from: inlines), base: .body) == inlines)
+    }
+
     @Test func typedTextKeepsItsHighlightColor() {
         for name in ["red", "pink", "brown"] {
             var typed = AttributedString("x")
@@ -191,7 +208,12 @@ struct EditorTextTests {
             }
             return DocumentModel.inlines(from: text, base: .body)
         }
-        #expect(saved(plain, bold: true) == saved(allBold))
-        #expect(saved(allBold, bold: false) == saved(plain))
+        // Marks in any order: kept ones go back in their stored order and a new one after them; the engine orders them
+        // by its schema.
+        func unordered(_ inlines: [PMNode]) -> [PMNode] {
+            inlines.map { PMNode(type: $0.type, attrs: $0.attrs, content: $0.content, marks: $0.marks?.sorted { $0.type < $1.type }, text: $0.text) }
+        }
+        #expect(unordered(saved(plain, bold: true)) == unordered(saved(allBold)))
+        #expect(unordered(saved(allBold, bold: false)) == unordered(saved(plain)))
     }
 }
