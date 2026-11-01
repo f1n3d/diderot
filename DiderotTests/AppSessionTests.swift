@@ -1095,6 +1095,50 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// Leaving a database with no saved copy while it loads shows no error on return (code review R43): the cancelled
+    /// load counted as failed, and "Something went wrong" showed until the next load ended.
+    @Test func cancelledDatabaseLoadIsNoFailure() async throws {
+        let session = try await sessionOnA()
+        let model = BaseModel(pageId: "base-\(UUID().uuidString)", session: session)
+        StubURLProtocol.requests.withLock { $0 = [] }
+        StubURLProtocol.unanswered.withLock { $0 = 1 }
+        let loading = Task { await model.load() }
+        while !StubURLProtocol.requests.withLock({ $0.contains { $0.hasSuffix("/api/bases/info") } }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        loading.cancel()
+        await loading.value
+        StubURLProtocol.unanswered.withLock { $0 = 0 }
+        if case .failed = model.state { Issue.record("The cancelled load shows as failed") }
+        await removeCaches()
+    }
+
+    /// Leaving a board while its columns load cancels their requests (code review R45): as tasks of their own they ran
+    /// on, and the board's load waited for them.
+    @Test func leavingABoardCancelsItsColumns() async throws {
+        let business = try JSONDecoder().decode(Entitlements.self, from: Data(#"{"tier": "business", "features": ["bases"]}"#.utf8))
+        await DiskCache(scope: a.absoluteString).write(business, key: CacheKey.entitlements)
+        let session = try await sessionOnA()
+        let model = BaseModel(pageId: "base-\(UUID().uuidString)", session: session)
+        // A board by "s" (only the "No value" column); the rows request gets the base as its answer too.
+        StubURLProtocol.body.withLock {
+            $0 = #"{"data": {"id": "b", "permissions": {"canEdit": true}, "properties": [{"id": "s", "name": "S", "type": "select"}], "views": [{"id": "v1", "name": "A", "type": "kanban", "config": {"groupByPropertyId": "s"}}]}}"#
+        }
+        await model.load()
+        StubURLProtocol.body.withLock { $0 = nil }
+        StubURLProtocol.requests.withLock { $0 = [] }
+        StubURLProtocol.unanswered.withLock { $0 = 1 }
+        let loading = Task { await model.loadRows() }
+        while StubURLProtocol.requests.withLock({ $0.isEmpty }) { try await Task.sleep(for: .milliseconds(10)) }
+        loading.cancel()
+        let ended = Mutex(false)
+        Task { await loading.value; ended.withLock { $0 = true } }
+        try await Task.sleep(for: .seconds(2))
+        StubURLProtocol.unanswered.withLock { $0 = 0 }
+        #expect(ended.withLock { $0 }, "The column's request ran on after leaving")
+        await removeCaches()
+    }
+
     /// The user deletes an entry, and a reload and "Load More" answer with it before the server has applied the delete.
     @Test(arguments: ["table", "kanban"]) func lateRowsAnswerKeepsTheEntryDeleted(type: String) async throws {
         let business = try JSONDecoder().decode(Entitlements.self, from: Data(#"{"tier": "business", "features": ["bases"]}"#.utf8))

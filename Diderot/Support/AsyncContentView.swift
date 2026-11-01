@@ -52,11 +52,19 @@ struct ErrorStateView: View {
 }
 
 extension Error {
-    /// User-facing message; API errors supply their own wording.
+    /// User-facing message; API errors supply their own wording. An error without a text of its own (a Swift error
+    /// such as a cancellation) read "The operation couldn't be completed. (Swift.CancellationError error 1.)".
     var userMessage: String {
         if let apiError = self as? APIError {
             return apiError.userMessage
         }
+        let error = self as NSError
+        if !(self is LocalizedError), error.userInfo[NSLocalizedDescriptionKey] == nil, !describedErrorDomains.contains(error.domain) {
+            return String(localized: "Something went wrong.")
+        }
         return localizedDescription
     }
 }
+
+/// Domains whose errors Foundation describes by their code (a missing file, no internet).
+private let describedErrorDomains: Set<String> = [NSCocoaErrorDomain, NSURLErrorDomain, NSPOSIXErrorDomain, NSOSStatusErrorDomain]

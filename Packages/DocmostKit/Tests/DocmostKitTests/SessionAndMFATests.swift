@@ -19,6 +19,7 @@ struct SessionFixtureTests {
         #expect(Endpoints.SSO.browserLoginURL(server: server, provider: saml, workspaceId: nil).absoluteString == "https://wiki.example.com/api/sso/saml/p2/login")
         let google = AuthProvider(id: "p3", name: "Google", type: "google")
         #expect(Endpoints.SSO.browserLoginURL(server: server, provider: google, workspaceId: "w1").absoluteString == "https://wiki.example.com/api/sso/google/login?workspaceId=w1")
+        #expect(Endpoints.SSO.browserLoginURL(server: server, provider: google, workspaceId: nil).absoluteString == "https://wiki.example.com/api/sso/google/login")
     }
 }
 

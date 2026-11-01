@@ -84,10 +84,6 @@ enum BaseValue {
         return .value(number)
     }
 
-    /// Number characters as the parser reads them: decimal digits of any script as ASCII (regions like Saudi Arabia or
-    /// Iran show Arabic-Indic or Persian ones, `numberDraft` too), the Arabic separators as "." and ",", and every
-    /// minus or dash as "-" (U+2212 in regions like Sweden): a dash inside the number then makes it invalid ("1–5")
-    /// instead of vanishing ("15").
     /// Characters a typed or pasted number may carry besides its own: spaces and apostrophes grouping thousands
     /// ("1 000", "1’000"), percent and currency signs, and the direction marks of Arabic and Persian minus signs
     /// (`numberDraft`).
@@ -96,6 +92,10 @@ enum BaseValue {
             || character.unicodeScalars.allSatisfy { [.currencySymbol, .format].contains($0.properties.generalCategory) }
     }
 
+    /// Number characters as the parser reads them: decimal digits of any script as ASCII (regions like Saudi Arabia or
+    /// Iran show Arabic-Indic or Persian ones, `numberDraft` too), the Arabic separators as "." and ",", and every
+    /// minus or dash as "-" (U+2212 in regions like Sweden): a dash inside the number then makes it invalid ("1–5")
+    /// instead of vanishing ("15").
     private static func asciiNumberCharacter(_ character: Character) -> Character {
         if character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first,
            scalar.properties.numericType == .decimal, let digit = character.wholeNumberValue {

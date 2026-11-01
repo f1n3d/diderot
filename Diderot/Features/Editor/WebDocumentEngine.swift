@@ -501,7 +501,8 @@ struct EngineEvent: Decodable {
     /// "permissions" (Docmost 0.97's `page.permissions`): "write", "read" or "none".
     let access: String?
 
-    /// Read one by one: the web client's entries have only `name` and `color`, no user id.
+    /// Read one by one: the web client's entries have only `name` and `color`, no user id, and an entry that doesn't
+    /// read (a number for a name) is left out; it emptied the whole list.
     struct Participants: Decodable {
         struct Entry: Decodable {
             let id: String?
@@ -509,7 +510,19 @@ struct EngineEvent: Decodable {
             let avatarUrl: String?
         }
         let list: [Entry]
-        init(from decoder: any Decoder) throws { list = (try? [Entry](from: decoder)) ?? [] }
+        init(from decoder: any Decoder) throws {
+            var list: [Entry] = []
+            if var entries = try? decoder.unkeyedContainer() {
+                while !entries.isAtEnd {
+                    if let entry = try? entries.decode(Entry.self) {
+                        list.append(entry)
+                    } else if (try? entries.decode(JSONValue.self)) == nil {
+                        break  // A failed entry isn't passed; this one couldn't be passed either.
+                    }
+                }
+            }
+            self.list = list
+        }
     }
 }
 

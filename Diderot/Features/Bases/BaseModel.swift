@@ -146,6 +146,8 @@ final class BaseModel {
             let keys = [CacheKey.base(pageId)] + views.map { CacheKey.baseView(pageId, viewId: $0.id) }
             state = .failed(error)
             for key in keys { await ownSession?.cache.remove(key: key) }
+        } catch is CancellationError {
+            // Left while it loaded: the next visit loads again; failed, it showed "Something went wrong" until then.
         } catch {
             let isOffline = if case .network = error as? APIError { true } else { false }
             if state.value == nil { state = .failed(error) } else { showRowsError(error, notice: !(isOpening && isOffline)) }
@@ -191,13 +193,22 @@ final class BaseModel {
                 }
                 var loaded = BaseLayout.kanbanColumns(view: view, groupBy: groupBy)
                 let viewFilter = BaseLayout.filter(of: view)
-                // Columns load concurrently; results apply in column order.
-                let requests = loaded.map { column in
-                    let filter = BaseLayout.columnFilter(viewFilter: viewFilter, groupBy: groupBy.id, column: column)
-                    return Task { try await self.fetch(filter: filter, sorts: nil, cursor: nil) }
+                // Columns load concurrently; results apply in column order. Leaving or switching views cancels them all,
+                // as does the first that fails: as separate tasks they ran on.
+                let pages = try await withThrowingTaskGroup(of: (Int, BaseRowsPage).self) { group in
+                    for (index, column) in loaded.enumerated() {
+                        let filter = BaseLayout.columnFilter(viewFilter: viewFilter, groupBy: groupBy.id, column: column)
+                        group.addTask {
+                            let page = try await self.fetch(filter: filter, sorts: nil, cursor: nil)
+                            return (index, page)
+                        }
+                    }
+                    var pages: [Int: BaseRowsPage] = [:]
+                    for try await (index, page) in group { pages[index] = page }
+                    return pages
                 }
-                for (index, request) in requests.enumerated() {
-                    let page = try await request.value
+                for index in loaded.indices {
+                    guard let page = pages[index] else { continue }
                     loaded[index].list = BaseRowList(
                         rows: Self.byPosition(page.items), cursor: page.meta.nextCursor, hasMore: page.meta.hasNextPage
                     )
@@ -310,7 +321,6 @@ final class BaseModel {
 
     var canEdit: Bool { base != nil && readOnlyReason == nil }
 
-    /// Current state of a row from the table or board.
     /// Makes a row available to the detail sheet, loading it by id if the view doesn't show it (a linked entry outside
     /// the loaded rows or the view's filter, as the web does). False if it can't be loaded, with a toast why: the link
     /// opened nothing without a word.
@@ -328,6 +338,7 @@ final class BaseModel {
         }
     }
 
+    /// Current state of a row from the table or board.
     func row(id: String) -> BaseRow? {
         if let row = table.rows.first(where: { $0.id == id }) { return row }
         for column in columns {
@@ -451,8 +462,8 @@ final class BaseModel {
         }
     }
 
-    /// Uploads a file to the database's page and appends it to the file cell.
-    /// Uploads a staged file (`UploadFile`) and adds it to the cell; the staged copy goes afterwards.
+    /// Uploads a staged file (`UploadFile`) to the database's page and adds it to the cell; the staged copy goes
+    /// afterwards.
     func attachFile(rowId: String, propertyId: String, file: UploadFile) async {
         defer { file.remove() }
         guard canEdit, let owner else { return }

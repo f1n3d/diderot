@@ -458,7 +458,7 @@ struct BaseFileEditor: View {
             case .success(let url):
                 upload { try await UploadFile.file(at: url, server: $0) }
             case .failure(let error):
-                model.toast = error.localizedDescription
+                model.toast = error.userMessage
             }
         }
         .quickLookPreview($previewURL)
@@ -470,8 +470,9 @@ struct BaseFileEditor: View {
         Task {
             do {
                 if let file = try await stage(server) { await model.attachFile(rowId: rowId, propertyId: property.id, file: file) }
+            } catch is CancellationError {
             } catch {
-                model.toast = error.localizedDescription
+                model.toast = error.userMessage
             }
         }
     }

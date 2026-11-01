@@ -19,6 +19,8 @@ final class SearchModel {
     @ObservationIgnored var session: AppSession?
     @ObservationIgnored let spaceId: String?
     private let pageSize = 25
+    /// Searches started (`run`, `loadMore`): only the latest ends `isSearching`, as an earlier one's query is gone.
+    @ObservationIgnored private var started = 0
 
     init(spaceId: String? = nil, query: String = "") {
         self.spaceId = spaceId
@@ -32,19 +34,29 @@ final class SearchModel {
 
     /// For `.task(id: key)`: debounces typing, then searches; an empty query clears the results.
     func run() async {
+        started += 1
+        let generation = started
         guard isActive else {
             results = []
             hasMore = false
             errorMessage = nil
+            isSearching = false
             return
         }
+        // From the first key on: during the debounce, the results said "No Results" for a query not sent yet.
+        isSearching = true
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
         await search(append: false)
+        if generation == started { isSearching = false }
     }
 
     func loadMore() async {
+        started += 1
+        let generation = started
+        isSearching = true
         await search(append: true)
+        if generation == started { isSearching = false }
     }
 
     func clear() {
@@ -53,9 +65,7 @@ final class SearchModel {
 
     private func search(append: Bool) async {
         guard let session, session.client != nil else { return }
-        isSearching = true
         errorMessage = nil
-        defer { isSearching = false }
         let key = key
         let offset = append ? results.count : 0
         let spaceId = spaceId

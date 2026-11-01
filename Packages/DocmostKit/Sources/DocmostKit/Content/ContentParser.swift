@@ -102,13 +102,6 @@ public enum ContentParser {
                 aspectRatio: ratio, align: node.string("align").flatMap(MediaAlign.init(rawValue:)) ?? .center
             )))
 
-        case "video", "audio", "attachment", "pdf", "drawio", "excalidraw", "embed", "youtube":
-            let kind = MediaBlock.Kind(rawValue: node.type)!
-            return Block(id: id, kind: .media(MediaBlock(
-                kind: kind, src: node.string("src") ?? node.string("url"), attachmentId: node.string("attachmentId"),
-                name: node.string("name") ?? node.string("title"), size: node.int("size"), provider: node.string("provider")
-            )))
-
         case "table":
             return Block(id: id, kind: .table(table(node, path: path, state: &state)))
 
@@ -159,6 +152,13 @@ public enum ContentParser {
             return Block(id: id, kind: .pageBreak)
 
         default:
+            // Media kinds by `MediaBlock.Kind`, so a new kind can't be listed here and missing there.
+            if let kind = MediaBlock.Kind(rawValue: node.type) {
+                return Block(id: id, kind: .media(MediaBlock(
+                    kind: kind, src: node.string("src") ?? node.string("url"), attachmentId: node.string("attachmentId"),
+                    name: node.string("name") ?? node.string("title"), size: node.int("size"), provider: node.string("provider")
+                )))
+            }
             // Unknown container: keep the children (like the server); pure text content becomes a paragraph.
             if !node.children.isEmpty, node.children.allSatisfy({ inlineTypes.contains($0.type) }) {
                 return Block(id: id, kind: .unknown(type: node.type, [

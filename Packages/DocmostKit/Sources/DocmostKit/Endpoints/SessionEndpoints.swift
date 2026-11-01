@@ -44,11 +44,10 @@ extension Endpoints {
         public static func browserLoginURL(server: URL, provider: AuthProvider, workspaceId: String?) -> URL {
             switch provider.type {
             case "google":
-                var components = URLComponents(url: server.appending(path: "api/sso/google/login"), resolvingAgainstBaseURL: false)!
-                if let workspaceId {
-                    components.queryItems = [URLQueryItem(name: "workspaceId", value: workspaceId)]
-                }
-                return components.url!
+                let login = server.appending(path: "api/sso/google/login")
+                guard let workspaceId, var components = URLComponents(url: login, resolvingAgainstBaseURL: false) else { return login }
+                components.queryItems = [URLQueryItem(name: "workspaceId", value: workspaceId)]
+                return components.url ?? login
             default:
                 return server.appending(path: "api/sso/\(provider.type)/\(provider.id)/login")
             }
