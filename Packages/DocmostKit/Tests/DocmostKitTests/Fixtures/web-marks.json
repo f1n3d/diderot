@@ -1,0 +1,650 @@
+{
+  "about": "Each distinct set of marks in every page of the Docmost 0.96 and 0.97 dev instances, with a node that carries it, as the servers store them (recorded November 1, 2026). InlineAttributedTextTests sends each through the editor and back.",
+  "nodes": [
+    {
+      "server": "0.96",
+      "page": "Handbuch",
+      "node": {
+        "text": "pages/create",
+        "type": "text",
+        "marks": [
+          {
+            "type": "code",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Handbuch",
+      "node": {
+        "text": "fett",
+        "type": "text",
+        "marks": [
+          {
+            "type": "bold",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Handbuch",
+      "node": {
+        "text": "kursiv",
+        "type": "text",
+        "marks": [
+          {
+            "type": "italic",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Handbuch",
+      "node": {
+        "text": "Link",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://docmost.com",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Handbuch",
+      "node": {
+        "text": "https://google.de",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://google.de",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Handbuch – Kapitel 2",
+      "node": {
+        "text": "pages/create",
+        "type": "text",
+        "marks": [
+          {
+            "type": "code"
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Handbuch – Kapitel 2",
+      "node": {
+        "text": "fett",
+        "type": "text",
+        "marks": [
+          {
+            "type": "bold"
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Handbuch – Kapitel 2",
+      "node": {
+        "text": "kursiv",
+        "type": "text",
+        "marks": [
+          {
+            "type": "italic"
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Advanced",
+      "node": {
+        "text": "link",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://example.com",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "underline",
+        "type": "text",
+        "marks": [
+          {
+            "type": "underline",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "strikethrough",
+        "type": "text",
+        "marks": [
+          {
+            "type": "strike",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "2",
+        "type": "text",
+        "marks": [
+          {
+            "type": "subscript",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "2",
+        "type": "text",
+        "marks": [
+          {
+            "type": "superscript",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "bold italic",
+        "type": "text",
+        "marks": [
+          {
+            "type": "bold",
+            "attrs": {}
+          },
+          {
+            "type": "italic",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "bold code",
+        "type": "text",
+        "marks": [
+          {
+            "type": "bold",
+            "attrs": {}
+          },
+          {
+            "type": "code",
+            "attrs": {}
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "yellow highlight",
+        "type": "text",
+        "marks": [
+          {
+            "type": "highlight",
+            "attrs": {
+              "color": "#f9e79f",
+              "colorName": "yellow"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "red text",
+        "type": "text",
+        "marks": [
+          {
+            "type": "textStyle",
+            "attrs": {
+              "color": "#e03131"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "comment mark",
+        "type": "text",
+        "marks": [
+          {
+            "type": "comment",
+            "attrs": {
+              "resolved": false,
+              "commentId": "00000000-0000-0000-0000-000000000000"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "Handbuch",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "/s/demo/p/handbuch-8scNdSalJ7",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "jump to heading 2",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "#fixtureheadtwo",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Editor-Test",
+      "node": {
+        "text": "Beispielseite",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://example.com/diderot-uitest",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Editor-Test",
+      "node": {
+        "text": "Fremde App",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "diderot-uitest://open",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.96",
+      "page": "Editor-Test",
+      "node": {
+        "text": "Skript",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "javascript:void(0)",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Fixture: Advanced",
+      "node": {
+        "text": "link",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://example.com",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false,
+              "integrationProvider": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Fixture: Docmost 0.97",
+      "node": {
+        "text": "to an issue",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://github.com/docmost/docmost/issues/2",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false,
+              "integrationProvider": "github"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "yellow highlight",
+        "type": "text",
+        "marks": [
+          {
+            "type": "highlight",
+            "attrs": {
+              "color": "#faf594",
+              "colorName": "yellow"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "docmost.com",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://docmost.com",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false,
+              "integrationProvider": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "Handbuch",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "/s/demo/p/handbuch-8scNdSalJ7",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": true,
+              "integrationProvider": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Fixture: Text & Marks",
+      "node": {
+        "text": "jump to heading 2",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "#fixtureheadtwo",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": true,
+              "integrationProvider": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Editor-Test",
+      "node": {
+        "text": "Erster",
+        "type": "text",
+        "marks": [
+          {
+            "type": "comment",
+            "attrs": {
+              "resolved": false,
+              "commentId": "01a1969a-b293-7750-96da-3aa627302bc0"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Editor-Test",
+      "node": {
+        "text": "Beispielseite",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://example.com/diderot-uitest",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false,
+              "integrationProvider": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Editor-Test",
+      "node": {
+        "text": "Fremde App",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "diderot-uitest://open",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false,
+              "integrationProvider": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Editor-Test",
+      "node": {
+        "text": "Skript",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "javascript:void(0)",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false,
+              "integrationProvider": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Editor-Test",
+      "node": {
+        "text": "https://example.com/",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://example.com/125934",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false,
+              "integrationProvider": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "server": "0.97",
+      "page": "Editor-Test",
+      "node": {
+        "text": "https://github.com/d",
+        "type": "text",
+        "marks": [
+          {
+            "type": "link",
+            "attrs": {
+              "rel": "noopener noreferrer nofollow",
+              "href": "https://github.com/docmost/docmost/pull/125934",
+              "class": null,
+              "title": null,
+              "target": "_blank",
+              "internal": false,
+              "integrationProvider": "github"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

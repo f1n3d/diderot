@@ -1689,6 +1689,37 @@ struct DocumentModelTests {
         #expect(!model.isEditable)
     }
 
+    /// A link and a line break added in the app come back from the engine with the attributes its schema fills in (the
+    /// link's `rel`, `class` and `title`, the break's direction): no collaborator's change, so the editor keeps its text as
+    /// it is. Inline content compares as the editor shows it.
+    @Test(.timeLimit(.minutes(1))) func engineFilledAttributesAreNoCollaboratorsChange() async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Docmost")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        model.activeText.link = URL(string: "https://docmost.com")
+        model.activeText.append(AttributedString(String(InlineAttributedText.lineBreak) + "Wiki"))
+        model.activeTextChanged()
+        await model.flush()
+        let link = PMMark(type: "link", attrs: ["href": "https://docmost.com", "target": "_blank", "internal": false])
+        #expect(engine.saved.last?.children == [
+            PMNode(type: "text", marks: [link], text: "Docmost"), PMNode(type: "hardBreak"), PMNode(type: "text", text: "Wiki"),
+        ])
+        let edited = model.activeText
+
+        let filled = PMMark(type: "link", attrs: ["href": "https://docmost.com", "target": "_blank", "rel": "noopener noreferrer nofollow",
+                                                  "class": .null, "title": .null, "internal": false])
+        engine.sendDocument(PMNode(type: "doc", content: [
+            PMNode(type: "paragraph", attrs: ["id": "a"], content: [
+                PMNode(type: "text", marks: [filled], text: "Docmost"), PMNode(type: "hardBreak", attrs: ["dir": "auto"]),
+                PMNode(type: "text", text: "Wiki"),
+            ]),
+        ]))
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(model.activeText == edited)
+    }
+
     /// An upload's error goes to the whole app, where it shows also once the page has closed: it went to the page's toast,
     /// which closed with it.
     @Test(.timeLimit(.minutes(1))) func uploadErrorIsToldAppWide() async throws {

@@ -649,12 +649,22 @@ final class DocumentModel {
         return !looksTheSame(node, base)
     }
 
-    /// Whether two versions of a block look the same in the editor; the engine's JSON can differ in details from the app's.
+    /// Whether two versions of a block look the same in the editor; the engine's JSON can differ in details from the app's
+    /// (it fills in attributes the app leaves out, such as a new link's `rel` or a new line break's direction), so inline
+    /// content compares as the editor shows it.
     private func looksTheSame(_ a: PMNode, _ b: PMNode) -> Bool {
         guard a.type == b.type, a.attrs == b.attrs else { return false }
         if a.type == "codeBlock" { return a.plainText == b.plainText }
-        return Self.inlines(from: Self.editorText(from: a.children), base: activeFont)
-            == Self.inlines(from: Self.editorText(from: b.children), base: activeFont)
+        return shownInlines(a.children) == shownInlines(b.children)
+    }
+
+    /// The inlines as the editor shows them: without their marks and line breaks' attributes as stored
+    /// (`InlineAttributedText`), which a save writes back.
+    private func shownInlines(_ inlines: [PMNode]) -> [PMNode] {
+        var text = Self.editorText(from: inlines)
+        text.docmost.storedMarks = nil
+        text.docmost.storedBreak = nil
+        return Self.inlines(from: text, base: activeFont)
     }
 
     /// Shows a collaborator's change of the block being edited; the cursor moves with the text around it. From the
