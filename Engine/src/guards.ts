@@ -1,6 +1,7 @@
-// Guards that keep a page's content intact: the engine takes no block from the app that the schema can't hold, and
-// edits no page that binding its editor would change.
-import type { Node as PMNode, Schema } from "@tiptap/pm/model";
+// Guards that keep a page's content intact: the engine takes no block from the app that the schema can't hold, replaces
+// no block that changed since the app built its replacement, and edits no page that binding its editor would change.
+import type { JSONContent } from "@tiptap/core";
+import { Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { initProseMirrorDoc } from "@tiptap/y-tiptap";
 import * as Y from "yjs";
 
@@ -18,6 +19,19 @@ export function checkBlocks(nodes: readonly PMNode[]) {
       const inner = /for node (\w+)/.exec(String(error))?.[1];
       throw new Error(`invalid ${node.type.name}${inner && inner !== node.type.name ? ` (${inner})` : ""}`);
     }
+  }
+}
+
+/**
+ * Whether `current` is still the block the app read as `expected` (from the engine's own document, so a block nobody
+ * touched comes back equal). A structural edit replaces the whole block: built from an older state, it would undo what a
+ * collaborator typed since, without notice. Unreadable JSON counts as changed.
+ */
+export function unchanged(current: PMNode, expected: JSONContent): boolean {
+  try {
+    return current.eq(PMNode.fromJSON(current.type.schema, expected));
+  } catch {
+    return false;
   }
 }
 

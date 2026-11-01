@@ -3584,6 +3584,26 @@
         }
       }
     },
+    "Nothing to redo.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts zu wiederholen."
+          }
+        }
+      }
+    },
+    "Nothing to undo.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts zu widerrufen."
+          }
+        }
+      }
+    },
     "Numbered list": {
       "localizations": {
         "de": {

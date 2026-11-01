@@ -48,9 +48,11 @@ struct DocumentModelTests {
         #expect(engine.replacedWith.count == 1)
     }
 
-    /// Switching the list type before the debounced save drops it, as the new list has the text (pending, it would hide
-    /// a collaborator's later edit and overwrite it on leaving); the item reopens with the text despite an older event.
-    @Test(.timeLimit(.minutes(1))) func listTypeSwitchDropsPendingSave() async throws {
+    /// Switching the list type with input pending: the input goes first, as typing sends it (with its base, so a
+    /// collaborator's edit of the item stays), and the new list is built from the engine's document after it. Nothing
+    /// stays pending (it would hide a collaborator's later edit and overwrite it on leaving), and the item reopens with
+    /// the text despite older events.
+    @Test(.timeLimit(.minutes(1))) func listTypeSwitchSendsPendingInputFirst() async throws {
         func list(_ type: String, _ text: String) -> PMNode {
             PMNode(type: type, content: [PMNode(type: "listItem", content: [
                 PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: text)]),
@@ -65,22 +67,25 @@ struct DocumentModelTests {
 
         model.activeText.append(AttributedString("!"))
         model.activeTextChanged()
-        engine.holdsNextSave = true
-        let switching = Task { await model.convertList(itemPath: [0, 0], to: .orderedList) }
-        while engine.heldSave == nil { try await Task.sleep(for: .milliseconds(10)) }
-        model.syncFromEngine()  // an event from before the switch
-        engine.document = PMNode(type: "doc", content: [list("orderedList", "Eins!")])
-        engine.heldSave?.resume()
-        await switching.value
+        engine.whileInserting = {
+            model.syncFromEngine()  // an event from before the change
+            let saved = engine.saved.last
+            engine.document = PMNode(type: "doc", content: [saved?.type == "paragraph" ? list("bulletList", "Eins!") : saved].compactMap { $0 })
+        }
+        await model.convertList(itemPath: [0, 0], to: .orderedList)
+        #expect(engine.saved.map(\.type) == ["paragraph", "orderedList"])
+        #expect(engine.bases.first??.plainText == "Eins")
+        #expect(engine.expectations.last == list("bulletList", "Eins!"))
         #expect(model.active?.ref.path == [0, 0, 0])
         #expect(String(model.activeText.characters) == "Eins!")
 
+        engine.whileInserting = nil
         engine.document = PMNode(type: "doc", content: [list("orderedList", "Eins! Zwei")])  // a collaborator's edit
         model.syncFromEngine()
         await model.flush()  // leaving the page
 
         #expect(model.node(at: [0, 0, 0])?.plainText == "Eins! Zwei")
-        #expect(engine.saved.map(\.plainText) == ["Eins!"])
+        #expect(engine.saved.count == 2)
     }
 
     /// Return mid-title in a toggle keeps the title whole and adds an empty paragraph atop the content, as on the web.
@@ -639,8 +644,8 @@ struct DocumentModelTests {
         #expect(engine.saved.map(\.plainText) == ["Eins"])
     }
 
-    /// A change the engine refuses silently (closed engine, block a collaborator just deleted): the page says it wasn't
-    /// applied until the next change goes through.
+    /// A change the engine refuses without a reason (e.g. at a block a collaborator just deleted): the page says it
+    /// wasn't applied until the next change goes through.
     @Test func failedChangeShowsMessageUntilOneApplies() async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
         engine.failsNextInsert = true
@@ -652,6 +657,98 @@ struct DocumentModelTests {
         #expect(model.errorMessage == String(localized: "The change could not be applied."))
         await model.insertBlocks([PMNode(type: "horizontalRule")], placement: .end, focus: nil)
         #expect(model.errorMessage == nil)
+    }
+
+    /// The engine goes while a block just left is saved (its web process ended): the block keeps its input, which goes
+    /// in once the engine is back, and nothing says "could not be applied". It counted as refused, and the text was gone.
+    @Test(.timeLimit(.minutes(1))) func unavailableEngineKeepsTheInputOfALeftBlock() async throws {
+        func paragraph(_ id: String, _ text: String) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)])
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", "Zwei")]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        let first = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: first), node: first)
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+
+        engine.savesUnavailable = true
+        let second = try #require(model.node(at: [1]))
+        model.activate(NodeRef(path: [1], node: second), node: second)
+        while engine.saved.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(model.node(at: [0])?.plainText == "Eins!")
+        #expect(model.errorMessage == nil)
+
+        engine.savesUnavailable = false
+        model.syncFromEngine()  // the reopened engine's first document
+        while engine.saved.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.saved.map(\.plainText) == ["Eins!", "Eins!"])
+        #expect(engine.bases.last??.plainText == "Eins")
+    }
+
+    /// Undo with nothing to undo says so; the button did nothing without a word. No engine says nothing (its restart
+    /// shows in the status).
+    @Test func refusedUndoSaysSo() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph")]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+
+        engine.historyResult = .refused
+        await model.undo()
+        #expect(model.notice == String(localized: "Nothing to undo."))
+        model.notice = nil
+        await model.redo()
+        #expect(model.notice == String(localized: "Nothing to redo."))
+        model.notice = nil
+        engine.historyResult = .unavailable
+        await model.undo()
+        #expect(model.notice == nil)
+    }
+
+    /// A list converted while a collaborator types in it: the new list comes from the engine's document, which has their
+    /// text, not from the app's copy, which gets no document event while someone types. Built from that copy, it dropped
+    /// what they typed meanwhile, without notice. The list read goes with it as the expected state.
+    @Test func listConversionKeepsWhatACollaboratorTyped() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei"])]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        engine.document = PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei und drei"])])
+
+        await model.convertList(itemPath: [0, 1], to: .orderedList)
+
+        let converted = try #require(engine.saved.last)
+        #expect(converted.type == "orderedList")
+        #expect(converted.children.map(\.plainText) == ["Eins", "Zwei und drei"])
+        #expect(engine.expectations.last == engine.document?.children.first)
+        #expect(model.errorMessage == nil)
+    }
+
+    /// A collaborator's edit that lands between reading a block and replacing it: the engine refuses the replacement, and
+    /// the page says so instead of overwriting the edit.
+    @Test func structuralEditIsRefusedWhenTheBlockChanged() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei"])]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        model.syncFromEngine()
+        engine.collaboratorEdit = { engine.document = PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei!"])]) }
+
+        await model.convertList(itemPath: [0, 1], to: .orderedList)
+
+        #expect(engine.expectations.last == Self.list("bulletList", ["Eins", "Zwei"]))
+        #expect(model.errorMessage == String(localized: "The change could not be applied."))
+    }
+
+    private static func list(_ type: String, _ items: [String]) -> PMNode {
+        PMNode(type: type, content: items.enumerated().map { index, text in
+            PMNode(type: "listItem", content: [
+                PMNode(type: "paragraph", attrs: ["id": .string("i\(index)")], content: [PMNode(type: "text", text: text)]),
+            ])
+        })
     }
 
     /// An inline item lands at the cursor, also at the very start of a block: "/datum" typed before "Hallo", or the "+"
@@ -788,16 +885,17 @@ struct DocumentModelTests {
         model.activate(NodeRef(path: [0], node: first), node: first)
         model.activeText.append(AttributedString(" neu"))
         model.activeTextChanged()
-        // The web process ends: the engine is closed and refuses the save on leaving the block.
+        // The web process ends: the engine is closed and takes nothing, also not the save on leaving the block.
         engine.document = nil
-        engine.refusesSaves = true
+        engine.savesUnavailable = true
         engine.onTerminated?()
         try await Task.sleep(for: .milliseconds(100))
 
-        engine.refusesSaves = false
+        engine.savesUnavailable = false
         engine.document = document
         model.syncFromEngine()
-        while engine.saved.last?.plainText != "Eins neu" { try await Task.sleep(for: .milliseconds(10)) }
+        while engine.saved.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.saved.map(\.plainText) == ["Eins neu", "Eins neu"])
     }
 
     /// "Open Link" on an integration mention opens only web addresses: Safari's view threw on any other, ending the app.
@@ -1422,15 +1520,15 @@ struct DocumentModelTests {
         model.activeText.append(AttributedString(" neu"))
         model.activeTextChanged()
 
-        // As the web engine does: it closes, then reports it, and refuses what comes meanwhile.
+        // As the web engine does: it closes, then reports it, and takes nothing meanwhile.
         engine.status = .idle
         engine.document = nil
-        engine.refusesSaves = true
+        engine.savesUnavailable = true
         engine.onFailure?(.engineError)
         #expect(model.active == nil)
         #expect(!model.isEditable)
         while engine.saved.isEmpty || engine.opened.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        engine.refusesSaves = false
+        engine.savesUnavailable = false
         engine.document = document
         model.syncFromEngine()
 
@@ -1476,9 +1574,11 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var opened: [String] = []
     /// "open" and "close" in order.
     private(set) var lifecycle: [String] = []
-    /// Blocks written with `replaceBlock(_:with:base:)`, and the bases passed with them.
+    /// Blocks written with `replaceBlock(_:with:base:expected:)`, and the bases passed with them.
     private(set) var saved: [PMNode] = []
     private(set) var bases: [PMNode?] = []
+    /// The expected state passed with each replacement (either kind), in order.
+    private(set) var expectations: [PMNode?] = []
     /// Blocks added with `insertBlock` or `insertBlocks`.
     private(set) var inserted: [(node: PMNode, target: BlockTarget?, position: BlockInsertPosition)] = []
     /// Targets of `replaceBlock(_:withNodes:)`.
@@ -1493,10 +1593,17 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var heldSave: CheckedContinuation<Void, Never>?
     /// Runs mid-insert or mid-replace (saves too): the test changes `document` and delivers events there.
     var whileInserting: (() -> Void)?
-    /// The next `insertBlocks` fails, like a closed engine.
+    /// The next `insertBlocks` is refused, like one at a block a collaborator just deleted.
     var failsNextInsert = false
     /// Saves fail, like a server refusing them.
     var refusesSaves = false
+    /// Saves find no engine, like one whose web process just ended.
+    var savesUnavailable = false
+    /// Runs once when the next replacement arrives, before it is checked against its expected state: a collaborator's
+    /// edit that lands between reading a block and replacing it.
+    var collaboratorEdit: (() -> Void)?
+    /// What `undo` and `redo` answer.
+    var historyResult = EngineResult.applied
     /// Table commands, with the table and the cell they ran on.
     private(set) var tableCommands: [(target: BlockTarget, cell: [Int], command: [String: JSONValue])] = []
     /// What `tableCommand` returns: the cell for the cursor afterwards; nil refuses the command.
@@ -1506,16 +1613,47 @@ final class FakeDocumentEngine: DocumentEngine {
         self.document = document
     }
 
-    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?) async -> Bool {
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?, expected: PMNode?) async -> EngineResult {
         saved.append(node)
         bases.append(base)
+        if let refusal = check(target, expected) { return refusal }
         whileInserting?()
         if holdsNextSave {
             holdsNextSave = false
             await withCheckedContinuation { heldSave = $0 }
             heldSave = nil
         }
-        return !refusesSaves
+        return savesUnavailable ? .unavailable : refusesSaves ? .refused : .applied
+    }
+
+    /// Refused, as the engine refuses it, when the target changed from `expected` (after `collaboratorEdit`).
+    private func check(_ target: BlockTarget, _ expected: PMNode?) -> EngineResult? {
+        expectations.append(expected)
+        collaboratorEdit?()
+        collaboratorEdit = nil
+        guard let expected else { return nil }
+        return block(at: target) == expected ? nil : .refused
+    }
+
+    private func block(at target: BlockTarget) -> PMNode? {
+        func find(_ node: PMNode, _ id: String) -> PMNode? {
+            for child in node.children {
+                if child.string("id") == id { return child }
+                if let found = find(child, id) { return found }
+            }
+            return nil
+        }
+        guard let document else { return nil }
+        switch target {
+        case .id(let id): return find(document, id)
+        case .path(let path, let type):
+            var node = document
+            for index in path {
+                guard node.children.indices.contains(index) else { return nil }
+                node = node.children[index]
+            }
+            return type == nil || node.type == type ? node : nil
+        }
     }
 
     func open(pageId: String) async throws {
@@ -1526,41 +1664,42 @@ final class FakeDocumentEngine: DocumentEngine {
     /// With the number of block saves before it.
     func saveUnsentChanges() async { lifecycle.append("save after \(saved.count)") }
     func currentDocument() async -> PMNode? { document }
-    func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> Bool {
+    func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode], expected: PMNode?) async -> EngineResult {
         replaced.append(target)
         replacedWith.append(nodes)
+        if let refusal = check(target, expected) { return refusal }
         whileInserting?()
-        return true
+        return .applied
     }
-    func insertBlock(_ node: PMNode, relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> Bool {
+    func insertBlock(_ node: PMNode, relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult {
         inserted.append((node, target, position))
         whileInserting?()
-        return true
+        return .applied
     }
-    func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> Bool {
+    func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult {
         if failsNextInsert {
             failsNextInsert = false
-            return false
+            return .refused
         }
         inserted += nodes.map { ($0, target, position) }
         whileInserting?()
-        return true
+        return .applied
     }
-    func deleteBlock(_ target: BlockTarget) async -> Bool {
+    func deleteBlock(_ target: BlockTarget) async -> EngineResult {
         deleted.append(target)
-        return true
+        return .applied
     }
-    func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> Bool { true }
-    func splitContainer(after child: BlockTarget) async -> Bool {
+    func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult { .applied }
+    func splitContainer(after child: BlockTarget) async -> EngineResult {
         splitAfter.append(child)
-        return true
+        return .applied
     }
-    func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> Bool { true }
+    func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult { .applied }
     func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]? {
         tableCommands.append((target, cell, command))
         whileInserting?()
         return tableFocus
     }
-    func undo() async {}
-    func redo() async {}
+    func undo() async -> EngineResult { historyResult }
+    func redo() async -> EngineResult { historyResult }
 }

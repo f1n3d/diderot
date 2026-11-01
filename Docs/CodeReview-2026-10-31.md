@@ -42,7 +42,7 @@ The code is clean on the surface:
 
 The debt sits in two places.
 
-**1. The editor's boundary to the engine.** Swift rebuilds ProseMirror operations as sequences of separate, path-addressed engine calls. These calls work on a snapshot that can be stale and don't run as one transaction. Most integrity risks follow from that: R1, R2, R5, R9 and part of the backlog's position races.
+**1. The editor's boundary to the engine.** Swift rebuilds ProseMirror operations as sequences of separate, path-addressed engine calls. These calls work on a snapshot that can be stale and don't run as one transaction. Most integrity risks follow from that: R2, R9 and part of the backlog's position races. Package C stopped two of them for now: a structural edit is built from the engine's document and refused if its block changed (R1), and an engine that is gone no longer counts as a refusal (R5).
 
 **2. Missing shared building blocks.** Several questions are answered differently in many places:
 
@@ -59,38 +59,22 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **C** Data safety in the editor | R1, R2, R3, R5, R6, R9, R19, R22, R23, R26 | unit tests and UI tests | medium |
+| **C** Data safety in the editor | R2, R3, R6, R9, R22, R23, R26 | unit tests and UI tests | medium |
 | **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
-S1 comes before splitting DocumentModel (S2). Moving the structural edits into the engine removes about 600 lines from DocumentModel and fixes R1, R5 and R9 along the way. The split is smaller and safer after that.
+S1 comes before splitting DocumentModel (S2). Moving the structural edits into the engine removes about 600 lines from DocumentModel, fixes R9 along the way and makes package C's stopgap for R1 unnecessary. The split is smaller and safer after that.
 
 ---
 
 ## 1. Data loss and integrity
 
-### R1 [high] ✔ Structural edits overwrite what collaborators type
-
-**Where:**
-
-- `DocumentModel.swift`: `convertList` 2377–2400, `setColumnCount` 1878–1901, `unsyncSource` 1846–1851, `replaceAtom` 1596–1609, `convert` 2366–2375, `wrapActiveInSyncedBlock` 1837–1844, also 1708 and 1859
-- `engine.ts` 142–151
-
-**Problem:** These functions build a whole subtree from the native snapshot (`latestNode`, `locate` over `document`). They send it through `replaceBlockWith` without a `base`. `rebase.ts` handles only a single text block.
-
-**Scenario:** B types in item 5 of a list while A switches it from bullets to numbers. Everything B typed since the app's last document event is gone, without notice. R2 widens the window.
-
-**Fix:**
-
-- Short term: send the source node as `base`, and let the engine refuse when `!found.node.eq(base)`. The user then sees "could not be applied" instead of a silent overwrite.
-- Long term: engine commands that work on the live document, like `tableCommand` (S1).
-
 ### R2 [medium] ✔ The document snapshot can be stale for as long as someone types
 
 **Where:** `engine.ts:280`, `:333–339`.
 
-**Problem:** `onUpdate → scheduleDocument(150)` is a trailing debounce, and every transaction resets it, remote ones included. While a collaborator keeps typing, no `document` event reaches native code. Paths, `followMovedBlocks`, adopting collaborators' changes and R1 all work on that stale snapshot.
+**Problem:** `onUpdate → scheduleDocument(150)` is a trailing debounce, and every transaction resets it, remote ones included. While a collaborator keeps typing, no `document` event reaches native code. Paths, `followMovedBlocks` and adopting collaborators' changes work on that stale snapshot. Structural edits read the engine's document since package C (R1).
 
 **Backlog:** It understates this. Two entries assume about 150 ms:
 
@@ -108,22 +92,12 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 - **highlight:** `color` is recomputed from `colorName`, and an unknown name becomes `#faf594`. The recorded fixture `#f9e79f`/"yellow" comes back as `#faf594`.
 - **link:** `target` is forced to `_blank`, and `internal` is recomputed from the scheme. `rel`, `class` and `title` are dropped, and `href` is re-serialised through `URL(string:)` (non-ASCII percent-encoded, ?).
 
-**Scenario:** Web users see their formatting change. The difference to `base` also grows, so `rebase.ts` fails more often and the whole block replaces a collaborator's edit (see R1).
+**Scenario:** Web users see their formatting change. The difference to `base` also grows, so `rebase.ts` fails more often and the whole block replaces a collaborator's edit.
 
 **Fix:**
 
 - Keep each text run's original mark JSON, as inline atoms already do, and write it back unchanged unless the user changed that mark.
 - Add a round-trip test over all fixtures and real web marks.
-
-### R5 [medium] ✔ "Engine unavailable" is treated like "refused"
-
-**Where:** `WebDocumentEngine.swift:330–339`; `DocumentModel.swift:2097–2113`, `:419–428`.
-
-**Problem:** `call()` returns `false` for "not applied" and also for "page gone or threw". For a block no longer being edited, `commit()` takes `false` as a refusal and drops its override. `onTerminated` rescues only the active block.
-
-**Scenario:** Type in A, tap B while A's commit runs, the web process ends. A's text is gone, and the message ("could not be applied") is misleading.
-
-**Fix:** Three results (applied, refused, unavailable). On unavailable, keep the override and send it again after the restart. Undo and redo report their result too: the protocol returns `Void` today, so a refused undo goes unnoticed (moved here from R28).
 
 ### R6 [medium] ✔ "Saved" stays up although nothing is confirmed
 
@@ -230,14 +204,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 ---
 
 ## 3. Visible errors, accessibility, concurrency
-
-### R19 [medium] ○ The editor's error message is out of sight
-
-**Where:** `PageView.swift:501`.
-
-**Problem:** `errorMessage` covers refused saves, lost write access and unsupported content. It is drawn below the last block, inside the scroll view, so someone editing near the top of a long page never sees it.
-
-**Fix:** A banner (`safeAreaInset`) or a toast.
 
 ### R40 [low] ○ A start without the server or a cached user shows the sign-in screen without a word
 
@@ -548,7 +514,7 @@ So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine(
 - A `batch(ops) → {ok, reason}` for the rest.
 - Ask the engine whether a node fits (`contentMatchAt`).
 
-This fixes R1, R5 and R9 and most position races, and it can be tested in `pnpm run check`.
+This fixes R9 and most position races, it replaces package C's stopgap for R1 (structural edits read the engine's document and send the block they were built from), and it can be tested in `pnpm run check`.
 
 ### S2 Large types
 
@@ -629,7 +595,7 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |
 | Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema (R3). | One mark codec that keeps unknown attributes, plus a round-trip test over all fixtures. (M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links (R13). | (M) |
-| Showing errors | Toast (read out by VoiceOver since R17), inline text, silent revert or only the log (R43). | One helper: toast plus a generic message. (S) |
+| Showing errors | Toast (read out by VoiceOver since R17), the editor's banner (R19), inline text, silent revert or only the log (R43). | One helper: toast plus a generic message. (S) |
 
 ### S4 Time as a control mechanism
 

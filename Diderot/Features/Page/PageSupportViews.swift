@@ -51,6 +51,25 @@ struct TrashBanner: View {
     }
 }
 
+/// The editor's message (a change it couldn't apply, why the page is read-only) at the top edge, where it stays in sight:
+/// below the last block, someone editing near the top of a long page never saw it. VoiceOver reads it out.
+struct EditorMessageBanner: View {
+    let message: String
+
+    var body: some View {
+        Label(message, systemImage: "exclamationmark.triangle")
+            .font(.footnote)
+            .foregroundStyle(.red)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+            .overlay(alignment: .bottom) { Divider() }
+            .task(id: message) { AccessibilityNotification.Announcement(message).post() }
+    }
+}
+
 /// Live-editing status in the toolbar: saved, connecting, offline, read-only.
 struct StatusPill: View {
     let status: EngineStatus

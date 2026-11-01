@@ -4,7 +4,7 @@ import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { prosemirrorJSONToYDoc } from "@tiptap/y-tiptap";
 import * as Y from "yjs";
-import { bindingChanges, checkBlocks } from "../src/guards";
+import { bindingChanges, checkBlocks, unchanged } from "../src/guards";
 import { schemaExtensions } from "../src/schema";
 
 const schema = getSchema(schemaExtensions);
@@ -45,6 +45,21 @@ expect("empty callout in a list", "invalid bulletList (callout)",
   verdict({ type: "bulletList", content: [{ type: "listItem", content: [paragraph(), { type: "callout" }] }] }));
 expect("bold in a code block", "invalid codeBlock", verdict({ type: "codeBlock", content: [text("let a", [{ type: "bold" }])] }));
 expect("the same mark twice", "invalid paragraph (text)", verdict(paragraph(text("Hello", [{ type: "bold" }, { type: "bold" }]))));
+
+// MARK: Structural edits
+
+/** The block as the app sends it back as `expected`: read from the engine's JSON, decoded and encoded again. */
+const readBack = (node: PMNode): JSONContent => JSON.parse(JSON.stringify(node.toJSON()));
+const list = (checked: boolean, ...items: string[]) => PMNode.fromJSON(schema, { type: "taskList", content: items.map((item) => (
+  { type: "taskItem", attrs: { checked }, content: [{ type: "paragraph", attrs: { id: item, textAlign: null }, content: [
+    text(item, [{ type: "link", attrs: { href: "https://example.com", target: "_blank", rel: null, class: null } }]),
+  ] }] })) });
+
+expect("a block nobody touched", true, unchanged(list(false, "one", "two"), readBack(list(false, "one", "two"))));
+expect("an item a collaborator typed in", false, unchanged(list(false, "one", "two!"), readBack(list(false, "one", "two"))));
+expect("an item a collaborator added", false, unchanged(list(false, "one", "two", "three"), readBack(list(false, "one", "two"))));
+expect("an attribute a collaborator set", false, unchanged(list(true, "one", "two"), readBack(list(false, "one", "two"))));
+expect("unreadable JSON", false, unchanged(list(false, "one"), { type: "futureBlock" }));
 
 // MARK: Binding
 

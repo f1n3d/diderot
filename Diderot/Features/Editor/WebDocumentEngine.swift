@@ -23,30 +23,46 @@ protocol DocumentEngine: AnyObject, Observable {
     /// The document straight from the engine (not debounced), e.g. for the reader on close.
     func currentDocument() async -> PMNode?
     /// With `base`, the text block the edit started from: a collaborator's edit of the block since then stays, unless
-    /// it changed the same range (the engine's `rebase`).
-    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?) async -> Bool
-    /// Replaces one block with several (unsync a synced block, merge columns, …).
-    func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> Bool
+    /// it changed the same range (the engine's `rebase`). With `expected`, the block a structural edit was built from:
+    /// refused if the block changed since (`unchanged` in Engine/src/guards.ts).
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?, expected: PMNode?) async -> EngineResult
+    /// Replaces one block with several (unsync a synced block, merge columns, …); `expected` as above.
+    func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode], expected: PMNode?) async -> EngineResult
     /// Without a target: at the end of the document, before the footnotes.
-    func insertBlock(_ node: PMNode, relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> Bool
-    func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> Bool
-    func deleteBlock(_ target: BlockTarget) async -> Bool
-    func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> Bool
+    func insertBlock(_ node: PMNode, relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult
+    func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult
+    func deleteBlock(_ target: BlockTarget) async -> EngineResult
+    func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult
     /// Splits a list, quote or callout after `child`: the children below go into a new one of the same kind right after.
-    func splitContainer(after child: BlockTarget) async -> Bool
-    func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> Bool
+    func splitContainer(after child: BlockTarget) async -> EngineResult
+    func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult
     /// Runs a table command (`TableCommand` in Engine/src/tables.ts) on a cell of the table at `target`, given by its
     /// row and its index in the row. Returns the cell for the cursor afterwards the same way, empty when the table is
     /// gone, nil when the command didn't apply.
     func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]?
-    func undo() async
-    func redo() async
+    /// Refused with nothing to undo or redo.
+    func undo() async -> EngineResult
+    func redo() async -> EngineResult
 }
 
 extension DocumentEngine {
-    func replaceBlock(_ target: BlockTarget, with node: PMNode) async -> Bool {
-        await replaceBlock(target, with: node, base: nil)
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode? = nil) async -> EngineResult {
+        await replaceBlock(target, with: node, base: base, expected: nil)
     }
+
+    func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> EngineResult {
+        await replaceBlock(target, withNodes: nodes, expected: nil)
+    }
+}
+
+/// What an engine operation came to: applied; refused (the block is gone, the change doesn't fit, or it changed since
+/// the app read it); or unavailable, with no engine to take it (its web process ended, it stopped after an error, it is
+/// closed). Unavailable is no verdict on the change: the app keeps input for it and sends it again once the engine is
+/// back. Both used to be `false`, and input for a block no longer edited was dropped as refused.
+enum EngineResult: Equatable {
+    case applied, refused, unavailable
+
+    var isApplied: Bool { self == .applied }
 }
 
 enum EngineStatus: Equatable {
@@ -267,38 +283,40 @@ final class WebDocumentEngine: DocumentEngine {
         participants = []
     }
 
-    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?) async -> Bool {
-        await call("return window.DocmostEngine.replaceBlockWith(target, json, base);",
-                   ["target": target.jsObject, "json": [Self.jsObject(node)], "base": base.map { Self.jsObject($0) } ?? NSNull()])
+    func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode?, expected: PMNode?) async -> EngineResult {
+        await call("return window.DocmostEngine.replaceBlockWith(target, json, base, expected);",
+                   ["target": target.jsObject, "json": [Self.jsObject(node)], "base": base.map { Self.jsObject($0) } ?? NSNull(),
+                    "expected": expected.map { Self.jsObject($0) } ?? NSNull()])
     }
 
-    func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> Bool {
-        await call("return window.DocmostEngine.replaceBlockWith(target, json);", ["target": target.jsObject, "json": nodes.map(Self.jsObject)])
+    func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode], expected: PMNode?) async -> EngineResult {
+        await call("return window.DocmostEngine.replaceBlockWith(target, json, null, expected);",
+                   ["target": target.jsObject, "json": nodes.map(Self.jsObject), "expected": expected.map { Self.jsObject($0) } ?? NSNull()])
     }
 
-    func insertBlock(_ node: PMNode, relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> Bool {
+    func insertBlock(_ node: PMNode, relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult {
         await insertBlocks([node], relativeTo: target, position: position)
     }
 
-    func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> Bool {
+    func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult {
         await call("return window.DocmostEngine.insertBlocks(target, json, position);",
                    ["target": target?.jsObject ?? NSNull(), "json": nodes.map(Self.jsObject), "position": position.rawValue])
     }
 
-    func deleteBlock(_ target: BlockTarget) async -> Bool {
+    func deleteBlock(_ target: BlockTarget) async -> EngineResult {
         await call("return window.DocmostEngine.deleteBlock(target);", ["target": target.jsObject])
     }
 
-    func splitContainer(after child: BlockTarget) async -> Bool {
+    func splitContainer(after child: BlockTarget) async -> EngineResult {
         await call("return window.DocmostEngine.splitContainer(target);", ["target": child.jsObject])
     }
 
-    func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> Bool {
+    func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult {
         await call("return window.DocmostEngine.moveBlock(target, destination, position);",
                    ["target": target.jsObject, "destination": destination.jsObject, "position": position.rawValue])
     }
 
-    func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> Bool {
+    func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult {
         await call("return window.DocmostEngine.setAttributes(target, attrs);",
                    ["target": target.jsObject, "attrs": Self.jsObject(attributes)])
     }
@@ -315,8 +333,8 @@ final class WebDocumentEngine: DocumentEngine {
         }
     }
 
-    func undo() async { _ = await call("return window.DocmostEngine.undo();", [:]) }
-    func redo() async { _ = await call("return window.DocmostEngine.redo();", [:]) }
+    func undo() async -> EngineResult { await call("return window.DocmostEngine.undo();", [:]) }
+    func redo() async -> EngineResult { await call("return window.DocmostEngine.redo();", [:]) }
 
     func currentDocument() async -> PMNode? {
         guard let page else { return nil }
@@ -329,14 +347,17 @@ final class WebDocumentEngine: DocumentEngine {
 
     // MARK: - Internal
 
-    private func call(_ script: String, _ arguments: [String: Any]) async -> Bool {
-        guard let page else { return false }
+    /// The engine answers true (applied), false (refused) or null (it takes no edits); no page, or a call that throws
+    /// (its web process ended), is unavailable too.
+    private func call(_ script: String, _ arguments: [String: Any]) async -> EngineResult {
+        guard let page else { return .unavailable }
         do {
             let result = try await page.callJavaScript(script, arguments: arguments)
-            return (result as? Bool) == true
+            guard let applied = result as? Bool else { return .unavailable }
+            return applied ? .applied : .refused
         } catch {
             AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
-            return false
+            return .unavailable
         }
     }
 

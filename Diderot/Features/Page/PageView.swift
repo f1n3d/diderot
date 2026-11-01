@@ -496,11 +496,6 @@ struct PageView: View {
                         }
                         DocumentBody(model: model)
                         getStarted(model)
-                        if let error = model.errorMessage {
-                            Label(error, systemImage: "exclamationmark.triangle")
-                                .font(.footnote)
-                                .foregroundStyle(.red)
-                        }
                     }
                 }
                 .padding()
@@ -576,6 +571,11 @@ struct PageView: View {
                 .opacity(0)
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
+        }
+        // Outside the geometry above: the banner is part of the scroll view's safe area there, so centering above the
+        // keyboard keeps the cursor below it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let error = model?.errorMessage { EditorMessageBanner(message: error) }
         }
     }
 

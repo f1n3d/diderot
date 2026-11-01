@@ -364,8 +364,9 @@ final class DocumentModel {
 
     private var overrides: [String: PMNode] = [:]
     @ObservationIgnored private var saveRefused = false
-    /// The active block's input that the engine's ended web process took with it; written once the engine syncs again.
-    @ObservationIgnored private var unsavedAtEnd: (ref: NodeRef, node: PMNode)?
+    /// Blocks whose input (still in `overrides`) the engine couldn't take: its web process ended or it stopped after an
+    /// error. Written once it syncs again, with the base the input started from (`commit`).
+    @ObservationIgnored private var unsaved: [String: (ref: NodeRef, base: PMNode?)] = [:]
     /// The engine was opened again after an error (`EngineFailure.engineError`); another one leaves the page read-only.
     @ObservationIgnored private var restartedAfterError = false
     private var commitTask: Task<Void, Never>?
@@ -417,9 +418,7 @@ final class DocumentModel {
             // As after a web process that ended, once per page: a reopened engine binds the shared document afresh, and
             // input it hadn't saved goes in once it is back. Again, or before the page was live: read-only until `resume`.
             case .engineError:
-                if let active = self.active, self.overrides[active.ref.identity] != nil, let node = self.currentActiveNode() {
-                    self.unsavedAtEnd = (active.ref, node)
-                }
+                self.keepActiveInput()
                 if self.isLive, !self.restartedAfterError {
                     self.restartedAfterError = true
                     self.suspend()
@@ -435,13 +434,17 @@ final class DocumentModel {
         // active (or on refresh). Input the engine hadn't saved yet goes in once it is back.
         engine?.onTerminated = { [weak self] in
             guard let self else { return }
-            if let active, overrides[active.ref.identity] != nil, let node = currentActiveNode() {
-                unsavedAtEnd = (active.ref, node)
-            }
+            keepActiveInput()
             guard isLive else { return }
             suspend()
             resume()
         }
+    }
+
+    /// The engine ended or stopped: the active block's input it hadn't saved goes in once it is back (`unsaved`).
+    private func keepActiveInput() {
+        guard let active, overrides[active.ref.identity] != nil else { return }
+        unsaved[active.ref.identity] = (active.ref, activeBase)
     }
 
     var isEditable: Bool { engine != nil && isLive && readOnlyReason == nil }
@@ -564,9 +567,16 @@ final class DocumentModel {
         isLive = true
         // Every local change brings a document event, also those that bypass `commit` (inserts, moves, undo).
         if engine.status != .synced { scheduleUnsentSave() }
-        if let unsaved = unsavedAtEnd {
-            unsavedAtEnd = nil
-            Task { await commit(unsaved.ref, node: unsaved.node, base: nil) }
+        if !unsaved.isEmpty {
+            let waiting = Array(unsaved.values)
+            unsaved = [:]
+            Task {
+                // The latest input of each: typed further meanwhile, it is in `overrides`; dropped since (its block went),
+                // nothing goes.
+                for (ref, base) in waiting {
+                    if let node = overrides[ref.identity] { await commit(ref, node: node, base: base) }
+                }
+            }
         }
         if let pendingFocus, let node = node(at: pendingFocus.path) {
             self.pendingFocus = nil
@@ -628,17 +638,18 @@ final class DocumentModel {
         pendingFocus = nil
     }
 
-    /// Shows and returns whether a block operation applied. Most engine failures carry no error (e.g. a block a
-    /// collaborator just deleted), hence one fixed message; the next applied change clears it, but a refused save's
-    /// only the next save (Return's new line applying after it must not hide it).
+    /// Shows and returns whether a block operation applied. A refusal carries no reason (e.g. a block a collaborator
+    /// just deleted or changed), hence one fixed message; the next applied change clears it, but a refused save's only
+    /// the next save (Return's new line applying after it must not hide it). No engine to take it says nothing: the
+    /// restart shows in the status, and input waits for it (`commit`).
     @discardableResult
-    private func report(_ applied: Bool) -> Bool {
-        if !applied {
-            errorMessage = String(localized: "The change could not be applied.")
-        } else if !saveRefused {
-            errorMessage = nil
+    private func report(_ result: EngineResult) -> Bool {
+        switch result {
+        case .applied: if !saveRefused { errorMessage = nil }
+        case .refused: errorMessage = String(localized: "The change could not be applied.")
+        case .unavailable: break
         }
-        return applied
+        return result.isApplied
     }
 
     /// The active block follows by its UniqueID when its path shifts; otherwise the editor would edit another block.
@@ -663,7 +674,7 @@ final class DocumentModel {
     }
 
     /// Path of the first node in document order that `matches`.
-    private func path(where matches: (PMNode) -> Bool) -> [Int]? {
+    private func path(where matches: (PMNode) -> Bool, in root: PMNode? = nil) -> [Int]? {
         func search(_ node: PMNode, _ path: [Int]) -> [Int]? {
             for (index, child) in node.children.enumerated() {
                 if matches(child) { return path + [index] }
@@ -671,7 +682,7 @@ final class DocumentModel {
             }
             return nil
         }
-        return search(document, [])
+        return search(root ?? document, [])
     }
 
     private func stop() async {
@@ -1611,7 +1622,8 @@ final class DocumentModel {
 
     /// Replaces or removes the `index`-th atom of type `type` in a (non-active) block.
     func replaceAtom(ofType type: String, in ref: NodeRef, index: Int, with replacement: PMNode?) async {
-        guard let engine, let (path, node) = locate(ref) else { return }
+        guard let engine, let block = await currentBlock(ref) else { return }
+        let node = block.latest
         var children = node.children
         var seen = -1
         guard let position = children.firstIndex(where: { child in
@@ -1621,7 +1633,7 @@ final class DocumentModel {
         }) else { return }
         if let replacement { children[position] = replacement } else { children.remove(at: position) }
         let updated = PMNode(type: node.type, attrs: node.attrs, content: children.isEmpty ? nil : children)
-        report(await engine.replaceBlock(NodeRef(path: path, node: node).target, with: updated))
+        report(await engine.replaceBlock(block.ref.target, with: updated, base: nil, expected: block.source))
     }
 
     /// Number for a new footnote reference: references before it plus one (the engine renumbers afterwards).
@@ -1656,7 +1668,7 @@ final class DocumentModel {
     /// Inserts blocks at `placement`, then moves the cursor per `focus`; without `focus`, editing ends.
     func insertBlocks(_ nodes: [PMNode], placement: BlockPlacement, focus: InsertFocus?) async {
         guard let engine, !nodes.isEmpty else { return }
-        let anchor: NodeRef?
+        var anchor: NodeRef?
         switch placement {
         case .replaceOrAfter(let ref):
             anchor = locate(ref).map { NodeRef(path: $0.path, node: $0.node) }
@@ -1676,8 +1688,15 @@ final class DocumentModel {
         }
         let before = placement == .end
         var replace = false
-        if !before, let anchor, let latest = latestNode(at: anchor.path), latest.type == "paragraph", latest.children.isEmpty {
-            replace = true
+        var replacedBlock: PMNode?
+        if !before, let candidate = anchor, let latest = latestNode(at: candidate.path), latest.type == "paragraph", latest.children.isEmpty {
+            // Replaced only if empty in the engine too: a collaborator may just have typed there.
+            guard let block = await currentBlock(candidate) else { return }
+            if block.latest.type == "paragraph", block.latest.children.isEmpty {
+                replace = true
+                replacedBlock = block.source
+                anchor = block.ref
+            }
         }
         let newPath: [Int]
         let next: PMNode?
@@ -1710,7 +1729,7 @@ final class DocumentModel {
             break
         }
         if let active {
-            if replace, active.ref.path == anchor?.path {
+            if replace, active.ref.identity == anchor?.identity {
                 // The block goes away: stop writing its input.
                 dropActive()
                 slashQuery = nil
@@ -1720,9 +1739,9 @@ final class DocumentModel {
             }
             // Otherwise it stays active until the new block takes focus (the keyboard stays up).
         }
-        let applied: Bool
+        let applied: EngineResult
         if replace, let anchor {
-            applied = await engine.replaceBlock(anchor.target, withNodes: blocks)
+            applied = await engine.replaceBlock(anchor.target, withNodes: blocks, expected: replacedBlock)
         } else if let anchor {
             applied = await engine.insertBlocks(blocks, relativeTo: anchor.target, position: before ? .before : .after)
         } else {
@@ -1852,17 +1871,20 @@ final class DocumentModel {
 
     /// Turns the active top-level block into a synced block (like "Turn into" in the web client).
     func wrapActiveInSyncedBlock() async {
-        guard let engine, let active, active.ref.isTopLevel, let node = latestNode(at: active.ref.path) else { return }
-        dropActive()
-        if report(await engine.replaceBlock(active.ref.target, with: PMNode(type: "transclusionSource", content: [node]))) {
-            await focusAfterOperation(active.ref.path + [0], .end)
+        guard let engine, let active, active.ref.isTopLevel, let block = await currentBlock(active.ref) else { return }
+        if self.active?.ref.identity == active.ref.identity { dropActive() }
+        if report(await engine.replaceBlock(block.ref.target, with: PMNode(type: "transclusionSource", content: [block.latest]), base: nil,
+                                            expected: block.source)) {
+            await focusAfterOperation(block.ref.path + [0], .end)
         }
     }
 
     /// Unsyncs a synced block's source: its content, including unsaved input inside, stays as normal blocks.
     func unsyncSource(_ ref: NodeRef) async {
-        guard let (path, _) = locate(ref), let latest = latestNode(at: path) else { return }
-        await replace(ref, withNodes: latest.children.isEmpty ? [PMNode(type: "paragraph")] : latest.children)
+        guard let engine, let block = await currentBlock(ref) else { return }
+        if active != nil { deactivate() }
+        let content = block.latest.children.isEmpty ? [PMNode(type: "paragraph")] : block.latest.children
+        report(await engine.replaceBlock(block.ref.target, withNodes: content, expected: block.source))
     }
 
     /// Unsyncs an embedded synced block once the server returned its content. It has no id, so it is looked up
@@ -1879,23 +1901,26 @@ final class DocumentModel {
         guard let first = topLevel.first else {
             return report(await engine.insertBlocks(nodes, relativeTo: nil, position: .after))
         }
-        return report(await engine.replaceBlock(first.ref.target, withNodes: nodes))
+        guard let block = await currentBlock(first.ref) else { return false }
+        return report(await engine.replaceBlock(block.ref.target, withNodes: nodes, expected: block.source))
     }
 
     /// Replaces a block with others (unsyncing: the content instead of the wrapper or the reference).
     func replace(_ ref: NodeRef, withNodes nodes: [PMNode]) async {
-        guard let engine, let (path, node) = locate(ref) else { return }
+        guard let engine, let block = await currentBlock(ref) else { return }
         if active != nil { deactivate() }
-        report(await engine.replaceBlock(NodeRef(path: path, node: node).target, withNodes: nodes))
+        report(await engine.replaceBlock(block.ref.target, withNodes: nodes, expected: block.source))
     }
 
     // MARK: Columns
 
     /// Changes the column count like the web client: new columns are empty, removed ones merge into the last kept one.
     func setColumnCount(_ count: Int, at path: [Int]) async {
-        guard let engine, (2...5).contains(count), let columns = latestNode(at: path), columns.type == "columns",
-              count != columns.children.count
+        guard let engine, (2...5).contains(count), let shown = node(at: path), shown.type == "columns", count != shown.children.count,
+              let block = await currentBlock(NodeRef(path: path, node: shown))
         else { return }
+        let columns = block.latest
+        guard count != columns.children.count else { return }
         let current = columns.children
         var children: [PMNode]
         if count > current.count {
@@ -1910,11 +1935,13 @@ final class DocumentModel {
         }
         var attrs = columns.attrs ?? [:]
         attrs["layout"] = .string(Self.defaultColumnsLayout(count))
+        let path = block.ref.path
         if let active, active.ref.path.starts(with: path), active.ref.path.count > path.count, active.ref.path[path.count] >= count - 1 {
             // The active block is in a column that gets merged: end editing.
             deactivate()
         }
-        report(await engine.replaceBlock(.path(path), with: PMNode(type: "columns", attrs: attrs, content: children)))
+        report(await engine.replaceBlock(block.ref.target, with: PMNode(type: "columns", attrs: attrs, content: children), base: nil,
+                                         expected: block.source))
     }
 
     // MARK: Tabs
@@ -2114,11 +2141,20 @@ final class DocumentModel {
     private func commit(_ ref: NodeRef, node: PMNode, base: PMNode?) async {
         guard let engine else { return }
         let pending = overrides[ref.identity]
-        let saved = await engine.replaceBlock(ref.target, with: node, base: base)
-        saveRefused = !saved
+        let result = await engine.replaceBlock(ref.target, with: node, base: base)
         // Not applied: the block keeps what it had.
-        if !saved, active?.ref.identity == ref.identity, activeBase == node { activeBase = base }
-        if report(saved) {
+        if !result.isApplied, active?.ref.identity == ref.identity, activeBase == node { activeBase = base }
+        if result == .unavailable {
+            // No engine to take it (its web process ended, it stopped after an error): the input stays, also for a block
+            // no longer edited, and goes in once the engine is back. It used to be dropped as refused.
+            if overrides[ref.identity] == pending { overrides[ref.identity] = node }
+            unsaved[ref.identity] = (ref, base)
+            // A block no longer edited shows it meanwhile, not what it had.
+            document = withOverrides(document)
+            return
+        }
+        saveRefused = result == .refused
+        if report(result) {
             // Input typed during the save stored a newer override; it stays pending so its commit or `flush` writes it.
             if overrides[ref.identity] == pending { overrides[ref.identity] = nil }
         } else if active?.ref != ref {
@@ -2156,7 +2192,7 @@ final class DocumentModel {
             await commit(active.ref, node: title, base: takeBase(of: active.ref, sending: title))
             let newNode = PMNode(type: "paragraph")
             let newPath: [Int]
-            let applied: Bool
+            let applied: EngineResult
             if details.bool("open") == true, let content = node(at: detailsPath + [1]) {
                 newPath = detailsPath + [1, 0]
                 applied = await (content.children.isEmpty
@@ -2381,21 +2417,19 @@ final class DocumentModel {
     // MARK: - Block operations
 
     func convert(_ ref: NodeRef, to template: BlockTemplate) async {
-        // Uses the latest text: the pending commit is discarded below.
-        guard let engine, let node = latestNode(at: ref.path) else { return }
-        let attrs = node.attrs?.filter { ["id", "textAlign", "indent"].contains($0.key) }
-        let replacement = template.node(inlines: Self.inlineContent(of: node), attrs: attrs)
-        if active?.ref == ref { dropActive() }
-        if report(await engine.replaceBlock(ref.target, with: replacement)), let first = template.firstTextPath {
-            await focusAfterOperation(ref.path + first, .end)
+        guard let engine, let block = await currentBlock(ref) else { return }
+        let attrs = block.latest.attrs?.filter { ["id", "textAlign", "indent"].contains($0.key) }
+        let replacement = template.node(inlines: Self.inlineContent(of: block.latest), attrs: attrs)
+        if active?.ref.identity == ref.identity { dropActive() }
+        if report(await engine.replaceBlock(block.ref.target, with: replacement, base: nil, expected: block.source)),
+           let first = template.firstTextPath {
+            await focusAfterOperation(block.ref.path + first, .end)
         }
     }
 
     /// Converts the list containing the active item (bullet ↔ numbered ↔ task).
     func convertList(itemPath: [Int], to template: BlockTemplate) async {
-        guard let engine else { return }
         let listPath = Array(itemPath.dropLast())
-        guard let list = latestNode(at: listPath) else { return }
         let listType: String
         let itemType: String
         switch template {
@@ -2404,15 +2438,20 @@ final class DocumentModel {
         case .taskList: (listType, itemType) = ("taskList", "taskItem")
         default: return
         }
-        guard list.type != listType else { return }
+        guard let engine, let shown = node(at: listPath), shown.type != listType,
+              let block = await currentBlock(NodeRef(path: listPath, node: shown))
+        else { return }
+        let list = block.latest
         let items = list.children.map { item in
             let attrs: [String: JSONValue]? = itemType == "taskItem" ? ["checked": .bool(item.bool("checked") ?? false)] : nil
             return PMNode(type: itemType, attrs: attrs, content: item.content)
         }
         let attrs: [String: JSONValue]? = listType == "orderedList" ? ["start": 1] : nil
-        let focusPath = active?.ref.path ?? itemPath + [0]
+        // Where the list is now: a collaborator may have added a block above it.
+        let focusPath = block.ref.path + (active?.ref.path ?? itemPath + [0]).dropFirst(listPath.count)
         dropActive()
-        if report(await engine.replaceBlock(.path(listPath), with: PMNode(type: listType, attrs: attrs, content: items))) {
+        if report(await engine.replaceBlock(block.ref.target, with: PMNode(type: listType, attrs: attrs, content: items), base: nil,
+                                            expected: block.source)) {
             await focusAfterOperation(focusPath, .end)
         }
     }
@@ -2624,7 +2663,7 @@ final class DocumentModel {
         guard let position = activeTablePosition else { return }
         let focus = await engine.tableCommand(.path(position.tablePath, type: "table"), cell: [position.row, position.column],
                                               command: edit.engineCommand)
-        guard report(focus != nil), let focus, let latest = await engine.currentDocument() else { return }
+        guard report(focus != nil ? .applied : .refused), let focus, let latest = await engine.currentDocument() else { return }
         document = withOverrides(latest)
         // The table is gone: deleted, or its only row or column.
         guard !focus.isEmpty else {
@@ -2656,7 +2695,14 @@ final class DocumentModel {
     private func stepHistory(redo: Bool) async {
         guard let engine else { return }
         await flush()
-        if redo { await engine.redo() } else { await engine.undo() }
+        switch redo ? await engine.redo() : await engine.undo() {
+        case .applied: break
+        // TipTap refuses an empty history; the button used to do nothing without a word.
+        case .refused:
+            notice = redo ? String(localized: "Nothing to redo.") : String(localized: "Nothing to undo.")
+            return
+        case .unavailable: return
+        }
         guard let latest = await engine.currentDocument() else { return }
         document = withOverrides(latest)
         adoptActiveBlock()
@@ -2715,6 +2761,27 @@ final class DocumentModel {
     private func latestNode(at path: [Int]) -> PMNode? {
         if let active, active.ref.path == path, let node = currentActiveNode() { return node }
         return node(at: path, in: withOverrides(document))
+    }
+
+    /// The block a structural edit replaces (convert, columns, unsync, an atom, a template), as the engine has it now:
+    /// pending input is written first, as typing writes it, and the block is read from the engine's document, not from
+    /// this copy, which lags behind while someone types. Built from this copy, a replacement used to overwrite what a
+    /// collaborator typed since, without notice. `source` goes with the replacement as its expected state, so the engine
+    /// refuses it if the block changes before it arrives; `latest` has input still pending over it. Nil, and said, when
+    /// the block is gone or there is no engine.
+    private func currentBlock(_ ref: NodeRef) async -> (ref: NodeRef, source: PMNode, latest: PMNode)? {
+        guard let engine else { return nil }
+        await flush()
+        guard let current = await engine.currentDocument() else {
+            report(.unavailable)
+            return nil
+        }
+        let found = ref.id.map { id in path(where: { $0.string("id") == id }, in: current) } ?? ref.path
+        guard let found, let source = node(at: found, in: current), ref.type == nil || source.type == ref.type else {
+            report(.refused)
+            return nil
+        }
+        return (NodeRef(path: found, node: source), source, node(at: found, in: withOverrides(current)) ?? source)
     }
 
     // MARK: - Helpers
