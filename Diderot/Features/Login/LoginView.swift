@@ -12,6 +12,7 @@ struct LoginView: View {
     @State private var browserLoginURL: URL?
     @State private var mfaChallenge: MFAChallenge?
     @State private var ldapProvider: AuthProvider?
+    @State private var hasSavedContent = false
     @FocusState private var focusedField: Field?
 
     private enum Field { case email, password }
@@ -72,6 +73,20 @@ struct LoginView: View {
                          ? "This workspace requires single sign-on. The browser sign-in handles it, including two-factor authentication."
                          : "Use the browser sign-in if your account uses single sign-on or two-factor authentication.")
                 }
+
+                if hasSavedContent {
+                    Section {
+                        Button("Clear Saved Content", role: .destructive) {
+                            Task {
+                                await session.clearSavedContent(of: server)
+                                hasSavedContent = await session.hasSavedContent(of: server)
+                            }
+                        }
+                        .disabled(isAuthenticating)
+                    } footer: {
+                        Text("Pages and images from your last sign-in stay here for reading offline once you sign in again.")
+                    }
+                }
             }
             .navigationTitle("Sign In")
             .toolbar {
@@ -89,6 +104,7 @@ struct LoginView: View {
             }
             // A restored sign-in has no workspace info (SSO, providers, logo) yet; retries after a failed sign-in.
             .task(id: isAuthenticating) { await session.loadWorkspaceInfo() }
+            .task(id: server.url) { hasSavedContent = await session.hasSavedContent(of: server) }
             .sheet(item: $browserLoginURL) { url in
                 BrowserLoginView(server: server, startURL: url)
             }

@@ -209,12 +209,35 @@ final class AppSession {
     func restoreAtLaunch() async {
         if launchRestore == nil {
             launchRestore = Task {
+                endSignInsOfAnEarlierInstall()
                 await restore()
                 // Once per launch: a window opened later (iPad) would remove the cookie of an editor open in another.
                 await WebEditorStores.removeLeftoverAuthCookies()
             }
         }
         await launchRestore?.value
+    }
+
+    /// Set at an install's first start.
+    static let installedKey = "installed"
+
+    /// The Keychain keeps sign-ins when the app is deleted, and a reinstall was signed in without a word (code review
+    /// R30). At an install's first start, sign-ins saved before its data were created end, as on signing out: an
+    /// earlier install's. An update keeps its own, saved since.
+    func endSignInsOfAnEarlierInstall(defaults: UserDefaults = .standard, installed: Date? = AppSession.installDate()) {
+        guard !defaults.bool(forKey: Self.installedKey) else { return }
+        defaults.set(true, forKey: Self.installedKey)
+        guard let saved = keychain("check the sign-ins", { try sessionStore.accountsSaved() }), let installed, saved < installed,
+              let accounts = keychain("load", { try sessionStore.loadAccounts() })
+        else { return }
+        AppLog.session.notice("Ending the sign-ins of an earlier install")
+        for account in accounts.sessions { keepPendingLogout(account) }
+        keychain("remove") { try sessionStore.removeAll() }
+    }
+
+    /// When the app's data were created: at its install, kept by updates.
+    nonisolated static func installDate() -> Date? {
+        try? FileManager.default.attributesOfItem(atPath: NSHomeDirectory())[.creationDate] as? Date
     }
 
     /// Restores the saved session, or signs in automatically in debug builds.
@@ -227,6 +250,8 @@ final class AppSession {
             let server = ServerInfo(url: stored.serverURL, workspace: nil)
             if stored.claims?.isExpired() == true {
                 AppLog.session.notice("Stored token expired, signing out")
+                // Expired by the device's clock, which can run ahead: the server ends it unless it did (`sendPendingLogouts`).
+                keepPendingLogout(stored)
                 keychain("clear") { try sessionStore.clear() }
                 reloadAccounts()
                 state = .signedOut(server)
@@ -386,7 +411,15 @@ final class AppSession {
         guard JWTClaims(token: token)?.isAccessToken == true else {
             throw APIError.unauthorized(message: String(localized: "The browser sign-in did not produce a valid session."))
         }
-        try await signIn(at: server) { _ in .authenticated(token: token) }
+        do {
+            try await signIn(at: server) { _ in .authenticated(token: token) }
+        } catch {
+            // The browser's session is the app's to end: unused, it stayed valid on the server until it expired
+            // (code review R12).
+            keepPendingLogout(StoredSession(serverURL: server.url, token: token))
+            Task { await sendPendingLogouts() }
+            throw error
+        }
     }
 
     /// Signs in to the sign-in screen's server. Once the app shows another (a link switched servers), it doesn't start,
@@ -445,6 +478,8 @@ final class AppSession {
     // MARK: - Sign-outs the server didn't get
 
     @ObservationIgnored private var isSendingLogouts = false
+    /// Expired longer than a clock runs ahead, and its server out of reach meanwhile.
+    private static let expiredLongAgo: TimeInterval = 7 * 24 * 3600
 
     /// A sign-out for its server: `sendPendingLogouts` ends the session there, now or once the server answers; out of
     /// reach, it would stay valid there until it expires.
@@ -458,14 +493,16 @@ final class AppSession {
     }
 
     /// Ends the sessions signed out while their server was out of reach (`signOut`): at launch, back in the app and when
-    /// the network returns. A token that expired meanwhile, or that the server no longer knows (401), is dropped.
+    /// the network returns. A token the server no longer knows (401), or that expired a week ago, is dropped.
     func sendPendingLogouts() async {
         guard !isSendingLogouts, let pending = try? sessionStore.pendingLogouts(), !pending.isEmpty else { return }
         isSendingLogouts = true
         defer { isSendingLogouts = false }
         var done: [StoredSession] = []
         for entry in pending {
-            if let expiresAt = entry.claims?.expiresAt, expiresAt < .now {
+            // The server judges a token that just expired: by the device's clock, which can run ahead, sign-outs were
+            // dropped whose sessions the server still took (code review R30).
+            if let expiresAt = entry.claims?.expiresAt, expiresAt < .now - Self.expiredLongAgo {
                 done.append(entry)
                 continue
             }
@@ -692,6 +729,20 @@ final class AppSession {
         if let version { await ready.cache.write(version, key: CacheKey.serverVersion) }
         // Not its staged uploads: a running upload reads them.
         await removeLocalData(for: ready.server.url, uploads: false)
+    }
+
+    /// Whether the signed-out server keeps its offline copies from before: for the same person when they sign in again.
+    func hasSavedContent(of server: ServerInfo) async -> Bool {
+        await makeCache(for: server.url).totalSize() > 0
+    }
+
+    /// Removes the offline copies, files and web editor data the signed-out server's sign-in left, on its sign-in
+    /// screen: once signed out, the server was in no list where they could be removed, as the privacy policy says they
+    /// can (code review R16). Not its changes the server doesn't have yet: they go out at the next sign-in there.
+    func clearSavedContent(of server: ServerInfo) async {
+        guard case .signedOut(let current) = state, Self.isSameServer(current, as: server) else { return }
+        await makeCache(for: server.url).removeAll()
+        await removeLocalData(for: server.url)
     }
 
     // MARK: - Internal

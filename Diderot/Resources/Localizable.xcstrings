@@ -3907,6 +3907,16 @@
         }
       }
     },
+    "Pages and images from your last sign-in stay here for reading offline once you sign in again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seiten und Bilder deiner letzten Anmeldung bleiben hier, damit du sie nach der nächsten Anmeldung offline lesen kannst."
+          }
+        }
+      }
+    },
     "Pages can show images, videos and PDFs from other websites. Off, they load only when you tap them: loading tells that website who reads the page and when.": {
       "localizations": {
         "de": {

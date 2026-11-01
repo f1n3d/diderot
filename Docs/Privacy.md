@@ -14,8 +14,8 @@ Diderot is an app for [Docmost](https://github.com/docmost/docmost) servers that
 
 ## What stays on your device
 
-- **Your sign-in** is in the iOS Keychain, on this device only.
-- **Copies of pages and images** for reading offline are in the app's cache. They can be read only while the device is unlocked and aren't part of backups. They stay when you sign out, so the same person finds them again, and are removed when someone else signs in to the same server, when you remove the server from the app, or with "Clear Saved Content" in the settings.
+- **Your sign-in** is in the iOS Keychain, on this device only. iOS keeps it when you delete the app; the app signs it out when you install it again.
+- **Copies of pages and images** for reading offline are in the app's cache. They can be read only while the device is unlocked and aren't part of backups. They stay when you sign out, so the same person finds them again, and are removed when someone else signs in to the same server, when you remove the server from the app, or with "Clear Saved Content" in the settings or, once you signed out, on the sign-in screen.
 - **Changes the server doesn't have yet** (for example while offline) are kept until the server has them. They aren't part of backups, and they are removed with the server.
 - **Downloaded attachments and exports** are kept only temporarily and removed when you sign out.
 - **The web editor's data** (its copies of pages) is removed when you sign out.
@@ -49,8 +49,8 @@ Diderot ist eine App für [Docmost](https://github.com/docmost/docmost)-Server, 
 
 ## Was auf deinem Gerät bleibt
 
-- **Deine Anmeldung** liegt im iOS-Schlüsselbund, nur auf diesem Gerät.
-- **Kopien von Seiten und Bildern** zum Offline-Lesen liegen im Cache der App. Sie sind nur bei entsperrtem Gerät lesbar und nicht Teil von Backups. Beim Abmelden bleiben sie, damit dieselbe Person sie wiederfindet; sie werden gelöscht, wenn sich jemand anderes am selben Server anmeldet, wenn du den Server aus der App entfernst oder mit „Gespeicherte Inhalte löschen" in den Einstellungen.
+- **Deine Anmeldung** liegt im iOS-Schlüsselbund, nur auf diesem Gerät. iOS behält sie, wenn du die App löschst; installierst du sie wieder, meldet die App sie ab.
+- **Kopien von Seiten und Bildern** zum Offline-Lesen liegen im Cache der App. Sie sind nur bei entsperrtem Gerät lesbar und nicht Teil von Backups. Beim Abmelden bleiben sie, damit dieselbe Person sie wiederfindet; sie werden gelöscht, wenn sich jemand anderes am selben Server anmeldet, wenn du den Server aus der App entfernst oder mit „Gespeicherte Inhalte löschen" in den Einstellungen oder, nach dem Abmelden, auf dem Anmeldebildschirm.
 - **Änderungen, die der Server noch nicht hat** (etwa offline), bleiben, bis der Server sie hat. Sie sind nicht Teil von Backups und werden mit dem Server gelöscht.
 - **Heruntergeladene Anhänge und Exporte** liegen nur vorübergehend auf dem Gerät und werden beim Abmelden gelöscht.
 - **Die Daten des Web-Editors** (seine Kopien von Seiten) werden beim Abmelden gelöscht.

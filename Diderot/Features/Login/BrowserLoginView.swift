@@ -53,7 +53,9 @@ struct BrowserLoginView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
+                        // Not once the token is taken: the sign-in finishes, or fails and ends its session on the server.
                         Button("Cancel") { dismiss() }
+                            .disabled(isFinishing)
                     }
                     ToolbarItem(placement: .primaryAction) {
                         Button("Reload", systemImage: "arrow.clockwise") { page.reload() }
@@ -85,18 +87,28 @@ struct BrowserLoginView: View {
         }
     }
 
+    /// The access token the server set after a sign-in in `cookies`: as Docmost sets it, HttpOnly and for its host only
+    /// (no `Domain`). By name and domain alone, a sibling subdomain's cookie for the parent domain also counted, and
+    /// signed the app in to whatever account that one was for (code review R12). `Secure` isn't asked for: Docmost sets
+    /// it only when its `APP_URL` says https, and a public server answers only over https here (App Transport Security).
+    static func authToken(in cookies: [HTTPCookie], for server: URL) -> HTTPCookie? {
+        guard let host = server.host()?.lowercased() else { return nil }
+        return cookies.first { cookie in
+            cookie.name == "authToken" && cookie.domain.lowercased() == host && cookie.isHTTPOnly
+                && JWTClaims(token: cookie.value)?.isAccessToken == true
+        }
+    }
+
     /// Reads `authToken` from the WebView's cookie store (HttpOnly cookies are readable natively).
     private func checkForToken() async -> Bool {
-        guard !captured, let host = server.url.host()?.lowercased() else { return false }
+        guard !captured else { return false }
         let cookies = await dataStore.httpCookieStore.allCookies()
         #if DEBUG
         if DebugLaunch.browserLogin {
             AppLog.session.notice("Browser cookies: \(cookies.map { "\($0.name)@\($0.domain)" }.joined(separator: ", "), privacy: .public)")
         }
         #endif
-        guard let cookie = cookies.first(where: { $0.name == "authToken" && $0.domain.lowercased().trimmingPrefix(".") == host }),
-              JWTClaims(token: cookie.value)?.isAccessToken == true
-        else { return false }
+        guard let cookie = Self.authToken(in: cookies, for: server.url) else { return false }
         captured = true
         isFinishing = true
         await dataStore.httpCookieStore.deleteCookie(cookie)
