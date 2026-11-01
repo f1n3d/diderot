@@ -43,6 +43,10 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Refused with nothing to undo or redo.
     func undo() async -> EngineResult
     func redo() async -> EngineResult
+    /// Applies the steps together, all or none (`batch` in Engine/src/engine.ts). A compound edit (leaving a list,
+    /// joining a block with the one before) used to be separate calls, and a refused last one left the text twice or
+    /// the list split, without a word.
+    func batch(_ steps: [EngineStep]) async -> EngineResult
 }
 
 extension DocumentEngine {
@@ -125,6 +129,16 @@ enum BlockTarget: Hashable, Sendable {
 
 enum BlockInsertPosition: String {
     case before, after
+}
+
+/// A step of `batch` (`Step` in Engine/src/steps.ts). Each finds its block where the steps before it left it, so later
+/// steps give paths in that document. `base` and `expected` as for `replaceBlock`.
+enum EngineStep: Equatable {
+    case replace(BlockTarget, with: PMNode, base: PMNode?)
+    case insert([PMNode], relativeTo: BlockTarget?, position: BlockInsertPosition)
+    case delete(BlockTarget, expected: PMNode?)
+    /// Splits a list, quote or callout after `child`, as `splitContainer(after:)`.
+    case split(after: BlockTarget)
 }
 
 /// Bundled TipTap/Yjs editor (`Engine/`) in a hidden `WebPage`, connected to the collab server; mirrors the document.
@@ -336,6 +350,10 @@ final class WebDocumentEngine: DocumentEngine {
     func undo() async -> EngineResult { await call("return window.DocmostEngine.undo();", [:]) }
     func redo() async -> EngineResult { await call("return window.DocmostEngine.redo();", [:]) }
 
+    func batch(_ steps: [EngineStep]) async -> EngineResult {
+        await call("return window.DocmostEngine.batch(steps);", ["steps": steps.map(Self.stepObject)])
+    }
+
     func currentDocument() async -> PMNode? {
         guard let page else { return nil }
         guard let result = try? await page.callJavaScript("return JSON.stringify(window.DocmostEngine.flush());") as? String,
@@ -443,6 +461,19 @@ final class WebDocumentEngine: DocumentEngine {
 
     private static func jsObject(_ value: some Encodable) -> Any {
         (try? JSONEncoder().encode(value)).flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? [:]
+    }
+
+    private static func stepObject(_ step: EngineStep) -> [String: Any] {
+        switch step {
+        case .replace(let target, let node, let base):
+            ["op": "replace", "target": target.jsObject, "json": [jsObject(node)], "base": base.map { jsObject($0) } ?? NSNull()]
+        case .insert(let nodes, let target, let position):
+            ["op": "insert", "target": target?.jsObject ?? NSNull(), "json": nodes.map(jsObject), "position": position.rawValue]
+        case .delete(let target, let expected):
+            ["op": "delete", "target": target.jsObject, "expected": expected.map { jsObject($0) } ?? NSNull()]
+        case .split(let child):
+            ["op": "split", "target": child.jsObject]
+        }
     }
 }
 

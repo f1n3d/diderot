@@ -8,7 +8,7 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json --pretty false && tsc -p tsconfig.tools.json --pretty false",
-    "check": "node tools/run.mjs tools/check.ts && node tools/run.mjs tools/rebase-check.ts && node tools/run.mjs tools/table-check.ts && node tools/run.mjs tools/guards-check.ts",
+    "check": "node tools/run.mjs tools/check.ts && node tools/run.mjs tools/rebase-check.ts && node tools/run.mjs tools/table-check.ts && node tools/run.mjs tools/guards-check.ts && node tools/run.mjs tools/steps-check.ts && node tools/run.mjs tools/schedule-check.ts",
     "observe": "node tools/run.mjs --docmost tools/observe-docmost.ts",
     "compare": "node tools/run.mjs --docmost tools/compare-docmost.ts"
   },

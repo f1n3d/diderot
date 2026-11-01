@@ -42,7 +42,7 @@ The code is clean on the surface:
 
 The debt sits in two places.
 
-**1. The editor's boundary to the engine.** Swift rebuilds ProseMirror operations as sequences of separate, path-addressed engine calls. These calls work on a snapshot that can be stale and don't run as one transaction. Most integrity risks follow from that: R2, R9 and part of the backlog's position races. Package C stopped two of them for now: a structural edit is built from the engine's document and refused if its block changed (R1), and an engine that is gone no longer counts as a refusal (R5).
+**1. The editor's boundary to the engine.** Swift rebuilds ProseMirror operations as path-addressed engine calls on a snapshot of the document. Most integrity risks followed from that. Package C stopped them for now: structural and compound edits are built from the engine's document and refused if their block changed (R1), compound edits run as one batch (R9), while someone types, the snapshot lags behind by about 0.6 s instead of until they pause (R2), and an engine that is gone no longer counts as a refusal (R5). Part of the backlog's position races remains (S1).
 
 **2. Missing shared building blocks.** Several questions are answered differently in many places:
 
@@ -59,29 +59,16 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **C** Data safety in the editor | R2, R3, R6, R9, R22, R23, R26 | unit tests and UI tests | medium |
+| **C** Data safety in the editor | R3, R6, R22, R23, R26 | unit tests and UI tests | medium |
 | **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
-S1 comes before splitting DocumentModel (S2). Moving the structural edits into the engine removes about 600 lines from DocumentModel, fixes R9 along the way and makes package C's stopgap for R1 unnecessary. The split is smaller and safer after that.
+S1 comes before splitting DocumentModel (S2). Moving the structural edits into the engine removes about 600 lines from DocumentModel and makes package C's stopgaps for R1 and R9 unnecessary. The split is smaller and safer after that.
 
 ---
 
 ## 1. Data loss and integrity
-
-### R2 [medium] ✔ The document snapshot can be stale for as long as someone types
-
-**Where:** `engine.ts:280`, `:333–339`.
-
-**Problem:** `onUpdate → scheduleDocument(150)` is a trailing debounce, and every transaction resets it, remote ones included. While a collaborator keeps typing, no `document` event reaches native code. Paths, `followMovedBlocks` and adopting collaborators' changes work on that stale snapshot. Structural edits read the engine's document since package C (R1).
-
-**Backlog:** It understates this. Two entries assume about 150 ms:
-
-- "Toggling, callout type, code language and columns reach blocks by their position …"
-- "Blocks without an ID of their own …"
-
-**Fix:** A throttle with a maximum wait (300–500 ms).
 
 ### R3 [medium] ✔ Editing a paragraph rewrites its marks' attributes
 
@@ -111,20 +98,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 **Scenario:** On a half-open socket, the provider notices the dead connection only after `messageReconnectTimeout` (30 s). Until then the pill says "Saved", no local save runs, and the edits live only in the web process. If that process ends or the app crashes, they're lost. Going to the background is covered by PageView's scene-phase save.
 
 **Fix:** Forward `onUnsyncedChanges`, and drive the pill and the local saves from that count.
-
-### R9 [low] ✔/○ Compound edits aren't atomic
-
-**Where:** `DocumentModel.swift:2233–2261` (lift), `:2263–2326` (Backspace merge), `:2405` (`toggleTask`).
-
-**Problem:** These edits are separate engine calls, and some results are thrown away with `_ =`:
-
-- leaving a list: split → insert → delete
-- a Backspace merge: replace → delete
-- `toggleTask`
-
-**Scenario:** The type-checked delete is refused, e.g. because a collaborator moved blocks. The text then exists twice, or the list is split with restarted numbering, without a message.
-
-**Fix:** An engine `batch(ops)` that applies all steps in one transaction or none, and returns `{ok, reason}`. It is also the basis for the backlog's M50.
 
 ---
 
@@ -501,7 +474,7 @@ So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine(
 
 **Today:**
 
-- Return, Backspace, leaving a list, merging, `convertList`, columns and unsync are rebuilt in Swift as non-atomic sequences of path-addressed engine calls (about 600 lines).
+- Return, Backspace, leaving a list, merging, `convertList`, columns and unsync are rebuilt in Swift as path-addressed engine calls (about 600 lines). Since package C the structural edits among them read the engine's document and send the block they were built from (R1), and leaving a list and joining blocks go as one `batch` built the same way (R9).
 - Schema rules exist twice:
   - `availableCommands`, `conversionTemplates`, `blockReplacement` (`DocumentModel.swift:917–940`) against `extensions.ts:48–52`
   - `canSort` (`:2584`) against `tables.ts:191–221`
@@ -511,10 +484,10 @@ So `stop()`'s `currentDocument()`, or a refused commit's direct `syncFromEngine(
 **Target:**
 
 - Engine commands that run in one transaction and return the cursor, as `tableCommand` does.
-- A `batch(ops) → {ok, reason}` for the rest.
+- The engine's `batch` (package C) for the rest.
 - Ask the engine whether a node fits (`contentMatchAt`).
 
-This fixes R9 and most position races, it replaces package C's stopgap for R1 (structural edits read the engine's document and send the block they were built from), and it can be tested in `pnpm run check`.
+This fixes most position races, it replaces package C's stopgaps for R1 and R9 (edits in Swift that read the engine's document and send the block they were built from), and it can be tested in `pnpm run check`, as the batch's steps already are.
 
 ### S2 Large types
 
