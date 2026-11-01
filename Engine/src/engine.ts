@@ -5,7 +5,7 @@ import { Node as PMNode } from "@tiptap/pm/model";
 import Collaboration from "@tiptap/extension-collaboration";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import * as Y from "yjs";
-import { bindingChanges, checkBlocks } from "./guards";
+import { bindingChanges, checkBlocks, unchanged } from "./guards";
 import { rebase } from "./rebase";
 import { editorOptions, schemaExtensions } from "./schema";
 import { runTableCommand, type TableCommand } from "./tables";
@@ -148,15 +148,22 @@ class DocmostEngine {
   }
 
   // MARK: Block operations
+  //
+  // Each returns true when applied, false when refused (the block is gone, the change doesn't fit) and null when the
+  // engine takes no edits (not open, or stopped after an error: `fail`); the app keeps input for null and sends it again
+  // once the engine is back.
 
   /**
    * Replaces one block with one or more (e.g. unsyncing a synced block: its content replaces the wrapper). With `base`,
-   * the text block the app's edit started from: a collaborator's edit since then stays (`rebase`).
+   * the text block the app's edit started from: a collaborator's edit since then stays (`rebase`). With `expected`, the
+   * block a structural edit was built from (a list converted, columns changed): refused when the block changed since,
+   * so the replacement doesn't overwrite what a collaborator typed meanwhile.
    */
-  replaceBlockWith(target: Target, json: JSONContent[], base?: JSONContent | null): boolean {
+  replaceBlockWith(target: Target, json: JSONContent[], base?: JSONContent | null, expected?: JSONContent | null): boolean | null {
     return this.transact((editor) => {
       const found = this.locate(editor, target);
       if (!found) return false;
+      if (expected && !unchanged(found.node, expected)) return false;
       let nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
       if (base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(editor.schema, base), nodes[0]) ?? nodes[0]];
       checkBlocks(nodes);
@@ -166,7 +173,7 @@ class DocmostEngine {
   }
 
   /** Inserts one or more blocks in one step (e.g. a divider plus a paragraph to keep typing in). */
-  insertBlocks(target: Target | null, json: JSONContent[], position: "before" | "after" = "after"): boolean {
+  insertBlocks(target: Target | null, json: JSONContent[], position: "before" | "after" = "after"): boolean | null {
     return this.transact((editor) => {
       const nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
       checkBlocks(nodes);
@@ -186,7 +193,7 @@ class DocmostEngine {
     });
   }
 
-  deleteBlock(target: Target): boolean {
+  deleteBlock(target: Target): boolean | null {
     return this.transact((editor) => {
       const found = this.locate(editor, target);
       if (!found) return false;
@@ -196,7 +203,7 @@ class DocmostEngine {
   }
 
   /** Moves a block before or after another block on the same level. */
-  moveBlock(target: Target, destination: Target, position: "before" | "after"): boolean {
+  moveBlock(target: Target, destination: Target, position: "before" | "after"): boolean | null {
     return this.transact((editor) => {
       const source = this.locate(editor, target);
       const dest = this.locate(editor, destination);
@@ -213,7 +220,7 @@ class DocmostEngine {
 
   /** Splits a list, quote or callout after one of its children: the children below go into a new one of the same kind
    * right after it. */
-  splitContainer(target: Target): boolean {
+  splitContainer(target: Target): boolean | null {
     return this.transact((editor) => {
       const found = this.locate(editor, target);
       if (!found) return false;
@@ -226,7 +233,7 @@ class DocmostEngine {
     });
   }
 
-  setAttributes(target: Target, attrs: Record<string, unknown>): boolean {
+  setAttributes(target: Target, attrs: Record<string, unknown>): boolean | null {
     return this.transact((editor) => {
       const found = this.locate(editor, target);
       if (!found) return false;
@@ -254,11 +261,12 @@ class DocmostEngine {
     return focus;
   }
 
-  undo(): boolean {
+  /** False with nothing to undo (TipTap's Collaboration refuses an empty history). */
+  undo(): boolean | null {
     return this.transact((editor) => editor.commands.undo());
   }
 
-  redo(): boolean {
+  redo(): boolean | null {
     return this.transact((editor) => editor.commands.redo());
   }
 
@@ -292,10 +300,11 @@ class DocmostEngine {
     return true;
   }
 
-  private transact(operation: (editor: Editor) => boolean): boolean {
+  /** Applied (true), refused (false) or no engine to take it (null), as the block operations above return. */
+  private transact(operation: (editor: Editor) => boolean): boolean | null {
     if (!this.editor || this.failed) {
       emit("error", { error: this.editor ? "engine failed" : "engine not open" });
-      return false;
+      return null;
     }
     const before = this.editor.state;
     try {
@@ -304,8 +313,12 @@ class DocmostEngine {
       return applied;
     } catch (error) {
       emit("error", { error: String(error) });
-      // Thrown once the editor had taken the change: by the binding, while writing it into the shared document.
-      if (this.editor?.state !== before) this.fail("change failed halfway");
+      // Thrown once the editor had taken the change: by the binding, while writing it into the shared document. The
+      // engine takes no more edits then, and the app sends this one again once it is back.
+      if (this.editor?.state !== before) {
+        this.fail("change failed halfway");
+        return null;
+      }
       return false;
     }
   }
