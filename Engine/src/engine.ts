@@ -1,13 +1,13 @@
 // Headless Docmost editor behind the native app: holds the Yjs document, syncs via Hocuspocus and runs the block
 // operations the app calls on `window.DocmostEngine`. Events go to `webkit.messageHandlers.engine` as JSON strings.
 import { Editor, getSchema, type JSONContent } from "@tiptap/core";
-import { Node as PMNode } from "@tiptap/pm/model";
 import Collaboration from "@tiptap/extension-collaboration";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import * as Y from "yjs";
-import { bindingChanges, checkBlocks, unchanged } from "./guards";
-import { rebase } from "./rebase";
+import { bindingChanges } from "./guards";
+import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
+import { applySteps, locate, type Step, type Target } from "./steps";
 import { runTableCommand, type TableCommand } from "./tables";
 
 declare global {
@@ -22,7 +22,6 @@ declare global {
   }
 }
 
-type Target = { id?: string; path?: number[]; type?: string };
 type OpenOptions = {
   wsUrl: string;
   pageId: string;
@@ -41,7 +40,10 @@ class DocmostEngine {
   private socket?: HocuspocusProviderWebsocket;
   private provider?: HocuspocusProvider;
   private editor?: Editor;
-  private updateTimer?: number;
+  private readonly documents = new DocumentSchedule(
+    { now: () => Date.now(), setTimeout: (run, ms) => window.setTimeout(run, ms), clearTimeout: (id) => window.clearTimeout(id) },
+    () => emit("document", { document: this.getDocument() }),
+  );
   private host?: HTMLElement;
   /** Set by `fail`: edits are refused from then on. */
   private failed = false;
@@ -68,7 +70,7 @@ class DocmostEngine {
       onSynced: ({ state }) => {
         if (state && !this.editor && !this.attachEditor()) return;
         emit("synced", { synced: state });
-        if (state) this.scheduleDocument(0);
+        if (state) this.documents.change(0);
       },
       onAuthenticationFailed: ({ reason }) => emit("authenticationFailed", { error: reason }),
       // "readonly" when the server lets the connection only read (a reader, a page in the trash).
@@ -96,7 +98,7 @@ class DocmostEngine {
   }
 
   close() {
-    if (this.updateTimer) window.clearTimeout(this.updateTimer);
+    this.documents.cancel();
     this.editor?.destroy();
     this.provider?.destroy();
     this.socket?.destroy();
@@ -138,12 +140,9 @@ class DocmostEngine {
     return this.editor?.getJSON() ?? { type: "doc", content: [] };
   }
 
-  /** Returns the document now, canceling the pending debounce. */
+  /** Returns the document now, canceling the pending document event. */
   flush(): JSONContent {
-    if (this.updateTimer) {
-      window.clearTimeout(this.updateTimer);
-      this.updateTimer = undefined;
-    }
+    this.documents.cancel();
     return this.getDocument();
   }
 
@@ -151,7 +150,17 @@ class DocmostEngine {
   //
   // Each returns true when applied, false when refused (the block is gone, the change doesn't fit) and null when the
   // engine takes no edits (not open, or stopped after an error: `fail`); the app keeps input for null and sends it again
-  // once the engine is back.
+  // once the engine is back. The steps behind them are in src/steps.ts.
+
+  /** Applies the steps in one transaction, all or none (src/steps.ts); a compound edit's steps go together. */
+  batch(steps: Step[]): boolean | null {
+    return this.transact((editor) => {
+      const tr = editor.state.tr;
+      if (!applySteps(tr, steps)) return false;
+      editor.view.dispatch(tr);
+      return true;
+    });
+  }
 
   /**
    * Replaces one block with one or more (e.g. unsyncing a synced block: its content replaces the wrapper). With `base`,
@@ -160,86 +169,31 @@ class DocmostEngine {
    * so the replacement doesn't overwrite what a collaborator typed meanwhile.
    */
   replaceBlockWith(target: Target, json: JSONContent[], base?: JSONContent | null, expected?: JSONContent | null): boolean | null {
-    return this.transact((editor) => {
-      const found = this.locate(editor, target);
-      if (!found) return false;
-      if (expected && !unchanged(found.node, expected)) return false;
-      let nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
-      if (base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(editor.schema, base), nodes[0]) ?? nodes[0]];
-      checkBlocks(nodes);
-      editor.view.dispatch(editor.state.tr.replaceWith(found.pos, found.pos + found.node.nodeSize, nodes));
-      return true;
-    });
+    return this.batch([{ op: "replace", target, json, base, expected }]);
   }
 
   /** Inserts one or more blocks in one step (e.g. a divider plus a paragraph to keep typing in). */
   insertBlocks(target: Target | null, json: JSONContent[], position: "before" | "after" = "after"): boolean | null {
-    return this.transact((editor) => {
-      const nodes = json.map((item) => PMNode.fromJSON(editor.schema, item));
-      checkBlocks(nodes);
-      let pos: number;
-      if (!target) {
-        pos = editor.state.doc.content.size;
-        // Insert before the footnotes, which always stay last.
-        const last = editor.state.doc.lastChild;
-        if (last && last.type.name === "footnotes") pos -= last.nodeSize;
-      } else {
-        const found = this.locate(editor, target);
-        if (!found) return false;
-        pos = position === "before" ? found.pos : found.pos + found.node.nodeSize;
-      }
-      editor.view.dispatch(editor.state.tr.insert(pos, nodes));
-      return true;
-    });
+    return this.batch([{ op: "insert", target, json, position }]);
   }
 
   deleteBlock(target: Target): boolean | null {
-    return this.transact((editor) => {
-      const found = this.locate(editor, target);
-      if (!found) return false;
-      editor.view.dispatch(editor.state.tr.delete(found.pos, found.pos + found.node.nodeSize));
-      return true;
-    });
+    return this.batch([{ op: "delete", target }]);
   }
 
   /** Moves a block before or after another block on the same level. */
   moveBlock(target: Target, destination: Target, position: "before" | "after"): boolean | null {
-    return this.transact((editor) => {
-      const source = this.locate(editor, target);
-      const dest = this.locate(editor, destination);
-      if (!source || !dest || source.pos === dest.pos) return false;
-      const node = source.node;
-      const tr = editor.state.tr.delete(source.pos, source.pos + node.nodeSize);
-      const rawDest = position === "before" ? dest.pos : dest.pos + dest.node.nodeSize;
-      const mapped = tr.mapping.map(rawDest, position === "before" ? -1 : 1);
-      tr.insert(mapped, node);
-      editor.view.dispatch(tr);
-      return true;
-    });
+    return this.batch([{ op: "move", target, destination, position }]);
   }
 
   /** Splits a list, quote or callout after one of its children: the children below go into a new one of the same kind
    * right after it. */
   splitContainer(target: Target): boolean | null {
-    return this.transact((editor) => {
-      const found = this.locate(editor, target);
-      if (!found) return false;
-      const end = found.pos + found.node.nodeSize;
-      const $end = editor.state.doc.resolve(end);
-      // Only between two children.
-      if ($end.index() === 0 || $end.index() >= $end.parent.childCount) return false;
-      editor.view.dispatch(editor.state.tr.split(end));
-      return true;
-    });
+    return this.batch([{ op: "split", target }]);
   }
 
   setAttributes(target: Target, attrs: Record<string, unknown>): boolean | null {
-    return this.transact((editor) => {
-      const found = this.locate(editor, target);
-      if (!found) return false;
-      editor.view.dispatch(editor.state.tr.setNodeMarkup(found.pos, undefined, { ...found.node.attrs, ...attrs }));
-      return true;
-    });
+    return this.batch([{ op: "setAttributes", target, attrs }]);
   }
 
   /**
@@ -250,7 +204,7 @@ class DocmostEngine {
   tableCommand(target: Target, cell: [number, number], command: TableCommand): number[] | undefined {
     let focus: number[] | undefined;
     this.transact((editor) => {
-      const found = this.locate(editor, target);
+      const found = locate(editor.state.doc, target);
       if (!found) return false;
       const result = runTableCommand(editor.state, found.pos, cell, command);
       if (!result) return false;
@@ -288,7 +242,7 @@ class DocmostEngine {
         element: this.host,
         editable: true,
         extensions: [...schemaExtensions, Collaboration.configure({ document: ydoc, provider: synced })],
-        onUpdate: () => this.scheduleDocument(150),
+        onUpdate: () => this.documents.change(documentDelay),
       });
     } catch (error) {
       // Bound halfway at most: closed, and the app takes it for a start that failed.
@@ -309,7 +263,7 @@ class DocmostEngine {
     const before = this.editor.state;
     try {
       const applied = operation(this.editor);
-      if (applied) this.scheduleDocument(0);
+      if (applied) this.documents.change(0);
       return applied;
     } catch (error) {
       emit("error", { error: String(error) });
@@ -321,48 +275,6 @@ class DocmostEngine {
       }
       return false;
     }
-  }
-
-  /** Finds a block by its UniqueID (`attrs.id`) or its path (child indices from the root). */
-  private locate(editor: Editor, target: Target): { node: PMNode; pos: number } | undefined {
-    const doc = editor.state.doc;
-    if (target.id) {
-      let result: { node: PMNode; pos: number } | undefined;
-      doc.descendants((node, pos) => {
-        if (result) return false;
-        if (node.attrs?.id === target.id) {
-          result = { node, pos };
-          return false;
-        }
-        return true;
-      });
-      if (result) return result;
-    }
-    if (target.path && target.path.length > 0) {
-      let node: PMNode = doc;
-      let pos = 0; // Position before the node; for the root, 0 = start of its content
-      let first = true;
-      for (const index of target.path) {
-        if (index < 0 || index >= node.childCount) return undefined;
-        let offset = first ? 0 : pos + 1;
-        for (let i = 0; i < index; i++) offset += node.child(i).nodeSize;
-        node = node.child(index);
-        pos = offset;
-        first = false;
-      }
-      // A path finds whatever sits there by now: after a collaborator's edit above, another block.
-      if (target.type && node.type.name !== target.type) return undefined;
-      return { node, pos };
-    }
-    return undefined;
-  }
-
-  private scheduleDocument(delay: number) {
-    if (this.updateTimer) window.clearTimeout(this.updateTimer);
-    this.updateTimer = window.setTimeout(() => {
-      this.updateTimer = undefined;
-      emit("document", { document: this.getDocument() });
-    }, delay);
   }
 
   private emitAwareness() {

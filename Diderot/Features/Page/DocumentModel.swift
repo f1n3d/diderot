@@ -1114,7 +1114,7 @@ final class DocumentModel {
         if let itemPath = active.itemPath, [.bulletList, .orderedList, .taskList].contains(template) {
             Task { await convertList(itemPath: itemPath, to: template) }
         } else if let itemPath = active.itemPath, active.ref.path == itemPath + [0], [.heading1, .heading2, .heading3].contains(template) {
-            Task { await liftLine(itemPath: itemPath, into: template) }
+            Task { await liftLine(into: template) }
         } else {
             Task { await convert(active.ref, to: template) }
         }
@@ -2216,7 +2216,7 @@ final class DocumentModel {
         // would go with it.
         if let itemPath = active.itemPath, active.ref.path.count == itemPath.count + 1 {
             if beforeInlines.isEmpty && afterInlines.isEmpty && node(at: itemPath)?.children.count == 1 {
-                await exitList(itemPath: itemPath)
+                await exitList()
                 return
             }
             overrides[active.ref.identity] = currentNode
@@ -2243,17 +2243,16 @@ final class DocumentModel {
     }
 
     /// Empty list item + Return (or Backspace in an empty first item): continues in a new paragraph.
-    private func exitList(itemPath: [Int]) async {
-        guard let index = itemPath.last else { return }
-        await lift(at: Array(itemPath.dropLast()), index: index, replacement: PMNode(type: "paragraph"), cursor: .start, removing: itemPath)
+    private func exitList() async {
+        await lift(levels: 2, withItem: true, replacement: PMNode(type: "paragraph"), cursor: .start)
     }
 
     /// A heading for an item's only line: the line leaves the list as that heading, as on the web.
-    private func liftLine(itemPath: [Int], into template: BlockTemplate) async {
-        guard let active, let line = latestNode(at: active.ref.path), let index = itemPath.last else { return }
+    private func liftLine(into template: BlockTemplate) async {
+        guard let active, let line = latestNode(at: active.ref.path) else { return }
         let attrs = line.attrs?.filter { ["textAlign", "indent"].contains($0.key) }
         let heading = template.node(inlines: Self.inlineContent(of: line), attrs: attrs)
-        await lift(at: Array(itemPath.dropLast()), index: index, replacement: heading, cursor: .end, removing: itemPath)
+        await lift(levels: 2, withItem: true, replacement: heading, cursor: .end)
     }
 
     /// Return on an empty line that the web lifts out of its container: a quote's or callout's line, a toggle's last
@@ -2266,49 +2265,66 @@ final class DocumentModel {
         let paragraph = PMNode(type: "paragraph")
         let isLast = index == parent.children.count - 1
         if ["blockquote", "callout"].contains(parent.type) {
-            await lift(at: parentPath, index: index, replacement: paragraph, cursor: .start, removing: path)
-        } else if parent.type == "detailsContent", isLast, parent.children.count > 1, let contentIndex = parentPath.last {
+            await lift(levels: 1, withItem: false, replacement: paragraph, cursor: .start)
+        } else if parent.type == "detailsContent", isLast, parent.children.count > 1 {
             // After the toggle; its content keeps a block.
-            await lift(at: Array(parentPath.dropLast()), index: contentIndex, replacement: paragraph, cursor: .start, removing: path)
-        } else if ["listItem", "taskItem"].contains(parent.type), index > 0, isLast, let itemIndex = parentPath.last {
-            await lift(at: Array(parentPath.dropLast()), index: itemIndex, replacement: paragraph, cursor: .start, removing: path)
+            await lift(levels: 2, withItem: false, replacement: paragraph, cursor: .start)
+        } else if ["listItem", "taskItem"].contains(parent.type), index > 0, isLast {
+            await lift(levels: 2, withItem: false, replacement: paragraph, cursor: .start)
         } else {
             return false
         }
         return true
     }
 
-    /// Puts `replacement` where the web lifts the active line out of the list, quote, callout or toggle at
-    /// `containerPath`, at its child `index`. A child that goes (an item, a quote's line) is replaced before the
-    /// container if it's the first, else after; one that stays (an item keeping its first line, a toggle's content) gets
-    /// it after itself. In between, the container is split after the child. `removing` (a path in the old document)
-    /// goes once the replacement is active, taking the container along if it was its only child.
-    private func lift(at containerPath: [Int], index: Int, replacement: PMNode, cursor: CursorRequest, removing: [Int]) async {
-        guard let engine, let previous = active, let container = node(at: containerPath) else { return }
+    /// Puts `replacement` where the web lifts the active line out of the list, quote, callout or toggle `levels` above
+    /// it. A child that goes (an item, a quote's line) is replaced before the container if it's the first, else after;
+    /// one that stays (an item keeping its first line, a toggle's content) gets it after itself. In between, the
+    /// container is split after the child. The line goes, with its item if `withItem` (the item holds only it), and with
+    /// the container if nothing else is left in it.
+    ///
+    /// One batch, built from the engine's document as it is now (the page's copy lags behind while someone types), with
+    /// the block that goes as expected: if a collaborator changed it meanwhile, nothing applies and the editor says so.
+    /// As separate calls, a refused removal left the line twice or the list split. No emptiness check: the engine can
+    /// still hold text deleted just before Return (its save is dropped).
+    private func lift(levels: Int, withItem: Bool, replacement: PMNode, cursor: CursorRequest) async {
+        guard let engine, let previous = active else { return }
         commitTask?.cancel()
         overrides[previous.ref.identity] = nil
+        guard let current = await engine.currentDocument() else {
+            report(.unavailable)
+            return
+        }
+        // Where the line is now: a collaborator may have added blocks above it.
+        let line = previous.ref.id.flatMap { id in path(where: { $0.string("id") == id }, in: current) } ?? previous.ref.path
+        let containerPath = Array(line.dropLast(levels)), removing = Array(line.dropLast(withItem ? 1 : 0))
+        guard line.count > levels, line.count == previous.ref.path.count,
+              let container = node(at: containerPath, in: current), container.type == node(at: Array(previous.ref.path.dropLast(levels)))?.type,
+              let gone = node(at: removing, in: current), !withItem || gone.children.count == 1
+        else {
+            report(.refused)
+            return
+        }
+        let index = line[containerPath.count]
         let count = container.children.count
         let replacesChild = removing.count == containerPath.count + 1
+        var steps: [EngineStep] = []
         if index < count - 1, index > 0 || !replacesChild {
-            guard report(await engine.splitContainer(after: .path(containerPath + [index], type: container.children[index].type))) else { return }
+            steps.append(.split(after: .path(containerPath + [index], type: container.children[index].type)))
         }
         let before = replacesChild && index == 0 && count > 1
-        var targetPath = containerPath, containerNowPath = containerPath
-        if before { containerNowPath[containerNowPath.count - 1] += 1 } else { targetPath[targetPath.count - 1] += 1 }
-        guard report(await engine.insertBlock(replacement, relativeTo: .path(containerPath, type: container.type),
-                                              position: before ? .before : .after))
-        else { return }
-        await focusAfterOperation(targetPath, cursor)
-        // A collaborator may have moved things meanwhile: only the block that still holds the old line goes. No emptiness
-        // check: the engine can still hold text deleted just before Return (its save was dropped).
-        let removingNow = containerNowPath + removing.dropFirst(containerPath.count)
-        guard let containerNow = node(at: containerNowPath), let gone = node(at: removingNow),
-              gone.string("id") == previous.ref.id || (gone.children.count == 1 && gone.children[0].string("id") == previous.ref.id)
-        else { return }
-        if replacesChild, containerNow.children.count <= 1 {
-            _ = await engine.deleteBlock(.path(containerNowPath, type: containerNow.type))
+        steps.append(.insert([replacement], relativeTo: .path(containerPath, type: container.type), position: before ? .before : .after))
+        var targetPath = containerPath, containerNow = containerPath
+        if before { containerNow[containerNow.count - 1] += 1 } else { targetPath[targetPath.count - 1] += 1 }
+        if replacesChild, count == 1 {
+            // Its only child: the container goes, and the replacement takes its place.
+            steps.append(.delete(.path(containerNow, type: container.type), expected: container))
+            targetPath = containerPath
         } else {
-            _ = await engine.deleteBlock(.path(removingNow, type: gone.type))
+            steps.append(.delete(.path(containerNow + removing.dropFirst(containerPath.count), type: gone.type), expected: gone))
+        }
+        if report(await engine.batch(steps)) {
+            await focusAfterOperation(targetPath, cursor)
         }
     }
 
@@ -2325,7 +2341,7 @@ final class DocumentModel {
             var previousItem = itemPath
             previousItem[previousItem.count - 1] = itemPath[itemPath.count - 1] - 1
             guard itemPath[itemPath.count - 1] > 0, let item = node(at: previousItem), !item.children.isEmpty else {
-                if currentInlines.isEmpty { await exitList(itemPath: itemPath) }
+                if currentInlines.isEmpty { await exitList() }
                 return
             }
             previousPath = previousItem + [item.children.count - 1]
@@ -2340,15 +2356,17 @@ final class DocumentModel {
             let offset = Self.editorText(from: previous.children).characters.count
             overrides[active.ref.identity] = nil
             commitTask?.cancel()
-            // Activate the previous block now with the merged text; the merged block goes afterwards.
+            // Activate the previous block now with the merged text.
             let previousRef = NodeRef(path: previousPath, node: previous)
             activate(previousRef, node: merged, cursor: .offset(offset))
-            // Based on the block as the page showed it: a collaborator's edit of it since stays.
-            guard report(await engine.replaceBlock(previousRef.target, with: merged, base: previous)) else {
+            // Together with removing the joined block, or neither. Based on the block before as the page showed it: a
+            // collaborator's edit of it since stays.
+            guard let removal = await removal(of: active),
+                  report(await engine.batch([.replace(previousRef.target, with: merged, base: previous), removal]))
+            else {
                 deactivate()
                 return
             }
-            await deleteMergedBlock(active)
         } else if currentInlines.isEmpty {
             // Empty paragraph after an image, table, divider …: continue at the end of the text before it (a table's
             // last cell), removing the paragraph. With no text before it, the keyboard closes.
@@ -2359,21 +2377,29 @@ final class DocumentModel {
             } else {
                 deactivate()
             }
-            await deleteMergedBlock(active)
+            if let removal = await removal(of: active) { report(await engine.batch([removal])) }
         }
     }
 
-    /// Removes the block after merging; if it is a list item's only content, removes the whole item.
-    private func deleteMergedBlock(_ active: Active) async {
-        guard let engine else { return }
-        let path = active.ref.path
-        // The item goes by its path only while it still holds the block: a collaborator may have moved it meanwhile.
-        if let itemPath = active.itemPath, path.count == itemPath.count + 1, let item = node(at: itemPath), item.children.count <= 1,
-           item.children.first?.string("id") == active.ref.id {
-            _ = await engine.deleteBlock(.path(itemPath, type: item.type))
-        } else {
-            _ = await engine.deleteBlock(active.ref.target)
+    /// The step removing the block Backspace leaves behind (joined with the one before, or empty after an image or a
+    /// table): the block, or its item if that holds only it. From the engine's document as it is now, with what goes as
+    /// expected, so a block a collaborator changed or moved there meanwhile stays. Nil, and said, without an engine or
+    /// with the block gone.
+    private func removal(of active: Active) async -> EngineStep? {
+        guard let current = await engine?.currentDocument() else {
+            report(.unavailable)
+            return nil
         }
+        let found = active.ref.id.flatMap { id in path(where: { $0.string("id") == id }, in: current) } ?? active.ref.path
+        guard let block = node(at: found, in: current), block.type == active.type else {
+            report(.refused)
+            return nil
+        }
+        let itemPath = Array(found.dropLast())
+        if let item = node(at: itemPath, in: current), ["listItem", "taskItem"].contains(item.type), item.children.count == 1 {
+            return .delete(.path(itemPath, type: item.type), expected: item)
+        }
+        return .delete(.path(found, type: block.type), expected: block)
     }
 
     /// Containers whose content is edited directly (unlike columns, synced blocks, etc.).
@@ -2457,8 +2483,8 @@ final class DocumentModel {
     }
 
     func toggleTask(itemPath: [Int]) async {
-        guard let engine, let item = node(at: itemPath) else { return }
-        _ = await engine.setAttributes(.path(itemPath), attributes: ["checked": .bool(!(item.bool("checked") ?? false))])
+        guard let engine, let item = node(at: itemPath), item.type == "taskItem" else { return }
+        report(await engine.setAttributes(.path(itemPath, type: item.type), attributes: ["checked": .bool(!(item.bool("checked") ?? false))]))
     }
 
     func delete(_ ref: NodeRef) async {

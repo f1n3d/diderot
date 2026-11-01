@@ -485,8 +485,8 @@ struct DocumentModelTests {
         #expect(model.active?.ref == NodeRef(path: [0, 0], id: "a"))
     }
 
-    /// Return in an empty list item: an older document event arrives while the paragraph after the list is inserted,
-    /// with the next block still at its path. The new paragraph still gets the cursor.
+    /// Return in an empty list item: an older document event arrives while the list makes way for the paragraph, with the
+    /// list still at its path. The new paragraph still gets the cursor.
     @Test(.timeLimit(.minutes(1))) func listExitFocusesNewParagraphDespiteOlderEvent() async throws {
         func paragraph(_ id: String, _ text: String?) -> PMNode {
             PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.map { [PMNode(type: "text", text: $0)] })
@@ -499,16 +499,16 @@ struct DocumentModelTests {
         let item = try #require(model.node(at: [0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0], node: item), node: item)
         engine.whileInserting = {
-            model.syncFromEngine()  // an event from before the insert
-            engine.document = PMNode(type: "doc", content: [list, paragraph("c", nil), paragraph("b", "Zwei")])
+            model.syncFromEngine()  // an event from before the batch
+            engine.document = PMNode(type: "doc", content: [paragraph("c", nil), paragraph("b", "Zwei")])
         }
 
         model.activeText.append(AttributedString("\n"))
         model.activeTextChanged()
         while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        model.syncFromEngine()  // the insert's own document event
+        model.syncFromEngine()  // the batch's own document event
 
-        #expect(model.active?.ref == NodeRef(path: [1], id: "c"))
+        #expect(model.active?.ref == NodeRef(path: [0], id: "c"))
     }
 
     /// Return on an empty line in a toggle inside a list item adds a line there; exiting the list would remove the item
@@ -709,9 +709,23 @@ struct DocumentModelTests {
         #expect(model.notice == nil)
     }
 
+    /// Checking a task reaches a task item only (by path alone it set `checked` on whatever block a collaborator moved
+    /// there), and a refusal is said; it used to go unanswered.
+    @Test func refusedTaskCheckSaysSo() async throws {
+        let item = PMNode(type: "taskItem", attrs: ["checked": false], content: [PMNode(type: "paragraph", attrs: ["id": "a"])])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "taskList", content: [item])]))
+        let model = try Self.model(engine)
+        engine.attributesResult = .refused
+
+        await model.toggleTask(itemPath: [0, 0])
+
+        #expect(engine.attributeTargets == [.path([0, 0], type: "taskItem")])
+        #expect(model.errorMessage == String(localized: "The change could not be applied."))
+    }
+
     /// A list converted while a collaborator types in it: the new list comes from the engine's document, which has their
-    /// text, not from the app's copy, which gets no document event while someone types. Built from that copy, it dropped
-    /// what they typed meanwhile, without notice. The list read goes with it as the expected state.
+    /// text, not from the app's copy, which lags behind while someone types. Built from that copy, it dropped what they
+    /// typed meanwhile, without notice. The list read goes with it as the expected state.
     @Test func listConversionKeepsWhatACollaboratorTyped() async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei"])]))
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
@@ -1203,31 +1217,43 @@ struct DocumentModelTests {
         #expect(engine.saved.isEmpty)
     }
 
-    /// Backspace joins a list item to the one above, removing it once the cursor has moved. A collaborator's list
-    /// arriving above meanwhile puts their item at its old path: that item stays, and the joined line goes by its id.
-    @Test(.timeLimit(.minutes(1))) func joinedItemIsRemovedOnlyWhereItWas() async throws {
-        func list(_ lines: [(id: String, text: String)]) -> PMNode {
-            PMNode(type: "bulletList", content: lines.map { line in
-                PMNode(type: "listItem", content: [PMNode(type: "paragraph", attrs: ["id": .string(line.id)], content: [PMNode(type: "text", text: line.text)])])
-            })
-        }
-        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [list([("a", "Eins"), ("b", "Zwei")])]))
-        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+    /// Backspace joins a list item to the one above in one batch with removing its item, which is found in the engine's
+    /// document as it is now and sent as expected: a collaborator's list arrived above, not yet in the page's copy, and
+    /// moved it down. Removed separately afterwards, by its old path, the item used to be theirs.
+    @Test(.timeLimit(.minutes(1))) func joinedItemGoesWhereTheEngineHasIt() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list([("a", "Eins"), ("b", "Zwei")])]))
+        let model = try Self.model(engine)
         let line = try #require(model.node(at: [0, 1, 0]))
         model.activate(NodeRef(path: [0, 1, 0], node: line), node: line)
-        engine.whileInserting = {
-            engine.document = PMNode(type: "doc", content: [list([("x", "Ihre"), ("y", "Liste")]), list([("a", "EinsZwei"), ("b", "Zwei")])])
-            model.syncFromEngine()
-        }
+        engine.document = PMNode(type: "doc", content: [Self.list([("x", "Ihre"), ("y", "Liste")]), Self.list([("a", "Eins"), ("b", "Zwei")])])
 
         #expect(model.backspaceAtStart())
-        while engine.saved.isEmpty || engine.deleted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        try await Task.sleep(for: .milliseconds(200))
+        while engine.saved.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
 
         #expect(engine.saved.map(\.plainText) == ["EinsZwei"])
-        #expect(engine.deleted == [.id("b")])
+        #expect(engine.batches.count == 1)
+        #expect(engine.batches.first?.last == .delete(.path([1, 1], type: "listItem"), expected: PMNode(type: "listItem", content: [line])))
+    }
+
+    /// A join the engine refuses (the joined block changed meanwhile) applies neither half and says so; editing ends
+    /// instead of showing the joined text. As separate calls, the text was then there twice.
+    @Test(.timeLimit(.minutes(1))) func refusedJoinSaysSo() async throws {
+        let first = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
+        let second = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Zwei")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [1], node: second), node: second)
+        engine.nextBatchResult = .refused
+
+        #expect(model.backspaceAtStart())
+        while engine.batches.isEmpty && engine.saved.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(engine.batches.count == 1)
+        #expect(engine.saved.isEmpty && engine.deleted.isEmpty)
+        #expect(model.errorMessage == String(localized: "The change could not be applied."))
+        #expect(model.active == nil)
     }
 
     /// Backspace at a block's start puts the cursor where the two texts meet, counted in the editor's characters: a
@@ -1305,30 +1331,69 @@ struct DocumentModelTests {
         #expect(engine.saved.last?.children.contains(formula) == true)
     }
 
-    /// Return in an empty list item continues after the list and removes the item (here its whole list) once the cursor
-    /// has moved, which with the page's one editor is right away. A collaborator's list arriving above afterwards stays.
-    @Test(.timeLimit(.minutes(1))) func leftListIsRemovedOnlyWhereItWas() async throws {
-        func list(_ id: String) -> PMNode {
-            PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [PMNode(type: "paragraph", attrs: ["id": .string(id)])])])
-        }
-        let after = PMNode(type: "paragraph", attrs: ["id": "b"])
-        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [list("a")]))
-        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        model.syncFromEngine()
+    /// Return in a list's only item, empty: one batch puts a paragraph after the list and removes the list, found in the
+    /// engine's document as it is now (below a collaborator's paragraph the page's copy doesn't have yet) and sent as
+    /// expected. The paragraph takes the list's place and gets the cursor.
+    @Test(.timeLimit(.minutes(1))) func leavingAListIsOneBatch() async throws {
+        let list = Self.list([("a", nil)])
+        let theirs = PMNode(type: "paragraph", attrs: ["id": "x"], content: [PMNode(type: "text", text: "Ihrer")])
+        let new = PMNode(type: "paragraph", attrs: ["id": "b"])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [list]))
+        let model = try Self.model(engine)
         let line = try #require(model.node(at: [0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0], node: line), node: line)
-        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [list("a"), after]) }
+        engine.document = PMNode(type: "doc", content: [theirs, list])
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [theirs, new]) }
 
         model.activeText.append(AttributedString("\n"))
         model.activeTextChanged()
-        while model.active?.ref.id != "b" { try await Task.sleep(for: .milliseconds(10)) }
-        while engine.deleted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        engine.document = PMNode(type: "doc", content: [list("x"), after])
-        model.syncFromEngine()
-        try await Task.sleep(for: .milliseconds(200))
+        while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
 
-        #expect(engine.deleted == [.path([0], type: "bulletList")])
+        #expect(engine.batches == [[
+            .insert([PMNode(type: "paragraph")], relativeTo: .path([1], type: "bulletList"), position: .after),
+            .delete(.path([1], type: "bulletList"), expected: list),
+        ]])
+        #expect(model.active?.ref == NodeRef(path: [1], id: "b"))
+    }
+
+    /// Leaving a list that the engine refuses (the item changed meanwhile) applies none of its steps and says so; the
+    /// cursor stays in the item.
+    @Test(.timeLimit(.minutes(1))) func refusedLiftSaysSo() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list([("a", "Eins"), ("b", nil), ("c", "Drei")])]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0, 1, 0]))
+        model.activate(NodeRef(path: [0, 1, 0], node: line), node: line)
+        engine.nextBatchResult = .refused
+
+        model.activeText.append(AttributedString("\n"))
+        model.activeTextChanged()
+        while engine.batches.isEmpty && engine.splitAfter.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(engine.batches.count == 1)
+        #expect(engine.splitAfter.isEmpty && engine.inserted.isEmpty && engine.deleted.isEmpty)
+        #expect(model.errorMessage == String(localized: "The change could not be applied."))
+        #expect(model.active?.ref.id == "b")
+    }
+
+    /// Return in an empty item that holds more in the engine by now (a collaborator added a nested list) keeps it in the
+    /// list and says so: removing the item would take their list along.
+    @Test(.timeLimit(.minutes(1))) func itemGrownMeanwhileStays() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"])
+        let nested = Self.list([("y", "Ihrer")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [line])])]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0, 0, 0], node: line), node: line)
+        engine.document = PMNode(type: "doc", content: [PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [line, nested])])])
+
+        model.activeText.append(AttributedString("\n"))
+        model.activeTextChanged()
+        while model.errorMessage == nil && engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(engine.batches.isEmpty && engine.inserted.isEmpty)
+        #expect(model.errorMessage == String(localized: "The change could not be applied."))
     }
 
     /// Return in an empty item in the middle of a list splits the list there, as the web does: the paragraph goes
@@ -1338,10 +1403,10 @@ struct DocumentModelTests {
         let model = try Self.model(engine)
         let line = try #require(model.node(at: [0, 1, 0]))
         model.activate(NodeRef(path: [0, 1, 0], node: line), node: line)
-        // The engine after the split and the insert.
+        // The engine after the batch.
         engine.whileInserting = {
             engine.document = PMNode(type: "doc", content: [
-                Self.list([("a", "Eins"), ("b", nil)]), PMNode(type: "paragraph", attrs: ["id": "n"]), Self.list([("c", "Drei")]),
+                Self.list([("a", "Eins")]), PMNode(type: "paragraph", attrs: ["id": "n"]), Self.list([("c", "Drei")]),
             ])
         }
 
@@ -1353,6 +1418,8 @@ struct DocumentModelTests {
         #expect(engine.inserted.map(\.position) == [.after] && engine.inserted.first?.target == .path([0], type: "bulletList"))
         #expect(model.active?.ref == NodeRef(path: [1], id: "n"))
         #expect(engine.deleted == [.path([0, 1], type: "listItem")])
+        #expect(engine.batches.count == 1)
+        #expect(engine.batches.first?.last == .delete(.path([0, 1], type: "listItem"), expected: PMNode(type: "listItem", content: [line])))
     }
 
     /// Return or Backspace in an empty first item puts the paragraph before the list, as the web lifts the item there.
@@ -1362,7 +1429,7 @@ struct DocumentModelTests {
         let line = try #require(model.node(at: [0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0], node: line), node: line)
         engine.whileInserting = {
-            engine.document = PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "n"]), Self.list([("a", nil), ("b", "Zwei")])])
+            engine.document = PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "n"]), Self.list([("b", "Zwei")])])
         }
 
         if backspace {
@@ -1388,7 +1455,7 @@ struct DocumentModelTests {
         model.activate(NodeRef(path: [0, 1, 0], node: line), node: line)
         engine.whileInserting = {
             engine.document = PMNode(type: "doc", content: [
-                Self.list([("a", "Eins"), ("b", "Zwei")]),
+                Self.list([("a", "Eins")]),
                 PMNode(type: "heading", attrs: ["id": "h", "level": 2], content: [PMNode(type: "text", text: "Zwei")]),
             ])
         }
@@ -1414,20 +1481,19 @@ struct DocumentModelTests {
         switch kind {
         case "quote":
             let quote = PMNode(type: "blockquote", content: [line("a", "Zitat"), line("b", nil)])
-            (blocks, after, linePath) = ([quote], [quote, new], [0, 1])
+            (blocks, after, linePath) = ([quote], [PMNode(type: "blockquote", content: [line("a", "Zitat")]), new], [0, 1])
             (split, insertTarget, deleted) = ([], .path([0], type: "blockquote"), .path([0, 1], type: "paragraph"))
         case "item":
             let first = PMNode(type: "listItem", content: [line("a", "Eins"), line("b", nil)])
             let second = PMNode(type: "listItem", content: [line("c", "Zwei")])
             (blocks, linePath) = ([PMNode(type: "bulletList", content: [first, second])], [0, 0, 1])
-            after = [PMNode(type: "bulletList", content: [first]), new, PMNode(type: "bulletList", content: [second])]
+            after = [PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [line("a", "Eins")])]), new, PMNode(type: "bulletList", content: [second])]
             (split, insertTarget, deleted) = ([.path([0, 0], type: "listItem")], .path([0], type: "bulletList"), .path([0, 0, 1], type: "paragraph"))
         default:
-            let toggle = PMNode(type: "details", content: [
-                PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "Titel")]),
-                PMNode(type: "detailsContent", content: [line("a", "Inhalt"), line("b", nil)]),
-            ])
-            (blocks, after, linePath) = ([toggle], [toggle, new], [0, 1, 1])
+            let summary = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "Titel")])
+            let toggle = PMNode(type: "details", content: [summary, PMNode(type: "detailsContent", content: [line("a", "Inhalt"), line("b", nil)])])
+            let left = PMNode(type: "details", content: [summary, PMNode(type: "detailsContent", content: [line("a", "Inhalt")])])
+            (blocks, after, linePath) = ([toggle], [left, new], [0, 1, 1])
             (split, insertTarget, deleted) = ([], .path([0], type: "details"), .path([0, 1, 1], type: "paragraph"))
         }
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: blocks))
@@ -1574,7 +1640,7 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var opened: [String] = []
     /// "open" and "close" in order.
     private(set) var lifecycle: [String] = []
-    /// Blocks written with `replaceBlock(_:with:base:expected:)`, and the bases passed with them.
+    /// Blocks written with `replaceBlock(_:with:base:expected:)` or a batch's replace step, and the bases passed with them.
     private(set) var saved: [PMNode] = []
     private(set) var bases: [PMNode?] = []
     /// The expected state passed with each replacement (either kind), in order.
@@ -1604,6 +1670,13 @@ final class FakeDocumentEngine: DocumentEngine {
     var collaboratorEdit: (() -> Void)?
     /// What `undo` and `redo` answer.
     var historyResult = EngineResult.applied
+    /// The steps of each `batch`.
+    private(set) var batches: [[EngineStep]] = []
+    /// What the next `batch` answers instead of applying, e.g. refused, as the engine refuses a block that changed.
+    var nextBatchResult: EngineResult?
+    /// Targets of `setAttributes`, and what it answers.
+    private(set) var attributeTargets: [BlockTarget] = []
+    var attributesResult = EngineResult.applied
     /// Table commands, with the table and the cell they ran on.
     private(set) var tableCommands: [(target: BlockTarget, cell: [Int], command: [String: JSONValue])] = []
     /// What `tableCommand` returns: the cell for the cursor afterwards; nil refuses the command.
@@ -1694,7 +1767,10 @@ final class FakeDocumentEngine: DocumentEngine {
         splitAfter.append(child)
         return .applied
     }
-    func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult { .applied }
+    func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult {
+        attributeTargets.append(target)
+        return attributesResult
+    }
     func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]? {
         tableCommands.append((target, cell, command))
         whileInserting?()
@@ -1702,4 +1778,25 @@ final class FakeDocumentEngine: DocumentEngine {
     }
     func undo() async -> EngineResult { historyResult }
     func redo() async -> EngineResult { historyResult }
+    /// Applied, records the steps as their own calls would (`saved`, `inserted`, `deleted`, `splitAfter`) and runs
+    /// `whileInserting`, where a test sets the document the batch leaves.
+    func batch(_ steps: [EngineStep]) async -> EngineResult {
+        batches.append(steps)
+        if let result = nextBatchResult {
+            nextBatchResult = nil
+            return result
+        }
+        for step in steps {
+            switch step {
+            case .replace(_, let node, let base):
+                saved.append(node)
+                bases.append(base)
+            case .insert(let nodes, let target, let position): inserted += nodes.map { ($0, target, position) }
+            case .delete(let target, _): deleted.append(target)
+            case .split(let child): splitAfter.append(child)
+            }
+        }
+        whileInserting?()
+        return .applied
+    }
 }
