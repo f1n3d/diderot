@@ -23,6 +23,21 @@ struct JSONValueTests {
         let decoded = try JSONDecoder().decode(JSONValue.self, from: data)
         #expect(decoded == value)
     }
+
+    /// Values deeper than `maxDepth` decode as null: JSON as deep as JSONDecoder takes ran out of a thread's stack, as
+    /// decoding goes a level deeper in it per level (code review R35).
+    @Test func deepValuesDecodeAsNull() async throws {
+        let data = Data((String(repeating: "[", count: 500) + String(repeating: "]", count: 500)).utf8)
+        // Off the main thread, as the API client decodes, where a thread's stack is smaller.
+        var value = try await Task.detached { try JSONDecoder().decode(JSONValue.self, from: data) }.value
+        var depth = 0
+        while case .array(let values) = value, let first = values.first {
+            value = first
+            depth += 1
+        }
+        #expect(depth == JSONValue.maxDepth)
+        #expect(value == .null)
+    }
 }
 
 struct DateParsingTests {

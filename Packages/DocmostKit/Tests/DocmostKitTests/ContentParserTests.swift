@@ -27,7 +27,8 @@ struct ContentParserTests {
     }
 
     /// Crafted numbers stay in bounds: a list's start near Int.max numbers from 1 (browsers count lists in 32 bits), a
-    /// huge colspan or rowspan spans 1,000, and widths such as "nan%" are no width. They trapped or took the app's memory.
+    /// huge colspan or rowspan spans 1,000, widths such as "nan%" are no width, and an image's aspect ratio outside 1:20
+    /// to 20:1 is none. They trapped or took the app's memory, or gave a placeholder no height it could take.
     @Test func craftedNumbersStayInBounds() throws {
         let json = try JSONDecoder().decode(JSONValue.self, from: Data(#"""
         {"type": "doc", "content": [
@@ -49,6 +50,39 @@ struct ContentParserTests {
         }
         #expect(Length(json: .string("50%")) == .percent(50))
         #expect(Length(json: .number(240)) == .points(240))
+        func aspectRatio(_ ratio: Double) -> Double? {
+            let image = ContentParser.parse(PMNode(type: "doc", content: [PMNode(type: "image", attrs: ["aspectRatio": .number(ratio)])]))
+            guard case .image(let block) = image.blocks.first?.kind else { Issue.record("expected image"); return nil }
+            return block.aspectRatio
+        }
+        for ratio in [0, -1, 1e-300, 0.01, 21, 1e300] {
+            #expect(aspectRatio(ratio) == nil, "\(ratio)")
+        }
+        #expect([0.05, 1.5, 20].map(aspectRatio) == [0.05, 1.5, 20])
+    }
+
+    /// Blocks deeper than `maxDepth` show as `.tooDeep`, those above them as they are, and unknown inline nodes as deep
+    /// show their content: the parser and the block views go a level deeper in the stack per level, and ran out of it
+    /// (code review R35).
+    @Test func deepContentShowsDownToMaxDepth() {
+        var node = PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Innermost")])
+        for _ in 0..<40 { node = PMNode(type: "blockquote", content: [node]) }
+        var block = ContentParser.parse(PMNode(type: "doc", content: [node])).blocks.first
+        var depth = 1
+        while case .blockquote(let blocks) = block?.kind {
+            block = blocks.first
+            depth += 1
+        }
+        #expect(depth == ContentParser.maxDepth + 1)
+        #expect(block?.kind == .tooDeep)
+
+        func inlines(_ levels: Int) -> [Inline] {
+            var inline = PMNode(type: "text", text: "Innermost")
+            for _ in 0..<levels { inline = PMNode(type: "crafted", content: [inline]) }
+            return ContentParser.inlines(of: PMNode(type: "paragraph", content: [inline]))
+        }
+        #expect(inlines(ContentParser.maxDepth - 1).plainText == "Innermost")
+        #expect(inlines(ContentParser.maxDepth) == [.unknown(type: "crafted")])
     }
 
     private func document(_ fixture: String) throws -> ContentDocument {
