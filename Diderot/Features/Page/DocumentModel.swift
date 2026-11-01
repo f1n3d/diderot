@@ -393,7 +393,10 @@ final class DocumentModel {
     /// The block became active through Return or Backspace in the previous one: the page keeps its place and only
     /// keeps the caret visible, while a tapped block is centered.
     @ObservationIgnored private(set) var activatedByTyping = false
-    /// Return and Backspace operations still running (quick typing overlaps them).
+    /// Return and Backspace operations still running (quick typing overlaps them). They put the cursor where it goes
+    /// themselves, so a document event meanwhile doesn't end editing when the block goes (leaving a list, joining
+    /// blocks): its editor would vanish and the keyboard hide and show again. One that ends without placing it ends
+    /// editing then, if the block is gone (`typingSwitchEnded`).
     @ObservationIgnored private var typingSwitches = 0
     /// Return or Backspace is switching blocks; meanwhile the old editor briefly shows the line break as a second line.
     var isSwitchingByTyping: Bool { typingSwitches > 0 }
@@ -703,12 +706,17 @@ final class DocumentModel {
         return result.isApplied
     }
 
+    private func typingSwitchEnded() {
+        typingSwitches -= 1
+        if typingSwitches == 0 { followMovedBlocks() }
+    }
+
     /// The active block follows by its UniqueID when its path shifts; otherwise the editor would edit another block.
     private func followMovedBlocks() {
         if let active, let id = active.ref.id, node(at: active.ref.path)?.string("id") != id {
             if let path = path(where: { $0.string("id") == id }) {
                 self.active = Active(ref: NodeRef(path: path, id: id), type: active.type, attrs: active.attrs, itemPath: enclosingItemPath(path))
-            } else if !editsTable {
+            } else if !editsTable && typingSwitches == 0 {
                 // A collaborator deleted it. Its editor used to vanish with it; the page's one editor stays, so end here.
                 overrides[active.ref.identity] = nil
                 commitTask?.cancel()
@@ -846,7 +854,7 @@ final class DocumentModel {
         guard let active, active.type != "codeBlock" else { return false }
         Task {
             typingSwitches += 1
-            defer { typingSwitches -= 1 }
+            defer { typingSwitchEnded() }
             await mergeWithPrevious(active)
         }
         return true
@@ -868,7 +876,7 @@ final class DocumentModel {
             // Right away: the editor would show the line break as a second line until the next update.
             Task.immediate {
                 typingSwitches += 1
-                defer { typingSwitches -= 1 }
+                defer { typingSwitchEnded() }
                 await handleReturn(active)
             }
             return
