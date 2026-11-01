@@ -83,6 +83,7 @@ struct MainTabView: View {
             }
         }
         .task {
+            offline.start()
             await recentlyOpened.load()
             await favorites.loadIds()
             #if DEBUG

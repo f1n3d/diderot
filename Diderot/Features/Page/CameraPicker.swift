@@ -27,10 +27,14 @@ struct CameraPicker: UIViewControllerRepresentable {
         }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let image = info[.originalImage] as? UIImage, let data = image.jpegData(compressionQuality: 0.9) {
-                parent.onCapture(data)
-            }
             parent.dismiss()
+            guard let image = info[.originalImage] as? UIImage else { return }
+            let onCapture = parent.onCapture
+            Task {
+                // A full-resolution photo takes a while to encode: not on the main thread, where it held up the UI.
+                let data = await Task.detached(priority: .userInitiated) { image.jpegData(compressionQuality: 0.9) }.value
+                if let data { onCapture(data) }
+            }
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {

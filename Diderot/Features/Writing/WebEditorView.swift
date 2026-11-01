@@ -14,29 +14,41 @@ struct WebEditorView: View {
     var onClose: () -> Void = {}
 
     private let storeID: UUID
-    @State private var dataStore: WKWebsiteDataStore
-    @State private var limit: WebNavigationLimit
-    @State private var webPage: WebPage
+    /// Made once: built in `init`, a page and its store came anew on every pass of the page view while the editor showed.
+    @State private var parts = Once<Parts>()
     @State private var isReady = false
+
+    private struct Parts {
+        let dataStore: WKWebsiteDataStore
+        let limit: WebNavigationLimit
+        let webPage: WebPage
+    }
 
     init(page: Page, serverURL: URL, token: String, onClose: @escaping () -> Void = {}) {
         self.page = page
         self.serverURL = serverURL
         self.token = token
         self.onClose = onClose
-        // A persistent store of this server's own: the web editor needs IndexedDB (Yjs offline cache), which a
-        // non-persistent store lacks. The auth cookie is removed on close.
         storeID = WebEditorStores.identifier(for: serverURL)
-        let dataStore = WKWebsiteDataStore(forIdentifier: storeID)
-        var configuration = WebPage.Configuration()
-        configuration.websiteDataStore = dataStore
-        // Frames: embeds and the draw.io editor.
-        let limit = WebNavigationLimit(home: serverURL, acrossOrigin: true, frames: true)
-        limit.catchesWindowOpen(in: &configuration)
-        self._dataStore = State(initialValue: dataStore)
-        self._limit = State(initialValue: limit)
-        self._webPage = State(initialValue: WebPage(configuration: configuration, navigationDecider: limit))
     }
+
+    private var editor: Parts {
+        parts {
+            // A persistent store of this server's own: the web editor needs IndexedDB (Yjs offline cache), which a
+            // non-persistent store lacks. The auth cookie is removed on close.
+            let dataStore = WKWebsiteDataStore(forIdentifier: storeID)
+            var configuration = WebPage.Configuration()
+            configuration.websiteDataStore = dataStore
+            // Frames: embeds and the draw.io editor.
+            let limit = WebNavigationLimit(home: serverURL, acrossOrigin: true, frames: true)
+            limit.catchesWindowOpen(in: &configuration)
+            return Parts(dataStore: dataStore, limit: limit, webPage: WebPage(configuration: configuration, navigationDecider: limit))
+        }
+    }
+
+    private var dataStore: WKWebsiteDataStore { editor.dataStore }
+    private var limit: WebNavigationLimit { editor.limit }
+    private var webPage: WebPage { editor.webPage }
 
     var body: some View {
         NavigationStack {

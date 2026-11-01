@@ -43,6 +43,21 @@ public enum FractionalIndex {
         return ia + (try midpoint(fa, nil))
     }
 
+    /// The key for an item moved to `index` among `siblings` (their keys in order, without the item): `nil` if it
+    /// already lies there (`current`, its key under the same parent, between its new neighbours'), else a key between
+    /// them. Keys out of order (another client's) leave no room between: the item then goes after the greatest, at the
+    /// end. Database cards and the page tree place items alike.
+    public static func key(placing current: String?, at index: Int, among siblings: [String?]) throws -> String? {
+        let previous = index > siblings.startIndex ? siblings[index - 1] : nil
+        let next = index < siblings.endIndex ? siblings[index] : nil
+        if let current, previous.map({ $0 < current }) ?? true, next.map({ current < $0 }) ?? true { return nil }
+        do {
+            return try jitteredKeyBetween(previous, next)
+        } catch {
+            return try jitteredKeyBetween(siblings.compactMap(\.self).max(), nil)
+        }
+    }
+
     /// `keyBetween` plus a random suffix (like the web's `fractional-indexing-jittered`). Always between `a` and `b`,
     /// with the 5–12 characters `pages/move` requires whenever such a key exists.
     public static func jitteredKeyBetween(_ a: String?, _ b: String?) throws -> String {
@@ -156,5 +171,12 @@ public enum FractionalIndex {
         }
         if let b, b.count > 1 { return String(b.prefix(1)) }
         return String(digits[digitA]) + (try midpoint(String(aChars.dropFirst()), nil))
+    }
+}
+
+extension FractionalIndex.KeyError: LocalizedError {
+    /// The user's words for keys that leave no place to sort into; it read "…FractionalIndex.KeyError error 1".
+    public var errorDescription: String? {
+        String(localized: "This can't be placed there.", bundle: .main)
     }
 }

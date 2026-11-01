@@ -36,6 +36,7 @@ struct RootView: View {
             guard phase == .active else { return }
             Task {
                 await session.refreshCurrentUser()
+                await session.retryUncheckedSignIn()
                 await session.sendPendingLogouts()
             }
         }

@@ -43,6 +43,18 @@ struct FractionalIndexTests {
         #expect(key > a && key < b)
     }
 
+    /// An item moved among siblings goes between its new neighbours, stays if it already lies there, and goes after the
+    /// greatest key, at the end, when its neighbours' keys are out of order (code review R29); keys that can't be read
+    /// leave no place.
+    @Test func placesAnItemAmongItsSiblings() throws {
+        let between = try #require(try FractionalIndex.key(placing: nil, at: 1, among: ["a0", "a1", "a2"]))
+        #expect("a0" < between && between < "a1")
+        #expect(try FractionalIndex.key(placing: between, at: 1, among: ["a0", "a1", "a2"]) == nil)
+        let atTheEnd = try #require(try FractionalIndex.key(placing: nil, at: 1, among: ["a2", "a1"]))
+        #expect(atTheEnd > "a2")
+        #expect(throws: FractionalIndex.KeyError.self) { try FractionalIndex.key(placing: nil, at: 1, among: ["?", "!"]) }
+    }
+
     /// Moving a page to the top repeatedly (drop before the first page) keeps keys short, like the web.
     @Test func movingToTheTopRepeatedlyKeepsKeysShort() throws {
         var first = try FractionalIndex.jitteredKeyBetween(nil, nil)

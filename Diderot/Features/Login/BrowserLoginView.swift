@@ -10,8 +10,8 @@ struct BrowserLoginView: View {
     let server: ServerInfo
     let startURL: URL
 
-    @State private var dataStore: WKWebsiteDataStore
-    @State private var page: WebPage
+    /// Made once: built in `init`, a page and its store came anew on every pass of the sign-in screen while this showed.
+    @State private var parts = Once<(dataStore: WKWebsiteDataStore, page: WebPage)>()
     @State private var errorMessage: String?
     @State private var isFinishing = false
     @State private var captured = false
@@ -19,12 +19,19 @@ struct BrowserLoginView: View {
     init(server: ServerInfo, startURL: URL) {
         self.server = server
         self.startURL = startURL
-        let dataStore = WKWebsiteDataStore.nonPersistent()
-        var configuration = WebPage.Configuration()
-        configuration.websiteDataStore = dataStore
-        self._dataStore = State(initialValue: dataStore)
-        self._page = State(initialValue: WebPage(configuration: configuration))
     }
+
+    private var browser: (dataStore: WKWebsiteDataStore, page: WebPage) {
+        parts {
+            let dataStore = WKWebsiteDataStore.nonPersistent()
+            var configuration = WebPage.Configuration()
+            configuration.websiteDataStore = dataStore
+            return (dataStore, WebPage(configuration: configuration))
+        }
+    }
+
+    private var dataStore: WKWebsiteDataStore { browser.dataStore }
+    private var page: WebPage { browser.page }
 
     var body: some View {
         NavigationStack {

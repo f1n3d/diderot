@@ -11,8 +11,13 @@ final class OfflineMonitor {
     /// The network's state while `DebugLaunch.offlineSeconds` pretends to be offline.
     private var pathIsOffline = false
     private var pretendsOffline = false
+    private var started = false
 
-    init() {
+    /// Starts watching the network; `init` doesn't, as SwiftUI builds a throwaway monitor on every init of the main
+    /// view, and each started a path monitor.
+    func start() {
+        guard !started else { return }
+        started = true
         #if DEBUG
         if let seconds = DebugLaunch.offlineSeconds {
             pretendsOffline = true

@@ -70,6 +70,55 @@ final class PageTreeStore {
         return rows[(start + 1)...].prefix { $0.depth > rows[start].depth }.contains { $0.id == pageId }
     }
 
+    // MARK: - Moving
+
+    /// Where `pageId` goes when dropped on `target` in `zone`, as the web's tree places it: its parent and position for
+    /// `pages/move`, `nil` if it stays where it is or can't go there (onto itself or into its own subtree). Nesting loads
+    /// the target's subpages first, to go after the last. Throws `FractionalIndex.KeyError` if no position can be made.
+    /// The space view did this itself, without the cards' check for "already in place" and fallback for keys out of order.
+    func placement(of pageId: String, relativeTo target: SidebarPage, zone: TreeDropZone) async throws
+        -> (parentPageId: String?, position: String)? {
+        guard target.id != pageId, !isDescendant(target.id, of: pageId) else { return nil }
+        let current = page(pageId)
+        let parentPageId: String?
+        let siblings: [SidebarPage]
+        let index: Int
+        switch zone {
+        case .nest:
+            if !isExpanded(target.id) { await toggle(target.id) } else if children(of: target.id).isEmpty { await loadChildren(of: target.id) }
+            parentPageId = target.id
+            siblings = children(of: target.id).filter { $0.id != pageId }
+            index = siblings.endIndex
+        case .before, .after:
+            parentPageId = target.parentPageId
+            siblings = (parentPageId.map { children(of: $0) } ?? rootPages).filter { $0.id != pageId }
+            guard let targetIndex = siblings.firstIndex(where: { $0.id == target.id }) else { return nil }
+            index = zone == .before ? targetIndex : targetIndex + 1
+        }
+        let samePlace = current.map { $0.parentPageId == parentPageId } ?? false
+        guard let position = try FractionalIndex.key(placing: samePlace ? current?.position : nil, at: index, among: siblings.map(\.position))
+        else { return nil }
+        return (parentPageId, position)
+    }
+
+    /// The server took the move: the page leaves its level and joins its new parent's in key order, so a second drag
+    /// before the tree reloads works from the new keys, not the old ones.
+    func moved(_ pageId: String, to parentPageId: String?, position: String) {
+        guard let page = page(pageId) else { return }
+        let moved = SidebarPage(id: page.id, slugId: page.slugId, title: page.title, icon: page.icon, position: position,
+                                parentPageId: parentPageId, spaceId: page.spaceId, isBase: page.isBase,
+                                hasChildren: page.hasChildren, canEdit: page.canEdit, updatedAt: page.updatedAt)
+        for key in children.keys { children[key]?.removeAll { $0.id == pageId } }
+        // A level not loaded yet shows it once it loads.
+        guard var level = children[parentPageId ?? Self.rootKey] else { return }
+        level.insert(moved, at: level.firstIndex { ($0.position ?? "") > position } ?? level.endIndex)
+        children[parentPageId ?? Self.rootKey] = level
+    }
+
+    private func page(_ pageId: String) -> SidebarPage? {
+        children.values.lazy.flatMap(\.self).first { $0.id == pageId }
+    }
+
     // MARK: - Loading
 
     /// Also after a failure: SwiftUI cancels the space view's load when a push or tab switch hides it.

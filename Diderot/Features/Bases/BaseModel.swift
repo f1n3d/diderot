@@ -377,18 +377,19 @@ final class BaseModel {
         else { return }
         let others = column.list.rows.filter { $0.id != rowId }
         let index = anchorId.flatMap { id in others.firstIndex { $0.id == id } }.map { below ? $0 + 1 : $0 } ?? others.endIndex
-        let previous = index > others.startIndex ? others[index - 1].position : nil
-        let next = index < others.endIndex ? others[index].position : nil
         let sourceColumnId = BaseLayout.columnId(of: current, groupBy: groupBy)
-        // Already in place.
-        if sourceColumnId == columnId, let position = current.position,
-           (previous.map { $0 < position } ?? true), (next.map { position < $0 } ?? true)
-        {
+        let position: String
+        do {
+            // `nil`: already in place.
+            guard let key = try FractionalIndex.key(placing: sourceColumnId == columnId ? current.position : nil, at: index,
+                                                    among: others.map(\.position))
+            else { return }
+            position = key
+        } catch {
+            // It went nowhere without a word.
+            toast = error.userMessage
             return
         }
-        guard let position = (try? FractionalIndex.jitteredKeyBetween(previous, next))
-            ?? (try? FractionalIndex.jitteredKeyBetween(others.last?.position, nil))
-        else { return }
         var cells: [String: JSONValue] = [:]
         if sourceColumnId != columnId {
             cells[groupBy.id] = column.isNoValue ? .null : .string(column.id)

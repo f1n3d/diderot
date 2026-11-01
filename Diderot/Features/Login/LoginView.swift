@@ -13,6 +13,7 @@ struct LoginView: View {
     @State private var mfaChallenge: MFAChallenge?
     @State private var ldapProvider: AuthProvider?
     @State private var hasSavedContent = false
+    @State private var isRetrying = false
     @FocusState private var focusedField: Field?
 
     private enum Field { case email, password }
@@ -24,6 +25,11 @@ struct LoginView: View {
 
     private var canSubmit: Bool {
         !email.trimmingCharacters(in: .whitespaces).isEmpty && !password.isEmpty && !isAuthenticating
+    }
+
+    /// The start couldn't check this server's saved sign-in (`AppSession.uncheckedSignIn`).
+    private var hasUncheckedSignIn: Bool {
+        session.uncheckedSignIn.map { StoredAccounts.key(for: $0.serverURL) == StoredAccounts.key(for: server.url) } == true
     }
 
     private var providers: [AuthProvider] { server.workspace?.providers ?? [] }
@@ -39,6 +45,29 @@ struct LoginView: View {
                         Label("Unencrypted connection: your password and your session travel unprotected.", systemImage: "lock.open")
                             .foregroundStyle(.orange)
                             .accessibilityIdentifier("login-unencrypted")
+                    }
+                }
+
+                if hasUncheckedSignIn {
+                    Section {
+                        Button {
+                            Task {
+                                isRetrying = true
+                                await session.retryUncheckedSignIn()
+                                isRetrying = false
+                            }
+                        } label: {
+                            HStack {
+                                Text("Try Again")
+                                if isRetrying { Spacer(); ProgressView() }
+                            }
+                        }
+                        .disabled(isRetrying || isAuthenticating)
+                        .accessibilityIdentifier("login-retry-saved")
+                    } header: {
+                        Text("Can't reach the server")
+                    } footer: {
+                        Text("Your sign-in is still saved, but the server didn't answer to confirm it. The app tries again when the network changes or when you come back to it.")
                     }
                 }
 
