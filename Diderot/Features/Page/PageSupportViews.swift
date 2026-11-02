@@ -74,10 +74,10 @@ struct EditorMessageBanner: View {
 /// every change; it used to show as soon as the engine synced, also while changes went into a connection that had died
 /// without notice, for the 30 s until the engine noticed.
 struct StatusPill: View {
-    let status: EngineStatus
-    let readOnlyReason: DocumentModel.ReadOnlyReason?
-    /// The server hasn't confirmed every change.
-    let unconfirmed: Bool
+    /// Read here, not handed in by the page's toolbar, whose values could stay behind the model's: right after a new page
+    /// opened, the engine counted a change and confirmed it 5 ms later, and from 2 s later on the pill said "Saving" with
+    /// nothing unconfirmed, until the next change (`test6_CreatePageFromSpace` in the UI suites).
+    let model: DocumentModel
     /// Symbol only (narrow toolbar, e.g. iPhone portrait next to the comment button); the text remains for VoiceOver.
     var compact = false
     /// Unconfirmed for longer than `savingDelay`: every change counts until the server confirms it a moment later, and
@@ -87,7 +87,7 @@ struct StatusPill: View {
     static let savingDelay: Duration = .seconds(2)
 
     private var content: (symbol: String, text: LocalizedStringKey, tint: Color) {
-        if let readOnlyReason {
+        if let readOnlyReason = model.readOnlyReason {
             switch readOnlyReason {
             case .offline: return ("wifi.slash", "Offline", .orange)
             case .notConnected: return ("icloud.slash", "Not connected", .orange)
@@ -95,7 +95,7 @@ struct StatusPill: View {
             case .noPermission, .newerServer: return ("lock", "Read only", .secondary)
             }
         }
-        switch status {
+        switch model.status {
         case .synced where saving: return ("icloud.and.arrow.up", "Saving", .secondary)
         case .synced: return ("checkmark.icloud", "Saved", .green)
         case .idle, .loading, .connecting, .connected: return ("arrow.triangle.2.circlepath.icloud", "Connecting", .secondary)
@@ -119,13 +119,14 @@ struct StatusPill: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(item.text))
         .accessibilityIdentifier("page-status")
-        .task(id: unconfirmed) {
-            guard unconfirmed else {
+        .task(id: model.hasUnconfirmedChanges) {
+            guard model.hasUnconfirmedChanges else {
                 saving = false
                 return
             }
             try? await Task.sleep(for: Self.savingDelay)
-            if !Task.isCancelled { saving = true }
+            // Still unconfirmed now, not only when the wait began.
+            if !Task.isCancelled, model.hasUnconfirmedChanges { saving = true }
         }
     }
 }
