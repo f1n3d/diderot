@@ -113,11 +113,13 @@ struct SpaceView: View {
         .task {
             configureStoreIfNeeded()
             await store.loadRootIfNeeded()
+            #if DEBUG
             if DebugLaunch.expandsTree {
                 for page in store.rootPages where page.mayHaveChildren {
                     await store.toggle(page.id)
                 }
             }
+            #endif
         }
         .task(id: mode) {
             // On every switch: `onChange` reloads Recent only while it shows, so tree changes would stay hidden.

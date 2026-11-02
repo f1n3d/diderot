@@ -1,7 +1,9 @@
 import Foundation
 
+#if DEBUG
 /// Debug-build launch parameters (`Tools/run-sim.sh`, UI tests) for auto sign-in and to jump straight to a view:
 /// `DOCMOST_DEBUG_SPACE=<slug|id>`, `DOCMOST_DEBUG_PAGE=<slugId|id>`, `DOCMOST_DEBUG_EXPAND=1`.
+/// Release builds don't have it: every use sits in `#if DEBUG` code, so the compiler keeps them from reading these.
 nonisolated enum DebugLaunch {
     static var spaceId: String? { value("DOCMOST_DEBUG_SPACE") }
     static var pageId: String? { value("DOCMOST_DEBUG_PAGE") }
@@ -44,12 +46,9 @@ nonisolated enum DebugLaunch {
         return value?.isEmpty == false ? value : nil
     }
 
-    /// Untrimmed (`DOCMOST_DEBUG_TYPE=" (bearbeitet)"` keeps its leading space); `nil` if empty or in release builds.
+    /// Untrimmed (`DOCMOST_DEBUG_TYPE=" (bearbeitet)"` keeps its leading space); `nil` if empty.
     private static func raw(_ key: String) -> String? {
-        #if DEBUG
-        return ProcessInfo.processInfo.environment[key].flatMap { $0.isEmpty ? nil : $0 }
-        #else
-        return nil
-        #endif
+        ProcessInfo.processInfo.environment[key].flatMap { $0.isEmpty ? nil : $0 }
     }
 }
+#endif

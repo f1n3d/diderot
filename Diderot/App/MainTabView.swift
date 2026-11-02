@@ -85,7 +85,9 @@ struct MainTabView: View {
         .task {
             await recentlyOpened.load()
             await favorites.loadIds()
+            #if DEBUG
             await applyDebugLaunch()
+            #endif
         }
         // Here, not in HomeView: a tab switch or a page opened at launch hides Home and would cancel the first load.
         .task { await spaces.loadIfNeeded() }
@@ -130,6 +132,7 @@ struct MainTabView: View {
         .environment(navigation)
     }
 
+    #if DEBUG
     /// Debug builds: jump to a space, page or tab (screenshots, UI tests).
     private func applyDebugLaunch() async {
         guard let ready = session.ready else { return }
@@ -152,6 +155,7 @@ struct MainTabView: View {
             spacesNavigation.open(PageSelection(pageId: pageId))
         }
     }
+    #endif
 }
 
 /// Destinations of every tab's stack that have no model of their own.

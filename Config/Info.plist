@@ -30,6 +30,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos for your pages.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to Docmost servers on your local network.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save images from your pages to Photos.</string>
 	<key>UIApplicationSceneManifest</key>

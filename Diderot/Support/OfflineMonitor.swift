@@ -13,6 +13,7 @@ final class OfflineMonitor {
     private var pretendsOffline = false
 
     init() {
+        #if DEBUG
         if let seconds = DebugLaunch.offlineSeconds {
             pretendsOffline = true
             isOffline = true
@@ -23,6 +24,7 @@ final class OfflineMonitor {
                 isOffline = pathIsOffline
             }
         }
+        #endif
         monitor.pathUpdateHandler = { [weak self] path in
             let offline = path.status != .satisfied
             Task { @MainActor in
