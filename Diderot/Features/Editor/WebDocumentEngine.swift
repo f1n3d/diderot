@@ -54,6 +54,13 @@ protocol DocumentEngine: AnyObject, Observable {
     /// joining a block with the one before) used to be separate calls, and a refused last one left the text twice or
     /// the list split, without a word.
     func batch(_ steps: [EngineStep]) async -> EngineResult
+    /// For each candidate, whether its blocks can go at `place` as the engine's schema allows (Engine/src/fits.ts); nil
+    /// without an engine. The app kept its own copy of these rules, and it drifted: a synced block was offered page
+    /// breaks and databases it can't hold.
+    func fits(_ place: BlockPlace, candidates: [[PMNode]]) async -> [Bool]?
+    /// For each table command, whether `tableCommand` would apply it to the cell, run without changing anything; nil
+    /// without an engine or the table.
+    func tableCommandsThatApply(_ target: BlockTarget, cell: [Int], commands: [[String: JSONValue]]) async -> [Bool]?
 }
 
 extension DocumentEngine {
@@ -136,6 +143,21 @@ enum BlockTarget: Hashable, Sendable {
 
 enum BlockInsertPosition: String {
     case before, after
+}
+
+/// Where blocks would go (`Place` in Engine/src/fits.ts): in place of the block at `target`, or before or after it;
+/// without a target, at the end of the page, before the footnotes.
+struct BlockPlace: Hashable, Sendable {
+    enum Position: String, Sendable {
+        case replace, before, after
+    }
+
+    var target: BlockTarget?
+    var position: Position
+
+    var jsObject: [String: Any] {
+        ["target": target?.jsObject ?? NSNull(), "position": position.rawValue]
+    }
 }
 
 /// A step of `batch` (`Step` in Engine/src/steps.ts). Each finds its block where the steps before it left it, so later
@@ -355,6 +377,16 @@ final class WebDocumentEngine: DocumentEngine {
         }
     }
 
+    func fits(_ place: BlockPlace, candidates: [[PMNode]]) async -> [Bool]? {
+        await answers("return window.DocmostEngine.fits(place, candidates);",
+                      ["place": place.jsObject, "candidates": candidates.map { $0.map(Self.jsObject) }])
+    }
+
+    func tableCommandsThatApply(_ target: BlockTarget, cell: [Int], commands: [[String: JSONValue]]) async -> [Bool]? {
+        await answers("return window.DocmostEngine.tableCommandsThatApply(target, cell, commands);",
+                      ["target": target.jsObject, "cell": cell, "commands": commands.map(Self.jsObject)])
+    }
+
     func undo() async -> EngineResult { await call("return window.DocmostEngine.undo();", [:]) }
     func redo() async -> EngineResult { await call("return window.DocmostEngine.redo();", [:]) }
 
@@ -370,6 +402,18 @@ final class WebDocumentEngine: DocumentEngine {
     }
 
     // MARK: - Internal
+
+    /// A question's answers, one per item asked about; nil when the engine takes no edits, has no page, or the call
+    /// throws.
+    private func answers(_ script: String, _ arguments: [String: Any]) async -> [Bool]? {
+        guard let page else { return nil }
+        do {
+            return try await page.callJavaScript(script, arguments: arguments) as? [Bool]
+        } catch {
+            AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
 
     /// The engine answers true (applied), false (refused) or null (it takes no edits); no page, or a call that throws
     /// (its web process ended), is unavailable too.

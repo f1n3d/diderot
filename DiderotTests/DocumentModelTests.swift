@@ -224,7 +224,9 @@ struct DocumentModelTests {
     }
 
     /// A mention shown as a card splits its paragraph there, as on the web: the text before (without its trailing
-    /// space), the card, the text after. No card in place of a list item's first line, in a table cell or a heading.
+    /// space), the card, the text after. Whether the card fits there is the engine's to say, asked with those blocks in
+    /// the paragraph's place, as the web asks its schema (not in place of a list item's first line, nor in a table
+    /// cell); a heading is no paragraph to split.
     @Test func mentionAsCardSplitsItsParagraph() async throws {
         let url = "https://github.com/o/r/issues/1"
         let mention = PMNode(type: "integrationMention", attrs: ["url": .string(url), "provider": "github"])
@@ -242,11 +244,21 @@ struct DocumentModelTests {
             DocumentModel.MentionTarget(ref: NodeRef(path: path, node: try #require(model.node(at: path))), index: 0, url: url, provider: "github")
         }
 
-        #expect(try !model.canShowAsCard(target([1, 0, 0])))
-        #expect(try !model.canShowAsCard(target([2, 0, 0, 0])))
-        #expect(try !model.canShowAsCard(target([3])))
+        let refused: [BlockTarget] = [.path([1, 0, 0], type: "paragraph"), .path([2, 0, 0, 0], type: "paragraph")]
+        engine.fitting = { place, _ in !refused.contains { $0 == place.target } }
+        #expect(try await !model.canShowAsCard(target([1, 0, 0])))
+        #expect(try await !model.canShowAsCard(target([2, 0, 0, 0])))
+        #expect(try await !model.canShowAsCard(target([3])))
+        #expect(engine.fitQuestions.count == 2)
         let first = try target([0])
-        #expect(model.canShowAsCard(first))
+        #expect(await model.canShowAsCard(first))
+        let card = [
+            PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Siehe")]),
+            PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": "github"]),
+            PMNode(type: "paragraph", content: [PMNode(type: "text", text: "danach")]),
+        ]
+        #expect(engine.fitQuestions.last?.place == BlockPlace(target: .path([0], type: "paragraph"), position: .replace))
+        #expect(engine.fitQuestions.last?.candidates == [card])
         await model.showMention(first, as: .card)
         #expect(engine.replacedWith.last == [
             PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Siehe")]),
@@ -787,6 +799,60 @@ struct DocumentModelTests {
         }
         model.perform(.date)
         #expect(String(model.activeText.characters) == Date.now.formatted(.dateTime.day().month(.wide).year()) + "Hallo")
+    }
+
+    /// The menus offer blocks where the engine says they fit, where they'd go. "/" in a synced block puts them after its
+    /// line, inside it, which holds no page breaks, databases or synced blocks; "+" after the synced block, where they all
+    /// fit. The app's own copy of the rules offered page breaks and databases there.
+    @Test(.timeLimit(.minutes(1))) func menusOfferBlocksWhereTheEngineSaysTheyFit() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "s"], content: [PMNode(type: "text", text: "Synced")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            PMNode(type: "transclusionSource", attrs: ["id": "t"], content: [line]),
+        ]))
+        let notInSyncedBlocks: Set<String> = ["pageBreak", "base", "transclusionSource", "transclusionReference"]
+        engine.fitting = { place, nodes in place.target != .id("s") || !nodes.contains { notInSyncedBlocks.contains($0.type) } }
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        model.activate(NodeRef(path: [0, 0], node: line), node: line)
+        while model.answers == nil { try await Task.sleep(for: .milliseconds(10)) }
+
+        model.togglePlusMenu()
+        #expect(model.insertMatches.contains(.pageBreak) && model.insertMatches.contains(.base))
+        model.togglePlusMenu()
+        model.activeText.append(AttributedString(" /"))
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        model.activeTextChanged()
+        #expect(model.slashQuery == "")
+        let offered = model.insertMatches
+        #expect(!offered.contains(.pageBreak) && !offered.contains(.base) && !offered.contains(.kanban) && !offered.contains(.syncedBlock))
+        #expect(offered.contains(.block(.table)) && offered.contains(.block(.divider)) && offered.contains(.date))
+        let places = engine.fitQuestions.map(\.place)
+        #expect(places.contains(BlockPlace(target: .id("s"), position: .after)) && places.contains(BlockPlace(target: .id("t"), position: .after)))
+    }
+
+    /// "/Database" where a database doesn't fit creates no database page on the server (it did, before its block
+    /// failed to go in) and says why.
+    @Test(.timeLimit(.minutes(1))) func databaseIsCreatedOnlyWhereItFits() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "s"])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            PMNode(type: "transclusionSource", attrs: ["id": "t"], content: [line]),
+        ]))
+        engine.fitting = { _, nodes in !nodes.contains { $0.type == "base" } }
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        var created = 0
+        model.canCreateBases = true
+        model.createBase = { _ in
+            created += 1
+            return "base"
+        }
+        engine.sendDocument()
+        model.activate(NodeRef(path: [0, 0], node: line), node: line)
+        model.perform(.base)
+        while model.notice == nil && created == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(created == 0 && model.notice == String(localized: "This can't be placed there."))
+        #expect(engine.inserted.isEmpty && engine.replacedWith.isEmpty)
     }
 
     /// A user mention shows as "@label": with the cursor right after it (its space deleted) the mention list stays
@@ -2021,5 +2087,21 @@ final class FakeDocumentEngine: DocumentEngine {
         }
         whileInserting?()
         return .applied
+    }
+    /// What the schema lets go where, as the test says; everything by default.
+    var fitting: ((BlockPlace, [PMNode]) -> Bool)?
+    /// The places asked about, with what for each.
+    private(set) var fitQuestions: [(place: BlockPlace, candidates: [[PMNode]])] = []
+    func fits(_ place: BlockPlace, candidates: [[PMNode]]) async -> [Bool]? {
+        fitQuestions.append((place, candidates))
+        return candidates.map { fitting?(place, $0) ?? true }
+    }
+    /// The table commands, by name, that apply to a cell; all by default.
+    var tableCommandsApplying: Set<String>?
+    /// Each question about table commands: the table, the cell and the commands.
+    private(set) var tableQuestions: [(target: BlockTarget, cell: [Int], commands: [[String: JSONValue]])] = []
+    func tableCommandsThatApply(_ target: BlockTarget, cell: [Int], commands: [[String: JSONValue]]) async -> [Bool]? {
+        tableQuestions.append((target, cell, commands))
+        return commands.map { command in tableCommandsApplying.map { $0.contains(command["name"]?.stringValue ?? "") } ?? true }
     }
 }
