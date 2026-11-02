@@ -434,133 +434,51 @@ final class AppSession {
         }
     }
 
-    // MARK: - Unsent page titles
+    // MARK: - Unsent page titles and database fields
 
-    @ObservationIgnored private var isSendingTitles = false
-    @ObservationIgnored private var isSendingCells = false
+    @ObservationIgnored private let unsentEdits = UnsentEdits()
 
     /// Keeps a page title the server didn't get; `sendUnsentTitles` sends it once the server answers. False if it couldn't
-    /// be kept (the kept titles can't be read, or not written): then nothing may promise it a later try.
+    /// be kept: then nothing may promise it a later try (`UnsentEdits.keepTitle`).
     /// `store`: the unsent changes of the session the page was opened in, as the editor engine keeps its own; a 401 or a
     /// switch may have ended that session meanwhile. Without one, the current session's.
     @discardableResult
     func keepUnsentTitle(_ title: String, pageId: String, spaceId: String?, in store: DiskCache? = nil) async -> Bool {
         guard let store = store ?? ready?.unsentChanges else { return false }
-        do {
-            // In one step: a title kept or sent meanwhile (another window) isn't lost.
-            try await store.update([String: UnsentTitle].self, key: CacheKey.unsentTitles, initial: [:]) {
-                $0[pageId] = UnsentTitle(title: title, spaceId: spaceId)
-            }
-            return true
-        } catch {
-            AppLog.session.error("Title not kept: \(error.localizedDescription, privacy: .public)")
-            return false
-        }
+        return await UnsentEdits.keepTitle(title, pageId: pageId, spaceId: spaceId, in: store)
     }
 
     /// The page's kept title, if it still waits for the server.
     func unsentTitle(pageId: String) async -> String? {
-        await ready?.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?[pageId]?.title
+        guard let store = ready?.unsentChanges else { return nil }
+        return await UnsentEdits.title(pageId: pageId, in: store)
     }
 
-    /// Drops the page's kept title: it, or a newer one, reached the server. With `title`, only while it is still that one:
-    /// a newer title kept meanwhile stays.
+    /// Drops the page's kept title: it, or a newer one, reached the server. With `title`, only while it is still that one.
     func forgetUnsentTitle(pageId: String, title: String? = nil) async {
         guard let store = ready?.unsentChanges else { return }
-        do {
-            try await store.update([String: UnsentTitle].self, key: CacheKey.unsentTitles, initial: [:]) { titles in
-                if let kept = titles[pageId], title == nil || kept.title == title { titles[pageId] = nil }
-            }
-        } catch {
-            AppLog.session.error("Kept title not dropped: \(error.localizedDescription, privacy: .public)")
-        }
+        await UnsentEdits.forgetTitle(pageId: pageId, title: title, in: store)
     }
 
-    /// A kept title or field that can never go (`UnsentChanges.isFinal`), dropped by `sendUnsentTitles` or
-    /// `sendUnsentCells`: `name` is what the user typed.
-    struct DroppedChange: Sendable {
-        let name: String
-        let reason: String
-
-        /// The notice for changes dropped: the page or entry was deleted, access to it removed or the input refused, and
-        /// the user expects them saved.
-        static func notice(for dropped: [DroppedChange]) -> String? {
-            guard let first = dropped.first else { return nil }
-            return dropped.count == 1
-                ? String(localized: "“\(first.name)” not saved: \(first.reason)")
-                : String(localized: "\(dropped.count) changes not saved, among them “\(first.name)”: \(first.reason)")
+    /// Sends the kept titles (`UnsentEdits.sendTitles`). Returns the spaces whose pages got theirs, and the titles that
+    /// can never go, which it dropped; after another error the rest waits for the next try (going online, back in the
+    /// app, opening a page).
+    func sendUnsentTitles() async -> (spaces: [String], dropped: [UnsentEdits.DroppedChange]) {
+        guard let session = ready else { return ([], []) }
+        return await unsentEdits.sendTitles(in: session.unsentChanges) { pageId, title in
+            // Another account's pages don't exist on its server: after a switch nothing more goes out.
+            _ = try await send(Endpoints.Pages.update(pageId: pageId, title: title), on: session)
         }
-    }
-
-    /// Sends the kept titles. Returns the spaces whose pages got theirs, and the titles that can never go, which it
-    /// dropped; after another error the rest waits for the next try (going online, back in the app, opening a page).
-    func sendUnsentTitles() async -> (spaces: [String], dropped: [DroppedChange]) {
-        guard !isSendingTitles, let session = ready else { return ([], []) }
-        isSendingTitles = true
-        defer { isSendingTitles = false }
-        let store = session.unsentChanges
-        let titles: [String: UnsentTitle]
-        do {
-            titles = try await store.readThrowing([String: UnsentTitle].self, key: CacheKey.unsentTitles) ?? [:]
-        } catch {
-            AppLog.session.error("Kept titles unreadable: \(error.localizedDescription, privacy: .public)")
-            return ([], [])
-        }
-        var spaces: [String] = [], dropped: [DroppedChange] = []
-        for (pageId, kept) in titles {
-            // A newer title saved meanwhile replaced or dropped this one.
-            guard (try? await store.readThrowing([String: UnsentTitle].self, key: CacheKey.unsentTitles))?[pageId]?.title == kept.title
-            else { continue }
-            do {
-                // Another account's pages don't exist on its server: after a switch nothing more goes out.
-                _ = try await send(Endpoints.Pages.update(pageId: pageId, title: kept.title), on: session)
-                if let spaceId = kept.spaceId { spaces.append(spaceId) }
-            } catch let error where UnsentChanges.isFinal(error) {
-                AppLog.session.error("Kept title dropped: \(error.userMessage, privacy: .public)")
-                dropped.append(DroppedChange(name: kept.title, reason: error.userMessage))
-            } catch {
-                break
-            }
-            // A title kept for the page meanwhile stays.
-            try? await store.update([String: UnsentTitle].self, key: CacheKey.unsentTitles, initial: [:]) { titles in
-                if titles[pageId]?.title == kept.title { titles[pageId] = nil }
-            }
-        }
-        return (spaces, dropped)
     }
 
     /// Sends the kept database fields (`UnsentCell`), as `sendUnsentTitles` does titles. Returns the ones that can never
     /// go (entry deleted, access gone, value refused), which it dropped.
-    func sendUnsentCells() async -> [DroppedChange] {
-        guard !isSendingCells, let session = ready else { return [] }
-        isSendingCells = true
-        defer { isSendingCells = false }
-        let store = session.unsentChanges
-        let cells: [String: UnsentCell]
-        do {
-            cells = try await store.readThrowing([String: UnsentCell].self, key: CacheKey.unsentCells) ?? [:]
-        } catch {
-            AppLog.session.error("Kept fields unreadable: \(error.localizedDescription, privacy: .public)")
-            return []
+    func sendUnsentCells() async -> [UnsentEdits.DroppedChange] {
+        guard let session = ready else { return [] }
+        return await unsentEdits.sendCells(in: session.unsentChanges) { cell in
+            _ = try await send(Endpoints.Bases.updateRow(pageId: cell.basePageId, rowId: cell.rowId, cells: [cell.propertyId: cell.value]),
+                               on: session)
         }
-        var dropped: [DroppedChange] = []
-        for (key, kept) in cells {
-            // A newer input saved or kept meanwhile replaced or dropped this one.
-            guard (try? await store.readThrowing([String: UnsentCell].self, key: CacheKey.unsentCells))?[key] == kept else { continue }
-            do {
-                let endpoint = Endpoints.Bases.updateRow(pageId: kept.basePageId, rowId: kept.rowId, cells: [kept.propertyId: kept.value])
-                _ = try await send(endpoint, on: session)
-            } catch let error where UnsentChanges.isFinal(error) {
-                AppLog.session.error("Kept field dropped: \(error.userMessage, privacy: .public)")
-                dropped.append(DroppedChange(name: kept.typed.isEmpty ? kept.propertyName : kept.typed, reason: error.userMessage))
-            } catch {
-                break
-            }
-            try? await store.update([String: UnsentCell].self, key: CacheKey.unsentCells, initial: [:]) { cells in
-                if cells[key] == kept { cells[key] = nil }
-            }
-        }
-        return dropped
     }
 
     /// Runs an API call and ends its session on 401. All data loaders use it.

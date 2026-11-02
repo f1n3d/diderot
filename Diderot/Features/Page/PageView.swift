@@ -1303,7 +1303,7 @@ struct PageView: View {
         guard !offline.isOffline else { return }
         let sent = await session.sendUnsentTitles()
         for spaceId in sent.spaces { changes.pageChanged(in: spaceId) }
-        if let notice = AppSession.DroppedChange.notice(for: sent.dropped) { toast = notice }
+        if let notice = UnsentEdits.DroppedChange.notice(for: sent.dropped) { toast = notice }
         guard await session.unsentTitle(pageId: page.id) == nil else { return }
         unsentTitle = nil
         await load(force: true)

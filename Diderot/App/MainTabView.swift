@@ -102,7 +102,7 @@ struct MainTabView: View {
         let titles = await session.sendUnsentTitles()
         changes.pagesChanged(in: titles.spaces)
         let dropped = titles.dropped + (await session.sendUnsentCells())
-        if let notice = AppSession.DroppedChange.notice(for: dropped) { notices.post(notice) }
+        if let notice = UnsentEdits.DroppedChange.notice(for: dropped) { notices.post(notice) }
     }
 
     /// A tab's navigation stack with every destination reachable from any view.
