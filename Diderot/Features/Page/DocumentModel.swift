@@ -673,7 +673,7 @@ final class DocumentModel {
 
     private func updateMentionQuery() {
         guard let active, active.type != "codeBlock", slashQuery == nil,
-              let newQuery = trigger("@", maxLength: 30, cursor: insertionIndex())?.query
+              let newQuery = TriggerParser.mention(in: activeText, cursor: insertionIndex())?.query
         else {
             mentionQuery = nil
             return
@@ -907,24 +907,7 @@ final class DocumentModel {
         guard let active, active.type != "codeBlock",
               case .insertionPoint(let cursor) = activeSelection.indices(in: activeText)
         else { return nil }
-        return trigger("/", maxLength: 24, cursor: cursor)
-    }
-
-    /// `mark` ("/" or "@") before the cursor, at block start or after whitespace (incl. the line break U+2028),
-    /// followed by at most `maxLength` non-whitespace characters. The limits only end a menu once a longer word is
-    /// typed: 24 is above every command keyword ("/"), 30 above most names ("@").
-    private func trigger(_ mark: Character, maxLength: Int, cursor: AttributedString.Index) -> (query: String, offset: Int)? {
-        let text = activeText
-        let before = Array(text[text.startIndex..<cursor].characters)
-        guard let offset = before.lastIndex(of: mark) else { return nil }
-        let query = before[(offset + 1)...]
-        guard query.count <= maxLength, !query.contains(where: \.isWhitespace) else { return nil }
-        guard offset == 0 || before[offset - 1].isWhitespace else { return nil }
-        // Mark and query are typed text, never an atom's: a user mention shows as "@label", a status or math may
-        // contain either, and an atom between mark and cursor would be lost with the pick.
-        let index = text.characters.index(text.startIndex, offsetBy: offset)
-        if text[index..<cursor].runs.contains(where: { $0.docmost.inlineNode != nil }) { return nil }
-        return (String(query), offset)
+        return TriggerParser.slash(in: activeText, cursor: cursor)
     }
 
     /// Removes "/query" from the active text and returns the offset where it was.
