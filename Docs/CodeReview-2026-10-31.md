@@ -59,7 +59,7 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **E** Structure, in steps | S2 → S3 → S4, plus R54 | unit tests and UI tests | medium to high |
+| **E** Structure, in steps | S2 → S3 → S4 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
 S1 is done: what fits where, Return, Backspace, conversions, columns and unsync are decided and applied in the engine and checked in `pnpm run check`. Package C's stopgap for R1 remains for cards, atoms and templates. DocumentModel didn't get shorter by it (about 3,000 lines): the engine's answers it asks for and keeps took the place of the rules.
@@ -98,18 +98,6 @@ S1 is done: what fits where, Return, Backspace, conversions, columns and unsync 
 
 **Fix:** Cap by `expectedContentLength`, download PDFs to a file and open them off the main thread.
 
-### Hygiene
-
-#### R54 [low] ○ Duplicates in the editor
-
-**Where and what:**
-
-- two `insertIntoActiveText` overloads (`DocumentModel.swift:1153`, `:1555`)
-- mention attributes built twice (`:856–863`, `:1452–1464`)
-- the "n-th atom of type" search three times (`:1233`, `:1589`, `:1596`)
-- the descend-to-text loop twice (`:2625`, `:2783`)
-- toolbar format actions call `activeTextChanged()` (`EditorToolbar.swift:303–358`, `:492`, `:539`), and `onChange(of: activeText)` calls it again (`BlockCards.swift:349–354`)
-
 ---
 
 ## 2. Structure
@@ -118,41 +106,16 @@ S1 is done: what fits where, Return, Backspace, conversions, columns and unsync 
 
 | Type | Lines | Notes |
 |---|---|---|
-| DocumentModel | 2,806 | about 12 jobs |
-| PageView | 1,460 | at the type checker's limit |
-| BlockCards | 1,164 | |
-| AppSession | 775 | about 9 jobs |
-| BaseModel | 625 | its about 20 tests live in AppSessionTests |
+| DocumentModel | 2,432 | its pure parts are out (see below) |
+| PageView | 1,441 | at the type checker's limit |
+| AppSession | 1,015 | about 9 jobs |
+| BaseModel | 708 | its about 20 tests live in AppSessionTests |
 
 #### DocumentModel
 
-Its jobs, by MARK section:
+Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), the lookups in a document (`DocumentTree.swift`), the nodes the editor makes (`NodeFactory.swift`), "/" and "@" in the text (`TriggerParser.swift`) and the table toolbar's types (`TableEditing.swift`). The insert rules S1 left are the menus' state and stay.
 
-- value types (1–243)
-- engine lifecycle and unsent saves (448–669)
-- snapshot and override sync
-- active text and commit (671–819, 2003–2113)
-- slash and @ menus
-- inline inserts, paste and integrations (1131–1635)
-- block inserts, media, synced blocks, columns and tabs (1637–2001)
-- Return and Backspace (2115–2362)
-- block operations, tables and undo (2439–2701)
-- tree helpers
-
-Split it in two steps.
-
-**First the pure parts (M, about 900 lines):**
-
-- `DocumentTypes` (move only)
-- `DocumentTree`: `node(at:)`, `path(where:)`, ancestors, `locate`, `lastTextBlock`, `precedes`, `applyOverrides`, `offset(movedFrom:)`
-- `NodeFactory`
-- `InsertRules`
-- `TriggerParser`
-- `TableEditing`
-
-DocumentModelTests are a good safety net.
-
-**Then the stateful parts (L):** `EngineConnection` (the lifecycle, an enum since package C, unsent-save scheduling, uploads) and `ActiveTextSession` (text, selection, overrides, base, commit), behind a thin observable model.
+**Then the stateful parts (L):** `EngineConnection` (the lifecycle, an enum since package C, unsent-save scheduling, uploads) and `ActiveTextSession` (text, selection, overrides, base, commit), behind a thin observable model. DocumentModelTests are a good safety net.
 
 #### PageView
 
@@ -161,10 +124,6 @@ DocumentModelTests are a good safety net.
 | Keyboard centring (about 230 lines) into a coordinator or view modifier | M |
 | A `PageLoader` with a `Dependencies` struct, replacing nine properties set after init | M |
 | Title handling, page actions, link routing | S each |
-
-#### BlockCards
-
-A file split is enough (S): PageEditor/ActiveTextEditor/EditorFocus, menus, block bars, drag & drop.
 
 #### AppSession
 
