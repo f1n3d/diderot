@@ -703,15 +703,8 @@ final class DocumentModel {
             mentionSuggestions = []
             return
         }
-        var attrs: [String: JSONValue] = [
-            "id": .string(UUID().uuidString.lowercased()),
-            "label": .string(suggestion.title),
-            "entityType": .string(suggestion.kind == .user ? "user" : "page"),
-            "entityId": .string(suggestion.entityId),
-            "slugId": suggestion.slugId.map { .string($0) } ?? .null,
-        ]
-        if let currentUserId { attrs["creatorId"] = .string(currentUserId) }
-        let node = PMNode(type: "mention", attrs: attrs)
+        let node = NodeFactory.mention(entityType: suggestion.kind == .user ? "user" : "page", entityId: suggestion.entityId,
+                                       label: suggestion.title, slugId: suggestion.slugId, creatorId: currentUserId)
         var run = Self.editorText(from: [node])
         run.append(AttributedString(" "))
         let insertedCount = run.characters.count
@@ -1039,7 +1032,7 @@ final class DocumentModel {
         case .subpages:
             Task { await insertBlocks([PMNode(type: "subpages")], placement: placement, focus: .after) }
         case .tabs:
-            Task { await insertBlocks([Self.tabsNode()], placement: placement, focus: .inside([0, 1, 0])) }
+            Task { await insertBlocks([NodeFactory.tabs()], placement: placement, focus: .inside([0, 1, 0])) }
         case .drawio, .excalidraw:
             Task { await insertBlocks([PMNode(type: command == .drawio ? "drawio" : "excalidraw")], placement: placement, focus: .after) }
         case .mermaid:
@@ -1049,7 +1042,7 @@ final class DocumentModel {
         case .syncedBlock:
             Task { await insertBlocks([PMNode(type: "transclusionSource", content: [PMNode(type: "paragraph")])], placement: placement, focus: .inside([0])) }
         case .columns(let count):
-            Task { await insertBlocks([Self.columnsNode(count: count)], placement: placement, focus: .inside([0, 0])) }
+            Task { await insertBlocks([NodeFactory.columns(count: count)], placement: placement, focus: .inside([0, 0])) }
         case .image: requestMedia(.images, placement: placement)
         case .camera: requestMedia(.camera, placement: placement)
         case .video: requestMedia(.videos, placement: placement)
@@ -1077,7 +1070,7 @@ final class DocumentModel {
         case .mathInline: editorSheet = .mathInline(.insert(offset: offset), latex: "")
         case .footnote:
             let node = PMNode(type: "footnoteReference", attrs: [
-                "data-id": .string(Self.newNodeId()), "referenceNumber": .string("\(footnoteNumber(at: offset))"),
+                "data-id": .string(NodeFactory.newNodeId()), "referenceNumber": .string("\(footnoteNumber(at: offset))"),
             ])
             insertAtom(node, offset: offset)
         default: break
@@ -1126,26 +1119,11 @@ final class DocumentModel {
         case card, mention, link
     }
 
-    static func integrationMention(url: String, provider: String) -> PMNode {
-        PMNode(type: "integrationMention", attrs: ["url": .string(url), "provider": .string(provider)])
-    }
-
-    static func integrationCard(url: String, provider: String) -> PMNode {
-        PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": .string(provider)])
-    }
-
-    /// The link as text, with its service as the web keeps it.
-    static func integrationLinkText(url: String, provider: String) -> PMNode {
-        var attrs: [String: JSONValue] = ["href": .string(url), "target": "_blank", "internal": false]
-        if !provider.isEmpty { attrs["integrationProvider"] = .string(provider) }
-        return PMNode(type: "text", marks: [PMMark(type: "link", attrs: attrs)], text: url)
-    }
-
     /// Shows an integration card as a mention or a link, in a paragraph of its own.
     func showIntegrationCard(_ ref: NodeRef, as display: IntegrationDisplay) async {
         guard display != .card, let (_, card) = document.locate(ref) else { return }
         let url = card.string("url") ?? "", provider = card.string("provider") ?? ""
-        let inline = display == .mention ? Self.integrationMention(url: url, provider: provider) : Self.integrationLinkText(url: url, provider: provider)
+        let inline = display == .mention ? NodeFactory.integrationMention(url: url, provider: provider) : NodeFactory.integrationLinkText(url: url, provider: provider)
         await replace(ref, withNodes: [PMNode(type: "paragraph", content: [inline])])
     }
 
@@ -1156,7 +1134,7 @@ final class DocumentModel {
             return
         case .link:
             await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index,
-                              with: Self.integrationLinkText(url: target.url, provider: target.provider))
+                              with: NodeFactory.integrationLinkText(url: target.url, provider: target.provider))
         case .card:
             guard let nodes = cardReplacement(for: target) else { return }
             await replace(target.ref, withNodes: nodes)
@@ -1178,7 +1156,7 @@ final class DocumentModel {
             seen += 1
             return seen == target.index
         }) else { return nil }
-        return blockReplacement(Self.integrationCard(url: target.url, provider: target.provider), paragraph: target.ref,
+        return blockReplacement(NodeFactory.integrationCard(url: target.url, provider: target.provider), paragraph: target.ref,
                                 before: Array(block.children[..<position]), after: Array(block.children[(position + 1)...]))
     }
 
@@ -1207,9 +1185,9 @@ final class DocumentModel {
         case .mention:
             let offset = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
             activeText.removeSubrange(range)
-            insertIntoActiveText(Self.editorText(from: [Self.integrationMention(url: url, provider: provider)]), at: offset)
+            insertIntoActiveText(Self.editorText(from: [NodeFactory.integrationMention(url: url, provider: provider)]), at: offset)
         case .card:
-            placeBlockInActiveText(Self.integrationCard(url: url, provider: provider), replacing: range)
+            placeBlockInActiveText(NodeFactory.integrationCard(url: url, provider: provider), replacing: range)
         }
     }
 
@@ -1394,16 +1372,8 @@ final class DocumentModel {
 
     /// A mention of the page, as the web makes one from a pasted link ("Untitled" unlocalized as there).
     private func pageMention(_ page: LinkedPage) -> PMNode {
-        var attrs: [String: JSONValue] = [
-            "id": .string(UUID().uuidString.lowercased()),
-            "label": .string(page.title.isEmpty ? "Untitled" : page.title),
-            "entityType": "page",
-            "entityId": .string(page.id),
-            "slugId": page.slugId.map { .string($0) } ?? .null,
-        ]
-        if let currentUserId { attrs["creatorId"] = .string(currentUserId) }
-        if let anchor = page.anchor, !anchor.isEmpty { attrs["anchorId"] = .string(anchor) }
-        return PMNode(type: "mention", attrs: attrs)
+        NodeFactory.mention(entityType: "page", entityId: page.id, label: page.title.isEmpty ? "Untitled" : page.title,
+                            slugId: page.slugId, creatorId: currentUserId, anchorId: page.anchor)
     }
 
     /// Replaces the paste as chosen; nil (the question dismissed) keeps it.
@@ -1414,7 +1384,7 @@ final class DocumentModel {
         let url = link.url.absoluteString, provider = link.provider?.rawValue ?? ""
         switch choice {
         case .card:
-            placeBlockInActiveText(Self.integrationCard(url: url, provider: provider), replacing: range)
+            placeBlockInActiveText(NodeFactory.integrationCard(url: url, provider: provider), replacing: range)
         case .embeddedBase:
             if let base = link.base {
                 placeBlockInActiveText(PMNode(type: "base", attrs: ["pageId": .string(base.id)]), replacing: range)
@@ -1422,7 +1392,7 @@ final class DocumentModel {
         case .mention:
             // A database link is its mention already.
             if link.base == nil {
-                replaceActiveText(range, with: Self.editorText(from: [Self.integrationMention(url: url, provider: provider)]))
+                replaceActiveText(range, with: Self.editorText(from: [NodeFactory.integrationMention(url: url, provider: provider)]))
             }
         case .link:
             break
@@ -1574,11 +1544,6 @@ final class DocumentModel {
         return count + 1
     }
 
-    /// New ID like `generateNodeId` in the web client (12 lowercase letters).
-    static func newNodeId() -> String {
-        String((0..<12).map { _ in "abcdefghijklmnopqrstuvwxyz".randomElement()! })
-    }
-
     // MARK: Blocks
 
     /// Inserts blocks at `placement`, then moves the cursor per `focus`; without `focus`, editing ends.
@@ -1693,20 +1658,6 @@ final class DocumentModel {
     /// Inserts an empty `template` block and puts the cursor in its first text.
     func insertTemplate(_ template: BlockTemplate, placement: BlockPlacement) async {
         await insertBlocks([template.node()], placement: placement, focus: template.firstTextPath.map { .inside($0) } ?? .after)
-    }
-
-    static func columnsNode(count: Int) -> PMNode {
-        PMNode(type: "columns", attrs: ["layout": .string(defaultColumnsLayout(count))],
-               content: (0..<count).map { _ in PMNode(type: "column", content: [PMNode(type: "paragraph")]) })
-    }
-
-    static func defaultColumnsLayout(_ count: Int) -> String {
-        switch count {
-        case 3: "three_equal"
-        case 4: "four_equal"
-        case 5: "five_equal"
-        default: "two_equal"
-        }
     }
 
     /// Result of the math block sheet: insert, change, or (for `nil`) delete.
@@ -1909,19 +1860,6 @@ final class DocumentModel {
 
     // MARK: Tabs
 
-    /// A new tabs block as the web makes it: "Tab 1" and "Tab 2", each with an empty paragraph.
-    static func tabsNode() -> PMNode {
-        PMNode(type: "tabs", content: [tabNode(label: "Tab 1"), tabNode(label: "Tab 2")])
-    }
-
-    /// A tab without an id (Docmost gives it one): its label and a panel with an empty paragraph.
-    static func tabNode(label: String, panel: [PMNode] = [PMNode(type: "paragraph")]) -> PMNode {
-        PMNode(type: "tab", content: [
-            PMNode(type: "tabLabel", content: label.isEmpty ? nil : [PMNode(type: "text", text: label)]),
-            PMNode(type: "tabPanel", content: panel),
-        ])
-    }
-
     /// The label of a tab node as plain text.
     static func tabLabel(of tab: PMNode) -> String {
         tab.children.first { $0.type == "tabLabel" }?.plainText ?? ""
@@ -1933,7 +1871,7 @@ final class DocumentModel {
         guard let engine, let (path, tabs) = document.locate(tabsRef), let last = tabs.children.last else { return nil }
         if active != nil { deactivate() }
         let lastRef = NodeRef(path: path + [tabs.children.count - 1], node: last)
-        let tab = Self.tabNode(label: "Tab \(tabs.children.count + 1)")
+        let tab = NodeFactory.tab(label: "Tab \(tabs.children.count + 1)")
         return report(await engine.insertBlock(tab, relativeTo: lastRef.target, position: .after)) ? path + [tabs.children.count] : nil
     }
 
