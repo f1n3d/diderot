@@ -67,10 +67,23 @@ protocol DocumentEngine: AnyObject, Observable {
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult
     /// Backspace at the start of a text block that holds `node` by now, its input (`backspace` in Engine/src/keys.ts).
     func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult
-    /// A heading (`node`) for an item's only line: the line leaves the list as it (`liftLine` in Engine/src/keys.ts).
-    func liftLine(_ target: BlockTarget, as node: PMNode) async -> KeyResult
     /// What Backspace at the start of the block does, empty and with text; nil without an engine or the block.
     func backspacePlans(_ target: BlockTarget) async -> BackspacePlans?
+    /// Turns the line at `target` into `kind` (a `BlockTemplate`'s raw value, or "syncedBlock") where it is, from the
+    /// engine's document then, in one transaction (`convert` in Engine/src/conversions.ts): a list kind in a list item
+    /// switches the item's whole list, a heading takes an item's only line out of the list. Returns where the cursor goes.
+    func convert(_ target: BlockTarget, to kind: String) async -> KeyResult
+    /// What the line at `target` can turn into where it is (the kinds `convert` takes); nil without an engine or the
+    /// block.
+    func conversions(_ target: BlockTarget) async -> Set<String>?
+    /// Sets the count of the columns block at `target` as the web does: new columns are empty, the ones removed go into
+    /// the last one kept.
+    func setColumnCount(_ target: BlockTarget, count: Int) async -> EngineResult
+    /// Unsyncs the synced block's source at `target`: its content stays as normal blocks.
+    func unsync(_ target: BlockTarget) async -> EngineResult
+    /// Replaces the embed of a synced block (its source page and id) with its content as the server returned it: the
+    /// embed at `path`, else the first on the page, as it has no id.
+    func replaceReference(at path: [Int], sourcePageId: String, transclusionId: String, with nodes: [PMNode]) async -> EngineResult
 }
 
 extension DocumentEngine {
@@ -177,7 +190,7 @@ struct EngineCursor: Equatable, Sendable, Decodable {
     var offset: Int
 }
 
-/// What Return or a heading out of a list came to: where the cursor goes; refused or unavailable as `EngineResult`.
+/// What Return or a conversion came to: where the cursor goes; refused or unavailable as `EngineResult`.
 enum KeyResult: Equatable {
     case moved(EngineCursor)
     case refused, unavailable
@@ -472,17 +485,37 @@ final class WebDocumentEngine: DocumentEngine {
         }
     }
 
-    func liftLine(_ target: BlockTarget, as node: PMNode) async -> KeyResult {
-        let result: KeyAnswer<EngineCursor> = await key("return JSON.stringify(window.DocmostEngine.liftLine(target, json));",
-                                                        ["target": target.jsObject, "json": Self.jsObject(node)])
-        return Self.moved(result)
-    }
-
     func backspacePlans(_ target: BlockTarget) async -> BackspacePlans? {
         let result: KeyAnswer<BackspacePlans> = await key("return JSON.stringify(window.DocmostEngine.backspacePlans(target));",
                                                           ["target": target.jsObject])
         if case .value(let plans) = result { return plans }
         return nil
+    }
+
+    func convert(_ target: BlockTarget, to kind: String) async -> KeyResult {
+        let result: KeyAnswer<EngineCursor> = await key("return JSON.stringify(window.DocmostEngine.convert(target, kind));",
+                                                        ["target": target.jsObject, "kind": kind])
+        return Self.moved(result)
+    }
+
+    func conversions(_ target: BlockTarget) async -> Set<String>? {
+        let result: KeyAnswer<[String]> = await key("return JSON.stringify(window.DocmostEngine.conversions(target));",
+                                                    ["target": target.jsObject])
+        if case .value(let kinds) = result { return Set(kinds) }
+        return nil
+    }
+
+    func setColumnCount(_ target: BlockTarget, count: Int) async -> EngineResult {
+        await call("return window.DocmostEngine.setColumnCount(target, count);", ["target": target.jsObject, "count": count])
+    }
+
+    func unsync(_ target: BlockTarget) async -> EngineResult {
+        await call("return window.DocmostEngine.unsync(target);", ["target": target.jsObject])
+    }
+
+    func replaceReference(at path: [Int], sourcePageId: String, transclusionId: String, with nodes: [PMNode]) async -> EngineResult {
+        await call("return window.DocmostEngine.replaceReference(path, source, json);",
+                   ["path": path, "source": ["sourcePageId": sourcePageId, "transclusionId": transclusionId], "json": nodes.map(Self.jsObject)])
     }
 
     func undo() async -> EngineResult { await call("return window.DocmostEngine.undo();", [:]) }
