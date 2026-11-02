@@ -30,8 +30,6 @@ final class DocumentModel {
         case closed, opening, live, closing
     }
 
-    static let editableTextTypes: Set<String> = ["paragraph", "heading", "detailsSummary"]
-
     let page: Page
     let engine: (any DocumentEngine)?
     private(set) var document: PMNode
@@ -136,7 +134,7 @@ final class DocumentModel {
     /// Offers "Comment" for text selected in the active text block. Not while a sheet (link, comment) has focus: its
     /// text fields would get the menu item too.
     var canCommentOnSelection: Bool {
-        guard canComment, !editsInSheet, let active, Self.editableTextTypes.contains(active.type),
+        guard canComment, !editsInSheet, let active, PMNode.editableTextTypes.contains(active.type),
               case .ranges(let ranges) = activeSelection.indices(in: activeText)
         else { return false }
         return ranges.ranges.contains { !$0.isEmpty }
@@ -414,7 +412,7 @@ final class DocumentModel {
     /// Backspace on its way, no sheet holding ranges of the text, no marked text (dictation, Japanese input).
     private func collaboratorChangedActiveBlock() -> Bool {
         guard let active, let base = activeBase, overrides[active.ref.identity] == nil, typingSwitches == 0, !editsInSheet,
-              editorTextView?.markedTextRange == nil, let (_, node) = locate(active.ref)
+              editorTextView?.markedTextRange == nil, let (_, node) = document.locate(active.ref)
         else { return false }
         return !looksTheSame(node, base)
     }
@@ -491,7 +489,7 @@ final class DocumentModel {
     /// The active block follows by its UniqueID when its path shifts; otherwise the editor would edit another block.
     private func followMovedBlocks() {
         if let active, let id = active.ref.id, node(at: active.ref.path)?.string("id") != id {
-            if let path = path(where: { $0.string("id") == id }) {
+            if let path = document.path(where: { $0.string("id") == id }) {
                 self.active = Active(ref: NodeRef(path: path, id: id), type: active.type, attrs: active.attrs, itemPath: enclosingItemPath(path))
             } else if !editsTable && typingSwitches == 0 {
                 // A collaborator deleted it. Its editor used to vanish with it; the page's one editor stays, so end here.
@@ -509,18 +507,6 @@ final class DocumentModel {
         }
     }
 
-    /// Path of the first node in document order that `matches`.
-    private func path(where matches: (PMNode) -> Bool, in root: PMNode? = nil) -> [Int]? {
-        func search(_ node: PMNode, _ path: [Int]) -> [Int]? {
-            for (index, child) in node.children.enumerated() {
-                if matches(child) { return path + [index] }
-                if let found = search(child, path + [index]) { return found }
-            }
-            return nil
-        }
-        return search(root ?? document, [])
-    }
-
     private func stop() async {
         await flush()
         if let engine {
@@ -536,7 +522,7 @@ final class DocumentModel {
 
     func activate(_ ref: NodeRef, node: PMNode, cursor: CursorRequest = .end) {
         // Only text and code: the editor's text would replace any other block (a list, quote or image) on the next key.
-        guard isEditable, Self.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
+        guard isEditable, PMNode.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
         if active?.ref == ref { return }
         if active != nil { commitPendingNow() }
         let itemPath = enclosingItemPath(ref.path)
@@ -597,7 +583,7 @@ final class DocumentModel {
     /// Tap below the last block: cursor to its end if it is text, else a new paragraph at the end.
     func activateTrailing() async {
         guard isEditable else { return }
-        if let last = contentBlocks.last, Self.editableTextTypes.contains(last.node.type) {
+        if let last = contentBlocks.last, PMNode.editableTextTypes.contains(last.node.type) {
             if active?.ref == last.ref {
                 cursorRequest = .end
             } else {
@@ -610,7 +596,7 @@ final class DocumentModel {
 
     /// Path of the active block's nearest ancestor of the given type (e.g. a callout).
     func activeAncestorPath(ofType type: String) -> [Int]? {
-        active.flatMap { ancestorPath(of: $0.ref.path, types: [type]) }
+        active.flatMap { document.ancestorPath(of: $0.ref.path, types: [type]) }
     }
 
     /// Sets attributes of a block (`NodeRef(path:id: nil)` targets it by position).
@@ -855,23 +841,11 @@ final class DocumentModel {
     func insertLocation(of active: Active) -> InsertLocation {
         if active.ref.isTopLevel { return .topLevel }
         if active.type == "detailsSummary" { return .summary }
-        let ancestors = ancestorTypes(of: active.ref.path)
+        let ancestors = document.ancestorTypes(of: active.ref.path)
         if ancestors.contains("footnotes") { return .footnote }
         if active.itemPath != nil { return .listItem }
         if ancestors.contains("tableCell") || ancestors.contains("tableHeader") { return .tableCell }
         return .container
-    }
-
-    /// Types of a node's ancestors, excluding the node.
-    func ancestorTypes(of path: [Int]) -> Set<String> {
-        var types: Set<String> = []
-        var current = document
-        for index in path.dropLast() {
-            guard current.children.indices.contains(index) else { break }
-            current = current.children[index]
-            types.insert(current.type)
-        }
-        return types
     }
 
     /// Commands that fit at the active block's position; all of them without an active block (floating "+").
@@ -896,7 +870,7 @@ final class DocumentModel {
             commands.removeAll { command in command.blockType.map { !fitting.contains($0) } ?? false }
         }
         // Columns hold columns, but the app puts none into a column.
-        if inPlace, slashQuery != nil, ancestorTypes(of: active.ref.path).contains("columns") {
+        if inPlace, slashQuery != nil, document.ancestorTypes(of: active.ref.path).contains("columns") {
             commands.removeAll { if case .columns = $0 { true } else { false } }
         }
         return commands
@@ -1169,7 +1143,7 @@ final class DocumentModel {
 
     /// Shows an integration card as a mention or a link, in a paragraph of its own.
     func showIntegrationCard(_ ref: NodeRef, as display: IntegrationDisplay) async {
-        guard display != .card, let (_, card) = locate(ref) else { return }
+        guard display != .card, let (_, card) = document.locate(ref) else { return }
         let url = card.string("url") ?? "", provider = card.string("provider") ?? ""
         let inline = display == .mention ? Self.integrationMention(url: url, provider: provider) : Self.integrationLinkText(url: url, provider: provider)
         await replace(ref, withNodes: [PMNode(type: "paragraph", content: [inline])])
@@ -1197,7 +1171,7 @@ final class DocumentModel {
     }
 
     private func cardReplacement(for target: MentionTarget) -> [PMNode]? {
-        guard let (_, block) = locate(target.ref) else { return nil }
+        guard let (_, block) = document.locate(target.ref) else { return nil }
         var seen = -1
         guard let position = block.children.firstIndex(where: { child in
             guard child.type == "integrationMention" else { return false }
@@ -1246,7 +1220,7 @@ final class DocumentModel {
     /// it isn't empty. Nil outside a paragraph. Whether they fit there is the engine's to say, as the web asks its schema
     /// (`getBlockPlacement`): not in table cells, synced blocks and footnotes, nor in place of a list item's first line.
     private func blockReplacement(_ block: PMNode, paragraph ref: NodeRef, before: [PMNode], after: [PMNode]) -> [PMNode]? {
-        guard ref.type == "paragraph", let (_, paragraph) = locate(ref) else { return nil }
+        guard ref.type == "paragraph", let (_, paragraph) = document.locate(ref) else { return nil }
         let before = Self.trimmingSpaces(before, atEnd: true), after = Self.trimmingSpaces(after, atEnd: false)
         return (before.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: before)]) + [block]
             + (after.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: after)])
@@ -1295,7 +1269,7 @@ final class DocumentModel {
     /// next text block, else a new paragraph if nothing follows (as after inserting other blocks).
     @discardableResult
     private func placeBlockInActiveText(_ block: PMNode, replacing range: Range<AttributedString.Index>) -> Bool {
-        guard let engine, let active, let (path, paragraph) = locate(active.ref) else { return false }
+        guard let engine, let active, let (path, paragraph) = document.locate(active.ref) else { return false }
         let (before, after) = activeInlines(around: range)
         // Asked before the active line's input goes into the new blocks: refused there, it would be lost.
         guard blockFitsInActiveLine(block.type, around: range),
@@ -1308,7 +1282,7 @@ final class DocumentModel {
         if nodes.last == block {
             let siblings = parentPath.isEmpty ? document.children : node(at: parentPath)?.children ?? []
             if siblings.indices.contains(index + 1), siblings[index + 1].type != "footnotes" {
-                if !Self.editableTextTypes.contains(siblings[index + 1].type) { focus = nil }
+                if !PMNode.editableTextTypes.contains(siblings[index + 1].type) { focus = nil }
             } else {
                 nodes.append(PMNode(type: "paragraph"))
             }
@@ -1557,7 +1531,7 @@ final class DocumentModel {
     }
 
     func atom(ofType type: String, in ref: NodeRef, index: Int) -> PMNode? {
-        guard let (_, node) = locate(ref) else { return nil }
+        guard let (_, node) = document.locate(ref) else { return nil }
         let atoms = node.children.filter { $0.type == type }
         return atoms.indices.contains(index) ? atoms[index] : nil
     }
@@ -1585,7 +1559,7 @@ final class DocumentModel {
         func walk(_ node: PMNode, path: [Int]) {
             for (index, child) in node.children.enumerated() where child.type != "footnotes" {
                 if child.type == "footnoteReference" {
-                    if Self.precedes(path, active.ref.path) { count += 1 }
+                    if path.precedes(active.ref.path) { count += 1 }
                 } else {
                     walk(child, path: path + [index])
                 }
@@ -1615,7 +1589,7 @@ final class DocumentModel {
         var anchor: NodeRef?
         switch placement {
         case .replaceOrAfter(let ref):
-            anchor = locate(ref).map { NodeRef(path: $0.path, node: $0.node) }
+            anchor = document.locate(ref).map { NodeRef(path: $0.path, node: $0.node) }
         case .afterTopLevel(let ref):
             let top = [ref.path[0]]
             anchor = node(at: top).map { NodeRef(path: top, node: $0) }
@@ -1664,7 +1638,7 @@ final class DocumentModel {
             focusTarget = (newPath + relative, .end)
         case .after:
             if let next, next.type != "footnotes" {
-                if Self.editableTextTypes.contains(next.type) { focusTarget = (afterPath, .start) }
+                if PMNode.editableTextTypes.contains(next.type) { focusTarget = (afterPath, .start) }
             } else {
                 blocks.append(PMNode(type: "paragraph"))
                 focusTarget = (afterPath, .start)
@@ -1704,7 +1678,7 @@ final class DocumentModel {
         let place: BlockPlace
         switch placement {
         case .replaceOrAfter(let ref):
-            guard let (path, node) = locate(ref) else { return false }
+            guard let (path, node) = document.locate(ref) else { return false }
             let empty = node.type == "paragraph" && node.children.isEmpty
             place = BlockPlace(target: NodeRef(path: path, node: node).target, position: empty ? .replace : .after)
         case .afterTopLevel(let ref):
@@ -1893,7 +1867,7 @@ final class DocumentModel {
     /// the page already (a second tap's late answer), nothing happens.
     func unsyncReference(_ reference: PMNode, at ref: NodeRef, content nodes: [PMNode]) async {
         guard let engine, let sourcePageId = reference.string("sourcePageId"), let transclusionId = reference.string("transclusionId"),
-              node(at: ref.path) == reference || path(where: { $0 == reference }) != nil
+              node(at: ref.path) == reference || document.path(where: { $0 == reference }) != nil
         else { return }
         if active != nil { deactivate() }
         report(await engine.replaceReference(at: ref.path, sourcePageId: sourcePageId, transclusionId: transclusionId, with: nodes))
@@ -1956,7 +1930,7 @@ final class DocumentModel {
     /// Adds a tab at the end like the web's "+" ("Tab N", unlocalized as there); returns its path.
     @discardableResult
     func addTab(to tabsRef: NodeRef) async -> [Int]? {
-        guard let engine, let (path, tabs) = locate(tabsRef), let last = tabs.children.last else { return nil }
+        guard let engine, let (path, tabs) = document.locate(tabsRef), let last = tabs.children.last else { return nil }
         if active != nil { deactivate() }
         let lastRef = NodeRef(path: path + [tabs.children.count - 1], node: last)
         let tab = Self.tabNode(label: "Tab \(tabs.children.count + 1)")
@@ -1966,7 +1940,7 @@ final class DocumentModel {
     /// Sets a tab's label; empty or unchanged labels are left alone, as on the web.
     func renameTab(_ tabRef: NodeRef, to label: String) async {
         let label = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let engine, let (path, tab) = locate(tabRef), !label.isEmpty, label != Self.tabLabel(of: tab),
+        guard let engine, let (path, tab) = document.locate(tabRef), !label.isEmpty, label != Self.tabLabel(of: tab),
               let index = tab.children.firstIndex(where: { $0.type == "tabLabel" })
         else { return }
         let labelRef = NodeRef(path: path + [index], node: tab.children[index])
@@ -1987,7 +1961,7 @@ final class DocumentModel {
 
     /// Deletes a tab; deleting the last one removes the tabs block, as on the web.
     func deleteTab(_ tabRef: NodeRef, in tabsRef: NodeRef) async {
-        guard let (_, tabs) = locate(tabsRef) else { return }
+        guard let (_, tabs) = document.locate(tabsRef) else { return }
         if let active, active.ref.path.starts(with: tabs.children.count == 1 ? tabsRef.path : tabRef.path) { deactivate() }
         await delete(tabs.children.count == 1 ? tabsRef : tabRef)
     }
@@ -2000,7 +1974,7 @@ final class DocumentModel {
         guard isEditable, let listIndex = document.children.firstIndex(where: { $0.type == "footnotes" }) else { return false }
         let footnotes = document.children[listIndex]
         guard let index = footnotes.children.firstIndex(where: { $0.string("data-id") == dataId }),
-              let paragraph = footnotes.children[index].children.last, Self.editableTextTypes.contains(paragraph.type)
+              let paragraph = footnotes.children[index].children.last, PMNode.editableTextTypes.contains(paragraph.type)
         else { return false }
         let path = [listIndex, index, footnotes.children[index].children.count - 1]
         activate(NodeRef(path: path, node: paragraph), node: paragraph, cursor: .end)
@@ -2034,7 +2008,7 @@ final class DocumentModel {
             let path = identity.dropFirst(5).split(separator: ".").compactMap { Int($0) }
             return node(at: path).map { NodeRef(path: path, node: $0) }
         }
-        return locate(NodeRef(path: [], id: identity)).map { NodeRef(path: $0.path, node: $0.node) }
+        return document.locate(NodeRef(path: [], id: identity)).map { NodeRef(path: $0.path, node: $0.node) }
     }
 
     // MARK: Active text
@@ -2254,15 +2228,15 @@ final class DocumentModel {
         case .join(let path):
             // Only where the page shows that block right before the line: answers from a document the page doesn't show
             // yet (a collaborator's change above) can name another block there.
-            guard lastTextBlock(before: active.ref.path)?.path == path, let previous = node(at: path),
-                  Self.editableTextTypes.contains(previous.type) else { return false }
+            guard document.lastTextBlock(before: active.ref.path)?.path == path, let previous = node(at: path),
+                  PMNode.editableTextTypes.contains(previous.type) else { return false }
             let children = previous.children + typed
             // In the editor's characters, the unit `.offset` counts in: a mention or a line break isn't its plain text.
             activate(NodeRef(path: path, node: previous), node: PMNode(type: previous.type, attrs: previous.attrs, content: children.isEmpty ? nil : children),
                      cursor: .offset(Self.editorText(from: previous.children).characters.count))
             return true
         case .remove:
-            if let target = lastTextBlock(before: active.ref.path), let node = node(at: target.path) {
+            if let target = document.lastTextBlock(before: active.ref.path), let node = node(at: target.path) {
                 activate(target, node: node, cursor: .end)
             } else {
                 deactivate()
@@ -2281,43 +2255,6 @@ final class DocumentModel {
         deactivate()
     }
 
-    /// Containers whose content is edited directly (unlike columns, synced blocks, etc.).
-    private static let inPlaceContainers: Set<String> = [
-        "bulletList", "orderedList", "listItem", "taskList", "taskItem", "blockquote", "callout",
-        "details", "detailsContent", "table", "tableRow", "tableCell", "tableHeader",
-    ]
-
-    /// Last directly editable text or non-mermaid code block before `path` in document order: in a table its last
-    /// cell, for a collapsed toggle its summary.
-    private func lastTextBlock(before path: [Int]) -> NodeRef? {
-        var result: NodeRef?
-        /// Visits the children in document order; returns `false` once `path` is reached.
-        func visit(_ node: PMNode, at nodePath: [Int]) -> Bool {
-            for (index, child) in node.children.enumerated() {
-                let childPath = nodePath + [index]
-                let isAncestor = childPath.count < path.count && path.starts(with: childPath)
-                guard isAncestor || Self.precedes(childPath, path) else { return false }
-                if Self.editableTextTypes.contains(child.type) || (child.type == "codeBlock" && child.string("language") != "mermaid") {
-                    if !isAncestor { result = NodeRef(path: childPath, node: child) }
-                } else if child.type == "details", child.bool("open") != true, !isAncestor {
-                    if let summary = child.children.first, summary.type == "detailsSummary" {
-                        result = NodeRef(path: childPath + [0], node: summary)
-                    }
-                } else if Self.inPlaceContainers.contains(child.type) {
-                    if !visit(child, at: childPath) { return false }
-                }
-            }
-            return true
-        }
-        _ = visit(document, at: [])
-        return result
-    }
-
-    /// `a` comes before `b` in document order and is neither `b` itself nor an ancestor of it.
-    private static func precedes(_ a: [Int], _ b: [Int]) -> Bool {
-        for (x, y) in zip(a, b) where x != y { return x < y }
-        return false
-    }
 
     // MARK: - Block operations
 
@@ -2361,7 +2298,7 @@ final class DocumentModel {
         // Uses the latest text, even if the last input hasn't reached the engine yet.
         guard let engine, let node = latestNode(at: ref.path) else { return }
         if active != nil { deactivate() }
-        report(await engine.insertBlock(Self.strippingIds(node), relativeTo: ref.target, position: .after))
+        report(await engine.insertBlock(node.strippingIds(), relativeTo: ref.target, position: .after))
     }
 
     func moveBlocks(from source: IndexSet, to destination: Int) async {
@@ -2390,7 +2327,7 @@ final class DocumentModel {
 
     /// Table, row and column of the active block (if it is in a cell).
     var activeTablePosition: TablePosition? {
-        guard let path = active?.ref.path, let table = ancestorPath(of: path, types: ["table"]), path.count >= table.count + 2 else { return nil }
+        guard let path = active?.ref.path, let table = document.ancestorPath(of: path, types: ["table"]), path.count >= table.count + 2 else { return nil }
         return TablePosition(tablePath: table, row: path[table.count], column: path[table.count + 1])
     }
 
@@ -2551,17 +2488,14 @@ final class DocumentModel {
             deactivate()
             return
         }
-        if !edit.movesCursor, let active, active.ref.id != nil, locate(active.ref) != nil {
+        if !edit.movesCursor, let active, active.ref.id != nil, document.locate(active.ref) != nil {
             // The block stays edited with its cursor, in its new place and with what changed (its alignment). Input
             // typed meanwhile stays: its save keeps the engine's changes (`rebase`).
             if overrides[active.ref.identity] == nil { adoptActiveBlock() } else { followMovedBlocks() }
             return
         }
         // To the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
-        var path = position.tablePath + focus
-        while let node = node(at: path), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock", !node.children.isEmpty {
-            path.append(0)
-        }
+        let path = document.textPath(from: position.tablePath + focus)
         pendingFocus = (path, { _ in .end })
         adopt(latest)
         pendingFocus = nil
@@ -2593,7 +2527,7 @@ final class DocumentModel {
     /// the cursor keeps its offset, after a collaborator's change it moves with the text around it.
     private func adoptActiveBlock(followingChange: Bool = false) {
         guard let current = active else { return }
-        guard let (path, node) = locate(current.ref) else {
+        guard let (path, node) = document.locate(current.ref) else {
             deactivate()
             return
         }
@@ -2632,12 +2566,6 @@ final class DocumentModel {
         return new.count - suffix
     }
 
-    /// Path and node of a block: by its ID (stable when something before it changes), otherwise by path.
-    private func locate(_ ref: NodeRef) -> (path: [Int], node: PMNode)? {
-        guard let id = ref.id else { return node(at: ref.path).map { (ref.path, $0) } }
-        return path(where: { $0.string("id") == id }).flatMap { path in node(at: path).map { (path, $0) } }
-    }
-
     /// A block's current state, including unsaved input.
     private func latestNode(at path: [Int]) -> PMNode? {
         if let active, active.ref.path == path, let node = currentActiveNode() { return node }
@@ -2657,7 +2585,7 @@ final class DocumentModel {
             report(.unavailable)
             return nil
         }
-        let found = ref.id.map { id in path(where: { $0.string("id") == id }, in: current) } ?? ref.path
+        let found = ref.id.map { id in current.path(where: { $0.string("id") == id }) } ?? ref.path
         guard let found, let source = node(at: found, in: current), ref.type == nil || source.type == ref.type else {
             report(.refused)
             return nil
@@ -2667,46 +2595,18 @@ final class DocumentModel {
 
     // MARK: - Helpers
 
+    /// The node at `path` in `root`, the page's document by default (DocumentTree.swift).
     func node(at path: [Int], in root: PMNode? = nil) -> PMNode? {
-        var current = root ?? document
-        for index in path {
-            guard current.children.indices.contains(index) else { return nil }
-            current = current.children[index]
-        }
-        return current
-    }
-
-    /// Path of the nearest ancestor (not the node itself) whose type is one of `types`.
-    private func ancestorPath(of path: [Int], types: Set<String>) -> [Int]? {
-        for length in stride(from: path.count - 1, through: 1, by: -1) {
-            let prefix = Array(path.prefix(length))
-            if let type = node(at: prefix)?.type, types.contains(type) { return prefix }
-        }
-        return nil
+        (root ?? document).node(at: path)
     }
 
     private func enclosingItemPath(_ path: [Int]) -> [Int]? {
-        ancestorPath(of: path, types: ["listItem", "taskItem"])
+        document.ancestorPath(of: path, types: ["listItem", "taskItem"])
     }
 
     /// A document with the local, unconfirmed changes applied.
     private func withOverrides(_ root: PMNode) -> PMNode {
-        overrides.isEmpty ? root : applyOverrides(to: root, path: [])
-    }
-
-    private func applyOverrides(to node: PMNode, path: [Int]) -> PMNode {
-        let ref = NodeRef(path: path, node: node)
-        // Kept by path for a block without an id: it stands only for a block of its type.
-        if !path.isEmpty, let override = overrides[ref.identity], override.type == node.type { return override }
-        guard let content = node.content else { return node }
-        let children = content.enumerated().map { applyOverrides(to: $0.element, path: path + [$0.offset]) }
-        return PMNode(type: node.type, attrs: node.attrs, content: children, marks: node.marks, text: node.text)
-    }
-
-    static func strippingIds(_ node: PMNode) -> PMNode {
-        var attrs = node.attrs
-        attrs?["id"] = nil
-        return PMNode(type: node.type, attrs: attrs?.isEmpty == true ? nil : attrs, content: node.content?.map(strippingIds), marks: node.marks, text: node.text)
+        root.applyingOverrides(overrides)
     }
 
     /// Inline nodes from the editor text (with the formatting that arrives only as SwiftUI attributes while typing).
@@ -2746,10 +2646,8 @@ final class DocumentModel {
         if let target = DebugLaunch.focusTarget {
             var path = [target.block]
             if let item = target.item { path += [item, 0] }
-            // Descend to the first text node (e.g. table → row → cell → paragraph).
-            while let node = node(at: path), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock", !node.children.isEmpty {
-                path.append(0)
-            }
+            // Down to the first text node (e.g. table → row → cell → paragraph).
+            path = document.textPath(from: path)
             if let node = node(at: path) {
                 activate(NodeRef(path: path, node: node), node: node)
                 if let typed = DebugLaunch.typeText {
