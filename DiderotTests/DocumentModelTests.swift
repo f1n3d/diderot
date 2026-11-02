@@ -1362,6 +1362,49 @@ struct DocumentModelTests {
         #expect(model.active?.ref == NodeRef(path: [1], id: "b"))
     }
 
+    /// The engine's event for the change can come before the cursor moves (it follows the read the cursor waits for,
+    /// and the system pauses the engine at times): editing goes on meanwhile, although the item went. It ended there, and
+    /// the keyboard hid and showed again (EditorUITests' test16 on a busy simulator).
+    @Test(.timeLimit(.minutes(1))) func editingGoesOnWhileLeavingAList() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list([("a", "Eins"), ("b", nil)])]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0, 1, 0]))
+        model.activate(NodeRef(path: [0, 1, 0], node: line), node: line)
+        var editsMeanwhile: Bool?
+        engine.whileInserting = {
+            engine.sendDocument(PMNode(type: "doc", content: [Self.list([("a", "Eins")]), PMNode(type: "paragraph", attrs: ["id": "n"])]))
+            editsMeanwhile = model.active != nil
+        }
+
+        model.activeText.append(AttributedString("\n"))
+        model.activeTextChanged()
+        while engine.batches.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(editsMeanwhile == true, "Editing ended while the cursor moved")
+        #expect(model.active?.ref == NodeRef(path: [1], id: "n"))
+    }
+
+    /// Return whose cursor finds no place (the new item isn't in the engine's document) ends editing once it's done, if
+    /// a collaborator removed the block meanwhile, as a collaborator's removal does otherwise.
+    @Test(.timeLimit(.minutes(1))) func returnWithoutAPlaceEndsEditingInARemovedBlock() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list([("a", "Eins"), ("b", "Zwei")])]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0, 0, 0]))
+        model.activate(NodeRef(path: [0, 0, 0], node: line), node: line)
+        engine.whileInserting = {
+            engine.whileInserting = nil
+            engine.sendDocument(PMNode(type: "doc", content: [Self.list([("b", "Zwei")])]))
+        }
+
+        model.activeText.append(AttributedString("\n"))
+        model.activeTextChanged()
+        while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(model.active == nil)
+    }
+
     /// Leaving a list that the engine refuses (the item changed meanwhile) applies none of its steps and says so; the
     /// cursor stays in the item.
     @Test(.timeLimit(.minutes(1))) func refusedLiftSaysSo() async throws {
