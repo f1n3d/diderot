@@ -7,6 +7,7 @@ import { Node as PMNode } from "@tiptap/pm/model";
 import * as Y from "yjs";
 import { fits, type Place } from "./fits";
 import { bindingChanges } from "./guards";
+import { backspaceEdit, backspacePlan, enterEdit, liftLineEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
 import { applySteps, locate, type Step, type Target } from "./steps";
@@ -222,6 +223,57 @@ class DocmostEngine {
     return focus;
   }
 
+  // MARK: Keys
+  //
+  // Return and Backspace in a text block (src/keys.ts), decided from the document now and applied in one transaction. They
+  // return where the cursor goes, false when refused (the block is gone or another type, or a step doesn't fit) and null
+  // when the engine takes no edits.
+
+  /** Return in a text block: it keeps `json`, its text before the cursor (saved on `base`), and `after` continues in a new
+   * line (`enterEdit`). */
+  enter(target: Target, json: JSONContent, after: JSONContent[], base?: JSONContent | null): Cursor | false | null {
+    return this.applyKey((editor) => enterEdit(editor.schema, editor.state.doc, target, json, after, base));
+  }
+
+  /**
+   * Backspace at the start of a text block that holds `json` by now: joins it with the text block before, removes it or
+   * leaves the list (`backspaceEdit`). Says which, with the cursor (none after a removal); "none" when it does nothing
+   * there.
+   */
+  backspace(target: Target, json: JSONContent): { kind: BackspacePlan["kind"]; cursor: Cursor | null } | false | null {
+    let outcome: { kind: BackspacePlan["kind"]; cursor: Cursor | null } | undefined;
+    const applied = this.transact((editor) => {
+      const found = backspaceEdit(editor.schema, editor.state.doc, target, json);
+      if (found === null) outcome = { kind: "none", cursor: null };
+      if (!found) return false;
+      const tr = editor.state.tr;
+      if (!applySteps(tr, found.edit.steps)) return false;
+      editor.view.dispatch(tr);
+      outcome = { kind: found.plan.kind, cursor: found.edit.cursor };
+      return true;
+    });
+    return applied === null ? null : outcome ?? false;
+  }
+
+  /** A heading (`json`) for an item's only line: the line leaves the list as it, the cursor at its end (`liftLineEdit`). */
+  liftLine(target: Target, json: JSONContent): Cursor | false | null {
+    return this.applyKey((editor) => liftLineEdit(editor.schema, editor.state.doc, target, json));
+  }
+
+  private applyKey(edit: (editor: Editor) => KeyEdit | undefined): Cursor | false | null {
+    let cursor: Cursor | undefined;
+    const applied = this.transact((editor) => {
+      const found = edit(editor);
+      if (!found) return false;
+      const tr = editor.state.tr;
+      if (!applySteps(tr, found.steps)) return false;
+      editor.view.dispatch(tr);
+      cursor = found.cursor;
+      return true;
+    });
+    return applied && cursor ? cursor : applied === null ? null : false;
+  }
+
   // MARK: Questions
   //
   // What the app's menus may offer, answered from the document now and the schema, so the app keeps no copy of the
@@ -238,6 +290,14 @@ class DocmostEngine {
         return false; // A type the schema doesn't know.
       }
     });
+  }
+
+  /** What Backspace at the start of the block at `target` does, empty and with text (src/keys.ts); null when it's gone. */
+  backspacePlans(target: Target): { empty: BackspacePlan; text: BackspacePlan } | null {
+    if (!this.editor || this.failed) return null;
+    const doc = this.editor.state.doc;
+    const empty = backspacePlan(doc, target, true), text = backspacePlan(doc, target, false);
+    return empty && text ? { empty, text } : null;
   }
 
   /**

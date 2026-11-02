@@ -386,7 +386,8 @@ final class DocumentModel {
     /// The engine was opened again after an error (`EngineFailure.engineError`); another one leaves the page read-only.
     @ObservationIgnored private var restartedAfterError = false
     private var commitTask: Task<Void, Never>?
-    private var pendingFocus: (path: [Int], cursor: CursorRequest)?
+    /// Where the cursor goes once the document holds the block at `path`, read in that block.
+    private var pendingFocus: (path: [Int], cursor: (PMNode) -> CursorRequest)?
     /// A table edit is under way. It puts the cursor into a cell itself, so a document event meanwhile neither ends
     /// editing (the keyboard and its table row would go and come back) nor takes the edit for a collaborator's change.
     @ObservationIgnored private var editsTable = false
@@ -624,7 +625,7 @@ final class DocumentModel {
         }
         if let pendingFocus, let node = node(at: pendingFocus.path) {
             self.pendingFocus = nil
-            activate(NodeRef(path: pendingFocus.path, node: node), node: node, cursor: pendingFocus.cursor)
+            activate(NodeRef(path: pendingFocus.path, node: node), node: node, cursor: pendingFocus.cursor(node))
             // Floating "+" inline command: runs shortly after the new paragraph's editor has focus; an emoji
             // keyboard or sheet appearing sooner would take that focus away.
             if let command = pendingInlineCommand, let ref = active?.ref {
@@ -686,6 +687,16 @@ final class DocumentModel {
     /// Focuses `path` once the operation that created it is applied; set earlier, `pendingFocus` could hit the old
     /// block in a document event still in flight (e.g. from the commit just before).
     private func focusAfterOperation(_ path: [Int], _ cursor: CursorRequest) async {
+        await focusAfterOperation(path) { _ in cursor }
+    }
+
+    /// Focuses where Return or Backspace left the cursor (`EngineCursor`); its offset counts as the engine's do, read in
+    /// the block it lands in.
+    private func focusAfterOperation(_ cursor: EngineCursor) async {
+        await focusAfterOperation(cursor.path) { .offset(Self.editorOffset(in: $0, at: cursor.offset)) }
+    }
+
+    private func focusAfterOperation(_ path: [Int], cursor: @escaping (PMNode) -> CursorRequest) async {
         guard let latest = await engine?.currentDocument() else { return }
         pendingFocus = (path, cursor)
         adopt(latest)
@@ -696,8 +707,8 @@ final class DocumentModel {
 
     /// Shows and returns whether a block operation applied. A refusal carries no reason (e.g. a block a collaborator
     /// just deleted or changed), hence one fixed message; the next applied change clears it, but a refused save's only
-    /// the next save (Return's new line applying after it must not hide it). No engine to take it says nothing: the
-    /// restart shows in the status, and input waits for it (`commit`).
+    /// the next save (a table edit or a conversion, which sends the input first, must not hide it). No engine to take it
+    /// says nothing: the restart shows in the status, and input waits for it (`commit`).
     @discardableResult
     private func report(_ result: EngineResult) -> Bool {
         switch result {
@@ -858,7 +869,7 @@ final class DocumentModel {
         Task {
             typingSwitches += 1
             defer { typingSwitchEnded() }
-            await mergeWithPrevious(active)
+            await joinBackward(active)
         }
         return true
     }
@@ -967,11 +978,11 @@ final class DocumentModel {
 
     // MARK: - What the engine says
 
-    /// The engine's answers about the active block, for the menus and the table row of the keyboard toolbar, which
-    /// show at once: which block types fit where new blocks go, which cards and inline databases can take its line's
-    /// place, which table commands apply to its cell. The app kept its own copy of these rules, and it drifted: a synced
-    /// block was offered page breaks and databases it can't hold. Asked when a block becomes active and after each
-    /// document; nil until answered, and for another block.
+    /// The engine's answers about the active block, for the menus, the table row of the keyboard toolbar and Backspace,
+    /// which show at once: which block types fit where new blocks go, which cards and inline databases can take its
+    /// line's place, which table commands apply to its cell, what Backspace at its start does. The app kept its own copy
+    /// of these rules, and it drifted: a synced block was offered page breaks and databases it can't hold. Asked when a
+    /// block becomes active and after each document; nil until answered, and for another block.
     struct EngineAnswers: Equatable {
         /// The active block's identity they are for.
         let identity: String
@@ -985,6 +996,8 @@ final class DocumentModel {
         var inLine: Set<InLine> = []
         /// Table commands, by name, that apply to its cell.
         var tableCommands: Set<String> = []
+        /// What Backspace at its start does, empty and with text (`joinBackward` shows it at once).
+        var backspace: BackspacePlans?
     }
 
     /// A card or inline database in place of a paragraph, with the paragraph's text before and after it, or not
@@ -1044,6 +1057,7 @@ final class DocumentModel {
                                                                          commands: Self.tableQuestions.map(\.engineCommand)) {
                 answers.tableCommands = Set(zip(Self.tableQuestions, apply).filter(\.1).compactMap { $0.0.engineCommand["name"]?.stringValue })
             }
+            answers.backspace = await engine.backspacePlans(ref.target)
             guard !Task.isCancelled, self.active?.ref.identity == ref.identity else { return }
             self.answers = answers
         }
@@ -2400,6 +2414,10 @@ final class DocumentModel {
     }
 
     // MARK: - Return and Backspace
+    //
+    // The engine decides where the lines go, from its document as it is when the key arrives, and applies the edit in one
+    // transaction (`enter`, `backspace`, Engine/src/keys.ts); the model shows it and puts the cursor where the engine
+    // says. The model built these edits from its copy of the page, reading the engine's document for the blocks to send.
 
     private func handleReturn(_ active: Active) async {
         guard let engine else { return }
@@ -2408,232 +2426,128 @@ final class DocumentModel {
         let before = AttributedString(full[full.startIndex..<newline])
         let afterStart = full.characters.index(after: newline)
         let after = AttributedString(full[afterStart..<full.endIndex])
-        activeText = before
+        // A toggle's title stays whole (web parity); any other line keeps the text before the cursor, and the text after
+        // it goes to the new line.
+        let keepsAll = active.type == "detailsSummary"
+        activeText = keepsAll ? before + after : before
         commitTask?.cancel()
 
         let beforeInlines = Self.inlines(from: before, base: activeFont)
-        let afterInlines = Self.inlines(from: after, base: activeFont)
-        let currentNode = PMNode(type: active.type, attrs: active.attrs, content: beforeInlines.isEmpty ? nil : beforeInlines)
-
-        // A toggle title (also in a list item) stays whole: an empty paragraph starts an open toggle's content or
-        // follows a closed one (web parity); right after the title it would split the toggle (only title + content).
-        let detailsPath = Array(active.ref.path.dropLast())
-        if active.type == "detailsSummary", let details = node(at: detailsPath), details.type == "details" {
-            activeText = before + after
-            let titleInlines = Self.inlines(from: before + after, base: activeFont)
-            let title = PMNode(type: active.type, attrs: active.attrs, content: titleInlines.isEmpty ? nil : titleInlines)
-            overrides[active.ref.identity] = title
-            await commit(active.ref, node: title, base: takeBase(of: active.ref, sending: title))
-            let newNode = PMNode(type: "paragraph")
-            let newPath: [Int]
-            let applied: EngineResult
-            if details.bool("open") == true, let content = node(at: detailsPath + [1]) {
-                newPath = detailsPath + [1, 0]
-                applied = await (content.children.isEmpty
-                    ? engine.replaceBlock(.path(detailsPath + [1]), with: PMNode(type: "detailsContent", content: [newNode]))
-                    : engine.insertBlock(newNode, relativeTo: .path(detailsPath + [1, 0]), position: .before))
+        let line = PMNode(type: active.type, attrs: active.attrs, content: beforeInlines.isEmpty ? nil : beforeInlines)
+        let kept = currentActiveNode() ?? line
+        overrides[active.ref.identity] = kept
+        let base = takeBase(of: active.ref, sending: kept)
+        let result = await engine.enter(active.ref.target, keeping: line, after: Self.inlines(from: after, base: activeFont), base: base)
+        guard case .moved(let cursor) = result else {
+            if result == .refused { report(.refused) }
+            guard self.active?.ref == active.ref else { return }
+            // The line stays as typed, without the line break.
+            if activeBase == kept { activeBase = base }
+            if !keepsAll { activeText += after }
+            if result == .refused {
+                // Saved with the next input or when editing ends: an applied save now would hide the message at once.
+                overrides[active.ref.identity] = currentActiveNode()
             } else {
-                var afterPath = detailsPath
-                afterPath[afterPath.count - 1] += 1
-                newPath = afterPath
-                applied = await engine.insertBlock(newNode, relativeTo: .path(detailsPath), position: .after)
-            }
-            if report(applied) {
-                await focusAfterOperation(newPath, .start)
+                // Kept for the engine's return, as any input (`commit`).
+                scheduleCommit(debounce: .zero)
             }
             return
         }
-
-        if beforeInlines.isEmpty, afterInlines.isEmpty, await liftEmptyLine(active) { return }
-
-        // The item's own lines. An empty first line leaves the list only if the item has no further blocks, as they
-        // would go with it.
-        if let itemPath = active.itemPath, active.ref.path.count == itemPath.count + 1 {
-            if beforeInlines.isEmpty && afterInlines.isEmpty && node(at: itemPath)?.children.count == 1 {
-                await exitList()
-                return
-            }
-            overrides[active.ref.identity] = currentNode
-            await commit(active.ref, node: currentNode, base: takeBase(of: active.ref, sending: currentNode))
-            guard let item = node(at: itemPath) else { return }
-            let attrs: [String: JSONValue]? = item.type == "taskItem" ? ["checked": false] : nil
-            let newItem = PMNode(type: item.type, attrs: attrs, content: [PMNode(type: "paragraph", content: afterInlines.isEmpty ? nil : afterInlines)])
-            var newPath = itemPath
-            newPath[newPath.count - 1] += 1
-            if report(await engine.insertBlock(newItem, relativeTo: .path(itemPath), position: .after)) {
-                await focusAfterOperation(newPath + [0], .start)
-            }
-            return
-        }
-
-        overrides[active.ref.identity] = currentNode
-        await commit(active.ref, node: currentNode, base: takeBase(of: active.ref, sending: currentNode))
-        let newNode = PMNode(type: "paragraph", content: afterInlines.isEmpty ? nil : afterInlines)
-        var newPath = active.ref.path
-        newPath[newPath.count - 1] += 1
-        if report(await engine.insertBlock(newNode, relativeTo: active.ref.target, position: .after)) {
-            await focusAfterOperation(newPath, .start)
-        }
-    }
-
-    /// Empty list item + Return (or Backspace in an empty first item): continues in a new paragraph.
-    private func exitList() async {
-        await lift(levels: 2, withItem: true, replacement: PMNode(type: "paragraph"), cursor: .start)
+        // Input typed meanwhile stored a newer override; it stays pending so its commit writes it.
+        if overrides[active.ref.identity] == kept { overrides[active.ref.identity] = nil }
+        saveRefused = false
+        report(.applied)
+        await focusAfterOperation(cursor.path, .start)
     }
 
     /// A heading for an item's only line: the line leaves the list as that heading, as on the web.
     private func liftLine(into template: BlockTemplate) async {
-        guard let active, let line = latestNode(at: active.ref.path) else { return }
+        guard let engine, let active, let line = latestNode(at: active.ref.path) else { return }
         let attrs = line.attrs?.filter { ["textAlign", "indent"].contains($0.key) }
         let heading = template.node(inlines: Self.inlineContent(of: line), attrs: attrs)
-        await lift(levels: 2, withItem: true, replacement: heading, cursor: .end)
-    }
-
-    /// Return on an empty line that the web lifts out of its container: a quote's or callout's line, a toggle's last
-    /// line of several, an item's last line below its first. False where Return adds a line as usual.
-    private func liftEmptyLine(_ active: Active) async -> Bool {
-        let path = active.ref.path
-        guard path.count >= 2, let index = path.last else { return false }
-        let parentPath = Array(path.dropLast())
-        guard let parent = node(at: parentPath) else { return false }
-        let paragraph = PMNode(type: "paragraph")
-        let isLast = index == parent.children.count - 1
-        if ["blockquote", "callout"].contains(parent.type) {
-            await lift(levels: 1, withItem: false, replacement: paragraph, cursor: .start)
-        } else if parent.type == "detailsContent", isLast, parent.children.count > 1 {
-            // After the toggle; its content keeps a block.
-            await lift(levels: 2, withItem: false, replacement: paragraph, cursor: .start)
-        } else if ["listItem", "taskItem"].contains(parent.type), index > 0, isLast {
-            await lift(levels: 2, withItem: false, replacement: paragraph, cursor: .start)
-        } else {
-            return false
-        }
-        return true
-    }
-
-    /// Puts `replacement` where the web lifts the active line out of the list, quote, callout or toggle `levels` above
-    /// it. A child that goes (an item, a quote's line) is replaced before the container if it's the first, else after;
-    /// one that stays (an item keeping its first line, a toggle's content) gets it after itself. In between, the
-    /// container is split after the child. The line goes, with its item if `withItem` (the item holds only it), and with
-    /// the container if nothing else is left in it.
-    ///
-    /// One batch, built from the engine's document as it is now (the page's copy lags behind while someone types), with
-    /// the block that goes as expected: if a collaborator changed it meanwhile, nothing applies and the editor says so.
-    /// As separate calls, a refused removal left the line twice or the list split. No emptiness check: the engine can
-    /// still hold text deleted just before Return (its save is dropped).
-    private func lift(levels: Int, withItem: Bool, replacement: PMNode, cursor: CursorRequest) async {
-        guard let engine, let previous = active else { return }
         commitTask?.cancel()
-        overrides[previous.ref.identity] = nil
-        guard let current = await engine.currentDocument() else {
-            report(.unavailable)
-            return
-        }
-        // Where the line is now: a collaborator may have added blocks above it.
-        let line = previous.ref.id.flatMap { id in path(where: { $0.string("id") == id }, in: current) } ?? previous.ref.path
-        let containerPath = Array(line.dropLast(levels)), removing = Array(line.dropLast(withItem ? 1 : 0))
-        guard line.count > levels, line.count == previous.ref.path.count,
-              let container = node(at: containerPath, in: current), container.type == node(at: Array(previous.ref.path.dropLast(levels)))?.type,
-              let gone = node(at: removing, in: current), !withItem || gone.children.count == 1
-        else {
-            report(.refused)
-            return
-        }
-        let index = line[containerPath.count]
-        let count = container.children.count
-        let replacesChild = removing.count == containerPath.count + 1
-        var steps: [EngineStep] = []
-        if index < count - 1, index > 0 || !replacesChild {
-            steps.append(.split(after: .path(containerPath + [index], type: container.children[index].type)))
-        }
-        let before = replacesChild && index == 0 && count > 1
-        steps.append(.insert([replacement], relativeTo: .path(containerPath, type: container.type), position: before ? .before : .after))
-        var targetPath = containerPath, containerNow = containerPath
-        if before { containerNow[containerNow.count - 1] += 1 } else { targetPath[targetPath.count - 1] += 1 }
-        if replacesChild, count == 1 {
-            // Its only child: the container goes, and the replacement takes its place.
-            steps.append(.delete(.path(containerNow, type: container.type), expected: container))
-            targetPath = containerPath
-        } else {
-            steps.append(.delete(.path(containerNow + removing.dropFirst(containerPath.count), type: gone.type), expected: gone))
-        }
-        if report(await engine.batch(steps)) {
-            await focusAfterOperation(targetPath, cursor)
+        overrides[active.ref.identity] = nil
+        switch await engine.liftLine(active.ref.target, as: heading) {
+        case .moved(let cursor): await focusAfterOperation(cursor)
+        case .refused: report(.refused)
+        case .unavailable: break
         }
     }
 
-    /// Backspace at block start: joins with the previous text block or removes an empty block.
-    private func mergeWithPrevious(_ active: Active) async {
+    /// Backspace at a block's start: joins it with the text block before, removes it (an empty line after an image, a
+    /// table …), leaves the list (an empty first item) or does nothing, as the engine decides (`backspace`). A join or a
+    /// removal shows at once where the engine said it goes (`answers`), so text typed right after the key lands there.
+    private func joinBackward(_ active: Active) async {
         guard let engine else { return }
-        let currentInlines = Self.inlines(from: activeText, base: activeFont)
-        let path = active.ref.path
-        var previousPath = path
-        // An item's first paragraph joins the previous item's last paragraph, any other block its previous sibling.
-        if let itemPath = active.itemPath, path == itemPath + [0] {
-            // Its further blocks would be removed with it, or remain without the paragraph a list item starts with.
-            guard node(at: itemPath)?.children.count == 1 else { return }
-            var previousItem = itemPath
-            previousItem[previousItem.count - 1] = itemPath[itemPath.count - 1] - 1
-            guard itemPath[itemPath.count - 1] > 0, let item = node(at: previousItem), !item.children.isEmpty else {
-                if currentInlines.isEmpty { await exitList() }
+        let typed = Self.inlines(from: activeText, base: activeFont)
+        let plan = activeAnswers?.backspace.map { typed.isEmpty ? $0.empty : $0.text }
+        if plan == .nothing { return }
+        // Its input goes with it: into the text before, or away with the line.
+        commitTask?.cancel()
+        overrides[active.ref.identity] = nil
+        let shown = plan.map { show($0, leaving: active, typed: typed) } ?? false
+        let result = await engine.backspace(active.ref.target, holding: PMNode(type: active.type, attrs: active.attrs, content: typed.isEmpty ? nil : typed))
+        switch result {
+        case .done(let done, let cursor):
+            if shown {
+                // Otherwise than shown (the page changed meanwhile): its document shows what happened.
+                if case .join? = plan, done != plan { endEditingShownJoin() }
                 return
             }
-            previousPath = previousItem + [item.children.count - 1]
-        } else {
-            guard let index = path.last, index > 0 else { return }
-            previousPath[previousPath.count - 1] = index - 1
+            switch done {
+            case .join, .remove:
+                if let cursor { await focusAfterOperation(cursor) } else { show(done, leaving: active, typed: typed) }
+            case .leave:
+                if let cursor { await focusAfterOperation(cursor) }
+            case .nothing:
+                scheduleCommit()
+            }
+        case .refused, .unavailable:
+            if result == .refused { report(.refused) }
+            if case .join? = plan, shown {
+                endEditingShownJoin()
+            } else if !shown, self.active?.ref == active.ref {
+                // Its input stays: saved with the next input or when editing ends (an applied save now would hide the
+                // message at once), or once the engine is back.
+                if result == .refused { overrides[active.ref.identity] = currentActiveNode() } else { scheduleCommit(debounce: .zero) }
+            }
         }
-        guard let previous = node(at: previousPath) else { return }
-        if Self.editableTextTypes.contains(previous.type) {
-            let merged = PMNode(type: previous.type, attrs: previous.attrs, content: (previous.children + currentInlines).isEmpty ? nil : previous.children + currentInlines)
+    }
+
+    /// Shows Backspace's join or removal before the engine has done it: the text block before with both texts, the cursor
+    /// where they meet; after a removal, the end of the text before (a table's last cell, a closed toggle's title), or no
+    /// editing without one. False for what it doesn't show.
+    @discardableResult
+    private func show(_ plan: BackspacePlan, leaving active: Active, typed: [PMNode]) -> Bool {
+        switch plan {
+        case .join(let path):
+            // Only where the page shows that block right before the line: answers from a document the page doesn't show
+            // yet (a collaborator's change above) can name another block there.
+            guard lastTextBlock(before: active.ref.path)?.path == path, let previous = node(at: path),
+                  Self.editableTextTypes.contains(previous.type) else { return false }
+            let children = previous.children + typed
             // In the editor's characters, the unit `.offset` counts in: a mention or a line break isn't its plain text.
-            let offset = Self.editorText(from: previous.children).characters.count
-            overrides[active.ref.identity] = nil
-            commitTask?.cancel()
-            // Activate the previous block now with the merged text.
-            let previousRef = NodeRef(path: previousPath, node: previous)
-            activate(previousRef, node: merged, cursor: .offset(offset))
-            // Together with removing the joined block, or neither. Based on the block before as the page showed it: a
-            // collaborator's edit of it since stays.
-            guard let removal = await removal(of: active),
-                  report(await engine.batch([.replace(previousRef.target, with: merged, base: previous), removal]))
-            else {
-                deactivate()
-                return
-            }
-        } else if currentInlines.isEmpty {
-            // Empty paragraph after an image, table, divider …: continue at the end of the text before it (a table's
-            // last cell), removing the paragraph. With no text before it, the keyboard closes.
-            commitTask?.cancel()
-            overrides[active.ref.identity] = nil
-            if let target = lastTextBlock(before: path), let targetNode = node(at: target.path) {
-                activate(target, node: targetNode, cursor: .end)
+            activate(NodeRef(path: path, node: previous), node: PMNode(type: previous.type, attrs: previous.attrs, content: children.isEmpty ? nil : children),
+                     cursor: .offset(Self.editorText(from: previous.children).characters.count))
+            return true
+        case .remove:
+            if let target = lastTextBlock(before: active.ref.path), let node = node(at: target.path) {
+                activate(target, node: node, cursor: .end)
             } else {
                 deactivate()
             }
-            if let removal = await removal(of: active) { report(await engine.batch([removal])) }
+            return true
+        case .leave, .nothing:
+            return false
         }
     }
 
-    /// The step removing the block Backspace leaves behind (joined with the one before, or empty after an image or a
-    /// table): the block, or its item if that holds only it. From the engine's document as it is now, with what goes as
-    /// expected, so a block a collaborator changed or moved there meanwhile stays. Nil, and said, without an engine or
-    /// with the block gone.
-    private func removal(of active: Active) async -> EngineStep? {
-        guard let current = await engine?.currentDocument() else {
-            report(.unavailable)
-            return nil
-        }
-        let found = active.ref.id.flatMap { id in path(where: { $0.string("id") == id }, in: current) } ?? active.ref.path
-        guard let block = node(at: found, in: current), block.type == active.type else {
-            report(.refused)
-            return nil
-        }
-        let itemPath = Array(found.dropLast())
-        if let item = node(at: itemPath, in: current), ["listItem", "taskItem"].contains(item.type), item.children.count == 1 {
-            return .delete(.path(itemPath, type: item.type), expected: item)
-        }
-        return .delete(.path(found, type: block.type), expected: block)
+    /// Ends editing a join shown before the engine refused it or did otherwise, without saving the shown text: it would
+    /// put the line's text into the block before a second time.
+    private func endEditingShownJoin() {
+        if let active { overrides[active.ref.identity] = nil }
+        commitTask?.cancel()
+        deactivate()
     }
 
     /// Containers whose content is edited directly (unlike columns, synced blocks, etc.).
@@ -2934,7 +2848,7 @@ final class DocumentModel {
         while let node = node(at: path), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock", !node.children.isEmpty {
             path.append(0)
         }
-        pendingFocus = (path, .end)
+        pendingFocus = (path, { _ in .end })
         adopt(latest)
         pendingFocus = nil
         if active?.ref.path != path { deactivate() }
@@ -3105,6 +3019,24 @@ final class DocumentModel {
     /// Editor text from inline nodes (with the SwiftUI attributes that make the formatting visible while editing).
     static func editorText(from inlines: [PMNode]) -> AttributedString {
         EditorText.display(InlineAttributedText.attributedString(from: inlines))
+    }
+
+    /// The engine's `offset` into a text block's content (a character of text per UTF-16 unit, an inline node 1) in the
+    /// editor's characters, which `CursorRequest.offset` counts in: a mention or a line break isn't its plain text.
+    static func editorOffset(in node: PMNode, at offset: Int) -> Int {
+        var before: [PMNode] = [], left = offset
+        for child in node.children where left > 0 {
+            guard let text = child.text else {
+                before.append(child)
+                left -= 1
+                continue
+            }
+            let units = text.utf16.count
+            before.append(units <= left ? child : PMNode(type: child.type, attrs: child.attrs, marks: child.marks,
+                                                         text: String(decoding: Array(text.utf16.prefix(left)), as: UTF16.self)))
+            left -= min(units, left)
+        }
+        return editorText(from: before).characters.count
     }
 
     #if DEBUG

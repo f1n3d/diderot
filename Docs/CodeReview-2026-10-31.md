@@ -118,14 +118,14 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 **Today:**
 
-- Return, Backspace, leaving a list, merging, `convertList`, columns and unsync are rebuilt in Swift as path-addressed engine calls (about 600 lines). Since package C the structural edits among them read the engine's document and send the block they were built from (R1), and leaving a list and joining blocks go as one `batch` built the same way (R9).
+- `convertList`, columns and unsync are rebuilt in Swift as path-addressed engine calls. Since package C they read the engine's document and send the block they were built from (R1).
 - `conversionTemplates` still decides in Swift which types the active block can turn into.
 
-Since part 1, the engine says what fits where (`fits` in `Engine/src/fits.ts`) and which table commands apply to a cell, for the insert menus, cards and the table toolbar, and it refuses blocks that don't fit instead of fitting them in elsewhere.
+Since part 1, the engine says what fits where (`fits` in `Engine/src/fits.ts`) and which table commands apply to a cell, for the insert menus, cards and the table toolbar, and it refuses blocks that don't fit instead of fitting them in elsewhere. Since part 2, Return and Backspace are engine commands (`enter`, `backspace` in `Engine/src/keys.ts`): the engine decides from its document where the lines go, applies the edit in one transaction and says where the cursor goes; the app shows a join at once where the engine said Backspace goes. A heading for an item's only line leaves the list the same way (`liftLine`).
 
 **Target:**
 
-- Engine commands that run in one transaction and return the cursor, as `tableCommand` does: Return and Backspace (part 2), then conversions, columns and unsync (part 3), which also says which conversions apply.
+- Engine commands that run in one transaction and return the cursor, as `tableCommand` and since part 2 `enter` and `backspace` do: conversions, columns and unsync (part 3), which also says which conversions apply.
 - The engine's `batch` (package C) for the rest.
 
 This fixes most position races, it replaces package C's stopgaps for R1 and R9 (edits in Swift that read the engine's document and send the block they were built from), and it can be tested in `pnpm run check`, as the batch's steps already are.

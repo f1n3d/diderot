@@ -1,0 +1,175 @@
+// Checks Return and Backspace (src/keys.ts) on the cases the app's editor had rules for: where the lines go, what leaves
+// a list, quote, callout or toggle, and where the cursor goes. Exits with 1 on any difference.
+//
+// Pages are written as their blocks: a text block as its text ("∅" when empty, a heading with "#", a toggle's title with
+// ">"), a list item as its blocks, another container as its type with its children in brackets. The cursor follows as
+// "@path:offset".
+import { getSchema, type JSONContent } from "@tiptap/core";
+import { Node as PMNode } from "@tiptap/pm/model";
+import { EditorState } from "@tiptap/pm/state";
+import { backspaceEdit, backspacePlan, enterEdit, liftLineEdit, type Cursor } from "../src/keys";
+import { schemaExtensions } from "../src/schema";
+import { applySteps, type Step, type Target } from "../src/steps";
+
+const schema = getSchema(schemaExtensions);
+let differences = 0;
+
+function expect(name: string, want: unknown, have: unknown) {
+  if (JSON.stringify(want) === JSON.stringify(have)) return;
+  differences++;
+  console.log(`✗ ${name}\n  want: ${JSON.stringify(want)}\n  have: ${JSON.stringify(have)}`);
+}
+
+const text = (value: string): JSONContent[] => (value ? [{ type: "text", text: value }] : []);
+const paragraph = (id: string, value = ""): JSONContent => ({ type: "paragraph", attrs: { id }, ...(value ? { content: text(value) } : {}) });
+const heading = (id: string, value: string): JSONContent => ({ type: "heading", attrs: { id, level: 2 }, content: text(value) });
+const item = (...content: JSONContent[]): JSONContent => ({ type: "listItem", content });
+const task = (...content: JSONContent[]): JSONContent => ({ type: "taskItem", attrs: { checked: true }, content });
+const list = (...items: JSONContent[]): JSONContent => ({ type: "bulletList", content: items });
+const quote = (...content: JSONContent[]): JSONContent => ({ type: "blockquote", content });
+const callout = (...content: JSONContent[]): JSONContent => ({ type: "callout", content });
+const toggle = (open: boolean, title: string, ...content: JSONContent[]): JSONContent => ({
+  type: "details",
+  attrs: open ? { open: true } : {},
+  content: [{ type: "detailsSummary", content: text(title) }, { type: "detailsContent", content }],
+});
+const image: JSONContent = { type: "image", attrs: { src: "/a.png" } };
+const page = (...content: JSONContent[]) => PMNode.fromJSON(schema, { type: "doc", content });
+
+function describe(node: PMNode): string {
+  if (node.isTextblock) {
+    const prefix = node.type.name === "heading" ? "#" : node.type.name === "detailsSummary" ? ">" : "";
+    return prefix + (node.textContent || "∅");
+  }
+  if (node.isAtom) return node.type.name;
+  const children: string[] = [];
+  node.forEach((child) => children.push(describe(child)));
+  if (node.type.name === "listItem" || node.type.name === "taskItem") return children.join("/");
+  return node.type.name === "doc" ? children.join(" ") : `${node.type.name}(${children.join(", ")})`;
+}
+
+/** The page after the edit and the cursor, as the engine dispatches it; "refused" when there is none or a step refuses. */
+function run(before: PMNode, edit: { steps: Step[]; cursor: Cursor | null } | null | undefined): string {
+  if (edit === null) return "nothing";
+  if (!edit) return "refused";
+  const tr = EditorState.create({ schema, doc: before }).tr;
+  if (!applySteps(tr, edit.steps)) return "refused";
+  return describe(tr.doc) + (edit.cursor ? ` @${edit.cursor.path.join(".")}:${edit.cursor.offset}` : "");
+}
+
+/** Return with the cursor after `before` characters of the text block at `path` (its id if it has one). */
+function enter(doc: PMNode, path: number[], before: number): string {
+  let node: PMNode = doc;
+  for (const index of path) node = node.child(index);
+  const json = node.toJSON() as JSONContent;
+  const inlines = (json.content ?? []) as JSONContent[];
+  const all = inlines.map((inline) => inline.text ?? "").join("");
+  const target: Target = node.attrs.id ? { id: node.attrs.id } : { path, type: node.type.name };
+  const head: JSONContent = { ...json, content: text(all.slice(0, before)) };
+  if (!head.content?.length) delete head.content;
+  return run(doc, enterEdit(schema, doc, target, head, text(all.slice(before)), json));
+}
+
+function backspace(doc: PMNode, path: number[]): string {
+  let node: PMNode = doc;
+  for (const index of path) node = node.child(index);
+  const result = backspaceEdit(schema, doc, { path, type: node.type.name }, node.toJSON());
+  return run(doc, result === null ? null : result?.edit);
+}
+
+// Return: the line continues in a new paragraph, a heading's in a paragraph too, a table cell's in the cell.
+expect("splitting a paragraph", "Eins Zwei Drei @1:0", enter(page(paragraph("a", "EinsZwei"), paragraph("c", "Drei")), [0], 4));
+expect("at a paragraph's end", "Eins ∅ @1:0", enter(page(paragraph("a", "Eins")), [0], 4));
+expect("splitting a heading", "#Ein s @1:0", enter(page(heading("h", "Eins")), [0], 3));
+expect("in a table cell", "table(tableRow(tableCell(A, B))) @0.0.0.1:0", enter(page({
+  type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", content: [paragraph("a", "AB")] }] }],
+}), [0, 0, 0, 0], 1));
+
+// A toggle's title stays whole: the new line starts an open toggle's content, follows a closed one.
+expect("in an open toggle's title", "details(>TiTel, detailsContent(∅, Inhalt)) @0.1.0:0",
+  enter(page(toggle(true, "TiTel", paragraph("i", "Inhalt"))), [0, 0], 2));
+expect("in an open toggle's title, its content empty", "details(>Titel, detailsContent(∅)) @0.1.0:0",
+  enter(page(toggle(true, "Titel")), [0, 0], 5));
+expect("in a closed toggle's title", "details(>Titel, detailsContent(Inhalt)) ∅ @1:0",
+  enter(page(toggle(false, "Titel", paragraph("i", "Inhalt"))), [0, 0], 5));
+
+// An empty line leaves a quote or callout (split there), a toggle as its last line, an item as its last line below the
+// first; elsewhere it's a line like any other.
+expect("an empty last line in a quote", "blockquote(Zitat) ∅ @1:0", enter(page(quote(paragraph("a", "Zitat"), paragraph("b"))), [0, 1], 0));
+expect("an empty middle line in a quote", "blockquote(A) ∅ blockquote(B) @1:0",
+  enter(page(quote(paragraph("a", "A"), paragraph("b"), paragraph("c", "B"))), [0, 1], 0));
+expect("an empty first line in a quote", "∅ blockquote(B) @0:0", enter(page(quote(paragraph("b"), paragraph("c", "B"))), [0, 0], 0));
+expect("a quote's only line", "∅ @0:0", enter(page(quote(paragraph("b"))), [0, 0], 0));
+expect("an empty line in a callout", "callout(Hinweis) ∅ @1:0", enter(page(callout(paragraph("a", "Hinweis"), paragraph("b"))), [0, 1], 0));
+expect("a toggle's empty last line", "details(>Titel, detailsContent(Inhalt)) ∅ @1:0",
+  enter(page(toggle(false, "Titel", paragraph("a", "Inhalt"), paragraph("b"))), [0, 1, 1], 0));
+expect("a toggle's only line", "details(>Titel, detailsContent(∅, ∅)) @0.1.1:0", enter(page(toggle(true, "Titel", paragraph("b"))), [0, 1, 0], 0));
+expect("an item's empty last line below its first", "bulletList(Eins) ∅ bulletList(Zwei) @1:0",
+  enter(page(list(item(paragraph("a", "Eins"), paragraph("b")), item(paragraph("c", "Zwei")))), [0, 0, 1], 0));
+expect("an empty line in a toggle in an item", "bulletList(x/details(>Titel, detailsContent(∅, ∅))) @0.0.1.1.1:0",
+  enter(page(list(item(paragraph("a", "x"), toggle(true, "Titel", paragraph("b"))))), [0, 0, 1, 1, 0], 0));
+
+// An empty item leaves the list, before it, between its halves or after it; one holding more adds an item.
+expect("an empty first item", "∅ bulletList(Zwei) @0:0", enter(page(list(item(paragraph("a")), item(paragraph("b", "Zwei")))), [0, 0, 0], 0));
+expect("an empty middle item", "bulletList(Eins) ∅ bulletList(Drei) @1:0",
+  enter(page(list(item(paragraph("a", "Eins")), item(paragraph("b")), item(paragraph("c", "Drei")))), [0, 1, 0], 0));
+expect("an empty last item", "bulletList(Eins) ∅ @1:0", enter(page(list(item(paragraph("a", "Eins")), item(paragraph("b")))), [0, 1, 0], 0));
+expect("a list's only item, empty", "∅ @0:0", enter(page(list(item(paragraph("a")))), [0, 0, 0], 0));
+expect("an empty first line before a nested list", "bulletList(∅/bulletList(y), ∅) @0.1.0:0",
+  enter(page(list(item(paragraph("a"), list(item(paragraph("y", "y")))))), [0, 0, 0], 0));
+expect("an item's line", "bulletList(Eins, Zwei) @0.1.0:0", enter(page(list(item(paragraph("a", "EinsZwei")))), [0, 0, 0], 4));
+const tasks = page({ type: "taskList", content: [task(paragraph("a", "Erledigt"))] });
+const afterTask = enterEdit(schema, tasks, { id: "a" }, paragraph("a", "Erledigt"), [], null);
+expect("a task's line", "taskList(Erledigt, ∅) @0.1.0:0", run(tasks, afterTask));
+expect("a new task is open", { checked: false }, (afterTask?.steps[1] as { json: JSONContent[] }).json[0].attrs);
+
+// The line keeps what was typed, saved on its base: a collaborator's edit since stays.
+expect("saving the line", "Eins! Neu @1:0", run(page(paragraph("a", "Eins")),
+  enterEdit(schema, page(paragraph("a", "Eins")), { id: "a" }, paragraph("a", "Eins!"), text("Neu"), paragraph("a", "Eins"))));
+expect("a line that's gone", "refused", run(page(paragraph("a", "Eins")),
+  enterEdit(schema, page(paragraph("a", "Eins")), { id: "x" }, paragraph("x", "Eins"), [], null)));
+expect("a line that's another type by now", "refused", run(page(heading("a", "Eins")),
+  enterEdit(schema, page(heading("a", "Eins")), { id: "a" }, paragraph("a", "Eins"), [], null)));
+
+// Backspace at a block's start joins it with the text block before, an item's only line with the previous item's last.
+expect("joining paragraphs", "EinsZwei @0:4", backspace(page(paragraph("a", "Eins"), paragraph("b", "Zwei")), [1]));
+expect("joining a heading", "#EinsZwei @0:4", backspace(page(heading("a", "Eins"), paragraph("b", "Zwei")), [1]));
+expect("a toggle's first line", "nothing", backspace(page(toggle(true, "Titel", paragraph("a", "Eins"))), [0, 1, 0]));
+expect("joining items", "bulletList(EinsZwei) @0.0.0:4",
+  backspace(page(list(item(paragraph("a", "Eins")), item(paragraph("b", "Zwei")))), [0, 1, 0]));
+expect("joining an item's second line", "bulletList(EinsZwei) @0.0.0:4", backspace(page(list(item(paragraph("a", "Eins"), paragraph("b", "Zwei")))), [0, 0, 1]));
+const holdingMore = page(list(item(paragraph("a", "Eins")), item(paragraph("b", "Zwei"), list(item(paragraph("y", "y"))))));
+expect("an item holding more", "nothing", backspace(holdingMore, [0, 1, 0]));
+expect("the first block", "nothing", backspace(page(paragraph("a", "Eins")), [0]));
+const two = page(paragraph("a", "Eins"), paragraph("b", "Zwei"));
+expect("joining what was typed", "EinsZwei! @0:4", run(two, backspaceEdit(schema, two, { id: "b" }, paragraph("b", "Zwei!"))?.edit));
+
+// An empty first item leaves the list; an empty line after an image, a table or a closed toggle goes; with text it stays.
+expect("an empty first item", "∅ bulletList(Zwei) @0:0", backspace(page(list(item(paragraph("a")), item(paragraph("b", "Zwei")))), [0, 0, 0]));
+expect("a first item with text", "nothing", backspace(page(list(item(paragraph("a", "Eins")))), [0, 0, 0]));
+expect("an empty line after an image", "image", backspace(page(image, paragraph("a")), [1]));
+expect("a line after an image", "nothing", backspace(page(image, paragraph("a", "Eins")), [1]));
+expect("an empty line after a closed toggle", "details(>Titel, detailsContent(Inhalt))",
+  backspace(page(toggle(false, "Titel", paragraph("i", "Inhalt")), paragraph("a")), [1]));
+expect("an empty item after a nested list", "bulletList(Eins/bulletList(y))",
+  backspace(page(list(item(paragraph("a", "Eins"), list(item(paragraph("y", "y")))), item(paragraph("b")))), [0, 1, 0]));
+expect("a block that's gone", "refused", run(page(paragraph("a", "Eins")), backspaceEdit(schema, page(paragraph("a", "Eins")), { id: "x" }, paragraph("x"))?.edit));
+
+// What the app shows at once, before the engine has done it.
+const plans = page(paragraph("a", "Eins"), paragraph("e", "Zwei"), list(item(paragraph("b")), item(paragraph("c", "Drei"))), image, paragraph("d"));
+expect("plans", [["join", [0]], ["leave", "none"], ["join", [2, 0, 0]], ["remove", "none"]], [[1], [2, 0, 0], [2, 1, 0], [4]].map((path) => {
+  const empty = backspacePlan(plans, { path }, true)!, typed = backspacePlan(plans, { path }, false)!;
+  return empty.kind === "join" ? [empty.kind, empty.path] : [empty.kind, typed.kind];
+}));
+
+// "/Heading" in an item's only line: the line leaves the list as the heading, the cursor at its end.
+const items = page(list(item(paragraph("a", "Eins")), item(paragraph("b", "Zwei"))));
+expect("a heading out of a list", "bulletList(Eins) #Zwei @1:4", run(items, liftLineEdit(schema, items, { id: "b" }, heading("b", "Zwei"))));
+const lines = page(list(item(paragraph("a", "Eins"), paragraph("b", "Zwei"))));
+expect("a heading for an item holding more", "refused", run(lines, liftLineEdit(schema, lines, { id: "b" }, heading("b", "Zwei"))));
+
+if (differences) {
+  console.log(`${differences} difference(s)`);
+  process.exit(1);
+}
+console.log("Return and Backspace go where the app's editor puts them.");
