@@ -55,10 +55,14 @@ final class AppSession {
     private let sessionStore: SessionStore
     /// Tests answer the API requests with a `URLProtocol`.
     private let protocolClasses: [AnyClass]?
+    private let pendingLogouts: PendingLogouts
 
     init(sessionStore: SessionStore = SessionStore(), protocolClasses: [AnyClass]? = nil) {
         self.sessionStore = sessionStore
         self.protocolClasses = protocolClasses
+        pendingLogouts = PendingLogouts(store: sessionStore) { url, token in
+            Self.makeClient(for: url, token: token, protocolClasses: protocolClasses)
+        }
     }
 
     /// How long a start with saved content waits for the server: one that doesn't answer (behind a VPN that is off)
@@ -416,47 +420,17 @@ final class AppSession {
 
     // MARK: - Sign-outs the server didn't get
 
-    @ObservationIgnored private var isSendingLogouts = false
-    /// Expired longer than a clock runs ahead, and its server out of reach meanwhile.
-    private static let expiredLongAgo: TimeInterval = 7 * 24 * 3600
-
     /// A sign-out for its server: `sendPendingLogouts` ends the session there, now or once the server answers; out of
     /// reach, it would stay valid there until it expires.
     private func keepPendingLogout(_ session: StoredSession) {
-        keychain("keep the sign-out") {
-            var pending = try sessionStore.pendingLogouts()
-            pending.removeAll { StoredAccounts.key(for: $0.serverURL) == StoredAccounts.key(for: session.serverURL) && $0.token == session.token }
-            pending.append(session)
-            try sessionStore.setPendingLogouts(pending)
-        }
+        keychain("keep the sign-out") { try pendingLogouts.keep(session) }
     }
 
     /// Ends the sessions signed out while their server was out of reach (`signOut`): at launch, back in the app and when
     /// the network returns. A token the server no longer knows (401), or that expired a week ago, is dropped.
     func sendPendingLogouts() async {
-        guard !isSendingLogouts, let pending = try? sessionStore.pendingLogouts(), !pending.isEmpty else { return }
-        isSendingLogouts = true
-        defer { isSendingLogouts = false }
-        var done: [StoredSession] = []
-        for entry in pending {
-            // The server judges a token that just expired: by the device's clock, which can run ahead, sign-outs were
-            // dropped whose sessions the server still took (code review R30).
-            if let expiresAt = entry.claims?.expiresAt, expiresAt < .now - Self.expiredLongAgo {
-                done.append(entry)
-                continue
-            }
-            do {
-                _ = try await makeClient(for: entry.serverURL, token: entry.token).send(Endpoints.Auth.logout)
-                done.append(entry)
-            } catch let error as APIError where error.isSessionExpired {
-                done.append(entry)
-            } catch {
-                AppLog.session.notice("Sign-out still waits for its server: \(error.userMessage, privacy: .public)")
-            }
-        }
-        // Read again: a sign-out meanwhile added its own.
-        keychain("update the waiting sign-outs") {
-            try sessionStore.setPendingLogouts(try sessionStore.pendingLogouts().filter { !done.contains($0) })
+        do { try await pendingLogouts.send() } catch {
+            AppLog.session.error("Keychain update the waiting sign-outs failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -770,10 +744,14 @@ final class AppSession {
     }
 
     private func makeClient(for url: URL, token: String?) -> APIClient {
+        Self.makeClient(for: url, token: token, protocolClasses: protocolClasses)
+    }
+
+    private static func makeClient(for url: URL, token: String?, protocolClasses: [AnyClass]?) -> APIClient {
         // A fresh configuration per client: clients made from one share its in-memory URL cache.
         let configuration = URLSessionConfiguration.ephemeral
         if let protocolClasses { configuration.protocolClasses = protocolClasses }
-        return APIClient(baseURL: url, token: token, userAgent: Self.userAgent, configuration: configuration, logger: AppLog.apiRequestLogger)
+        return APIClient(baseURL: url, token: token, userAgent: userAgent, configuration: configuration, logger: AppLog.apiRequestLogger)
     }
 
     private func makeCache(for url: URL) -> DiskCache {
