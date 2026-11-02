@@ -224,7 +224,7 @@ extension EnvironmentValues {
 }
 
 /// Makes comment marks in text tappable: a custom scheme that the page view intercepts to open the comment.
-enum CommentLink {
+nonisolated enum CommentLink {
     static let scheme = "docmost-comment"
 
     static func url(for commentId: String) -> URL? {
@@ -238,7 +238,7 @@ enum CommentLink {
 
 /// Makes status and math atoms tappable while editing: a custom scheme carrying the block, type and index of the atom
 /// within the block, which the page view intercepts to open the matching sheet.
-enum AtomLink {
+nonisolated enum AtomLink {
     static let scheme = "docmost-atom"
 
     static func url(block: String, type: String, index: Int) -> URL? {

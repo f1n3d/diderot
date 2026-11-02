@@ -5552,6 +5552,16 @@
         }
       }
     },
+    "This link can't be opened.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link lässt sich nicht öffnen."
+          }
+        }
+      }
+    },
     "This link doesn't point to a page on your Docmost server.": {
       "localizations": {
         "de": {

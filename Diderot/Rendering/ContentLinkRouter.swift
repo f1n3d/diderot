@@ -5,6 +5,9 @@ import Foundation
 /// `/docs/<space>/<slug>`.
 nonisolated enum ContentLinkRouter {
     static let internalScheme = "docmost-internal"
+    /// The app's own links (pages, comments, atoms) and deep links. Page content never links to them: tapped, they open a
+    /// comment, another block's atom sheet with "Remove", or switch to another saved server (code review R13).
+    static let appSchemes: Set<String> = [internalScheme, CommentLink.scheme, AtomLink.scheme, DeepLink.scheme]
 
     enum Destination: Equatable {
         case page(slugId: String, anchor: String?)
@@ -22,18 +25,21 @@ nonisolated enum ContentLinkRouter {
         let trimmed = href.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         if trimmed.hasPrefix("#") {
-            // One path component, "/" encoded too: `destination` reads the last one.
-            let anchor = trimmed.dropFirst().addingPercentEncoding(withAllowedCharacters: urlPathComponentAllowed) ?? ""
-            return URL(string: "\(internalScheme)://anchor/\(anchor)")
+            return URL(string: "\(internalScheme)://anchor/\(pathComponent(trimmed.dropFirst()))")
         }
         if trimmed.hasPrefix("/"), let baseURL {
             return URL(string: trimmed, relativeTo: baseURL)?.absoluteURL
         }
-        if let url = URL(string: trimmed), url.scheme != nil {
-            return url
+        if let url = URL(string: trimmed), let scheme = url.scheme {
+            return appSchemes.contains(scheme.lowercased()) ? nil : url
         }
         // No scheme, e.g. `example.com/path`.
         return URL(string: "https://" + trimmed)
+    }
+
+    /// `text` as one path component, "/" encoded too: `destination` reads the last one, decoded.
+    private static func pathComponent(_ text: some StringProtocol) -> String {
+        text.addingPercentEncoding(withAllowedCharacters: urlPathComponentAllowed) ?? ""
     }
 
     private static let urlPathComponentAllowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))
@@ -69,21 +75,24 @@ nonisolated enum ContentLinkRouter {
         switch url.scheme?.lowercased() {
         case "http", "https": .browser
         case "mailto", "tel", "sms": .system
-        case nil, "javascript", "data", "vbscript", "file", internalScheme, CommentLink.scheme, AtomLink.scheme: .never
+        case nil, "javascript", "data", "vbscript", "file": .never
+        case let scheme? where appSchemes.contains(scheme): .never
         default: .askFirst
         }
     }
 
+    /// Ids from the page, encoded: a "/", "?" or "#" in one cut it short or became the query or anchor, and another page
+    /// or user opened (code review R33).
     static func pageURL(slugId: String, anchor: String? = nil) -> URL {
-        var text = "\(internalScheme)://page/\(slugId)"
+        var text = "\(internalScheme)://page/\(pathComponent(slugId))"
         if let anchor, !anchor.isEmpty {
-            text += "#\(anchor)"
+            text += "#\(anchor.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? "")"
         }
         return URL(string: text)!
     }
 
     static func userURL(id: String) -> URL {
-        URL(string: "\(internalScheme)://user/\(id)")!
+        URL(string: "\(internalScheme)://user/\(pathComponent(id))")!
     }
 
     /// Web client URL `/p/<slugId>` (a page UUID works too); `destination(for:serverURL:)` maps it back to `.page`.
@@ -100,7 +109,7 @@ nonisolated enum ContentLinkRouter {
         if url.scheme == internalScheme {
             let id = url.lastPathComponent
             switch url.host() {
-            case "page": return .page(slugId: id, anchor: url.fragment)
+            case "page": return .page(slugId: id, anchor: url.fragment(percentEncoded: false))
             case "anchor": return .anchor(id.removingPercentEncoding ?? id)
             case "user": return .user(id: id)
             default: return .external(url)
@@ -123,7 +132,7 @@ nonisolated enum ContentLinkRouter {
             if let commentId = query.first(where: { $0.name == "commentId" })?.value, !commentId.isEmpty {
                 return .comment(slugId: slugId, commentId: commentId)
             }
-            return .page(slugId: slugId, anchor: url.fragment)
+            return .page(slugId: slugId, anchor: url.fragment(percentEncoded: false))
         }
         return .external(url)
     }

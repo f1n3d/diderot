@@ -39,9 +39,11 @@ final class AppNavigation {
 }
 
 nonisolated enum DeepLink {
+    static let scheme = "diderot"
+
     /// Unwraps `diderot://open?url=<web-url>`; http(s) URLs pass through unchanged.
     static func webURL(from url: URL) -> URL? {
-        if url.scheme?.lowercased() == "diderot" {
+        if url.scheme?.lowercased() == scheme {
             guard url.host()?.lowercased() == "open",
                   let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                   let target = components.queryItems?.first(where: { $0.name == "url" })?.value,
