@@ -59,7 +59,7 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **D** Hardening and privacy | R12–R16, R24, R30–R36, R42, R53, R58, R59 | unit tests, partly a device | low |
+| **D** Hardening and privacy | R12, R13, R16, R24, R30–R33, R42, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
@@ -101,36 +101,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 - **`diderot` scheme:** It isn't in `.never`, so a content link to it asks "Open in Another App?". iOS hands it back to the app, and `AppNavigation.handle` can switch to another saved server (R46, now in BACKLOG.md).
 
 **Fix:** Drop internal schemes in `url(for:)`, and add `diderot` to `.never`.
-
-### R14 [medium] ✔/○ Consent for media from other servers sticks to the view's position
-
-**Where:** `RemoteImage.swift:9–12`, `:25–30` ✔; `MediaBlockViews.swift:44`, `:61`, `:95`, `:113`, `:138`, `:162` ○.
-
-**Problem:** `loadsFromOtherServer` and the loaded image are per-view `@State`. Media blocks have no id, so a view's identity is its position.
-
-**Scenarios:**
-
-- A block above is inserted or deleted, or a collaborator changes `src`. The same view then gets another file with consent still true, and a different foreign file loads without a tap. That contradicts `Docs/Privacy.md:13`.
-- `ContentImageView` never clears `loaded`. If the new image fails or needs a tap, the old picture stays.
-
-**More (○):**
-
-- Workspace and space logos load absolute foreign URLs through `URLSession.shared`, ignoring "Load Content from Other Servers" (`ImageURL.swift:14–16`; `LoginView.swift:291`, before sign-in; `WorkspaceMenu.swift:118`; `SpaceComponents.swift:11`). Whether Docmost ever sends absolute logo URLs is unconfirmed.
-- The web layout's CSP restricts only scripts, so foreign images and media load there by themselves (`WebLayoutView.swift:63`; Privacy.md exempts only embeds).
-
-**Fix:**
-
-- Keep the allowed URL instead of a Bool, or give media views `.id(src)` (as `BaseEmbedCard(...).id(pageId)` does).
-- Move the own-server check into `ImageURL.resolve`.
-- Add `img-src`/`media-src 'self' data:` to the web layout's CSP unless the setting is on.
-
-### R15 [low] ○ Engine error texts are logged publicly
-
-**Where:** `WebDocumentEngine.swift:369`, `:375`, `:380`, fed by `engine.ts:295`, `:354–355`. Also `RemoteImage.swift:84`.
-
-**Problem:** Engine errors are logged at error level with `privacy: .public`, so they end up in "Export Logs". ProseMirror's "Invalid content for node …" includes up to about 50 characters of page text. `RemoteImage.swift:84` logs file names publicly, against `fetchFile`'s own rule.
-
-**Fix:** Log only the error's class or a code, and only the folder for files.
 
 ### R16 [low] ○ Signing out keeps the server's offline cache
 
@@ -248,34 +218,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 **Problem:** Ids are put into URLs as they are. A `/`, `?` or `#` in a slug id or user id is cut by `lastPathComponent` or read as query or fragment, and the link opens the wrong page or user. The force unwraps there can't fail.
 
 **Fix:** Percent-encode the id as the anchor branch does, or use `URLComponents`.
-
-#### R34 [low] ○ No size limit for math
-
-**Where:** `WebIslandView.swift:73`, `:107`.
-
-**Problem:** KaTeX's `maxSize` defaults to Infinity, and the island's height has no cap. `\rule{1em}{100000em}` gives a web view about 1.7 million points tall.
-
-**Fix:** `maxSize` (e.g. 50) and a height cap.
-
-#### R35 [low] ? Deeply nested content may overflow the stack
-
-**Where:** `JSONValue.swift:12–30`; `PMNode.swift:123–130`; `ContentParser.swift:29–171`.
-
-**Problem:** Nesting depth is limited only by JSONDecoder (about 512). Decoding, the parser and the block views recurse once per level, so a page about 250 levels deep may crash on every open.
-
-**Confirm:** Parse a 500-level nested quote in `Task.detached`.
-
-**Fix:** Cap the depth in `PMNode(json:)`.
-
-#### R36 [medium] ✔/? The image placeholder takes the aspect ratio unclamped
-
-**Where:** `RemoteImage.swift:47`, with the value from `ContentParser.swift:90`.
-
-**Problem:** `.aspectRatio(image.aspectRatio ?? 16/9, contentMode: .fit)` takes any finite number from content: 0, negative, 1e-300. Every other crafted number is clamped after earlier crash findings. A ratio of 0 divides by zero, giving NaN geometry inside the LazyVStack, for every reader and editor of the page.
-
-**Confirm:** Host `ContentImageView` with 0, −1 and 1e-300, as MediaBlockViewTests host views.
-
-**Fix:** Accept only finite ratios between about 0.05 and 20 in the parser.
 
 #### R53 [low] ? Audio and video play silently with the Ring/Silent switch on
 
@@ -587,9 +529,9 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 - ○ **Release builds:** every `DOCMOST_DEBUG_*` path (auto-login, server pin, form filler) is guarded (R59 makes it compiler-enforced).
 - ✔ **API client:** stores no cookies; `fetchFile` sends the bearer token only to the own origin.
 - ○ **Tokens and content:** no token in URLs or logs; token claims serve only display and expiry, and the server verifies the token.
-- ○ **Disk cache:** file names can't leave the cache folder. `TempFile` sanitises names; out-of-range numbers in content are clamped (except R36).
-- ○ **Islands:** content JSON-encoded with `<` escaped, CSP `default-src 'none'`, KaTeX `trust` off, Mermaid `strict` (directives can't lower it).
-- ○ **Web layout:** `script-src 'none'`, non-persistent store.
+- ○ **Disk cache:** file names can't leave the cache folder. `TempFile` sanitises names; out-of-range numbers in content are clamped, and nesting is capped (decoded down to 100 levels of JSON, shown down to 32 nodes).
+- ○ **Islands:** content JSON-encoded with `<` escaped, CSP `default-src 'none'`, KaTeX `trust` off and `maxSize` 50, Mermaid `strict` (directives can't lower it), at most 10,000 points tall.
+- ○ **Web layout:** `script-src 'none'`, images and media only from the server unless the setting allows others, non-persistent store.
 - ○ **Cookie the app sets:** host-only, HttpOnly, SameSite=Lax, Secure on https.
 - ○ **Engine bridge:** main frame only, decoded into typed events, malformed messages dropped. No message can open URLs, write files or switch servers. The hidden page loads only `engine.js` with the server as base URL, uses a non-persistent store and allows no frames or windows.
 - ○ **FractionalIndex:** matches the reference library, including Docmost's keys ending in "0" and the 12-character limit.

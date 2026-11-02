@@ -294,8 +294,8 @@ struct WorkspaceHeader: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RemoteThumbnail(url: ImageURL.resolve(server.workspace?.logo, kind: .workspaceIcon, baseURL: server.url), size: 44,
-                            shape: RoundedRectangle(cornerRadius: 10)) { placeholder }
+            RemoteThumbnail(url: ImageURL.resolve(server.workspace?.logo, kind: .workspaceIcon, baseURL: server.url), server: server.url,
+                            size: 44, shape: RoundedRectangle(cornerRadius: 10)) { placeholder }
             VStack(alignment: .leading) {
                 Text(server.displayName)
                     .font(.headline)

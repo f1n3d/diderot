@@ -9,7 +9,32 @@ public enum JSONValue: Sendable, Hashable, Codable {
     case array([JSONValue])
     case object([String: JSONValue])
 
+    /// The deepest a value decodes, counted in the values around it; deeper ones decode as `.null`. Decoding goes a level
+    /// deeper in the stack per level, and a page as deep as JSONDecoder takes (512 levels) ran out of a thread's and
+    /// ended the app on every open (code review R35). Pages nest about 20 levels; the parser shows nodes down to
+    /// `ContentParser.maxDepth` and a note for the next, 67 levels (two per node).
+    static let maxDepth = 100
+
+    /// How many values the decoding on this thread is inside: a decoding runs on one thread from start to end.
+    private static var decodingDepth: Int {
+        get { Int(bitPattern: pthread_getspecific(depthKey)) }
+        set { pthread_setspecific(depthKey, UnsafeRawPointer(bitPattern: newValue)) }
+    }
+
+    private static let depthKey: pthread_key_t = {
+        var key = pthread_key_t()
+        pthread_key_create(&key, nil)
+        return key
+    }()
+
     public init(from decoder: Decoder) throws {
+        let depth = Self.decodingDepth
+        guard depth < Self.maxDepth else {
+            self = .null
+            return
+        }
+        Self.decodingDepth = depth + 1
+        defer { Self.decodingDepth = depth }
         let container = try decoder.singleValueContainer()
         // Most likely types first: each failed probe throws, and JSONDecoder never converts between these types.
         if container.decodeNil() {

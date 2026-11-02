@@ -116,7 +116,8 @@ struct WorkspaceLogoView: View {
     var body: some View {
         let workspace = session.ready?.currentUser.workspace
         RemoteThumbnail(url: session.server.flatMap { ImageURL.resolve(workspace?.logo, kind: .workspaceIcon, baseURL: $0.url) },
-                        size: size, shape: RoundedRectangle(cornerRadius: size * 0.3)) { initial(workspace?.name ?? "D") }
+                        server: session.server?.url, size: size,
+                        shape: RoundedRectangle(cornerRadius: size * 0.3)) { initial(workspace?.name ?? "D") }
     }
 
     private func initial(_ name: String) -> some View {

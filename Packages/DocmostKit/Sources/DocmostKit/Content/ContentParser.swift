@@ -20,6 +20,12 @@ public enum ContentParser {
         var anchors: [String: String] = [:]
     }
 
+    /// The deepest a block shows, counted in nodes below the document as `path` counts them. Pages have up to 8 levels
+    /// (lists in lists), the engine's JSON up to about 250 (JSONDecoder's limit; `JSONValue` decodes 50). The parser and
+    /// the block views go a level deeper in the stack per level, and ran out of it (code review R35). Deeper content shows
+    /// as `.tooDeep`; the page keeps it.
+    public static let maxDepth = 32
+
     private static let inlineTypes: Set<String> = [
         "text", "hardBreak", "mention", "mathInline", "status", "footnoteReference", "integrationMention",
     ]
@@ -28,6 +34,9 @@ public enum ContentParser {
 
     private static func parseBlock(_ node: PMNode, path: String, state: inout State) -> Block {
         let id = node.string("id") ?? "p\(path)"
+        if path.utf8.count(where: { $0 == UInt8(ascii: ".") }) >= maxDepth {
+            return Block(id: id, kind: .tooDeep)
+        }
         func children() -> [Block] {
             parseBlocks(node.children, path: path, state: &state)
         }
@@ -85,9 +94,12 @@ public enum ContentParser {
             return Block(id: id, kind: .details(open: node.bool("open") ?? false, summary: summary, content))
 
         case "image":
+            // Only a ratio between 1:20 and 20:1 sizes the placeholder: 0, a negative or a tiny one (crafted content)
+            // can't size it.
+            let ratio = node.double("aspectRatio").flatMap { (0.05...20).contains($0) ? $0 : nil }
             return Block(id: id, kind: .image(ImageBlock(
                 src: node.string("src"), alt: node.string("alt"), width: Length(json: node.attr("width")),
-                aspectRatio: node.double("aspectRatio"), align: node.string("align").flatMap(MediaAlign.init(rawValue:)) ?? .center
+                aspectRatio: ratio, align: node.string("align").flatMap(MediaAlign.init(rawValue:)) ?? .center
             )))
 
         case "video", "audio", "attachment", "pdf", "drawio", "excalidraw", "embed", "youtube":
@@ -257,6 +269,10 @@ public enum ContentParser {
 
     /// Inline content of a text node (paragraph, heading, toggle summary) for display.
     public static func inlines(of node: PMNode) -> [Inline] {
+        inlines(of: node, depth: 1)
+    }
+
+    private static func inlines(of node: PMNode, depth: Int) -> [Inline] {
         var result: [Inline] = []
         for child in node.children {
             switch child.type {
@@ -280,8 +296,9 @@ public enum ContentParser {
             case "integrationMention":
                 result.append(marked(.integrationMention(integrationLink(child)), child))
             default:
-                if !child.children.isEmpty {
-                    result.append(contentsOf: inlines(of: child))
+                // An unknown node's content, as deep as blocks show.
+                if !child.children.isEmpty, depth < maxDepth {
+                    result.append(contentsOf: inlines(of: child, depth: depth + 1))
                 } else if let text = child.text, !text.isEmpty {
                     result.append(.text(text, style(for: child.marks ?? [])))
                 } else {

@@ -81,7 +81,8 @@ struct ContentImageView: View {
             loaded = try await loader.image(for: url, targetWidth: width, scale: displayScale)
         } catch {
             failed = true
-            AppLog.ui.debug("Image failed: \(url.lastPathComponent, privacy: .public) – \(error.userMessage, privacy: .public)")
+            // File names are user content and logs can be exported, so only the folder, as `fetchFile` logs it.
+            AppLog.ui.debug("Image failed: \(url.deletingLastPathComponent().path, privacy: .public) – \(error.userMessage, privacy: .public)")
         }
     }
 }

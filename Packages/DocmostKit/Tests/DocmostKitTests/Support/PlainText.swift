@@ -24,7 +24,7 @@ extension Block {
         case .tabs(let tabs):
             return tabs.map { ([$0.label] + $0.blocks.map(\.plainText)).joined(separator: "\n") }.joined(separator: "\n")
         case .integrationCard(let link): return link.url
-        case .horizontalRule, .subpages, .transclusionReference, .base, .pageBreak: return ""
+        case .horizontalRule, .subpages, .transclusionReference, .base, .pageBreak, .tooDeep: return ""
         }
     }
 }

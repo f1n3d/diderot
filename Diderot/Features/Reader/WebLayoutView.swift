@@ -37,7 +37,8 @@ struct WebLayoutView: View {
             .task(id: html) {
                 limit.openOutside = { [openURL] in openURL($0) }
                 await installCookie()
-                page.load(html: Self.wrap(html, title: title), baseURL: serverURL)
+                let loadsOtherServers = UserDefaults.standard.bool(forKey: RenderContext.loadsOtherServersKey)
+                page.load(html: Self.wrap(html, title: title, loadsOtherServers: loadsOtherServers), baseURL: serverURL)
                 isReady = true
             }
     }
@@ -48,19 +49,22 @@ struct WebLayoutView: View {
     }
 
     /// Minimal stylesheet so the exported HTML is readable and follows the system appearance.
-    private static func wrap(_ body: String, title: String) -> String {
+    static func wrap(_ body: String, title: String, loadsOtherServers: Bool) -> String {
         let escapedTitle = title
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
         // script-src 'none': page scripts can't run signed in on the server's origin; cross-origin embeds keep theirs.
+        // Images and media come from the server only, as on the page, unless Settings › "Load Content from Other
+        // Servers" is on (`RenderContext.loadsByItself`): from elsewhere, they told that host who read the page and when.
+        let media = loadsOtherServers ? "" : "; img-src 'self' data: blob:; media-src 'self' data: blob:"
         return """
         <!doctype html>
         <html>
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta http-equiv="Content-Security-Policy" content="script-src 'none'">
+        <meta http-equiv="Content-Security-Policy" content="script-src 'none'\(media)">
         <meta name="color-scheme" content="light dark">
         <style>
           :root { color-scheme: light dark; }

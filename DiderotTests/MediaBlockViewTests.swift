@@ -219,6 +219,46 @@ struct MediaBlockViewTests {
         #expect(await poll { Set(labels(in: window)).isSuperset(of: expected) }, "\(labels(in: window))")
     }
 
+    /// A tap to load a file from another server holds for that file only: another file in its place (a block above
+    /// removed, a collaborator's change) asks again. It loaded by itself, and an image showed the previous picture until
+    /// then (code review R14).
+    @Test(arguments: ["image", "drawio", "pdf"])
+    func tapToLoadFromAnotherServerHoldsForThatFile(type: String) async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [SlowURLProtocol.self]
+        let server = URL(string: "https://wiki.example.com")!
+        let loader = ImageLoader(client: APIClient(baseURL: server, configuration: configuration))
+        let context = RenderContext(baseURL: server, client: nil, imageLoader: loader, token: nil, pageId: nil)
+        func media(_ src: String) throws -> some View {
+            let doc = PMNode(type: "doc", content: [PMNode(type: type, attrs: ["src": .string(src)])])
+            return BlockView(block: try #require(ContentParser.parse(doc).blocks.first)).environment(\.renderContext, context)
+        }
+        let host = UIHostingController(rootView: try media("https://one.example.net/a"))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        func asks(_ name: String) -> Bool { labels(in: window).contains { $0.contains(name) } }
+        #expect(await poll { asks("one.example.net") })
+        let card = try #require(element(in: window) { $0.contains("one.example.net") })
+        #expect(card.accessibilityActivate())
+        #expect(await poll { !asks("one.example.net") && spinner(in: window) }, "loads after the tap")
+
+        host.rootView = try media("https://two.example.net/b")
+        #expect(await poll { asks("two.example.net") }, "asks again for another file")
+    }
+
+    /// An image's aspect ratio from the page sizes its placeholder only where it can: 0, a negative or a tiny ratio
+    /// gave it no height it could take (code review R36). Such a ratio counts as none, 16:9.
+    @Test(arguments: [0, -1, 1e-300])
+    func imagePlaceholderTakesASensibleHeight(ratio: Double) throws {
+        let doc = PMNode(type: "doc", content: [PMNode(type: "image", attrs: ["src": "/api/files/a/b.png", "aspectRatio": .number(ratio)])])
+        let block = try #require(ContentParser.parse(doc).blocks.first)
+        let size = UIHostingController(rootView: BlockView(block: block)).sizeThatFits(in: CGSize(width: 300, height: CGFloat.infinity))
+        #expect(size.height.isFinite && size.height > 0 && size.height <= 300, "\(size)")
+    }
+
     /// Polls `condition` while SwiftUI lays out (`tries` × 50 ms, 20 s by default: GitHub's runners start web processes
     /// far slower than a Mac, and a met condition ends the wait at once).
     private func poll(tries: Int = 400, _ condition: () -> Bool) async -> Bool {
@@ -246,6 +286,16 @@ struct MediaBlockViewTests {
     private func labels(in element: NSObject) -> [String] {
         let children = element.accessibilityElements as? [NSObject] ?? (element as? UIView)?.subviews ?? []
         return [element.accessibilityLabel].compactMap(\.self) + children.flatMap(labels)
+    }
+
+    /// The first element VoiceOver can reach from `element` whose label passes `matches`.
+    private func element(in element: NSObject, _ matches: (String) -> Bool) -> NSObject? {
+        if let label = element.accessibilityLabel, matches(label) { return element }
+        let children = element.accessibilityElements as? [NSObject] ?? (element as? UIView)?.subviews ?? []
+        for child in children {
+            if let found = self.element(in: child, matches) { return found }
+        }
+        return nil
     }
 }
 

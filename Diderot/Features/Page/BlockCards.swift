@@ -47,6 +47,9 @@ struct NodeView: View {
 
     var body: some View {
         switch node.type {
+        // As in the reader: each level is a view in a view.
+        case _ where ref.path.count > ContentParser.maxDepth:
+            TooDeepView()
         case "paragraph", "heading", "detailsSummary":
             TextNodeView(model: model, node: node, ref: ref, isEditing: model.active?.ref == ref)
         case "bulletList", "orderedList":

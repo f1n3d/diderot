@@ -415,7 +415,8 @@ final class WebDocumentEngine: DocumentEngine {
             let me = session.ready?.currentUser.user
             participants = EngineParticipant.merge(event.participants?.list ?? [], myId: me?.id, myName: me?.displayName)
         case "error":
-            AppLog.ui.error("Engine error: \(event.error ?? "?", privacy: .public)")
+            // Private: the error can quote page text (ProseMirror's "Invalid content for node …"), and logs can be exported.
+            AppLog.ui.error("Engine error: \(event.error ?? "?", privacy: .private)")
             if case .loading = status, let pending = readyContinuation {
                 readyContinuation = nil
                 pending.resume(throwing: APIError.server(status: 0, message: event.error))
