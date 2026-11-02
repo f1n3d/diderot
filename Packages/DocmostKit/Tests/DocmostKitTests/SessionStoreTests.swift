@@ -77,14 +77,30 @@ struct SessionStoreTests {
         #expect(try store.pendingLogouts().isEmpty)
         #expect(try secrets.load(account: "pendingLogouts") == nil)
     }
+
+    /// When the sign-ins were last saved (the app ends an earlier install's), and all of them removed at once.
+    @Test func signInsKnowWhenTheyWereSavedAndGoAtOnce() throws {
+        let store = SessionStore(keychain: MemorySecretStore())
+        #expect(try store.accountsSaved() == nil)
+        let before = Date.now
+        try store.save(session(wiki))
+        try store.save(session(docs))
+        #expect(try #require(try store.accountsSaved()) >= before)
+        try store.removeAll()
+        #expect(try store.loadAccounts().sessions.isEmpty)
+        #expect(try store.accountsSaved() == nil)
+    }
 }
 
 /// In-memory stand-in for the keychain.
 private final class MemorySecretStore: SecretStore {
     private let storage = Mutex<[String: Data]>([:])
+    /// When each item was last saved; tests may set it.
+    let modified = Mutex<[String: Date]>([:])
 
     func save(_ data: Data, account: String) throws {
         storage.withLock { $0[account] = data }
+        modified.withLock { $0[account] = .now }
     }
 
     func load(account: String) throws -> Data? {
@@ -93,5 +109,10 @@ private final class MemorySecretStore: SecretStore {
 
     func delete(account: String) throws {
         storage.withLock { _ = $0.removeValue(forKey: account) }
+        modified.withLock { _ = $0.removeValue(forKey: account) }
+    }
+
+    func modificationDate(account: String) throws -> Date? {
+        modified.withLock { $0[account] }
     }
 }

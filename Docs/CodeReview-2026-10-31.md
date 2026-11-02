@@ -59,7 +59,7 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **D** Hardening and privacy | R12, R16, R24, R30–R32, R53, R58, R59 | unit tests, partly a device | low |
+| **D** Hardening and privacy | R31, R32, R53, R58, R59 | unit tests, partly a device | low |
 | **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
@@ -67,39 +67,7 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ---
 
-## 1. Security and privacy
-
-### R12 [low] ✔ SSO token capture checks only name and domain
-
-**Where:** `BrowserLoginView.swift:97–110`, `:55–56`; `AppSession.swift:370–377`.
-
-**Problems:**
-
-- **Cookie check:** The `authToken` cookie is matched by name and `domain.trimmingPrefix(".") == host` only, without `isHTTPOnly`, `isSecure` or host-only checks.
-  - With Docmost on the apex domain, a sibling subdomain could plant a `.example.com` cookie (login CSRF); so could a plain-http response for that host.
-  - An unrelated host can't.
-- **Wrong server (○):** `signIn(withToken:)` uses `session.server`, not the sheet's `server`, and returns silently without one.
-- **Stray sessions (○):** A captured token whose sign-in fails or is cancelled is never logged out on the server. Cancel stays enabled while "Signing in…" shows.
-- **No tests:** Nothing tests the capture; `AuthCookieTests` cover only the outgoing cookie.
-
-**Fix:**
-
-- Extract `authToken(from:server:)` with the attribute checks, and unit-test it.
-- Pass the sheet's server in.
-- Queue a pending logout when the sign-in fails.
-- Disable Cancel while finishing.
-
-### R16 [low] ○ Signing out keeps the server's offline cache
-
-**Where:** `AppSession.swift:401–412`; `Docs/Privacy.md:18`.
-
-**Problem:** Signing out removes the server from the list but keeps its offline cache: page text and images. Only another user's sign-in to that server deletes it later. `removeAccount` needs a listed server, `clearCache` needs the current session, and `prune` never runs on it. So the privacy policy's "removed … when you remove the server" can't happen. The backlog notes this only for unsent changes.
-
-**Fix:** Offer "Remove Saved Content" on the signed-out screen, or keep a list of servers with local data.
-
----
-
-## 2. Visible errors, accessibility, concurrency
+## 1. Visible errors, accessibility, concurrency
 
 ### R40 [low] ○ A start without the server or a cached user shows the sign-in screen without a word
 
@@ -124,17 +92,9 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ---
 
-## 3. Further findings
+## 2. Further findings
 
 ### Data and lifecycle
-
-#### R24 [low] ? Removing local data deletes the web editor's store without asking
-
-**Where:** `WebEditorView.swift:146–160` and `removeLocalData`.
-
-**Problem:** Signing out, and `removeLocalData` without the `hasEntries` confirmation, delete the web editor's data store. That includes the web client's IndexedDB Yjs cache, which can hold edits that didn't reach the server (comment at `:119–121`).
-
-**Confirm:** Edit offline in the web editor, then sign out.
 
 #### R27 [low] ○ Several spaces changing at once refresh only one
 
@@ -157,17 +117,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 **Fix:** A `PageTreeStore.move` sharing one insertion helper with `moveCard`, applying the move locally, and messages for `KeyError`.
 
 ### Security and robustness
-
-#### R30 [low] ○ Sign-ins survive deleting the app
-
-**Where:** `KeychainStore.swift`; `AppSession.swift:217`, `:440`.
-
-**Problems:**
-
-- Keychain items (`accounts`, `pendingLogouts`) survive deleting the app, so a reinstall is silently signed in.
-- A queued server logout is dropped once the token's unverified expiry has passed by the device's clock. A clock running ahead leaves a signed-out token valid on the server.
-
-**Fix:** An install marker in UserDefaults that wipes the Keychain when missing. Judge expiry with `serverClockOffset`, or let a 401 decide.
 
 #### R31 [low] ○ The server clock offset comes from any response
 
@@ -315,7 +264,7 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ---
 
-## 4. Structure
+## 3. Structure
 
 ### S1 The editor's boundary to the engine (L, the biggest lever)
 
@@ -464,7 +413,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 ---
 
-## 5. CI, tools, tests
+## 4. CI, tools, tests
 
 ### T3 [medium] ✔ Selected UI test runs discard every API check
 
@@ -494,7 +443,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 ---
 
-## 6. Checked and fine
+## 5. Checked and fine
 
 - ✔ **Keychain:** `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data protection keychain, no iCloud sync; an update falls back to an add.
 - ○ **Release builds:** every `DOCMOST_DEBUG_*` path (auto-login, server pin, form filler) is guarded (R59 makes it compiler-enforced).

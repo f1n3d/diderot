@@ -80,6 +80,8 @@ public protocol SecretStore: Sendable {
     func save(_ data: Data, account: String) throws
     func load(account: String) throws -> Data?
     func delete(account: String) throws
+    /// When the item was last saved, nil without one.
+    func modificationDate(account: String) throws -> Date?
 }
 
 extension KeychainStore: SecretStore {}
@@ -122,6 +124,17 @@ public struct SessionStore: Sendable {
         var accounts = try loadAccounts()
         accounts.upsert(session)
         try saveAccounts(accounts)
+    }
+
+    /// When the sign-ins were last saved, nil without any.
+    public func accountsSaved() throws -> Date? {
+        try store.modificationDate(account: Self.accountsKey) ?? store.modificationDate(account: Self.legacyAccount)
+    }
+
+    /// Removes every sign-in.
+    public func removeAll() throws {
+        try store.delete(account: Self.accountsKey)
+        try store.delete(account: Self.legacyAccount)
     }
 
     /// Removes the current sign-in (sign-out); other servers are kept.

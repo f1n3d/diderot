@@ -40,6 +40,20 @@ public struct KeychainStore: Sendable {
         }
     }
 
+    /// When the item was last saved, nil without one.
+    public func modificationDate(account: String) throws -> Date? {
+        var query = baseQuery(account: account)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        switch status {
+        case errSecSuccess: return (result as? [String: Any])?[kSecAttrModificationDate as String] as? Date
+        case errSecItemNotFound: return nil
+        default: throw KeychainError.unexpectedStatus(status)
+        }
+    }
+
     public func delete(account: String) throws {
         let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
