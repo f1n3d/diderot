@@ -139,8 +139,7 @@ struct PageView: View {
             if let model {
                 // Own capsule without glass: inside the shared glass group the pill sits askew at the left edge.
                 ToolbarItem(placement: .topBarTrailing) {
-                    StatusPill(status: model.status, readOnlyReason: model.readOnlyReason, unconfirmed: model.hasUnconfirmedChanges,
-                               compact: horizontalSizeClass == .compact)
+                    StatusPill(model: model, compact: horizontalSizeClass == .compact)
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
