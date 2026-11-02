@@ -61,6 +61,13 @@ extension PMNode {
         return nil
     }
 
+    /// Where the `index`-th child of type `type` is among the children: an atom in a block's text, which a link to it
+    /// names by its number among those of its type.
+    func childPosition(ofType type: String, index: Int) -> Int? {
+        let positions = children.indices.filter { children[$0].type == type }
+        return positions.indices.contains(index) ? positions[index] : nil
+    }
+
     /// `path`, or the first text under it, down through first children (a table's first cell, a list's first item);
     /// it stops at a block without children (an image, a formula).
     func textPath(from path: [Int]) -> [Int] {

@@ -1149,13 +1149,9 @@ final class DocumentModel {
     }
 
     private func cardReplacement(for target: MentionTarget) -> [PMNode]? {
-        guard let (_, block) = document.locate(target.ref) else { return nil }
-        var seen = -1
-        guard let position = block.children.firstIndex(where: { child in
-            guard child.type == "integrationMention" else { return false }
-            seen += 1
-            return seen == target.index
-        }) else { return nil }
+        guard let (_, block) = document.locate(target.ref),
+              let position = block.childPosition(ofType: "integrationMention", index: target.index)
+        else { return nil }
         return blockReplacement(NodeFactory.integrationCard(url: target.url, provider: target.provider), paragraph: target.ref,
                                 before: Array(block.children[..<position]), after: Array(block.children[(position + 1)...]))
     }
@@ -1185,7 +1181,8 @@ final class DocumentModel {
         case .mention:
             let offset = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
             activeText.removeSubrange(range)
-            insertIntoActiveText(Self.editorText(from: [NodeFactory.integrationMention(url: url, provider: provider)]), at: offset)
+            let mention = NodeFactory.integrationMention(url: url, provider: provider)
+            insertIntoActiveText(Self.editorText(from: [mention]), offset: offset, plainAfter: true)
         case .card:
             placeBlockInActiveText(NodeFactory.integrationCard(url: url, provider: provider), replacing: range)
         }
@@ -1461,18 +1458,8 @@ final class DocumentModel {
         var run = AttributedString(url.absoluteString)
         run.link = url
         if let provider { run.docmost.linkProvider = provider.rawValue }
-        insertIntoActiveText(run, at: offset)
+        insertIntoActiveText(run, offset: offset, plainAfter: true)
         return url.absoluteString
-    }
-
-    /// Inserts at `offset` (0: the start) and puts the cursor after it, with plain typing attributes.
-    private func insertIntoActiveText(_ run: AttributedString, at offset: Int) {
-        guard active != nil else { return }
-        let position = min(max(offset, 0), activeText.characters.count)
-        activeText.insert(run, at: activeText.characters.index(activeText.startIndex, offsetBy: position))
-        let end = activeText.characters.index(activeText.startIndex, offsetBy: min(position + run.characters.count, activeText.characters.count))
-        activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: AttributeContainer())
-        scheduleCommit(debounce: .zero)
     }
 
     /// Applies the emoji keyboard's pick (`nil`: closed without one). The editor regains focus only once that
@@ -1501,22 +1488,16 @@ final class DocumentModel {
     }
 
     func atom(ofType type: String, in ref: NodeRef, index: Int) -> PMNode? {
-        guard let (_, node) = document.locate(ref) else { return nil }
-        let atoms = node.children.filter { $0.type == type }
-        return atoms.indices.contains(index) ? atoms[index] : nil
+        guard let (_, node) = document.locate(ref), let position = node.childPosition(ofType: type, index: index) else { return nil }
+        return node.children[position]
     }
 
     /// Replaces or removes the `index`-th atom of type `type` in a (non-active) block.
     func replaceAtom(ofType type: String, in ref: NodeRef, index: Int, with replacement: PMNode?) async {
         guard let engine, let block = await currentBlock(ref) else { return }
         let node = block.latest
+        guard let position = node.childPosition(ofType: type, index: index) else { return }
         var children = node.children
-        var seen = -1
-        guard let position = children.firstIndex(where: { child in
-            guard child.type == type else { return false }
-            seen += 1
-            return seen == index
-        }) else { return }
         if let replacement { children[position] = replacement } else { children.remove(at: position) }
         let updated = PMNode(type: node.type, attrs: node.attrs, content: children.isEmpty ? nil : children)
         report(await engine.replaceBlock(block.ref.target, with: updated, base: nil, expected: block.source))
