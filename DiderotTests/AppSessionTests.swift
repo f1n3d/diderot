@@ -1235,6 +1235,22 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// Cards whose keys can't be read leave no place to sort into: the board says so (code review R29). The card went
+    /// nowhere without a word.
+    @Test func cardWithoutAPlaceSaysSo() async throws {
+        let (session, model) = try await boardsOnA()
+        let column = try #require(model.columns.first).id
+        StubURLProtocol.body.withLock {
+            $0 = #"{"data": {"items": [{"id": "r1", "cells": {}, "position": "?"}, {"id": "r2", "cells": {}, "position": "!"}, {"id": "r3", "cells": {}, "position": "~"}], "meta": {"hasNextPage": false}}}"#
+        }
+        await model.loadRows()
+        StubURLProtocol.body.withLock { $0 = nil }
+        await model.moveCard("r3", to: column, beside: "r2", below: false)
+        #expect(model.toast == String(localized: "This can't be placed there."))
+        withExtendedLifetime(session) {}
+        await removeCaches()
+    }
+
     /// A database on a with a Business license, editable, its table showing row r1 (no cells).
     private func editableBase() async throws -> (BaseModel, AppSession) {
         _ = try await sessionOnA()
@@ -1295,6 +1311,58 @@ struct AppSessionRaceTests {
         await #expect(throws: (any Error).self) { try await session.signIn(withToken: token, at: server) }
         #expect(try store.pendingLogouts().filter { $0.token == token }.map(\.serverURL) == [a])
         try store.setPendingLogouts([])
+        await removeCaches()
+    }
+
+    /// A start that can't reach the server and has nothing of it saved to show keeps the sign-in and says so (code review
+    /// R40); trying again signs in once the server answers. It showed the sign-in screen without a word and tried no more.
+    @Test func uncheckedStartKeepsTheSignInAndTriesAgain() async throws {
+        let session = try await uncheckedStartOnA()
+        #expect(try store.loadAccounts().sessions.map(\.token) == ["a"], "The saved sign-in went")
+        StubURLProtocol.offline.withLock { $0 = true }
+        await session.retryUncheckedSignIn()
+        StubURLProtocol.offline.withLock { $0 = false }
+        #expect(session.ready == nil && session.uncheckedSignIn?.token == "a", "Still out of reach")
+        await session.retryUncheckedSignIn()
+        #expect(session.ready?.token == "a" && session.uncheckedSignIn == nil)
+        await removeCaches()
+    }
+
+    /// Signing in anew there ends the saved sign-in's session on the server, as signing out does: it stayed open (code
+    /// review R40).
+    @Test func signingInAnewEndsTheUncheckedSignIn() async throws {
+        let session = try await uncheckedStartOnA()
+        let payload = Data(#"{"type":"access","exp":4102444800}"#.utf8).base64EncodedString()
+            .replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+        let token = "e30.\(payload).sig"
+        try await session.signIn(withToken: token, at: ServerInfo(url: a, workspace: nil))
+        #expect(session.ready?.token == token)
+        #expect(try store.pendingLogouts().map(\.token) == ["a"])
+        try store.setPendingLogouts([])
+        await removeCaches()
+    }
+
+    /// A retry that answers after the user moved on (here: to adding a server) changes nothing (code review R40).
+    @Test func lateRetryKeepsWhatTheUserDid() async throws {
+        let session = try await uncheckedStartOnA()
+        StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in session.beginAddingServer() } }
+        await session.retryUncheckedSignIn()
+        let addsServer = if case .noServer = session.state { true } else { false }
+        #expect(addsServer && session.ready == nil, "The late retry signed in")
+        await removeCaches()
+    }
+
+    /// Another server's sign-in screen ends the unchecked sign-in: a retry there would have signed in with a's token as
+    /// that server (code review R40).
+    @Test func retryStaysWithItsServer() async throws {
+        let session = try await uncheckedStartOnA()
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "w2", "name": "Other"}}"# }
+        try await session.connect(to: b.absoluteString)
+        StubURLProtocol.body.withLock { $0 = nil }
+        await session.retryUncheckedSignIn()
+        let signedOutAtB = if case .signedOut(let server) = session.state { server.url == b } else { false }
+        #expect(signedOutAtB && session.uncheckedSignIn == nil)
+        #expect(try store.loadAccounts().sessions.map(\.serverURL) == [a], "a's sign-in was saved for b")
         await removeCaches()
     }
 
@@ -1474,6 +1542,19 @@ struct AppSessionRaceTests {
         await model.loadRows()
         try #require(model.columns.map { $0.list.rows.map(\.id) } == [["r1"]])
         return (session, model)
+    }
+
+    /// A start with a's sign-in saved, a out of reach and nothing of a saved to show: the sign-in screen, unchecked.
+    private func uncheckedStartOnA() async throws -> AppSession {
+        try store.save(StoredSession(serverURL: a, token: "a"))
+        await removeCaches()
+        StubURLProtocol.offline.withLock { $0 = true }
+        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        await session.restore()
+        StubURLProtocol.offline.withLock { $0 = false }
+        let signedOut = if case .signedOut(let server) = session.state { server.url == a } else { false }
+        try #require(signedOut && session.uncheckedSignIn?.token == "a")
+        return session
     }
 
     /// Signed in to a from the offline cache (a start without network), with b saved as well.

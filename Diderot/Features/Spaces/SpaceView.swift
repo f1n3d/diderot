@@ -290,27 +290,11 @@ struct SpaceView: View {
 
     /// Reorders or reparents a page (`pages/move` with a fractional-index position, like the web client).
     private func movePage(_ pageId: String, relativeTo target: SidebarPage, zone: TreeDropZone) async {
-        // A page can't move into its own subtree: not on, before or after one of its subpages.
-        guard session.client != nil, !store.isDescendant(target.id, of: pageId) else { return }
-        let newParentId: String?
-        let position: String
+        guard session.client != nil else { return }
         do {
-            switch zone {
-            case .nest:
-                newParentId = target.id
-                if !store.isExpanded(target.id) { await store.toggle(target.id) } else if store.children(of: target.id).isEmpty { await store.loadChildren(of: target.id) }
-                let last = store.children(of: target.id).last { $0.id != pageId }
-                position = try FractionalIndex.jitteredKeyBetween(last?.position, nil)
-            case .before, .after:
-                newParentId = target.parentPageId
-                let all = (target.parentPageId.map { store.children(of: $0) } ?? store.rootPages).filter { $0.id != pageId }
-                guard let index = all.firstIndex(where: { $0.id == target.id }) else { return }
-                let insertIndex = zone == .before ? index : index + 1
-                let lower = insertIndex > 0 ? all[insertIndex - 1].position : nil
-                let upper = insertIndex < all.count ? all[insertIndex].position : nil
-                position = try FractionalIndex.jitteredKeyBetween(lower, upper)
-            }
-            _ = try await session.send(Endpoints.Pages.move(pageId: pageId, position: position, parentPageId: newParentId))
+            guard let move = try await store.placement(of: pageId, relativeTo: target, zone: zone) else { return }
+            _ = try await session.send(Endpoints.Pages.move(pageId: pageId, position: move.position, parentPageId: move.parentPageId))
+            store.moved(pageId, to: move.parentPageId, position: move.position)
             changes.pageChanged(in: space.id)
         } catch {
             runner?.toast = error.userMessage

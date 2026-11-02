@@ -59,45 +59,14 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **E** Structure, in steps | S1 → S2 → S3 → S4, plus R29, R40, R51, R52, R54 | unit tests and UI tests | medium to high |
+| **E** Structure, in steps | S1 → S2 → S3 → S4, plus R54 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
 S1 comes before splitting DocumentModel (S2). Moving the structural edits into the engine removes about 600 lines from DocumentModel and makes package C's stopgaps for R1 and R9 unnecessary. The split is smaller and safer after that.
 
 ---
 
-## 1. Visible errors, accessibility, concurrency
-
-### R40 [low] ○ A start without the server or a cached user shows the sign-in screen without a word
-
-**Where:** `AppSession.swift:241–259`.
-
-**Problem:** When the app starts offline or can't reach the server and has no cached user (iOS can purge Caches), it shows sign-in without a message, although the stored token is still valid.
-
-**Consequences:**
-
-- Nothing retries when the network returns.
-- Signing in again replaces the token without ending the old server session.
-
-**Fix:** "Can't reach the server – Try Again" (runs `restore()` again), and retry when the network returns.
-
----
-
-## 2. Further findings
-
-### Data and lifecycle
-
-#### R29 [low] ○ Tree drag & drop: position logic in the view, untested, without the safeguards
-
-**Where:** `SpaceView.swift:290–316`; `BaseModel.swift:327–350`, `:342–343`; `FractionalIndex.swift:7`.
-
-**Problems:**
-
-- The logic re-implements `BaseModel.moveCard`'s "insert between neighbours", without its "already in place" check (`:336–341`) and its fallback for out-of-order keys.
-- `FractionalIndex.KeyError` has no message, so the user sees "…FractionalIndex.KeyError error 1"; in databases the card silently goes to the column's end.
-- The tree isn't updated locally, so a second drag before the reload uses stale keys (?).
-
-**Fix:** A `PageTreeStore.move` sharing one insertion helper with `moveCard`, applying the move locally, and messages for `KeyError`.
+## 1. Further findings
 
 ### Performance: measure first
 
@@ -131,23 +100,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ### Hygiene
 
-#### R51 [low] ○ `@State` initial values are built on every redraw
-
-**Where and what:**
-
-- `MainTabView.swift:23–30`: an `OfflineMonitor` and four stores
-- `BrowserLoginView.swift:19–27`: a data store and a `WebPage`
-- `WebEditorView.swift:22–39`: a `WebPage` on every PageView render while the cover shows
-- `LicensesView.swift:24–26`: decodes 110 KB of JSON on the main thread per body pass; a decode failure shows an empty list
-
-**Fix:** Create them lazily, or pass them in.
-
-#### R52 [low] ○ File work on the main thread
-
-**Where:** `CameraPicker.swift:30`; `MediaViewer.swift:224`.
-
-**Problem:** The full-resolution JPEG is encoded on the main thread, and the viewer writes its share file there too.
-
 #### R54 [low] ○ Duplicates in the editor
 
 **Where and what:**
@@ -160,7 +112,7 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ---
 
-## 3. Structure
+## 2. Structure
 
 ### S1 The editor's boundary to the engine (L, the biggest lever)
 
@@ -309,7 +261,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 ---
 
-## 4. CI, tools, tests
+## 3. CI, tools, tests
 
 ### T3 [medium] ✔ Selected UI test runs discard every API check
 
@@ -334,11 +286,10 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
   - concurrent access to the unsent store
   - the SSO cookie capture
   - the lossy-content guard
-  - the tree drop positions
 
 ---
 
-## 5. Checked and fine
+## 4. Checked and fine
 
 - ✔ **Keychain:** `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data protection keychain, no iCloud sync; an update falls back to an add.
 - ✔ **Release builds:** `DebugLaunch` exists only in debug builds, so the compiler keeps every `DOCMOST_DEBUG_*` path (auto-login, server pin, form filler, start routes) out of release builds.

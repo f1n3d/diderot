@@ -9,6 +9,35 @@ struct PageTreeStoreTests {
         SidebarPage(id: id, title: id, parentPageId: parent, hasChildren: children)
     }
 
+    /// A dropped page goes where the web's tree puts it, and the tree takes the move at once: a second drag before the
+    /// reload works from the new keys (code review R29). A page where it already is stays; onto itself, nothing moves.
+    @Test func movesPagesWhereTheyGo() async throws {
+        let store = PageTreeStore(spaceId: "s")
+        func page(_ id: String, _ position: String) -> SidebarPage { SidebarPage(id: id, title: id, position: position) }
+        store.setChildren([page("A", "a0"), page("B", "a1"), page("C", "a2")], of: nil)
+
+        let first = try #require(try await store.placement(of: "A", relativeTo: store.rootPages[2], zone: .after))
+        #expect(first.parentPageId == nil && first.position > "a2")
+        store.moved("A", to: first.parentPageId, position: first.position)
+        #expect(store.rootPages.map(\.id) == ["B", "C", "A"])
+
+        let second = try #require(try await store.placement(of: "B", relativeTo: store.rootPages[2], zone: .after))
+        #expect(second.position > first.position, "From A's old key")
+        #expect(try await store.placement(of: "C", relativeTo: store.rootPages[2], zone: .before) == nil, "C is before A already")
+        #expect(try await store.placement(of: "B", relativeTo: store.rootPages[0], zone: .nest) == nil)
+    }
+
+    /// Keys that can't be read leave no place, and the message says so in words (code review R29); it read
+    /// "…FractionalIndex.KeyError error 1".
+    @Test func pagesWithoutAPlaceSaySo() async throws {
+        let store = PageTreeStore(spaceId: "s")
+        store.setChildren([SidebarPage(id: "A", title: "A", position: "?"), SidebarPage(id: "B", title: "B", position: "!")], of: nil)
+        await #expect(throws: FractionalIndex.KeyError.self) {
+            _ = try await store.placement(of: "B", relativeTo: store.rootPages[0], zone: .after)
+        }
+        #expect(FractionalIndex.KeyError.outOfRange.userMessage == String(localized: "This can't be placed there."))
+    }
+
     @Test func flattensExpandedNodesDepthFirst() {
         let store = PageTreeStore(spaceId: "s")
         store.setChildren([page("A", children: true), page("B"), page("C", children: true)], of: nil)

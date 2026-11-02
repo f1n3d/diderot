@@ -883,6 +883,16 @@
         }
       }
     },
+    "Can't reach the server": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server nicht erreichbar"
+          }
+        }
+      }
+    },
     "Cancel": {
       "localizations": {
         "de": {
@@ -2654,6 +2664,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lizenzen"
+          }
+        }
+      }
+    },
+    "Licenses unavailable": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lizenzen nicht verfügbar"
           }
         }
       }
@@ -5380,6 +5400,16 @@
         }
       }
     },
+    "The list of licenses couldn't be read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Liste der Lizenzen ließ sich nicht lesen."
+          }
+        }
+      }
+    },
     "The location couldn't be removed from the photo or video, so it wasn't uploaded.": {
       "localizations": {
         "de": {
@@ -5498,6 +5528,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "In der Zwischenablage liegt kein synchronisierter Block."
+          }
+        }
+      }
+    },
+    "This can't be placed there.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das lässt sich dort nicht einordnen."
           }
         }
       }
@@ -6263,6 +6303,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Du bist auf dem Laufenden."
+          }
+        }
+      }
+    },
+    "Your sign-in is still saved, but the server didn't answer to confirm it. The app tries again when the network changes or when you come back to it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Anmeldung ist noch gespeichert, aber der Server hat nicht geantwortet, um sie zu bestätigen. Die App versucht es wieder, wenn sich das Netzwerk ändert oder du zu ihr zurückkehrst."
           }
         }
       }

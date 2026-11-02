@@ -220,11 +220,12 @@ private struct MediaViewerPage: View {
                 image = await ImageLoader.decode(data, targetPixelWidth: 16_384)
             }
             failed = markup == nil && image == nil
-            // Shared as the web downloads it: the file with its name.
-            if !failed, let server = context.baseURL,
-               let file = try? TempFile.write(data, server: server, folder: ["attachments", url.deletingLastPathComponent().lastPathComponent],
-                                              name: url.lastPathComponent) {
-                loaded(file)
+            // Shared as the web downloads it: the file with its name. Written off the main thread, which it held up.
+            if !failed, let server = context.baseURL {
+                let folder = ["attachments", url.deletingLastPathComponent().lastPathComponent], name = url.lastPathComponent
+                if let file = await Task.detached(operation: { try? TempFile.write(data, server: server, folder: folder, name: name) }).value {
+                    loaded(file)
+                }
             }
         } catch {
             if !Task.isCancelled { failed = true }

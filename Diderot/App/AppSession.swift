@@ -112,7 +112,20 @@ final class AppSession {
         case ready(ReadySession)
     }
 
-    private(set) var state: State = .restoring
+    private(set) var state: State = .restoring {
+        didSet {
+            // Only its server's sign-in screen waits for it.
+            if case .signedOut(let server) = state, let uncheckedSignIn,
+               StoredAccounts.key(for: server.url) == StoredAccounts.key(for: uncheckedSignIn.serverURL) { return }
+            uncheckedSignIn = nil
+            uncheckedSignInRetry?.cancel()
+        }
+    }
+    /// The saved sign-in the start couldn't check: its server didn't answer, and nothing of it is saved to show. It
+    /// stays saved; the sign-in screen says so and tries again, as does the network changing or the app coming back.
+    /// The sign-in screen showed without a word, nothing tried again, and signing in anew left its session open.
+    private(set) var uncheckedSignIn: StoredSession?
+    @ObservationIgnored private var uncheckedSignInRetry: Task<Void, Never>?
     /// Saved sign-ins, one per server, including the current one.
     private(set) var accounts: [StoredSession] = []
     private let sessionStore: SessionStore
@@ -293,6 +306,8 @@ final class AppSession {
                 }
                 AppLog.session.error("Could not validate stored session: \(error.userMessage, privacy: .public)")
                 state = .signedOut(server)
+                uncheckedSignIn = stored
+                retryUncheckedSignInWhenTheNetworkChanges()
                 return
             }
         }
@@ -749,7 +764,8 @@ final class AppSession {
 
     /// `replacing`: the offline session that a reconnect loads fully. `signingIn`: a sign-in from the sign-in screen.
     private func finishSignIn(
-        server: ServerInfo, client: APIClient, token: String, replacing: ReadySession? = nil, signingIn: Bool = false
+        server: ServerInfo, client: APIClient, token: String, replacing: ReadySession? = nil, signingIn: Bool = false,
+        retrying: StoredSession? = nil
     ) async throws {
         async let me = client.send(Endpoints.Users.me)
         async let entitlements = client.send(Endpoints.Workspace.entitlements)
@@ -792,7 +808,14 @@ final class AppSession {
         // `state` write.
         if let replacing, !isStillCurrent(replacing) { return }
         if signingIn, !isSigningIn(at: server) { throw CancellationError() }
+        if let retrying, uncheckedSignIn != retrying { throw CancellationError() }
         let stored = StoredSession(serverURL: server.url, token: token, email: currentUser.user.email, workspaceName: currentUser.workspace.name)
+        // A sign-in anew replaces the server's saved one (one per server): its session ends on the server, as on
+        // signing out, instead of staying open.
+        if let replaced = accounts.first(where: { StoredAccounts.key(for: $0.serverURL) == StoredAccounts.key(for: server.url) }),
+           replaced.token != token {
+            keepPendingLogout(replaced)
+        }
         keychain("save") { try sessionStore.save(stored) }
         reloadAccounts()
         Task.detached(priority: .utility) { await cache.prune() }
@@ -859,6 +882,43 @@ final class AppSession {
     private static func hasNoNetwork() async -> Bool {
         for await path in NWPathMonitor() { return path.status != .satisfied }
         return false
+    }
+
+    /// Checks the saved sign-in the start couldn't check (`uncheckedSignIn`) again. Its result counts only while the
+    /// sign-in screen still waits for it: signing in or switching servers meanwhile wins.
+    func retryUncheckedSignIn() async {
+        guard let unchecked = uncheckedSignIn, case .signedOut(let server) = state else { return }
+        do {
+            try await finishSignIn(server: server, client: makeClient(for: unchecked.serverURL, token: unchecked.token),
+                                   token: unchecked.token, retrying: unchecked)
+        } catch let error as APIError where error.isSessionExpired {
+            // Ended on the server meanwhile: it goes, as at the start.
+            guard uncheckedSignIn == unchecked else { return }
+            AppLog.session.notice("Stored session rejected by server, signing out")
+            keychain("remove") { try sessionStore.remove(serverURL: unchecked.serverURL) }
+            reloadAccounts()
+            uncheckedSignIn = nil
+            uncheckedSignInRetry?.cancel()
+        } catch {
+            guard uncheckedSignIn == unchecked else { return }
+            AppLog.session.notice("Saved sign-in still unchecked: \(error.userMessage, privacy: .public)")
+            retryUncheckedSignInWhenTheNetworkChanges()
+        }
+    }
+
+    /// Once the network changes (a VPN coming on, another Wi-Fi), not for the network as it is now: a server that
+    /// doesn't answer on it would be asked again and again.
+    private func retryUncheckedSignInWhenTheNetworkChanges() {
+        uncheckedSignInRetry?.cancel()
+        uncheckedSignInRetry = Task { [weak self] in
+            var paths = NWPathMonitor().makeAsyncIterator()
+            _ = await paths.next()
+            while let path = await paths.next(), !Task.isCancelled {
+                guard path.status == .satisfied else { continue }
+                await self?.retryUncheckedSignIn()
+                return
+            }
+        }
     }
 
     /// After an offline start, fully loads the session once the server is reachable again.
