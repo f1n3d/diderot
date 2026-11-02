@@ -98,16 +98,13 @@ enum BlockTemplate: String, CaseIterable, Identifiable {
         }
     }
 
-    /// New node, optionally with existing inline content (when converting).
-    func node(inlines: [PMNode]? = nil, attrs: [String: JSONValue]? = nil) -> PMNode {
-        let content = inlines?.isEmpty == false ? inlines : nil
-        let paragraph = PMNode(type: "paragraph", attrs: attrs, content: content)
+    /// A new, empty block of this kind.
+    func node() -> PMNode {
+        let paragraph = PMNode(type: "paragraph")
         switch self {
         case .paragraph: return paragraph
         case .heading1, .heading2, .heading3:
-            var headingAttrs = attrs ?? [:]
-            headingAttrs["level"] = .number(Double(self == .heading1 ? 1 : self == .heading2 ? 2 : 3))
-            return PMNode(type: "heading", attrs: headingAttrs, content: content)
+            return PMNode(type: "heading", attrs: ["level": .number(Double(self == .heading1 ? 1 : self == .heading2 ? 2 : 3))])
         case .bulletList: return PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [paragraph])])
         case .orderedList: return PMNode(type: "orderedList", attrs: ["start": 1], content: [PMNode(type: "listItem", content: [paragraph])])
         case .taskList: return PMNode(type: "taskList", content: [PMNode(type: "taskItem", attrs: ["checked": false], content: [paragraph])])
@@ -115,13 +112,10 @@ enum BlockTemplate: String, CaseIterable, Identifiable {
         case .callout: return PMNode(type: "callout", attrs: ["type": "info"], content: [paragraph])
         case .toggle:
             return PMNode(type: "details", attrs: ["open": true], content: [
-                PMNode(type: "detailsSummary", content: content),
+                PMNode(type: "detailsSummary"),
                 PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")]),
             ])
-        case .codeBlock:
-            // Line breaks become the code's lines, as the web's setBlockType does; mentions and other atoms drop out.
-            let text = inlines.map { $0.map { $0.type == "hardBreak" ? "\n" : $0.plainText }.joined() } ?? ""
-            return PMNode(type: "codeBlock", attrs: ["language": .null], content: text.isEmpty ? nil : [PMNode(type: "text", text: text)])
+        case .codeBlock: return PMNode(type: "codeBlock", attrs: ["language": .null])
         case .table:
             func cell(_ type: String) -> PMNode { PMNode(type: type, attrs: ["colspan": 1, "rowspan": 1], content: [PMNode(type: "paragraph")]) }
             let header = PMNode(type: "tableRow", content: [cell("tableHeader"), cell("tableHeader"), cell("tableHeader")])
@@ -2937,22 +2931,6 @@ final class DocumentModel {
         guard let content = node.content else { return node }
         let children = content.enumerated().map { applyOverrides(to: $0.element, path: path + [$0.offset]) }
         return PMNode(type: node.type, attrs: node.attrs, content: children, marks: node.marks, text: node.text)
-    }
-
-    static func inlineContent(of node: PMNode) -> [PMNode]? {
-        switch node.type {
-        case "paragraph", "heading", "detailsSummary": return node.content
-        case "codeBlock":
-            // The code's lines become line breaks, as on the web; a raw "\n" in text would count as Return.
-            let lines = node.plainText.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-            let inlines = lines.enumerated().flatMap { index, line in
-                (index > 0 ? [PMNode(type: "hardBreak")] : []) + (line.isEmpty ? [] : [PMNode(type: "text", text: String(line))])
-            }
-            return inlines.isEmpty ? nil : inlines
-        default:
-            if let first = node.children.first { return inlineContent(of: first) }
-            return nil
-        }
     }
 
     static func strippingIds(_ node: PMNode) -> PMNode {
