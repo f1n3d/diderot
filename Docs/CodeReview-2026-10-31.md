@@ -59,7 +59,7 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **E** Structure, in steps | S1 → S2 → S3 → S4, plus R27, R29, R37, R39, R40, R43, R45, R51, R52, R54, R56, R57 | unit tests and UI tests | medium to high |
+| **E** Structure, in steps | S1 → S2 → S3 → S4, plus R29, R40, R51, R52, R54 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
 S1 comes before splitting DocumentModel (S2). Moving the structural edits into the engine removes about 600 lines from DocumentModel and makes package C's stopgaps for R1 and R9 unnecessary. The split is smaller and safer after that.
@@ -81,27 +81,11 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 **Fix:** "Can't reach the server – Try Again" (runs `restore()` again), and retry when the network returns.
 
-### R45 [low] ○ Kanban column requests aren't cancelled
-
-**Where:** `BaseModel.swift:181–191`.
-
-**Problem:** The column requests are unstructured `Task {}`s. Awaiting `.value` doesn't pass cancellation on: leaving or switching views doesn't cancel them, and after the first failure the others keep running.
-
-**Fix:** `withThrowingTaskGroup`.
-
 ---
 
 ## 2. Further findings
 
 ### Data and lifecycle
-
-#### R27 [low] ○ Several spaces changing at once refresh only one
-
-**Where:** `ContentChanges.swift:7–14`; `MainTabView.swift:93`; `SpaceView.swift:103–108`.
-
-**Problem:** `ContentChanges` keeps a single `lastChangedSpaceId`. `sendUnsentTitles` calls `pageChanged` in a loop, and SwiftUI coalesces that into one `onChange`. Every other space's open view keeps the old titles.
-
-**Fix:** Send `nil` ("all") when more than one space changed.
 
 #### R29 [low] ○ Tree drag & drop: position logic in the view, untested, without the safeguards
 
@@ -147,23 +131,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ### Hygiene
 
-#### R39 [low] ○ Search briefly shows "No Results"
-
-**Where:** `SearchModel.swift:34–44`; `SearchResultsCard.swift:36–41`.
-
-**Problem:** `isSearching` turns true only after the 300 ms debounce, so every new query first shows "No Results".
-
-**Fix:** Mark the search pending at the start of `run()`.
-
-#### R43 [low] ○ Raw error texts reach the user
-
-**Where:** `BaseFieldEditors.swift:441`, `:451`, `:464`; `BaseModel.swift:135–137`.
-
-**Problems:**
-
-- Non-API errors reach the user as Cocoa text through `localizedDescription` (e.g. `KeyError`, `CancellationError`), and the three BaseFieldEditors places skip `userMessage`.
-- `BaseModel.load` lacks the `CancellationError` branch. Leaving a database without a cached copy while it loads shows "Something went wrong" briefly on return.
-
 #### R51 [low] ○ `@State` initial values are built on every redraw
 
 **Where and what:**
@@ -190,31 +157,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 - the "n-th atom of type" search three times (`:1233`, `:1589`, `:1596`)
 - the descend-to-text loop twice (`:2625`, `:2783`)
 - toolbar format actions call `activeTextChanged()` (`EditorToolbar.swift:303–358`, `:492`, `:539`), and `onChange(of: activeText)` calls it again (`BlockCards.swift:349–354`)
-
-#### R56 [low] ○ Force unwraps that rely on lists in sync
-
-**Where:** `ContentParser.swift:94`; `SessionEndpoints.swift:47`, `:51`.
-
-**Problem:**
-
-- `ContentParser.swift:94` is safe today, but only because the `case` list matches `MediaBlock.Kind` exactly.
-- The `SessionEndpoints` unwraps can't fail for normalised URLs.
-
-**Fix:** `if let`, and plain fallbacks.
-
-#### R57 [low] ○ Misleading comments
-
-**Where:**
-
-- `BaseValue.swift:87–93` merges two functions' docs.
-- `BaseModel.swift:286` and `:418` each have two stacked summaries.
-- `AppSessionTests.swift:427` describes `lateRowsAnswerKeepsTheNewView` (`:495`), not the test it sits on.
-
-#### R37 [low] ○ One bad presence entry empties the list
-
-**Where:** `Participants.init`.
-
-**Problem:** One malformed awareness entry empties the whole participant list.
 
 ---
 
@@ -318,7 +260,7 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |
 | Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema. Since package C the editor writes marks back as stored while they show the same, line breaks' too with their direction, checked over all fixtures and the dev instances' marks (R3). | One mark codec for the reader and the editor. (M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links, which can't use the app's schemes since R13. | (M) |
-| Showing errors | Toast (read out by VoiceOver since R17), the editor's banner (R19), inline text, silent revert or only the log (R43). | One helper: toast plus a generic message. (S) |
+| Showing errors | Toast (read out by VoiceOver since R17), the editor's banner (R19), inline text, silent revert or only the log. An error without a text of its own reads as a plain sentence (since R43). | One helper: toast plus a generic message. (S) |
 
 ### S4 Time as a control mechanism
 

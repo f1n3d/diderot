@@ -99,7 +99,7 @@ struct MainTabView: View {
 
     private func sendUnsentChanges() async {
         let titles = await session.sendUnsentTitles()
-        for spaceId in titles.spaces { changes.pageChanged(in: spaceId) }
+        changes.pagesChanged(in: titles.spaces)
         let dropped = titles.dropped + (await session.sendUnsentCells())
         if let notice = AppSession.DroppedChange.notice(for: dropped) { notices.post(notice) }
     }

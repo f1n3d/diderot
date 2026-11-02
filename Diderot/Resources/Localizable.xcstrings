@@ -4977,6 +4977,16 @@
         }
       }
     },
+    "Something went wrong.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Etwas ist schiefgelaufen."
+          }
+        }
+      }
+    },
     "Sort A → Z": {
       "localizations": {
         "de": {

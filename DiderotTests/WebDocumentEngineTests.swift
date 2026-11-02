@@ -43,6 +43,14 @@ struct WebDocumentEngineTests {
         ])
     }
 
+    /// An entry that doesn't read (a number for a name, no object at all) is left out; it emptied the whole list (code
+    /// review R37).
+    @Test func oneBadEntryKeepsTheOthers() throws {
+        let list = ##"[{"id": "u1", "name": "Ann"}, {"id": "u2", "name": 5}, "x", {"id": "u3", "name": "Cem"}]"##
+        let entries = try JSONDecoder().decode(EngineEvent.self, from: Data(#"{"type": "awareness", "participants": \#(list)}"#.utf8)).participants?.list
+        #expect(entries?.map(\.id) == ["u1", "u3"])
+    }
+
     /// A block without an id is found by position and carries its type, so the engine refuses another kind of block
     /// a collaborator moved there meanwhile; a block with an id needs no type.
     @Test func positionTargetCarriesTheBlockType() throws {
