@@ -333,8 +333,8 @@ struct EditorToolbar: View {
         model.activeTextChanged()
     }
 
-    /// Like "/code": block to code block (keeping its text), code block back to paragraph. Where a code block isn't
-    /// allowed (list item, table cell, …), inserts one after the enclosing block.
+    /// Like "/code": block to code block (keeping its text), code block back to paragraph. Where the line can't become
+    /// one (an item's first line, a toggle's title, …), inserts one after the enclosing block.
     private func toggleCodeBlock() {
         guard let active = model.active else { return }
         if active.type == "codeBlock" {

@@ -7,7 +7,8 @@ import { Node as PMNode } from "@tiptap/pm/model";
 import * as Y from "yjs";
 import { fits, type Place } from "./fits";
 import { bindingChanges } from "./guards";
-import { backspaceEdit, backspacePlan, enterEdit, liftLineEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
+import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, type Kind } from "./conversions";
+import { backspaceEdit, backspacePlan, enterEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
 import { applySteps, locate, type Step, type Target } from "./steps";
@@ -232,7 +233,7 @@ class DocmostEngine {
   /** Return in a text block: it keeps `json`, its text before the cursor (saved on `base`), and `after` continues in a new
    * line (`enterEdit`). */
   enter(target: Target, json: JSONContent, after: JSONContent[], base?: JSONContent | null): Cursor | false | null {
-    return this.applyKey((editor) => enterEdit(editor.schema, editor.state.doc, target, json, after, base));
+    return this.applyEdit((editor) => enterEdit(editor.schema, editor.state.doc, target, json, after, base));
   }
 
   /**
@@ -255,23 +256,54 @@ class DocmostEngine {
     return applied === null ? null : outcome ?? false;
   }
 
-  /** A heading (`json`) for an item's only line: the line leaves the list as it, the cursor at its end (`liftLineEdit`). */
-  liftLine(target: Target, json: JSONContent): Cursor | false | null {
-    return this.applyKey((editor) => liftLineEdit(editor.schema, editor.state.doc, target, json));
+  // MARK: Conversions
+  //
+  // A line turned into another block, a columns block's count and unsyncing (src/conversions.ts), decided from the
+  // document now and applied in one transaction; false when refused (the block is gone or another type, or the result
+  // doesn't fit there) and null when the engine takes no edits.
+
+  /** Turns the line at `target` into `kind` (`convertEdit`) and returns where the cursor goes, as the keys do. */
+  convert(target: Target, kind: Kind): Cursor | false | null {
+    return this.applyEdit((editor) => convertEdit(editor.schema, editor.state.doc, target, kind));
   }
 
-  private applyKey(edit: (editor: Editor) => KeyEdit | undefined): Cursor | false | null {
+  /** Sets the count of the columns block at `target` (`columnCountEdit`). */
+  setColumnCount(target: Target, count: number): boolean | null {
+    return this.applyBuilt((editor) => columnCountEdit(editor.schema, editor.state.doc, target, count));
+  }
+
+  /** Unsyncs the synced block's source at `target`: its content stays as normal blocks (`unsyncEdit`). */
+  unsync(target: Target): boolean | null {
+    return this.applyBuilt((editor) => unsyncEdit(editor.state.doc, target));
+  }
+
+  /** Replaces an embedded synced block with its content as the server returned it, where it is now (`referenceEdit`). */
+  replaceReference(path: number[], source: { sourcePageId: string; transclusionId: string }, json: JSONContent[]): boolean | null {
+    return this.applyBuilt((editor) => referenceEdit(editor.state.doc, path, source, json));
+  }
+
+  /** Applies an edit's steps and returns its cursor; an edit without steps changes nothing. */
+  private applyEdit(build: (editor: Editor) => KeyEdit | undefined): Cursor | false | null {
     let cursor: Cursor | undefined;
-    const applied = this.transact((editor) => {
-      const found = edit(editor);
-      if (!found) return false;
-      const tr = editor.state.tr;
-      if (!applySteps(tr, found.steps)) return false;
-      editor.view.dispatch(tr);
-      cursor = found.cursor;
-      return true;
+    const applied = this.applyBuilt((editor) => {
+      const edit = build(editor);
+      cursor = edit?.cursor;
+      return edit?.steps;
     });
     return applied && cursor ? cursor : applied === null ? null : false;
+  }
+
+  /** Applies the steps built from the document now in one transaction; none change nothing. */
+  private applyBuilt(build: (editor: Editor) => Step[] | undefined): boolean | null {
+    return this.transact((editor) => {
+      const steps = build(editor);
+      if (!steps) return false;
+      if (steps.length === 0) return true;
+      const tr = editor.state.tr;
+      if (!applySteps(tr, steps)) return false;
+      editor.view.dispatch(tr);
+      return true;
+    });
   }
 
   // MARK: Questions
@@ -290,6 +322,12 @@ class DocmostEngine {
         return false; // A type the schema doesn't know.
       }
     });
+  }
+
+  /** What the line at `target` can turn into where it is (src/conversions.ts); null when it's gone. */
+  conversions(target: Target): Kind[] | null {
+    if (!this.editor || this.failed) return null;
+    return conversions(this.editor.schema, this.editor.state.doc, target) ?? null;
   }
 
   /** What Backspace at the start of the block at `target` does, empty and with text (src/keys.ts); null when it's gone. */

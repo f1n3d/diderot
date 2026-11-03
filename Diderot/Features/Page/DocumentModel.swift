@@ -98,16 +98,13 @@ enum BlockTemplate: String, CaseIterable, Identifiable {
         }
     }
 
-    /// New node, optionally with existing inline content (when converting).
-    func node(inlines: [PMNode]? = nil, attrs: [String: JSONValue]? = nil) -> PMNode {
-        let content = inlines?.isEmpty == false ? inlines : nil
-        let paragraph = PMNode(type: "paragraph", attrs: attrs, content: content)
+    /// A new, empty block of this kind.
+    func node() -> PMNode {
+        let paragraph = PMNode(type: "paragraph")
         switch self {
         case .paragraph: return paragraph
         case .heading1, .heading2, .heading3:
-            var headingAttrs = attrs ?? [:]
-            headingAttrs["level"] = .number(Double(self == .heading1 ? 1 : self == .heading2 ? 2 : 3))
-            return PMNode(type: "heading", attrs: headingAttrs, content: content)
+            return PMNode(type: "heading", attrs: ["level": .number(Double(self == .heading1 ? 1 : self == .heading2 ? 2 : 3))])
         case .bulletList: return PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [paragraph])])
         case .orderedList: return PMNode(type: "orderedList", attrs: ["start": 1], content: [PMNode(type: "listItem", content: [paragraph])])
         case .taskList: return PMNode(type: "taskList", content: [PMNode(type: "taskItem", attrs: ["checked": false], content: [paragraph])])
@@ -115,13 +112,10 @@ enum BlockTemplate: String, CaseIterable, Identifiable {
         case .callout: return PMNode(type: "callout", attrs: ["type": "info"], content: [paragraph])
         case .toggle:
             return PMNode(type: "details", attrs: ["open": true], content: [
-                PMNode(type: "detailsSummary", content: content),
+                PMNode(type: "detailsSummary"),
                 PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")]),
             ])
-        case .codeBlock:
-            // Line breaks become the code's lines, as the web's setBlockType does; mentions and other atoms drop out.
-            let text = inlines.map { $0.map { $0.type == "hardBreak" ? "\n" : $0.plainText }.joined() } ?? ""
-            return PMNode(type: "codeBlock", attrs: ["language": .null], content: text.isEmpty ? nil : [PMNode(type: "text", text: text)])
+        case .codeBlock: return PMNode(type: "codeBlock", attrs: ["language": .null])
         case .table:
             func cell(_ type: String) -> PMNode { PMNode(type: type, attrs: ["colspan": 1, "rowspan": 1], content: [PMNode(type: "paragraph")]) }
             let header = PMNode(type: "tableRow", content: [cell("tableHeader"), cell("tableHeader"), cell("tableHeader")])
@@ -980,9 +974,9 @@ final class DocumentModel {
 
     /// The engine's answers about the active block, for the menus, the table row of the keyboard toolbar and Backspace,
     /// which show at once: which block types fit where new blocks go, which cards and inline databases can take its
-    /// line's place, which table commands apply to its cell, what Backspace at its start does. The app kept its own copy
-    /// of these rules, and it drifted: a synced block was offered page breaks and databases it can't hold. Asked when a
-    /// block becomes active and after each document; nil until answered, and for another block.
+    /// line's place, which table commands apply to its cell, what Backspace at its start does, what it can turn into.
+    /// The app kept its own copy of these rules, and it drifted: a synced block was offered page breaks and databases it
+    /// can't hold. Asked when a block becomes active and after each document; nil until answered, and for another block.
     struct EngineAnswers: Equatable {
         /// The active block's identity they are for.
         let identity: String
@@ -998,6 +992,8 @@ final class DocumentModel {
         var tableCommands: Set<String> = []
         /// What Backspace at its start does, empty and with text (`joinBackward` shows it at once).
         var backspace: BackspacePlans?
+        /// What it can turn into where it is: `BlockTemplate` raw values, and "syncedBlock".
+        var conversions: Set<String>?
     }
 
     /// A card or inline database in place of a paragraph, with the paragraph's text before and after it, or not
@@ -1058,6 +1054,7 @@ final class DocumentModel {
                 answers.tableCommands = Set(zip(Self.tableQuestions, apply).filter(\.1).compactMap { $0.0.engineCommand["name"]?.stringValue })
             }
             answers.backspace = await engine.backspacePlans(ref.target)
+            answers.conversions = await engine.conversions(ref.target)
             guard !Task.isCancelled, self.active?.ref.identity == ref.identity else { return }
             self.answers = answers
         }
@@ -1264,34 +1261,27 @@ final class DocumentModel {
         performBlock(command, placement: .end)
     }
 
-    /// Block types the active block can be turned into in place, for "/" and the toolbar.
+    /// Block types the active block can be turned into in place, for "/" and the toolbar, as the engine says
+    /// (`conversions` in Engine/src/conversions.ts): none for a toggle's title or a footnote's text, the list kinds in a
+    /// list item (for its whole list), a heading for an item's only line (it leaves the list). Until the engine has
+    /// answered, all of them but for a toggle's title or a footnote's text, so the toolbar doesn't change there under the
+    /// finger, and the engine refuses what doesn't fit.
     var conversionTemplates: [BlockTemplate] {
         guard let active else { return [] }
-        let text: [BlockTemplate] = [.paragraph, .heading1, .heading2, .heading3]
-        let lists: [BlockTemplate] = [.bulletList, .orderedList, .taskList]
-        switch insertLocation(of: active) {
-        case .topLevel, .container: return text + lists + [.quote, .callout, .toggle, .codeBlock]
-        case .tableCell: return text + lists
-        // An item's content is "paragraph block*": a heading can't start it. As on the web, the item's only line then
-        // leaves the list as the heading (`liftLine`); a first line with more below it stays a paragraph.
-        case .listItem:
-            guard let itemPath = active.itemPath, active.ref.path == itemPath + [0] else { return text + lists }
-            return node(at: itemPath)?.children.count == 1 ? text + lists : [.paragraph] + lists
-        // A replacement would split the toggle, or ProseMirror turns the footnote text back into a paragraph.
-        case .summary, .footnote: return []
+        let all: [BlockTemplate] = [.paragraph, .heading1, .heading2, .heading3, .bulletList, .orderedList, .taskList, .quote, .callout, .toggle, .codeBlock]
+        guard let kinds = activeAnswers?.conversions else {
+            return [.summary, .footnote].contains(insertLocation(of: active)) ? [] : all
         }
+        return all.filter { kinds.contains($0.rawValue) }
     }
 
-    /// Turns the active block into `template`; a list kind on a list item converts the item's whole list.
+    /// Turns the active block into `template` where it is (`convert`); a list kind in a list item switches the item's
+    /// whole list, which is that kind already when nothing happens.
     func convertActive(to template: BlockTemplate) {
         guard let active else { return }
-        if let itemPath = active.itemPath, [.bulletList, .orderedList, .taskList].contains(template) {
-            Task { await convertList(itemPath: itemPath, to: template) }
-        } else if let itemPath = active.itemPath, active.ref.path == itemPath + [0], [.heading1, .heading2, .heading3].contains(template) {
-            Task { await liftLine(into: template) }
-        } else {
-            Task { await convert(active.ref, to: template) }
-        }
+        if let itemPath = active.itemPath, active.ref.path.count == itemPath.count + 1,
+           node(at: Array(itemPath.dropLast()))?.type == template.rawValue { return }
+        Task { await convert(active.ref, to: template) }
     }
 
     private func performBlock(_ command: InsertCommand, placement: BlockPlacement) {
@@ -2115,27 +2105,28 @@ final class DocumentModel {
 
     /// Turns the active top-level block into a synced block (like "Turn into" in the web client).
     func wrapActiveInSyncedBlock() async {
-        guard let engine, let active, active.ref.isTopLevel, let block = await currentBlock(active.ref) else { return }
-        if self.active?.ref.identity == active.ref.identity { dropActive() }
-        if report(await engine.replaceBlock(block.ref.target, with: PMNode(type: "transclusionSource", content: [block.latest]), base: nil,
-                                            expected: block.source)) {
-            await focusAfterOperation(block.ref.path + [0], .end)
-        }
+        guard let active, active.ref.isTopLevel else { return }
+        await convert(active.ref, to: "syncedBlock")
     }
 
-    /// Unsyncs a synced block's source: its content, including unsaved input inside, stays as normal blocks.
+    /// Unsyncs a synced block's source: its content, including unsaved input inside, stays as normal blocks (`unsync` in
+    /// Engine/src/conversions.ts).
     func unsyncSource(_ ref: NodeRef) async {
-        guard let engine, let block = await currentBlock(ref) else { return }
+        guard let engine else { return }
+        await flush()
         if active != nil { deactivate() }
-        let content = block.latest.children.isEmpty ? [PMNode(type: "paragraph")] : block.latest.children
-        report(await engine.replaceBlock(block.ref.target, withNodes: content, expected: block.source))
+        report(await engine.unsync(ref.target))
     }
 
-    /// Unsyncs an embedded synced block once the server returned its content. It has no id, so it is looked up
-    /// again: a collaborator (or an edit before it) may have moved or removed it meanwhile.
+    /// Unsyncs an embedded synced block once the server returned its content. It has no id, so the engine finds it where
+    /// it is by then (`replaceReference`): a collaborator (or an edit before it) may have moved it meanwhile. Gone from
+    /// the page already (a second tap's late answer), nothing happens.
     func unsyncReference(_ reference: PMNode, at ref: NodeRef, content nodes: [PMNode]) async {
-        guard let path = node(at: ref.path) == reference ? ref.path : path(where: { $0 == reference }) else { return }
-        await replace(NodeRef(path: path, node: reference), withNodes: nodes)
+        guard let engine, let sourcePageId = reference.string("sourcePageId"), let transclusionId = reference.string("transclusionId"),
+              node(at: ref.path) == reference || path(where: { $0 == reference }) != nil
+        else { return }
+        if active != nil { deactivate() }
+        report(await engine.replaceReference(at: ref.path, sourcePageId: sourcePageId, transclusionId: transclusionId, with: nodes))
     }
 
     /// Puts a template's blocks into a blank page, as the web's "Get started with" does; `false` once it isn't blank.
@@ -2158,34 +2149,18 @@ final class DocumentModel {
 
     // MARK: Columns
 
-    /// Changes the column count like the web client: new columns are empty, removed ones merge into the last kept one.
+    /// Changes the column count like the web client (`setColumnCount` in Engine/src/conversions.ts): new columns are
+    /// empty, removed ones merge into the last kept one.
     func setColumnCount(_ count: Int, at path: [Int]) async {
-        guard let engine, (2...5).contains(count), let shown = node(at: path), shown.type == "columns", count != shown.children.count,
-              let block = await currentBlock(NodeRef(path: path, node: shown))
+        guard let engine, (2...5).contains(count), let shown = node(at: path), shown.type == "columns", count != shown.children.count
         else { return }
-        let columns = block.latest
-        guard count != columns.children.count else { return }
-        let current = columns.children
-        var children: [PMNode]
-        if count > current.count {
-            children = current + (current.count..<count).map { _ in PMNode(type: "column", content: [PMNode(type: "paragraph")]) }
-        } else {
-            children = Array(current.prefix(count - 1))
-            var merged = current[count - 1].children
-            for column in current[count...] {
-                merged += column.children.filter { $0.type != "paragraph" || !$0.children.isEmpty }
-            }
-            children.append(PMNode(type: "column", content: merged))
-        }
-        var attrs = columns.attrs ?? [:]
-        attrs["layout"] = .string(Self.defaultColumnsLayout(count))
-        let path = block.ref.path
+        // Its input goes first: the engine merges the columns it has.
+        await flush()
         if let active, active.ref.path.starts(with: path), active.ref.path.count > path.count, active.ref.path[path.count] >= count - 1 {
             // The active block is in a column that gets merged: end editing.
             deactivate()
         }
-        report(await engine.replaceBlock(block.ref.target, with: PMNode(type: "columns", attrs: attrs, content: children), base: nil,
-                                         expected: block.source))
+        report(await engine.setColumnCount(NodeRef(path: path, node: shown).target, count: count))
     }
 
     // MARK: Tabs
@@ -2460,20 +2435,6 @@ final class DocumentModel {
         await focusAfterOperation(cursor.path, .start)
     }
 
-    /// A heading for an item's only line: the line leaves the list as that heading, as on the web.
-    private func liftLine(into template: BlockTemplate) async {
-        guard let engine, let active, let line = latestNode(at: active.ref.path) else { return }
-        let attrs = line.attrs?.filter { ["textAlign", "indent"].contains($0.key) }
-        let heading = template.node(inlines: Self.inlineContent(of: line), attrs: attrs)
-        commitTask?.cancel()
-        overrides[active.ref.identity] = nil
-        switch await engine.liftLine(active.ref.target, as: heading) {
-        case .moved(let cursor): await focusAfterOperation(cursor)
-        case .refused: report(.refused)
-        case .unavailable: break
-        }
-    }
-
     /// Backspace at a block's start: joins it with the text block before, removes it (an empty line after an image, a
     /// table …), leaves the list (an empty first item) or does nothing, as the engine decides (`backspace`). A join or a
     /// removal shows at once where the engine said it goes (`answers`), so text typed right after the key lands there.
@@ -2590,43 +2551,26 @@ final class DocumentModel {
 
     // MARK: - Block operations
 
+    /// Turns the line at `ref` into `template` where it is (`convert`).
     func convert(_ ref: NodeRef, to template: BlockTemplate) async {
-        guard let engine, let block = await currentBlock(ref) else { return }
-        let attrs = block.latest.attrs?.filter { ["id", "textAlign", "indent"].contains($0.key) }
-        let replacement = template.node(inlines: Self.inlineContent(of: block.latest), attrs: attrs)
-        if active?.ref.identity == ref.identity { dropActive() }
-        if report(await engine.replaceBlock(block.ref.target, with: replacement, base: nil, expected: block.source)),
-           let first = template.firstTextPath {
-            await focusAfterOperation(block.ref.path + first, .end)
-        }
+        await convert(ref, to: template.rawValue)
     }
 
-    /// Converts the list containing the active item (bullet ↔ numbered ↔ task).
-    func convertList(itemPath: [Int], to template: BlockTemplate) async {
-        let listPath = Array(itemPath.dropLast())
-        let listType: String
-        let itemType: String
-        switch template {
-        case .bulletList: (listType, itemType) = ("bulletList", "listItem")
-        case .orderedList: (listType, itemType) = ("orderedList", "listItem")
-        case .taskList: (listType, itemType) = ("taskList", "taskItem")
-        default: return
-        }
-        guard let engine, let shown = node(at: listPath), shown.type != listType,
-              let block = await currentBlock(NodeRef(path: listPath, node: shown))
-        else { return }
-        let list = block.latest
-        let items = list.children.map { item in
-            let attrs: [String: JSONValue]? = itemType == "taskItem" ? ["checked": .bool(item.bool("checked") ?? false)] : nil
-            return PMNode(type: itemType, attrs: attrs, content: item.content)
-        }
-        let attrs: [String: JSONValue]? = listType == "orderedList" ? ["start": 1] : nil
-        // Where the list is now: a collaborator may have added a block above it.
-        let focusPath = block.ref.path + (active?.ref.path ?? itemPath + [0]).dropFirst(listPath.count)
-        dropActive()
-        if report(await engine.replaceBlock(block.ref.target, with: PMNode(type: listType, attrs: attrs, content: items), base: nil,
-                                            expected: block.source)) {
-            await focusAfterOperation(focusPath, .end)
+    /// Turns the line at `ref` into `kind` where it is, from the engine's block then (`convert` in
+    /// Engine/src/conversions.ts); the cursor goes to the end of the new block's first line. The model built the new block
+    /// from the engine's document read beforehand, and the engine refused it when a collaborator changed the block in
+    /// between.
+    private func convert(_ ref: NodeRef, to kind: String) async {
+        guard let engine else { return }
+        // Its input goes first: the engine turns the block it has.
+        await flush()
+        if active?.ref.identity == ref.identity { dropActive() }
+        switch await engine.convert(ref.target, to: kind) {
+        case .moved(let cursor):
+            report(.applied)
+            await focusAfterOperation(cursor.path, .end)
+        case .refused: report(.refused)
+        case .unavailable: break
         }
     }
 
@@ -2930,12 +2874,12 @@ final class DocumentModel {
         return node(at: path, in: withOverrides(document))
     }
 
-    /// The block a structural edit replaces (convert, columns, unsync, an atom, a template), as the engine has it now:
-    /// pending input is written first, as typing writes it, and the block is read from the engine's document, not from
-    /// this copy, which lags behind while someone types. Built from this copy, a replacement used to overwrite what a
-    /// collaborator typed since, without notice. `source` goes with the replacement as its expected state, so the engine
-    /// refuses it if the block changes before it arrives; `latest` has input still pending over it. Nil, and said, when
-    /// the block is gone or there is no engine.
+    /// The block a structural edit replaces (an atom, a card, a template), as the engine has it now: pending input is
+    /// written first, as typing writes it, and the block is read from the engine's document, not from this copy, which
+    /// lags behind while someone types. Built from this copy, a replacement used to overwrite what a collaborator typed
+    /// since, without notice. `source` goes with the replacement as its expected state, so the engine refuses it if the
+    /// block changes before it arrives; `latest` has input still pending over it. Nil, and said, when the block is gone
+    /// or there is no engine.
     private func currentBlock(_ ref: NodeRef) async -> (ref: NodeRef, source: PMNode, latest: PMNode)? {
         guard let engine else { return nil }
         await flush()
@@ -2987,22 +2931,6 @@ final class DocumentModel {
         guard let content = node.content else { return node }
         let children = content.enumerated().map { applyOverrides(to: $0.element, path: path + [$0.offset]) }
         return PMNode(type: node.type, attrs: node.attrs, content: children, marks: node.marks, text: node.text)
-    }
-
-    static func inlineContent(of node: PMNode) -> [PMNode]? {
-        switch node.type {
-        case "paragraph", "heading", "detailsSummary": return node.content
-        case "codeBlock":
-            // The code's lines become line breaks, as on the web; a raw "\n" in text would count as Return.
-            let lines = node.plainText.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-            let inlines = lines.enumerated().flatMap { index, line in
-                (index > 0 ? [PMNode(type: "hardBreak")] : []) + (line.isEmpty ? [] : [PMNode(type: "text", text: String(line))])
-            }
-            return inlines.isEmpty ? nil : inlines
-        default:
-            if let first = node.children.first { return inlineContent(of: first) }
-            return nil
-        }
     }
 
     static func strippingIds(_ node: PMNode) -> PMNode {

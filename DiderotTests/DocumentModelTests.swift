@@ -49,9 +49,9 @@ struct DocumentModelTests {
     }
 
     /// Switching the list type with input pending: the input goes first, as typing sends it (with its base, so a
-    /// collaborator's edit of the item stays), and the new list is built from the engine's document after it. Nothing
-    /// stays pending (it would hide a collaborator's later edit and overwrite it on leaving), and the item reopens with
-    /// the text despite older events.
+    /// collaborator's edit of the item stays), and the engine switches the list it has then (Engine/tools/
+    /// conversions-check.ts). Nothing stays pending (it would hide a collaborator's later edit and overwrite it on leaving),
+    /// and the item reopens with the text despite older events.
     @Test(.timeLimit(.minutes(1))) func listTypeSwitchSendsPendingInputFirst() async throws {
         func list(_ type: String, _ text: String) -> PMNode {
             PMNode(type: type, content: [PMNode(type: "listItem", content: [
@@ -59,23 +59,22 @@ struct DocumentModelTests {
             ])])
         }
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [list("bulletList", "Eins")]))
-        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        engine.sendDocument()
+        let model = try Self.model(engine)
         let item = try #require(model.node(at: [0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0], node: item), node: item)
 
         model.activeText.append(AttributedString("!"))
         model.activeTextChanged()
+        engine.convertResult = .moved(EngineCursor(path: [0, 0, 0], offset: 5))
         engine.whileInserting = {
             engine.sendDocument()  // an event from before the change
-            let saved = engine.saved.last
-            engine.document = PMNode(type: "doc", content: [saved?.type == "paragraph" ? list("bulletList", "Eins!") : saved].compactMap { $0 })
+            engine.document = PMNode(type: "doc", content: [list(engine.converted.isEmpty ? "bulletList" : "orderedList", "Eins!")])
         }
-        await model.convertList(itemPath: [0, 0], to: .orderedList)
-        #expect(engine.saved.map(\.type) == ["paragraph", "orderedList"])
+        model.convertActive(to: .orderedList)
+        while engine.converted.isEmpty || model.active == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.saved.map(\.plainText) == ["Eins!"])
         #expect(engine.bases.first??.plainText == "Eins")
-        #expect(engine.expectations.last == list("bulletList", "Eins!"))
+        #expect(engine.converted.first?.target == .id("a") && engine.converted.first?.kind == "orderedList")
         #expect(model.active?.ref.path == [0, 0, 0])
         #expect(String(model.activeText.characters) == "Eins!")
 
@@ -85,7 +84,7 @@ struct DocumentModelTests {
         await model.flush()  // leaving the page
 
         #expect(model.node(at: [0, 0, 0])?.plainText == "Eins! Zwei")
-        #expect(engine.saved.count == 2)
+        #expect(engine.saved.count == 1)
     }
 
     /// Return mid-title in a toggle keeps the title whole on screen and sends the engine the text on both sides of the
@@ -159,34 +158,44 @@ struct DocumentModelTests {
         #expect(model.active?.ref == NodeRef(path: [1], id: "c"))
     }
 
-    /// "/" and the toolbar share these rules: toggle titles and footnote text keep their type; a list item's first line
-    /// can become a heading only if it's all the item holds (it then leaves the list).
-    @Test func conversionTemplatesPerLocation() throws {
-        func block(_ type: String) -> PMNode { PMNode(type: type, content: [PMNode(type: "text", text: "x")]) }
-        let document = PMNode(type: "doc", content: [
-            block("paragraph"),
-            PMNode(type: "details", content: [block("detailsSummary"), PMNode(type: "detailsContent", content: [block("paragraph")])]),
-            PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [block("paragraph"), block("paragraph")])]),
-            PMNode(type: "table", content: [PMNode(type: "tableRow", content: [PMNode(type: "tableCell", content: [block("paragraph")])])]),
-            PMNode(type: "footnotes", content: [PMNode(type: "footnote", content: [block("paragraph")])]),
-            PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [block("paragraph")])]),
-        ])
-        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let engine = FakeDocumentEngine(document: document)
-        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+    /// "/" and the toolbar offer what the engine says the line can turn into, in the menus' order: none for a toggle's
+    /// title or a footnote's text, a heading for an item's only line (Engine/tools/conversions-check.ts has the rules).
+    /// Until the engine has answered, everything but in a toggle's title or a footnote's text, and it refuses what
+    /// doesn't fit.
+    @Test(.timeLimit(.minutes(1))) func conversionsAreTheEngines() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "x")])
+        let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "Titel")])
+        let toggle = PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line, toggle]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [1, 0], node: title), node: title)
+        #expect(model.conversionTemplates.isEmpty)
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        #expect(model.conversionTemplates == [.paragraph, .heading1, .heading2, .heading3, .bulletList, .orderedList, .taskList, .quote, .callout, .toggle, .codeBlock])
+
+        engine.conversionKinds = ["quote", "paragraph", "taskList", "syncedBlock"]
         engine.sendDocument()
-        let text: [BlockTemplate] = [.paragraph, .heading1, .heading2, .heading3]
-        let lists: [BlockTemplate] = [.bulletList, .orderedList, .taskList]
-        let all = text + lists + [.quote, .callout, .toggle, .codeBlock]
-        let expected: [(path: [Int], templates: [BlockTemplate])] = [
-            ([0], all), ([1, 0], []), ([1, 1, 0], all), ([2, 0, 0], [.paragraph] + lists), ([2, 0, 1], text + lists),
-            ([3, 0, 0, 0], text + lists), ([4, 0, 0], []), ([5, 0, 0], text + lists),
-        ]
-        for (path, templates) in expected {
-            let node = try #require(model.node(at: path))
-            model.activate(NodeRef(path: path, node: node), node: node)
-            #expect(model.conversionTemplates == templates, "at \(path)")
-        }
+        while model.answers?.conversions == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(model.conversionTemplates == [.paragraph, .taskList, .quote])
+
+        engine.conversionKinds = []
+        engine.sendDocument()
+        while model.answers?.conversions != [] { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(model.conversionTemplates.isEmpty)
+    }
+
+    /// The kind of the item's list already does nothing: editing goes on in the line, and the engine isn't asked.
+    @Test func itsOwnListKindDoesNothing() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [line])]),
+        ]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0, 0, 0], node: line), node: line)
+        model.convertActive(to: .bulletList)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(engine.converted.isEmpty)
+        #expect(model.active?.ref.id == "a")
     }
 
     /// A pasted web link goes in as a link, as on the web (Tiptap's paste rule); over selected text it links that text;
@@ -489,9 +498,12 @@ struct DocumentModelTests {
             engine.document = PMNode(type: "doc", content: [PMNode(type: "transclusionSource", content: [paragraph])])
         }
 
+        engine.convertResult = .moved(EngineCursor(path: [0, 0], offset: 4))
+
         await model.wrapActiveInSyncedBlock()
         engine.sendDocument()  // the wrap's own document event
 
+        #expect(engine.converted.first?.kind == "syncedBlock")
         #expect(model.active?.ref == NodeRef(path: [0, 0], id: "a"))
     }
 
@@ -687,35 +699,30 @@ struct DocumentModelTests {
         #expect(model.errorMessage == String(localized: "The change could not be applied."))
     }
 
-    /// A list converted while a collaborator types in it: the new list comes from the engine's document, which has their
-    /// text, not from the app's copy, which lags behind while someone types. Built from that copy, it dropped what they
-    /// typed meanwhile, without notice. The list read goes with it as the expected state.
-    @Test func listConversionKeepsWhatACollaboratorTyped() async throws {
-        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei"])]))
-        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        engine.sendDocument()
-        engine.document = PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei und drei"])])
+    /// A conversion the engine refuses (the line is gone, or what it turns into doesn't fit there by now): the page says
+    /// so. Converting ends editing the line first, as it did.
+    @Test func refusedConversionSaysSo() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: line), node: line)
 
-        await model.convertList(itemPath: [0, 1], to: .orderedList)
+        await model.convert(NodeRef(path: [0], node: line), to: .quote)
 
-        let converted = try #require(engine.saved.last)
-        #expect(converted.type == "orderedList")
-        #expect(converted.children.map(\.plainText) == ["Eins", "Zwei und drei"])
-        #expect(engine.expectations.last == engine.document?.children.first)
-        #expect(model.errorMessage == nil)
+        #expect(engine.converted.first?.target == .id("a") && engine.converted.first?.kind == "quote")
+        #expect(model.errorMessage == String(localized: "The change could not be applied."))
+        #expect(model.active == nil)
     }
 
-    /// A collaborator's edit that lands between reading a block and replacing it: the engine refuses the replacement, and
-    /// the page says so instead of overwriting the edit.
+    /// A collaborator's edit that lands between reading a block and replacing it (a card or mention in a line's place):
+    /// the engine refuses the replacement, and the page says so instead of overwriting the edit.
     @Test func structuralEditIsRefusedWhenTheBlockChanged() async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei"])]))
-        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        engine.sendDocument()
+        let model = try Self.model(engine)
         engine.collaboratorEdit = { engine.document = PMNode(type: "doc", content: [Self.list("bulletList", ["Eins", "Zwei!"])]) }
+        let list = try #require(model.node(at: [0]))
 
-        await model.convertList(itemPath: [0, 1], to: .orderedList)
+        await model.replace(NodeRef(path: [0], node: list), withNodes: [PMNode(type: "paragraph")])
 
         #expect(engine.expectations.last == Self.list("bulletList", ["Eins", "Zwei"]))
         #expect(model.errorMessage == String(localized: "The change could not be applied."))
@@ -1341,32 +1348,27 @@ struct DocumentModelTests {
         #expect(model.cursorRequest == .offset(4))
     }
 
-    /// Text ↔ code keeps line breaks, as the web's setBlockType does: Shift-Return lines become the code's lines and
-    /// back, and the converted text doesn't split into blocks on the next key.
-    @Test(.timeLimit(.minutes(1))) func convertingBetweenTextAndCodeKeepsLines() async throws {
+    /// Code turned into text keeps its lines as line breaks (Engine/tools/conversions-check.ts), and the text doesn't
+    /// split into blocks on the next key: its line breaks aren't Return.
+    @Test(.timeLimit(.minutes(1))) func textFromCodeKeepsItsLineBreaks() async throws {
+        let code = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "SELECT *\nFROM t")])
         let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [
             PMNode(type: "text", text: "SELECT *"), PMNode(type: "hardBreak"), PMNode(type: "text", text: "FROM t"),
         ])
-        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
-        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        engine.sendDocument()
-        engine.whileInserting = { engine.document = PMNode(type: "doc", content: Array(engine.saved.suffix(1))) }
-
-        await model.convert(NodeRef(path: [0], node: paragraph), to: .codeBlock)
-        let code = try #require(engine.saved.last)
-        #expect(code.type == "codeBlock")
-        #expect(code.plainText == "SELECT *\nFROM t")
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [code]))
+        let model = try Self.model(engine)
+        engine.convertResult = .moved(EngineCursor(path: [0], offset: 15))
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [paragraph]) }
 
         await model.convert(NodeRef(path: [0], node: code), to: .paragraph)
-        let text = try #require(engine.saved.last)
-        #expect(text.children.map(\.type) == ["text", "hardBreak", "text"])
-
+        #expect(engine.converted.map(\.kind) == ["paragraph"])
         #expect(model.active?.type == "paragraph")
         model.activeText.append(AttributedString("x"))
         model.activeTextChanged()
         await model.flush()
-        #expect(engine.inserted.isEmpty)
+
+        #expect(engine.enters.isEmpty)
+        #expect(engine.saved.last?.children.map(\.type) == ["text", "hardBreak", "text"])
     }
 
     /// A formula written with Shift-Return stays whole while its paragraph is edited: its line break read as Return split
@@ -1468,14 +1470,14 @@ struct DocumentModelTests {
         #expect(model.active?.ref == NodeRef(path: [0], id: "n"))
     }
 
-    /// "/Heading" in an item's only line sends the line to the engine as the heading, which takes it out of the list as
-    /// on the web (Engine/tools/keys-check.ts); the cursor goes to its end.
+    /// "/Heading" in an item's only line goes to the engine as a conversion, which takes the line out of the list as the
+    /// heading, as on the web (Engine/tools/conversions-check.ts); the cursor goes to its end.
     @Test(.timeLimit(.minutes(1))) func headingTakesLineOutOfList() async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list([("a", "Eins"), ("b", "Zwei")])]))
         let model = try Self.model(engine)
         let line = try #require(model.node(at: [0, 1, 0]))
         model.activate(NodeRef(path: [0, 1, 0], node: line), node: line)
-        engine.liftLineResult = .moved(EngineCursor(path: [1], offset: 4))
+        engine.convertResult = .moved(EngineCursor(path: [1], offset: 4))
         engine.whileInserting = {
             engine.document = PMNode(type: "doc", content: [
                 Self.list([("a", "Eins")]),
@@ -1486,11 +1488,9 @@ struct DocumentModelTests {
         model.convertActive(to: .heading2)
         while model.active?.ref.id != "h" { try await Task.sleep(for: .milliseconds(10)) }
 
-        let lifted = try #require(engine.liftedLines.first)
-        #expect(lifted.node == PMNode(type: "heading", attrs: ["level": 2], content: [PMNode(type: "text", text: "Zwei")]))
-        #expect(lifted.target == .id("b"))
+        #expect(engine.converted.first?.target == .id("b") && engine.converted.first?.kind == "heading2")
         #expect(model.active?.ref == NodeRef(path: [1], id: "h"))
-        #expect(model.cursorRequest == .offset(4))
+        #expect(model.cursorRequest == .end)
     }
 
     /// A bullet list of single-paragraph items (id, text).
@@ -1507,27 +1507,60 @@ struct DocumentModelTests {
         return model
     }
 
-    /// Unsync of a synced block embedded from another page: once the server answers, its content replaces it where it
-    /// is now (a collaborator added a block above meanwhile); a second tap's late answer finds it gone.
-    @Test func unsyncFindsTheEmbedAgain() async throws {
+    /// Unsync of a synced block embedded from another page: once the server answers, the engine finds the embed where it
+    /// is by then (Engine/tools/conversions-check.ts), from where the page showed it and its source. A second tap's late
+    /// answer, with the embed gone from the page, sends nothing.
+    @Test func unsyncSendsTheEmbedsSource() async throws {
         let reference = PMNode(type: "transclusionReference", attrs: ["sourcePageId": "s", "transclusionId": "t"])
         let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph, reference]))
-        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
-        engine.sendDocument()
+        let model = try Self.model(engine)
         let ref = NodeRef(path: [1], node: reference)
-        let above = PMNode(type: "paragraph", attrs: ["id": "b"])
         let content = [PMNode(type: "paragraph", attrs: ["id": "c"], content: [PMNode(type: "text", text: "Inhalt")])]
 
-        engine.document = PMNode(type: "doc", content: [above, paragraph, reference])
-        engine.sendDocument()
         await model.unsyncReference(reference, at: ref, content: content)
-        engine.document = PMNode(type: "doc", content: [above, paragraph] + content)
+        engine.document = PMNode(type: "doc", content: [paragraph] + content)
         engine.sendDocument()
         await model.unsyncReference(reference, at: ref, content: content)
 
-        #expect(engine.replaced == [.path([2], type: "transclusionReference")])
+        #expect(engine.replacedReferences.count == 1)
+        let replaced = try #require(engine.replacedReferences.first)
+        #expect(replaced.path == [1] && replaced.sourcePageId == "s" && replaced.transclusionId == "t" && replaced.nodes == content)
+    }
+
+    /// The column count goes to the engine as one command (Engine/tools/conversions-check.ts), the input typed in the
+    /// columns first; editing in a column that merges into another ends. A synced block's source unsyncs the same way.
+    @Test(.timeLimit(.minutes(1))) func columnsAndUnsyncGoToTheEngine() async throws {
+        let lines = ["Links", "Mitte", "Rechts"].enumerated().map { index, text in
+            PMNode(type: "paragraph", attrs: ["id": .string("l\(index)")], content: [PMNode(type: "text", text: text)])
+        }
+        let columns = PMNode(type: "columns", attrs: ["layout": "three_equal"], content: lines.map { PMNode(type: "column", content: [$0]) })
+        let synced = PMNode(type: "paragraph", attrs: ["id": "q"], content: [PMNode(type: "text", text: "Quelle")])
+        let source = PMNode(type: "transclusionSource", attrs: ["id": "s"], content: [synced])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [columns, source]))
+        let model = try Self.model(engine)
+        func typing(at path: [Int], _ line: PMNode) {
+            model.activate(NodeRef(path: path, node: line), node: line)
+            model.activeText.append(AttributedString("!"))
+            model.activeTextChanged()
+        }
+
+        typing(at: [0, 0, 0], lines[0])
+        await model.setColumnCount(4, at: [0])
+        #expect(engine.saved.map(\.plainText) == ["Links!"])
+        #expect(engine.columnCounts.first?.target == .path([0], type: "columns") && engine.columnCounts.first?.count == 4)
+        #expect(model.active?.ref.id == "l0")
+
+        typing(at: [0, 2, 0], lines[2])
+        await model.setColumnCount(2, at: [0])
+        #expect(engine.saved.last?.plainText == "Rechts!")
+        #expect(engine.columnCounts.last?.count == 2)
+        #expect(model.active == nil)
+
+        typing(at: [1, 0], synced)
+        await model.unsyncSource(NodeRef(path: [1], node: source))
+        #expect(engine.saved.last?.plainText == "Quelle!")
+        #expect(engine.unsynced == [.id("s")])
     }
 
     /// iOS ends the engine's web process mid-edit: editing ends, the page goes read-only, and the engine reopens it.
@@ -1955,9 +1988,9 @@ final class FakeDocumentEngine: DocumentEngine {
         whileInserting?()
         return .applied
     }
-    /// Return, Backspace and headings out of lists as the model sent them. Where their lines go is the engine's
-    /// (Engine/tools/keys-check.ts); here the test says where the cursor goes, and `whileInserting` sets the document
-    /// they leave.
+    /// Return, Backspace and conversions as the model sent them. Where their lines go is the engine's
+    /// (Engine/tools/keys-check.ts, conversions-check.ts); here the test says where the cursor goes, and `whileInserting`
+    /// sets the document they leave.
     private(set) var enters: [(target: BlockTarget, node: PMNode, after: [PMNode], base: PMNode?)] = []
     var enterResult = KeyResult.moved(EngineCursor(path: [1], offset: 0))
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult {
@@ -1974,12 +2007,32 @@ final class FakeDocumentEngine: DocumentEngine {
         whileInserting?()
         return backspaceResult
     }
-    private(set) var liftedLines: [(target: BlockTarget, node: PMNode)] = []
-    var liftLineResult = KeyResult.refused
-    func liftLine(_ target: BlockTarget, as node: PMNode) async -> KeyResult {
-        liftedLines.append((target, node))
+    private(set) var converted: [(target: BlockTarget, kind: String)] = []
+    var convertResult = KeyResult.refused
+    func convert(_ target: BlockTarget, to kind: String) async -> KeyResult {
+        converted.append((target, kind))
         whileInserting?()
-        return liftLineResult
+        return convertResult
+    }
+    /// What a line can turn into, as the engine would say; nothing said by default.
+    var conversionKinds: Set<String>?
+    func conversions(_ target: BlockTarget) async -> Set<String>? { conversionKinds }
+    /// Column counts set, unsynced sources and replaced embeds, as the model sent them.
+    private(set) var columnCounts: [(target: BlockTarget, count: Int)] = []
+    func setColumnCount(_ target: BlockTarget, count: Int) async -> EngineResult {
+        columnCounts.append((target, count))
+        return .applied
+    }
+    private(set) var unsynced: [BlockTarget] = []
+    func unsync(_ target: BlockTarget) async -> EngineResult {
+        unsynced.append(target)
+        return .applied
+    }
+    private(set) var replacedReferences: [(path: [Int], sourcePageId: String, transclusionId: String, nodes: [PMNode])] = []
+    func replaceReference(at path: [Int], sourcePageId: String, transclusionId: String, with nodes: [PMNode]) async -> EngineResult {
+        replacedReferences.append((path, sourcePageId, transclusionId, nodes))
+        whileInserting?()
+        return .applied
     }
     /// What Backspace does, as the engine would tell the model in advance; nothing said by default.
     var plans: BackspacePlans?

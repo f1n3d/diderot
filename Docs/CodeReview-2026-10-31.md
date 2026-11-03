@@ -42,7 +42,7 @@ The code is clean on the surface:
 
 The debt sits in two places.
 
-**1. The editor's boundary to the engine.** Swift rebuilds ProseMirror operations as path-addressed engine calls on a snapshot of the document. Most integrity risks followed from that. Package C stopped them for now: structural and compound edits are built from the engine's document and refused if their block changed (R1), compound edits run as one batch (R9), while someone types, the snapshot lags behind by about 0.6 s instead of until they pause (R2), and an engine that is gone no longer counts as a refusal (R5). Part of the backlog's position races remains (S1).
+**1. The editor's boundary to the engine.** Swift rebuilds ProseMirror operations as path-addressed engine calls on a snapshot of the document. Most integrity risks followed from that. Package C stopped them for now: structural and compound edits are built from the engine's document and refused if their block changed (R1), compound edits run as one batch (R9), while someone types, the snapshot lags behind by about 0.6 s instead of until they pause (R2), and an engine that is gone no longer counts as a refusal (R5). S1 then moved the structural edits into the engine: it decides from its document what fits where, where the lines go and what a line can turn into, and applies each edit in one transaction. Cards, atoms and templates still use package C's stopgap.
 
 **2. Missing shared building blocks.** Several questions are answered differently in many places:
 
@@ -59,10 +59,10 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **E** Structure, in steps | S1 → S2 → S3 → S4, plus R54 | unit tests and UI tests | medium to high |
+| **E** Structure, in steps | S2 → S3 → S4, plus R54 | unit tests and UI tests | medium to high |
 | **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
-S1 comes before splitting DocumentModel (S2). Moving the structural edits into the engine removes about 600 lines from DocumentModel and makes package C's stopgaps for R1 and R9 unnecessary. The split is smaller and safer after that.
+S1 is done: what fits where, Return, Backspace, conversions, columns and unsync are decided and applied in the engine and checked in `pnpm run check`. Package C's stopgap for R1 remains for cards, atoms and templates. DocumentModel didn't get shorter by it (about 3,000 lines): the engine's answers it asks for and keeps took the place of the rules.
 
 ---
 
@@ -114,22 +114,6 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 
 ## 2. Structure
 
-### S1 The editor's boundary to the engine (L, the biggest lever)
-
-**Today:**
-
-- `convertList`, columns and unsync are rebuilt in Swift as path-addressed engine calls. Since package C they read the engine's document and send the block they were built from (R1).
-- `conversionTemplates` still decides in Swift which types the active block can turn into.
-
-Since part 1, the engine says what fits where (`fits` in `Engine/src/fits.ts`) and which table commands apply to a cell, for the insert menus, cards and the table toolbar, and it refuses blocks that don't fit instead of fitting them in elsewhere. Since part 2, Return and Backspace are engine commands (`enter`, `backspace` in `Engine/src/keys.ts`): the engine decides from its document where the lines go, applies the edit in one transaction and says where the cursor goes; the app shows a join at once where the engine said Backspace goes. A heading for an item's only line leaves the list the same way (`liftLine`).
-
-**Target:**
-
-- Engine commands that run in one transaction and return the cursor, as `tableCommand` and since part 2 `enter` and `backspace` do: conversions, columns and unsync (part 3), which also says which conversions apply.
-- The engine's `batch` (package C) for the rest.
-
-This fixes most position races, it replaces package C's stopgaps for R1 and R9 (edits in Swift that read the engine's document and send the block they were built from), and it can be tested in `pnpm run check`, as the batch's steps already are.
-
 ### S2 Large types
 
 | Type | Lines | Notes |
@@ -155,7 +139,7 @@ Its jobs, by MARK section:
 - block operations, tables and undo (2439–2701)
 - tree helpers
 
-After S1, split it in two steps.
+Split it in two steps.
 
 **First the pure parts (M, about 900 lines):**
 
@@ -165,7 +149,6 @@ After S1, split it in two steps.
 - `InsertRules`
 - `TriggerParser`
 - `TableEditing`
-- the list and column transforms
 
 DocumentModelTests are a good safety net.
 
