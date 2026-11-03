@@ -345,12 +345,12 @@ struct SyncedBlockUsageSheet: View {
     @Environment(\.renderContext) private var context
     @Environment(ReaderNavigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
-    @State private var state: LoadState<TransclusionReferences> = .idle
+    @State private var references = RemoteValue<TransclusionReferences>()
 
     var body: some View {
         NavigationStack {
             List {
-                switch state {
+                switch references.state {
                 case .idle, .loading:
                     ProgressView().frame(maxWidth: .infinity)
                 case .failed(let error):
@@ -395,12 +395,8 @@ struct SyncedBlockUsageSheet: View {
 
     private func load() async {
         guard context.canRequest else { return }
-        state = .loading
-        do {
-            state = .loaded(try await context.send(Endpoints.Transclusions.references(sourcePageId: sourcePageId, transclusionId: transclusionId)))
-        } catch is CancellationError {
-        } catch {
-            state = .failed(error)
+        await references.load {
+            try await context.send(Endpoints.Transclusions.references(sourcePageId: sourcePageId, transclusionId: transclusionId))
         }
     }
 }

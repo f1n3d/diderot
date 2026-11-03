@@ -14,7 +14,7 @@ struct TemplatePickerView: View {
     @Environment(SpacesStore.self) private var spaces
     @Environment(\.dismiss) private var dismiss
     @State private var scope: Scope
-    @State private var state: LoadState<[PageTemplate]> = .idle
+    @State private var templates = RemoteValue<[PageTemplate]>()
     @State private var query = ""
     /// The template being used.
     @State private var using: String?
@@ -32,7 +32,7 @@ struct TemplatePickerView: View {
 
     var body: some View {
         NavigationStack {
-            AsyncContentView(state: state, retry: { await load() }) { templates in
+            AsyncContentView(state: templates.state, retry: { await load() }) { templates in
                 let shown = filtered(templates)
                 if shown.isEmpty {
                     if query.isEmpty {
@@ -105,16 +105,12 @@ struct TemplatePickerView: View {
 
     private func load() async {
         guard let ready = session.ready else { return }
-        state = .loading
         let space = scope == .space ? spaceId : nil
-        do {
-            let templates = try await Paginated.all { cursor in
+        // Each scope is a list of its own: the other's goes.
+        await templates.load(fresh: true) {
+            try await Paginated.all { cursor in
                 try await session.load(Endpoints.Templates.list(spaceId: space, cursor: cursor), of: ready)
             }
-            state = .loaded(templates)
-        } catch is CancellationError {
-        } catch {
-            state = .failed(error)
         }
     }
 
@@ -172,12 +168,12 @@ private struct TemplatePreviewView: View {
     let use: (PageTemplate) async -> Void
 
     @Environment(AppSession.self) private var session
-    @State private var state: LoadState<PageTemplate> = .idle
+    @State private var full = RemoteValue<PageTemplate>()
     /// Subpages and databases in the preview don't open behind the picker.
     @State private var previewNavigation = ReaderNavigation()
 
     var body: some View {
-        AsyncContentView(state: state, retry: { await load() }) { full in
+        AsyncContentView(state: full.state, retry: { await load() }) { full in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top, spacing: 10) {
@@ -212,23 +208,17 @@ private struct TemplatePreviewView: View {
                 if isUsing {
                     ProgressView()
                 } else {
-                    Button("Use Template") { Task { await use(state.value ?? template) } }
+                    Button("Use Template") { Task { await use(full.value ?? template) } }
                         .accessibilityIdentifier("template-use")
                 }
             }
         }
-        .task { if state.value == nil { await load() } }
+        .task { if full.value == nil { await load() } }
     }
 
     private func load() async {
         guard let ready = session.ready else { return }
-        state = .loading
-        do {
-            state = .loaded(try await session.load(Endpoints.Templates.info(templateId: template.id), of: ready))
-        } catch is CancellationError {
-        } catch {
-            state = .failed(error)
-        }
+        await full.load { try await session.load(Endpoints.Templates.info(templateId: template.id), of: ready) }
     }
 }
 

@@ -105,12 +105,7 @@ struct HomeView: View {
                 .frame(width: 96)
                 .accessibilityLabel("Layout")
             }
-            switch spaces.state {
-            case .idle, .loading:
-                ProgressView().frame(maxWidth: .infinity).padding()
-            case .failed(let error):
-                ErrorStateView(error: error) { await spaces.load() }
-            case .loaded(let items):
+            AsyncContentView(state: spaces.state, layout: .inline(padding: 16), retry: { await spaces.load() }) { items in
                 if items.isEmpty {
                     Text("You are not a member of any space yet.")
                         .foregroundStyle(.secondary)
