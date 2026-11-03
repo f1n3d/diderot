@@ -23,10 +23,8 @@ struct BrowserLoginView: View {
 
     private var browser: (dataStore: WKWebsiteDataStore, page: WebPage) {
         parts {
-            let dataStore = WKWebsiteDataStore.nonPersistent()
-            var configuration = WebPage.Configuration()
-            configuration.websiteDataStore = dataStore
-            return (dataStore, WebPage(configuration: configuration))
+            let browser = WebViews.browserSignIn()
+            return (browser.dataStore, browser.page)
         }
     }
 

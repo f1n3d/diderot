@@ -316,8 +316,8 @@ final class ImageZoomView: UIScrollView, UIScrollViewDelegate {
 }
 
 /// WebKit draws the diagram sharp at every zoom, up to 4× (pinch, double tap); pulled down at its normal size, it
-/// closes. A WKWebView per view: SwiftUI's WebView traps when the paging view builds a page twice (one `WebPage`, two
-/// views), and its HTML has nothing to navigate to (an `<img>`).
+/// closes. A WKWebView per view (`WebViews.diagramViewer`): SwiftUI's WebView traps when the paging view builds a page
+/// twice (one `WebPage`, two views), and its HTML has nothing to navigate to (an `<img>`).
 private struct ZoomableDiagram: UIViewRepresentable {
     let markup: String
     let label: String
@@ -326,7 +326,8 @@ private struct ZoomableDiagram: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> WKWebView {
-        let view = WKWebView()
+        let (view, limit) = WebViews.diagramViewer()
+        context.coordinator.limit = limit
         view.isOpaque = false
         view.backgroundColor = .clear
         view.allowsLinkPreview = false
@@ -348,6 +349,8 @@ private struct ZoomableDiagram: UIViewRepresentable {
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var close: () -> Void = {}
+        /// The view's navigation delegate, which it doesn't keep.
+        var limit: WebNavigationLimit?
 
         @objc func panned(_ pan: UIPanGestureRecognizer) {
             guard pan.state == .ended, let scrollView = pan.view as? UIScrollView,

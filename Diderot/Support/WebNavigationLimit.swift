@@ -1,32 +1,50 @@
 import WebKit
 
-/// Keeps a web view on the pages the app loads into it, so neither a link nor a script takes it elsewhere: the page at
-/// `home` (the base URL its HTML loads with) or, `acrossOrigin`, every page of home's origin (the web editor on its
-/// server). A link tapped there, or a window it opens, goes to `openOutside` instead (the view's `openURL`, as from a
-/// page); other navigations away don't happen. Frames (embeds) load only if `frames`.
-final class WebNavigationLimit: WebPage.NavigationDeciding {
+/// Keeps a web view on the pages the app loads into it, so neither a link nor a script takes it elsewhere: where
+/// `reach` says, from `home` (the base URL its HTML loads with). A link tapped there, or a window it opens, goes to
+/// `openOutside` instead (the view's `openURL`, as from a page); other navigations away don't happen. Frames (embeds)
+/// load only if `frames`. The decider of a `WebPage`, and the navigation delegate of a `WKWebView`, which doesn't keep it.
+final class WebNavigationLimit: NSObject, WebPage.NavigationDeciding, WKNavigationDelegate {
     enum Decision: Equatable {
         case allow
         case cancel
         case openOutside
     }
 
+    /// Where the main frame may go.
+    enum Reach {
+        /// The page at `home`, at any anchor.
+        case page
+        /// Every page of home's origin (the web editor on its server).
+        case origin
+        /// Any web page (`http`, `https`): a sign-in that passes other services' pages.
+        case web
+    }
+
     private let home: URL
-    private let acrossOrigin: Bool
-    private let frames: Bool
+    let reach: Reach
+    let frames: Bool
     /// Set once the view is shown; until then tapped links are dropped.
     var openOutside: ((URL) -> Void)?
 
-    init(home: URL, acrossOrigin: Bool = false, frames: Bool = false) {
+    init(home: URL, reach: Reach = .page, frames: Bool = false) {
         self.home = home
-        self.acrossOrigin = acrossOrigin
+        self.reach = reach
         self.frames = frames
     }
 
     func decidePolicy(for action: WebPage.NavigationAction, preferences: inout WebPage.NavigationPreferences) async -> WKNavigationActionPolicy {
-        guard let url = action.request.url else { return .cancel }
-        switch Self.decision(for: url, home: home, acrossOrigin: acrossOrigin, frames: frames,
-                             mainFrame: action.target?.isMainFrame, linkTap: action.navigationType == .linkActivated) {
+        decide(action.request.url, mainFrame: action.target?.isMainFrame, linkTap: action.navigationType == .linkActivated)
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+        decide(navigationAction.request.url, mainFrame: navigationAction.targetFrame?.isMainFrame,
+               linkTap: navigationAction.navigationType == .linkActivated)
+    }
+
+    private func decide(_ url: URL?, mainFrame: Bool?, linkTap: Bool) -> WKNavigationActionPolicy {
+        guard let url else { return .cancel }
+        switch Self.decision(for: url, home: home, reach: reach, frames: frames, mainFrame: mainFrame, linkTap: linkTap) {
         case .allow:
             return .allow
         case .cancel:
@@ -50,10 +68,15 @@ final class WebNavigationLimit: WebPage.NavigationDeciding {
     }
 
     /// `mainFrame` is nil for a new window.
-    nonisolated static func decision(for url: URL, home: URL, acrossOrigin: Bool, frames: Bool, mainFrame: Bool?, linkTap: Bool) -> Decision {
+    nonisolated static func decision(for url: URL, home: URL, reach: Reach, frames: Bool, mainFrame: Bool?, linkTap: Bool) -> Decision {
         guard let mainFrame else { return .openOutside }
         if !mainFrame { return frames ? .allow : .cancel }
-        if acrossOrigin ? sameOrigin(url, home) : samePage(url, home) { return .allow }
+        let within = switch reach {
+        case .page: samePage(url, home)
+        case .origin: sameOrigin(url, home)
+        case .web: ["http", "https"].contains(url.scheme?.lowercased())
+        }
+        if within { return .allow }
         return linkTap ? .openOutside : .cancel
     }
 

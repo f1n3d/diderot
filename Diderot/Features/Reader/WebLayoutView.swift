@@ -19,13 +19,10 @@ struct WebLayoutView: View {
         self.title = title
         self.serverURL = serverURL
         self.token = token
-        let dataStore = WKWebsiteDataStore.nonPersistent()
-        var configuration = WebPage.Configuration()
-        configuration.websiteDataStore = dataStore
-        let limit = WebNavigationLimit(home: serverURL, frames: true)
-        self._dataStore = State(initialValue: dataStore)
-        self._limit = State(initialValue: limit)
-        self._page = State(initialValue: WebPage(configuration: configuration, navigationDecider: limit))
+        let layout = WebViews.webLayout(server: serverURL)
+        self._dataStore = State(initialValue: layout.dataStore)
+        self._limit = State(initialValue: layout.limit)
+        self._page = State(initialValue: layout.page)
     }
 
     var body: some View {
