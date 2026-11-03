@@ -8,11 +8,12 @@ import DocmostKit
 @Observable
 final class PageComments {
     let pageId: String
-    private(set) var state: LoadState<[PageComment]> = .idle
+    /// Up to five loads run at once (the badge, each sheet open, refresh, the focus lookup, each change), and only the
+    /// latest one's answer counts. A slow earlier one hid a comment just posted, or brought back a deleted one.
+    private let list = RemoteValue<[PageComment]>()
     private unowned let session: AppSession
-    /// Loads started: up to five run at once (the badge, each sheet open, refresh, the focus lookup, each change), and
-    /// only the latest one's answer counts. A slow earlier one hid a comment just posted, or brought back a deleted one.
-    private var loads = 0
+
+    var state: LoadState<[PageComment]> { list.state }
 
     init(pageId: String, session: AppSession) {
         self.pageId = pageId
@@ -69,18 +70,10 @@ final class PageComments {
 
     func load() async {
         guard let ready = session.ready else { return }
-        if state.value == nil { state = .loading }
-        loads += 1
-        let load = loads
-        do {
-            let comments = try await Paginated.all { cursor in
+        await list.load {
+            try await Paginated.all { cursor in
                 try await session.load(Endpoints.Comments.list(pageId: self.pageId, cursor: cursor), of: ready)
             }
-            guard load == loads else { return }
-            state = .loaded(comments)
-        } catch is CancellationError {
-        } catch {
-            if load == loads, state.value == nil { state = .failed(error) }
         }
     }
 
@@ -126,11 +119,10 @@ final class PageComments {
     /// Shows a change at once, and reloads the list in the background for what only the server knows. Each change used
     /// to wait for the whole list, and an inline comment's mark with it.
     private func changed(_ change: (inout [PageComment]) -> Void) {
-        // A load started before the change doesn't overwrite it.
-        loads += 1
-        if var comments = state.value {
+        // A load started before the change doesn't overwrite it (`RemoteValue.show`); the next one starts right away.
+        if var comments = list.value {
             change(&comments)
-            state = .loaded(comments)
+            list.show(comments)
         }
         Task { await load() }
     }

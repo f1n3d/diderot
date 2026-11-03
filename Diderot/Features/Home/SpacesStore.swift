@@ -6,9 +6,11 @@ import DocmostKit
 @MainActor
 @Observable
 final class SpacesStore {
-    private(set) var state: LoadState<[Space]> = .idle
+    /// A load started later wins (before, a second one was skipped while one ran).
+    private let list = RemoteValue<[Space]>()
     private unowned let session: AppSession
-    private var isLoading = false
+
+    var state: LoadState<[Space]> { list.state }
 
     init(session: AppSession) {
         self.session = session
@@ -20,25 +22,12 @@ final class SpacesStore {
 
     /// Shows the cache, then loads from the server; an error surfaces only while nothing is shown.
     func load() async {
-        guard !isLoading, let ready = session.ready else { return }
-        isLoading = true
-        defer { isLoading = false }
-        if state.value == nil {
-            if let cached = await ready.cache.read([Space].self, key: CacheKey.spaces) {
-                state = .loaded(cached)
-            } else {
-                state = .loading
-            }
-        }
-        do {
-            let spaces = try await Paginated.all { cursor in
+        guard let ready = session.ready else { return }
+        await list.load(cached: { await ready.cache.read([Space].self, key: CacheKey.spaces) },
+                        save: { await ready.cache.write($0, key: CacheKey.spaces) }) {
+            try await Paginated.all { cursor in
                 try await session.load(Endpoints.Spaces.list(PaginationOptions(limit: 100, cursor: cursor)), of: ready)
             }
-            await ready.cache.write(spaces, key: CacheKey.spaces)
-            state = .loaded(spaces)
-        } catch is CancellationError {
-        } catch {
-            if state.value == nil { state = .failed(error) }
         }
     }
 }

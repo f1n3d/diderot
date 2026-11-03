@@ -4,12 +4,12 @@ import DocmostKit
 /// The user's active sessions; other devices can be signed out.
 struct SessionsView: View {
     @Environment(AppSession.self) private var session
-    @State private var state: LoadState<[UserSession]> = .idle
+    @State private var sessions = RemoteValue<[UserSession]>()
     @State private var isRevokingAll = false
     @State private var revokeError: String?
 
     var body: some View {
-        AsyncContentView(state: state, retry: load) { sessions in
+        AsyncContentView(state: sessions.state, retry: load) { sessions in
             List {
                 Section {
                     ForEach(sessions) { item in
@@ -63,7 +63,7 @@ struct SessionsView: View {
         } message: {
             Text(revokeError ?? "")
         }
-        .task { if state.value == nil { await load() } }
+        .task { if sessions.value == nil { await load() } }
     }
 
     private func icon(for item: UserSession) -> String {
@@ -77,14 +77,7 @@ struct SessionsView: View {
 
     private func load() async {
         guard session.client != nil else { return }
-        if state.value == nil { state = .loading }
-        do {
-            let list = try await session.send(Endpoints.Sessions.list)
-            state = .loaded(list.sessions)
-        } catch is CancellationError {
-        } catch {
-            if state.value == nil { state = .failed(error) }
-        }
+        await sessions.load { try await session.send(Endpoints.Sessions.list).sessions }
     }
 
     private func revoke(_ item: UserSession) async {

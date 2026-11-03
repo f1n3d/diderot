@@ -330,12 +330,12 @@ struct SubpagesBlockView: View {
     var sortBy: SubpagesSort = .manual
     var sort: ((SubpagesSort) -> Void)?
     @Environment(\.renderContext) private var context
-    @State private var state: LoadState<[SidebarPage]> = .idle
+    @State private var subpages = RemoteValue<[SidebarPage]>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            header(count: state.value?.count)
-            switch state {
+            header(count: subpages.value?.count)
+            switch subpages.state {
             case .idle, .loading:
                 ProgressView().frame(maxWidth: .infinity, minHeight: 40)
             case .failed(let error):
@@ -387,14 +387,7 @@ struct SubpagesBlockView: View {
 
     private func load() async {
         guard context.canRequest, let pageId = context.pageId else { return }
-        if state.value == nil { state = .loading }
-        do {
-            let pages = try await Paginated.all { try await context.send(Endpoints.Pages.children(of: pageId, cursor: $0)) }
-            state = .loaded(pages)
-        } catch is CancellationError {
-        } catch {
-            if state.value == nil { state = .failed(error) }
-        }
+        await subpages.load { try await Paginated.all { try await context.send(Endpoints.Pages.children(of: pageId, cursor: $0)) } }
     }
 }
 

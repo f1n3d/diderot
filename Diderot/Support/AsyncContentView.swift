@@ -14,17 +14,31 @@ enum LoadState<Value: Sendable>: Sendable {
     }
 }
 
-/// Shows a spinner, an error with "Try Again", or the content.
+/// Shows a spinner, an error with "Try Again", or the content: on the whole screen, or in place in a card or a list
+/// (`inline`), where the spinner takes only its room.
 struct AsyncContentView<Value: Sendable, Content: View>: View {
+    enum Layout {
+        case fullScreen
+        case inline(padding: CGFloat = 40)
+    }
+
     let state: LoadState<Value>
+    var layout = Layout.fullScreen
     let retry: () async -> Void
     @ViewBuilder let content: (Value) -> Content
 
     var body: some View {
         switch state {
         case .idle, .loading:
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            switch layout {
+            case .fullScreen:
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .inline(let padding):
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(padding)
+            }
         case .failed(let error):
             ErrorStateView(error: error, retry: retry)
         case .loaded(let value):

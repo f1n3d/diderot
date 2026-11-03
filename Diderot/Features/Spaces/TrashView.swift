@@ -11,12 +11,12 @@ struct TrashView: View {
     @Environment(AppSession.self) private var session
     @Environment(ContentChanges.self) private var changes
     let route: SpaceTrashRoute
-    @State private var state: LoadState<[Page]> = .idle
+    @State private var pages = RemoteValue<[Page]>()
     @State private var toast: String?
     @State private var permanentDeleteCandidate: Page?
 
     var body: some View {
-        AsyncContentView(state: state, retry: load) { pages in
+        AsyncContentView(state: pages.state, retry: load) { pages in
             if pages.isEmpty {
                 ContentUnavailableView("The trash is empty", systemImage: "trash", description: Text("Pages you move to the trash show up here."))
             } else {
@@ -75,21 +75,17 @@ struct TrashView: View {
         .navigationTitle("Trash")
         .toolbarTitleDisplayMode(.inline)
         .toast($toast)
-        .task { if state.value == nil { await load() } }
+        .task { if pages.value == nil { await load() } }
     }
 
     private func load() async {
         guard let ready = session.ready else { return }
-        if state.value == nil { state = .loading }
-        do {
-            let pages = try await Paginated.all { cursor in
+        let failed = await pages.load {
+            try await Paginated.all { cursor in
                 try await session.load(Endpoints.Pages.trash(spaceId: route.spaceId, cursor: cursor), of: ready)
             }
-            state = .loaded(pages)
-        } catch is CancellationError {
-        } catch {
-            if state.value == nil { state = .failed(error) } else { toast = error.userMessage }
         }
+        if let failed { toast = failed.userMessage }
     }
 
     private func restore(_ page: Page) async {

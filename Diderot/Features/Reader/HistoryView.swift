@@ -7,14 +7,14 @@ struct HistoryView: View {
     @Environment(ReaderNavigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     let page: Page
-    @State private var state: LoadState<[PageHistoryEntry]> = .idle
+    @State private var entries = RemoteValue<[PageHistoryEntry]>()
     /// Subpages, databases and page links in a version open on the page's stack, once the history has closed: pushed
     /// there while it is open, they appeared behind it.
     @State private var versionNavigation = ReaderNavigation()
 
     var body: some View {
         NavigationStack {
-            AsyncContentView(state: state, retry: load) { entries in
+            AsyncContentView(state: entries.state, retry: load) { entries in
                 if entries.isEmpty {
                     ContentUnavailableView("No versions yet", systemImage: "clock.arrow.circlepath", description: Text("Versions are captured a few minutes after a page was edited."))
                 } else {
@@ -49,7 +49,7 @@ struct HistoryView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task { if state.value == nil { await load() } }
+            .task { if entries.value == nil { await load() } }
         }
         // On the stack, not its root: pushed versions don't get values set inside the stack.
         .environment(\.renderContext, RenderContext(session: session, pageId: page.id))
@@ -68,15 +68,10 @@ struct HistoryView: View {
 
     private func load() async {
         guard let ready = session.ready else { return }
-        if state.value == nil { state = .loading }
-        do {
-            let entries = try await Paginated.all { cursor in
+        await entries.load {
+            try await Paginated.all { cursor in
                 try await session.load(Endpoints.History.list(pageId: page.id, cursor: cursor), of: ready)
             }
-            state = .loaded(entries)
-        } catch is CancellationError {
-        } catch {
-            if state.value == nil { state = .failed(error) }
         }
     }
 }
@@ -85,11 +80,11 @@ private struct HistoryDetailView: View {
     @Environment(AppSession.self) private var session
     @Environment(ReaderNavigation.self) private var navigation
     let entry: PageHistoryEntry
-    @State private var state: LoadState<ContentDocument> = .idle
+    @State private var detail = RemoteValue<ContentDocument>()
     @State private var anchor: String?
 
     var body: some View {
-        AsyncContentView(state: state, retry: load) { document in
+        AsyncContentView(state: detail.state, retry: load) { document in
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -137,19 +132,14 @@ private struct HistoryDetailView: View {
             }
         }
         .opensExternalLinks()
-        .task { if state.value == nil { await load() } }
+        .task { if detail.value == nil { await load() } }
     }
 
     private func load() async {
         guard session.client != nil else { return }
-        state = .loading
-        do {
-            let detail = try await session.send(Endpoints.History.info(historyId: entry.id))
-            let content = detail.content
-            state = .loaded(await Task.detached { ContentDocument(json: content) }.value)
-        } catch is CancellationError {
-        } catch {
-            state = .failed(error)
+        await detail.load {
+            let content = try await session.send(Endpoints.History.info(historyId: entry.id)).content
+            return await Task.detached { ContentDocument(json: content) }.value
         }
     }
 }

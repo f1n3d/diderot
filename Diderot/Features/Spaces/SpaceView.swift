@@ -193,12 +193,7 @@ struct SpaceView: View {
 
     @ViewBuilder
     private var treeCard: some View {
-        switch store.rootState {
-        case .idle, .loading:
-            ProgressView().frame(maxWidth: .infinity).padding(40)
-        case .failed(let error):
-            ErrorStateView(error: error) { await store.reload() }
-        case .loaded:
+        AsyncContentView(state: store.rootState, layout: .inline(), retry: { await store.reload() }) { _ in
             if store.rootPages.isEmpty {
                 ContentUnavailableView("No pages yet", systemImage: "doc", description: Text("Pages created in this space will show up here."))
                     .padding(.vertical, 20)
@@ -225,12 +220,7 @@ struct SpaceView: View {
 
     @ViewBuilder
     private var recentCard: some View {
-        switch recent {
-        case .idle, .loading:
-            ProgressView().frame(maxWidth: .infinity).padding(40)
-        case .failed(let error):
-            ErrorStateView(error: error) { await loadRecent() }
-        case .loaded(let pages):
+        AsyncContentView(state: recent, layout: .inline(), retry: { await loadRecent() }) { pages in
             if pages.isEmpty {
                 ContentUnavailableView("Nothing here yet", systemImage: "clock", description: Text("Recently updated pages in this space show up here."))
                     .padding(.vertical, 20)

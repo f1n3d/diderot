@@ -172,11 +172,11 @@ struct ProfileView: View {
 /// Workspace members (read-only).
 struct WorkspaceMembersView: View {
     @Environment(AppSession.self) private var session
-    @State private var state: LoadState<[WorkspaceMember]> = .idle
+    @State private var members = RemoteValue<[WorkspaceMember]>()
     @State private var query = ""
 
     var body: some View {
-        AsyncContentView(state: state, retry: load) { members in
+        AsyncContentView(state: members.state, retry: load) { members in
             let shown = filtered(members)
             List(shown) { member in
                 HStack(spacing: 12) {
@@ -206,7 +206,7 @@ struct WorkspaceMembersView: View {
         }
         .navigationTitle("Members")
         .toolbarTitleDisplayMode(.inline)
-        .task { if state.value == nil { await load() } }
+        .task { if members.value == nil { await load() } }
     }
 
     private func filtered(_ members: [WorkspaceMember]) -> [WorkspaceMember] {
@@ -219,15 +219,10 @@ struct WorkspaceMembersView: View {
 
     private func load() async {
         guard let ready = session.ready else { return }
-        state = .loading
-        do {
-            let members = try await Paginated.all { cursor in
+        await members.load {
+            try await Paginated.all { cursor in
                 try await session.load(Endpoints.Workspace.members(PaginationOptions(limit: 100, cursor: cursor)), of: ready)
             }
-            state = .loaded(members)
-        } catch is CancellationError {
-        } catch {
-            state = .failed(error)
         }
     }
 }

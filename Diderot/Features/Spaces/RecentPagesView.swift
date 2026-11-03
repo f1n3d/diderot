@@ -5,12 +5,11 @@ import DocmostKit
 struct RecentPagesView: View {
     @Environment(AppSession.self) private var session
     @Environment(ContentChanges.self) private var changes
-    @State private var state: LoadState<[Page]> = .idle
-    /// Counts loads, so only the newest answer shows.
-    @State private var loads = 0
+    /// Only the newest load's answer shows.
+    @State private var recent = RemoteValue<[Page]>()
 
     var body: some View {
-        AsyncContentView(state: state, retry: load) { pages in
+        AsyncContentView(state: recent.state, retry: load) { pages in
             if pages.isEmpty {
                 ContentUnavailableView("Nothing here yet", systemImage: "clock", description: Text("Pages you and your team edit will show up here."))
             } else {
@@ -51,23 +50,9 @@ struct RecentPagesView: View {
 
     private func load() async {
         guard let ready = session.ready else { return }
-        if state.value == nil {
-            if let cached = await ready.cache.read([Page].self, key: CacheKey.recent) {
-                state = .loaded(cached)
-            } else {
-                state = .loading
-            }
-        }
-        loads += 1
-        let load = loads
-        do {
-            let page = try await session.load(Endpoints.Pages.recent(limit: 50), of: ready)
-            guard load == loads else { return }
-            state = .loaded(page.items)
-            await ready.cache.write(page.items, key: CacheKey.recent)
-        } catch is CancellationError {
-        } catch {
-            if state.value == nil { state = .failed(error) }
+        await recent.load(cached: { await ready.cache.read([Page].self, key: CacheKey.recent) },
+                          save: { await ready.cache.write($0, key: CacheKey.recent) }) {
+            try await session.load(Endpoints.Pages.recent(limit: 50), of: ready).items
         }
     }
 }

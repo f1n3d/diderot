@@ -173,19 +173,19 @@ struct BaseEmbedCard: View {
     let pageId: String?
     @Environment(\.renderContext) private var context
     @Environment(ReaderNavigation.self) private var navigation
-    @State private var state: LoadState<Base> = .idle
+    @State private var info = RemoteValue<Base>()
 
     var body: some View {
         Button {
             guard let pageId else { return }
-            navigation.open(PageSelection(pageId: pageId, title: state.value?.title))
+            navigation.open(PageSelection(pageId: pageId, title: info.value?.title))
         } label: {
             HStack(spacing: 12) {
-                PageIconView(icon: state.value?.icon, size: 22, isBase: true)
+                PageIconView(icon: info.value?.icon, size: 22, isBase: true)
                     .padding(6)
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(state.value?.displayTitle ?? String(localized: "Database"))
+                    Text(info.value?.displayTitle ?? String(localized: "Database"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
@@ -211,7 +211,7 @@ struct BaseEmbedCard: View {
     }
 
     private var detail: String {
-        switch state {
+        switch info.state {
         case .failed(let error):
             return error.userMessage
         case .loaded(let base) where !base.views.isEmpty:
@@ -223,12 +223,6 @@ struct BaseEmbedCard: View {
 
     private func load() async {
         guard context.canRequest, let pageId else { return }
-        if state.value == nil { state = .loading }
-        do {
-            state = .loaded(try await context.send(Endpoints.Bases.info(pageId: pageId)))
-        } catch is CancellationError {
-        } catch {
-            if state.value == nil { state = .failed(error) }
-        }
+        await info.load { try await context.send(Endpoints.Bases.info(pageId: pageId)) }
     }
 }
