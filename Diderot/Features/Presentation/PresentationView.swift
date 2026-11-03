@@ -150,7 +150,6 @@ struct PresentationView: View {
                 openLink(url)
             }
         }
-        .opensExternalLinks()
         .mediaViewer { document }
         .environment(\.renderContext, RenderContext(session: session, pageId: pageId))
         .environment(\.linkPreviews, session.linkPreviews)

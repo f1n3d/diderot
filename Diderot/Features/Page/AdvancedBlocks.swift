@@ -239,7 +239,7 @@ struct SyncedBlockNodeView: View {
         }
         .padding(12)
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 1.5))
-        .sheet(isPresented: $showsUsage) {
+        .linkSheet(isPresented: $showsUsage) {
             if let transclusionId {
                 SyncedBlockUsageSheet(sourcePageId: model.page.id, transclusionId: transclusionId, currentPageId: model.page.id)
             }
@@ -307,7 +307,7 @@ struct SyncedReferenceNodeView: View {
         .padding(12)
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
             .strokeBorder(Color.accentColor.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3])))
-        .sheet(isPresented: $showsUsage) {
+        .linkSheet(isPresented: $showsUsage) {
             if let sourcePageId, let transclusionId {
                 SyncedBlockUsageSheet(sourcePageId: sourcePageId, transclusionId: transclusionId, currentPageId: model.page.id)
             }

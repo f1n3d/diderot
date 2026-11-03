@@ -131,7 +131,6 @@ private struct HistoryDetailView: View {
             case .external(let external): outside(external)
             }
         }
-        .opensExternalLinks()
         .task { if detail.value == nil { await load() } }
     }
 

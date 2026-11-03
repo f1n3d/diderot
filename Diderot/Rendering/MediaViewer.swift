@@ -95,7 +95,7 @@ private struct MediaViewerHost: ViewModifier {
                     shown = Shown(items: [media], index: 0)
                 }
             })
-            .fullScreenCover(item: $shown) { MediaViewer(items: $0.items, index: $0.index) }
+            .linkFullScreenCover(item: $shown) { MediaViewer(items: $0.items, index: $0.index) }
     }
 }
 

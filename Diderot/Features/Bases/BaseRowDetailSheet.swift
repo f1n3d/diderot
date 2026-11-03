@@ -65,7 +65,6 @@ struct BaseRowDetailSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .toast(Binding { model.toast } set: { model.toast = $0 })
-        .opensExternalLinks()
         .accessibilityIdentifier("base-row-detail")
     }
 
