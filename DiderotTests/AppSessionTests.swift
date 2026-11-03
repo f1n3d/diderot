@@ -1576,6 +1576,20 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// Block views' requests go through the session the page showed with: its 401 ends that session, as the session's
+    /// own requests' do. They went out with its bare client, and a 401 there ended nothing.
+    @Test func blockViewsRequestThroughTheirSession() async throws {
+        let session = try await sessionOnA()
+        let context = RenderContext(session: session, pageId: "p")
+        StubURLProtocol.status.withLock { $0 = 401 }
+        StubURLProtocol.body.withLock { $0 = #"{"statusCode": 401, "message": "Unauthorized"}"# }
+        await #expect(throws: APIError.self) { _ = try await context.send(Endpoints.Users.me) }
+        StubURLProtocol.status.withLock { $0 = 200 }
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(session.ready == nil, "a's 401 ended it")
+        await removeCaches()
+    }
+
     /// What a screen loads for a session that a switch has replaced doesn't go out, and ends as a closing screen's request
     /// does, without an error to show; the session now current stays. A list's later pages went out with the old
     /// client, and their 401 (its server signed out) ended the session now current.

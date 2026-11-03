@@ -322,11 +322,11 @@ struct SyncedReferenceNodeView: View {
 
     /// Web parity: the server copies the attachments and returns the content that replaces the reference.
     private func unsync() async {
-        guard let client = context.client, let sourcePageId, let transclusionId else { return }
+        guard context.canRequest, let sourcePageId, let transclusionId else { return }
         isUnsyncing = true
         defer { isUnsyncing = false }
         do {
-            let result = try await client.send(Endpoints.Transclusions.unsyncReference(
+            let result = try await context.send(Endpoints.Transclusions.unsyncReference(
                 referencePageId: model.page.id, sourcePageId: sourcePageId, transclusionId: transclusionId
             ))
             let nodes = result.nodes
@@ -394,10 +394,10 @@ struct SyncedBlockUsageSheet: View {
     }
 
     private func load() async {
-        guard let client = context.client else { return }
+        guard context.canRequest else { return }
         state = .loading
         do {
-            state = .loaded(try await client.send(Endpoints.Transclusions.references(sourcePageId: sourcePageId, transclusionId: transclusionId)))
+            state = .loaded(try await context.send(Endpoints.Transclusions.references(sourcePageId: sourcePageId, transclusionId: transclusionId)))
         } catch is CancellationError {
         } catch {
             state = .failed(error)

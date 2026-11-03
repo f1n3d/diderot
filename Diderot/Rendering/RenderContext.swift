@@ -1,16 +1,49 @@
 import SwiftUI
 import DocmostKit
 
-/// What block views need to render: server URL for relative links and media, API client for files behind sign-in,
+/// What block views need to render: server URL for relative links and media, their requests (`send`, `perform`),
 /// image loader, token for media cookies, current page.
 struct RenderContext: Sendable {
     let baseURL: URL?
-    let client: APIClient?
     let imageLoader: ImageLoader?
     let token: String?
     let pageId: String?
+    private let requests: Requests?
+
+    /// Where block views' requests go: through the session the page showed with (`AppSession.perform(on:)`), so a 401
+    /// ends only that session and nothing goes out once a switch or sign-out has replaced it. They went out with its
+    /// bare client, past the session's handling of a 401. Tests give a client.
+    private enum Requests: Sendable {
+        case session(AppSession, ReadySession)
+        case client(APIClient)
+    }
+
+    init(baseURL: URL?, client: APIClient?, imageLoader: ImageLoader?, token: String?, pageId: String?) {
+        self.baseURL = baseURL
+        self.imageLoader = imageLoader
+        self.token = token
+        self.pageId = pageId
+        requests = client.map(Requests.client)
+    }
 
     static let empty = RenderContext(baseURL: nil, client: nil, imageLoader: nil, token: nil, pageId: nil)
+
+    /// Whether requests can go out: signed in.
+    var canRequest: Bool { requests != nil }
+
+    /// Runs requests of the page's session; without one it throws `CancellationError`: there's nothing to show them for.
+    func perform<T: Sendable>(_ operation: (APIClient) async throws -> T) async throws -> T {
+        switch requests {
+        case .session(let session, let owner): return try await session.perform(on: owner, operation)
+        case .client(let client): return try await operation(client)
+        case nil: throw CancellationError()
+        }
+    }
+
+    /// One request through `perform`.
+    func send<Response>(_ endpoint: Endpoint<Response>) async throws -> Response {
+        try await perform { try await $0.send(endpoint) }
+    }
 
     /// `authToken` cookie for AVFoundation (the server checks the cookie before the bearer header).
     func authCookie() -> HTTPCookie? {
@@ -57,8 +90,11 @@ struct OtherServerCard: View {
 
 extension RenderContext {
     init(session: AppSession, pageId: String?) {
-        self.init(baseURL: session.server?.url, client: session.client, imageLoader: session.ready?.imageLoader,
-                  token: session.ready?.token, pageId: pageId)
+        baseURL = session.server?.url
+        imageLoader = session.ready?.imageLoader
+        token = session.ready?.token
+        self.pageId = pageId
+        requests = session.ready.map { .session(session, $0) }
     }
 }
 

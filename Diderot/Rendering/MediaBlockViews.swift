@@ -271,12 +271,12 @@ struct AttachmentBlockView: View {
     }
 
     private func open() async {
-        guard let client = context.client, let server = context.baseURL, let url = context.mediaURL(media.src) else { return }
+        guard context.canRequest, let server = context.baseURL, let url = context.mediaURL(media.src) else { return }
         isDownloading = true
         errorMessage = nil
         defer { isDownloading = false }
         do {
-            let (data, _) = try await client.fetchFile(at: url)
+            let data = try await context.perform { try await $0.fetchFile(at: url).0 }
             localURL = try TempFile.write(
                 data, server: server, folder: ["attachments", media.attachmentId ?? UUID().uuidString], name: media.name ?? url.lastPathComponent
             )
@@ -386,10 +386,10 @@ struct SubpagesBlockView: View {
     }
 
     private func load() async {
-        guard let client = context.client, let pageId = context.pageId else { return }
+        guard context.canRequest, let pageId = context.pageId else { return }
         if state.value == nil { state = .loading }
         do {
-            let pages = try await Paginated.all { try await client.send(Endpoints.Pages.children(of: pageId, cursor: $0)) }
+            let pages = try await Paginated.all { try await context.send(Endpoints.Pages.children(of: pageId, cursor: $0)) }
             state = .loaded(pages)
         } catch is CancellationError {
         } catch {
@@ -459,10 +459,10 @@ private struct SubpageRow: View {
             }
         }
         .task(id: isExpanded) {
-            guard isExpanded, children.value == nil, let client = context.client else { return }
+            guard isExpanded, children.value == nil, context.canRequest else { return }
             children = .loading
             do {
-                children = .loaded(try await Paginated.all { try await client.send(Endpoints.Pages.children(of: page.id, cursor: $0)) })
+                children = .loaded(try await Paginated.all { try await context.send(Endpoints.Pages.children(of: page.id, cursor: $0)) })
             } catch is CancellationError {
                 children = .idle
             } catch {
@@ -545,13 +545,13 @@ struct TransclusionReferenceView: View {
     private var key: String { "\(reference)/\(refreshToken)" }
 
     private func load() async {
-        guard let client = context.client, let sourcePageId, let transclusionId else {
+        guard context.canRequest, let sourcePageId, let transclusionId else {
             state = .failed(APIError.notFound(message: String(localized: "Synced block reference is incomplete.")))
             return
         }
         if state.value == nil { state = .loading }
         do {
-            let lookup = try await client.send(Endpoints.Transclusions.lookup([.init(sourcePageId: sourcePageId, transclusionId: transclusionId)]))
+            let lookup = try await context.send(Endpoints.Transclusions.lookup([.init(sourcePageId: sourcePageId, transclusionId: transclusionId)]))
             guard let item = lookup.items.first else { state = .loaded(.empty); return }
             switch item.status {
             case "not_found": state = .failed(APIError.notFound(message: String(localized: "The synced block source no longer exists.")))
