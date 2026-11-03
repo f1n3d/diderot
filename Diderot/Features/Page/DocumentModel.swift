@@ -3,236 +3,6 @@ import Observation
 import SwiftUI
 import DocmostKit
 
-/// Node identity in the view: UniqueID (paragraphs, headings) or path from the root.
-struct NodeRef: Hashable, Sendable {
-    let path: [Int]
-    let id: String?
-    /// Source node's type, so a path target misses another kind of block; not part of the identity.
-    var type: String?
-
-    init(path: [Int], node: PMNode) {
-        self.path = path
-        // A tab may have an empty id until Docmost gives it one: no identity.
-        self.id = node.string("id").flatMap { $0.isEmpty ? nil : $0 }
-        self.type = node.type
-    }
-
-    init(path: [Int], id: String?) {
-        self.path = path
-        self.id = id
-    }
-
-    static func == (lhs: NodeRef, rhs: NodeRef) -> Bool { lhs.path == rhs.path && lhs.id == rhs.id }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(path)
-        hasher.combine(id)
-    }
-
-    var identity: String { id ?? "path:" + path.map(String.init).joined(separator: ".") }
-    var target: BlockTarget { id.map { .id($0) } ?? .path(path, type: type) }
-    /// Anchor ID as in the reader (`ContentParser`): UniqueID or path "0.3.1".
-    var anchorId: String { id ?? path.map(String.init).joined(separator: ".") }
-    var isTopLevel: Bool { path.count == 1 }
-}
-
-/// Node plus its identity for `ForEach`.
-struct NodeEntry: Identifiable {
-    let ref: NodeRef
-    let node: PMNode
-    var id: String { ref.identity }
-
-    static func entries(_ nodes: [PMNode], parentPath: [Int]) -> [NodeEntry] {
-        nodes.enumerated().map { NodeEntry(ref: NodeRef(path: parentPath + [$0.offset], node: $0.element), node: $0.element) }
-    }
-}
-
-enum CursorRequest: Equatable {
-    case start, end
-    case offset(Int)
-    /// A tap, relative to the block's text (top left of its first line): the text position there, once the editor
-    /// shows the block. Not the window: the page moves the block meanwhile, to the middle of the space above the keyboard.
-    case point(CGPoint)
-}
-
-/// Templates for new blocks.
-enum BlockTemplate: String, CaseIterable, Identifiable {
-    case paragraph, heading1, heading2, heading3, bulletList, orderedList, taskList, quote, callout, toggle, codeBlock, table, divider
-
-    var id: String { rawValue }
-
-    /// Localized title (key = English title) for the toolbar and the insert menu.
-    var titleResource: LocalizedStringResource {
-        switch self {
-        case .paragraph: "Paragraph"
-        case .heading1: "Heading 1"
-        case .heading2: "Heading 2"
-        case .heading3: "Heading 3"
-        case .bulletList: "Bullet list"
-        case .orderedList: "Numbered list"
-        case .taskList: "Task list"
-        case .quote: "Quote"
-        case .callout: "Callout"
-        case .toggle: "Toggle"
-        case .codeBlock: "Code block"
-        case .table: "Table"
-        case .divider: "Divider"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .paragraph: "text.alignleft"
-        case .heading1: "1.square"
-        case .heading2: "2.square"
-        case .heading3: "3.square"
-        case .bulletList: "list.bullet"
-        case .orderedList: "list.number"
-        case .taskList: "checklist"
-        case .quote: "text.quote"
-        case .callout: "info.bubble"
-        case .toggle: "chevron.right.square"
-        case .codeBlock: "chevron.left.forwardslash.chevron.right"
-        case .table: "tablecells"
-        case .divider: "minus"
-        }
-    }
-
-    /// A new, empty block of this kind.
-    func node() -> PMNode {
-        let paragraph = PMNode(type: "paragraph")
-        switch self {
-        case .paragraph: return paragraph
-        case .heading1, .heading2, .heading3:
-            return PMNode(type: "heading", attrs: ["level": .number(Double(self == .heading1 ? 1 : self == .heading2 ? 2 : 3))])
-        case .bulletList: return PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [paragraph])])
-        case .orderedList: return PMNode(type: "orderedList", attrs: ["start": 1], content: [PMNode(type: "listItem", content: [paragraph])])
-        case .taskList: return PMNode(type: "taskList", content: [PMNode(type: "taskItem", attrs: ["checked": false], content: [paragraph])])
-        case .quote: return PMNode(type: "blockquote", content: [paragraph])
-        case .callout: return PMNode(type: "callout", attrs: ["type": "info"], content: [paragraph])
-        case .toggle:
-            return PMNode(type: "details", attrs: ["open": true], content: [
-                PMNode(type: "detailsSummary"),
-                PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")]),
-            ])
-        case .codeBlock: return PMNode(type: "codeBlock", attrs: ["language": .null])
-        case .table:
-            func cell(_ type: String) -> PMNode { PMNode(type: type, attrs: ["colspan": 1, "rowspan": 1], content: [PMNode(type: "paragraph")]) }
-            let header = PMNode(type: "tableRow", content: [cell("tableHeader"), cell("tableHeader"), cell("tableHeader")])
-            let rows = (0..<2).map { _ in PMNode(type: "tableRow", content: [cell("tableCell"), cell("tableCell"), cell("tableCell")]) }
-            return PMNode(type: "table", content: [header] + rows)
-        case .divider: return PMNode(type: "horizontalRule")
-        }
-    }
-
-    /// Path (relative to the new node) of the first editable text.
-    var firstTextPath: [Int]? {
-        switch self {
-        case .paragraph, .heading1, .heading2, .heading3, .codeBlock: []
-        case .bulletList, .orderedList, .taskList: [0, 0]
-        case .quote, .callout, .toggle: [0]
-        case .table: [0, 0, 0]
-        case .divider: nil
-        }
-    }
-}
-
-/// Mention suggestion: a person or a page.
-struct MentionSuggestion: Identifiable, Hashable {
-    enum Kind: Hashable { case user, page }
-
-    let kind: Kind
-    let entityId: String
-    let title: String
-    let subtitle: String?
-    let icon: String?
-    let avatarUrl: String?
-    let slugId: String?
-
-    var id: String { (kind == .user ? "user-" : "page-") + entityId }
-
-    static func from(_ suggestions: SearchSuggestions) -> [MentionSuggestion] {
-        let users = (suggestions.users ?? []).map {
-            MentionSuggestion(kind: .user, entityId: $0.id, title: $0.name?.isEmpty == false ? $0.name! : ($0.email ?? ""), subtitle: $0.email, icon: nil, avatarUrl: $0.avatarUrl, slugId: nil)
-        }
-        let pages = (suggestions.pages ?? []).map {
-            MentionSuggestion(kind: .page, entityId: $0.id, title: PageTitle.display($0.title), subtitle: $0.space?.name, icon: $0.icon, avatarUrl: nil, slugId: $0.slugId)
-        }
-        return pages + users
-    }
-}
-
-/// Media picker the model asks the UI for.
-enum PendingMediaAction: Equatable {
-    /// Photo library.
-    case images, videos
-    case camera
-    /// Files app.
-    case audio, pdf
-    /// Any file, always as an attachment card (like "File attachment" on the web).
-    case attachment
-}
-
-/// Media pick request; its own ID makes a repeat of the same kind (e.g. after a cancel) reopen the picker.
-struct MediaRequest: Equatable {
-    let id = UUID()
-    let action: PendingMediaAction
-}
-
-/// Where the files of a closed media picker go.
-struct MediaTarget {
-    let placement: BlockPlacement
-    let asAttachment: Bool
-}
-
-/// Where a new block goes.
-enum BlockPlacement: Equatable {
-    /// In place of the block if it is an empty paragraph, else after it (same container).
-    case replaceOrAfter(NodeRef)
-    /// After the top-level block containing `NodeRef`, or in its place if that is an empty paragraph.
-    case afterTopLevel(NodeRef)
-    /// End of the document, before the footnotes.
-    case end
-}
-
-/// Where the cursor lands after inserting a block.
-enum InsertFocus: Equatable {
-    /// End of the new block's first text (path relative to the block).
-    case inside([Int])
-    /// Start of the next block (as the web does after a divider): a paragraph is added if no block follows; editing
-    /// ends if the next block isn't text.
-    case after
-}
-
-/// Editor input sheet (status, math, embed) for inserting or editing.
-enum EditorSheet: Identifiable, Equatable {
-    /// Inline atom target: insert at the active block's cursor, or edit the block's `index`-th atom of this type.
-    enum AtomTarget: Equatable {
-        case insert(offset: Int)
-        case edit(ref: NodeRef, index: Int)
-    }
-
-    /// Block target: insert a new one or change an existing one.
-    enum BlockSlot: Equatable {
-        case insert(BlockPlacement)
-        case edit(NodeRef)
-    }
-
-    case status(AtomTarget, text: String, color: String)
-    case mathInline(AtomTarget, latex: String)
-    case mathBlock(BlockSlot, latex: String)
-    case embed(BlockSlot, provider: EmbedProvider, link: String)
-
-    var id: String {
-        switch self {
-        case .status: "status"
-        case .mathInline: "math-inline"
-        case .mathBlock: "math-block"
-        case .embed: "embed"
-        }
-    }
-}
-
 /// Page view state: the document (REST snapshot, later the engine's), one active text block as a `TextEditor`, and
 /// block operations through the engine. Return/Backspace split or join blocks.
 @MainActor
@@ -259,8 +29,6 @@ final class DocumentModel {
     enum Lifecycle {
         case closed, opening, live, closing
     }
-
-    static let editableTextTypes: Set<String> = ["paragraph", "heading", "detailsSummary"]
 
     let page: Page
     let engine: (any DocumentEngine)?
@@ -366,7 +134,7 @@ final class DocumentModel {
     /// Offers "Comment" for text selected in the active text block. Not while a sheet (link, comment) has focus: its
     /// text fields would get the menu item too.
     var canCommentOnSelection: Bool {
-        guard canComment, !editsInSheet, let active, Self.editableTextTypes.contains(active.type),
+        guard canComment, !editsInSheet, let active, PMNode.editableTextTypes.contains(active.type),
               case .ranges(let ranges) = activeSelection.indices(in: activeText)
         else { return false }
         return ranges.ranges.contains { !$0.isEmpty }
@@ -644,7 +412,7 @@ final class DocumentModel {
     /// Backspace on its way, no sheet holding ranges of the text, no marked text (dictation, Japanese input).
     private func collaboratorChangedActiveBlock() -> Bool {
         guard let active, let base = activeBase, overrides[active.ref.identity] == nil, typingSwitches == 0, !editsInSheet,
-              editorTextView?.markedTextRange == nil, let (_, node) = locate(active.ref)
+              editorTextView?.markedTextRange == nil, let (_, node) = document.locate(active.ref)
         else { return false }
         return !looksTheSame(node, base)
     }
@@ -721,7 +489,7 @@ final class DocumentModel {
     /// The active block follows by its UniqueID when its path shifts; otherwise the editor would edit another block.
     private func followMovedBlocks() {
         if let active, let id = active.ref.id, node(at: active.ref.path)?.string("id") != id {
-            if let path = path(where: { $0.string("id") == id }) {
+            if let path = document.path(where: { $0.string("id") == id }) {
                 self.active = Active(ref: NodeRef(path: path, id: id), type: active.type, attrs: active.attrs, itemPath: enclosingItemPath(path))
             } else if !editsTable && typingSwitches == 0 {
                 // A collaborator deleted it. Its editor used to vanish with it; the page's one editor stays, so end here.
@@ -739,18 +507,6 @@ final class DocumentModel {
         }
     }
 
-    /// Path of the first node in document order that `matches`.
-    private func path(where matches: (PMNode) -> Bool, in root: PMNode? = nil) -> [Int]? {
-        func search(_ node: PMNode, _ path: [Int]) -> [Int]? {
-            for (index, child) in node.children.enumerated() {
-                if matches(child) { return path + [index] }
-                if let found = search(child, path + [index]) { return found }
-            }
-            return nil
-        }
-        return search(root ?? document, [])
-    }
-
     private func stop() async {
         await flush()
         if let engine {
@@ -766,7 +522,7 @@ final class DocumentModel {
 
     func activate(_ ref: NodeRef, node: PMNode, cursor: CursorRequest = .end) {
         // Only text and code: the editor's text would replace any other block (a list, quote or image) on the next key.
-        guard isEditable, Self.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
+        guard isEditable, PMNode.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
         if active?.ref == ref { return }
         if active != nil { commitPendingNow() }
         let itemPath = enclosingItemPath(ref.path)
@@ -827,7 +583,7 @@ final class DocumentModel {
     /// Tap below the last block: cursor to its end if it is text, else a new paragraph at the end.
     func activateTrailing() async {
         guard isEditable else { return }
-        if let last = contentBlocks.last, Self.editableTextTypes.contains(last.node.type) {
+        if let last = contentBlocks.last, PMNode.editableTextTypes.contains(last.node.type) {
             if active?.ref == last.ref {
                 cursorRequest = .end
             } else {
@@ -840,7 +596,7 @@ final class DocumentModel {
 
     /// Path of the active block's nearest ancestor of the given type (e.g. a callout).
     func activeAncestorPath(ofType type: String) -> [Int]? {
-        active.flatMap { ancestorPath(of: $0.ref.path, types: [type]) }
+        active.flatMap { document.ancestorPath(of: $0.ref.path, types: [type]) }
     }
 
     /// Sets attributes of a block (`NodeRef(path:id: nil)` targets it by position).
@@ -917,7 +673,7 @@ final class DocumentModel {
 
     private func updateMentionQuery() {
         guard let active, active.type != "codeBlock", slashQuery == nil,
-              let newQuery = trigger("@", maxLength: 30, cursor: insertionIndex())?.query
+              let newQuery = TriggerParser.mention(in: activeText, cursor: insertionIndex())?.query
         else {
             mentionQuery = nil
             return
@@ -947,15 +703,8 @@ final class DocumentModel {
             mentionSuggestions = []
             return
         }
-        var attrs: [String: JSONValue] = [
-            "id": .string(UUID().uuidString.lowercased()),
-            "label": .string(suggestion.title),
-            "entityType": .string(suggestion.kind == .user ? "user" : "page"),
-            "entityId": .string(suggestion.entityId),
-            "slugId": suggestion.slugId.map { .string($0) } ?? .null,
-        ]
-        if let currentUserId { attrs["creatorId"] = .string(currentUserId) }
-        let node = PMNode(type: "mention", attrs: attrs)
+        let node = NodeFactory.mention(entityType: suggestion.kind == .user ? "user" : "page", entityId: suggestion.entityId,
+                                       label: suggestion.title, slugId: suggestion.slugId, creatorId: currentUserId)
         var run = Self.editorText(from: [node])
         run.append(AttributedString(" "))
         let insertedCount = run.characters.count
@@ -1085,23 +834,11 @@ final class DocumentModel {
     func insertLocation(of active: Active) -> InsertLocation {
         if active.ref.isTopLevel { return .topLevel }
         if active.type == "detailsSummary" { return .summary }
-        let ancestors = ancestorTypes(of: active.ref.path)
+        let ancestors = document.ancestorTypes(of: active.ref.path)
         if ancestors.contains("footnotes") { return .footnote }
         if active.itemPath != nil { return .listItem }
         if ancestors.contains("tableCell") || ancestors.contains("tableHeader") { return .tableCell }
         return .container
-    }
-
-    /// Types of a node's ancestors, excluding the node.
-    func ancestorTypes(of path: [Int]) -> Set<String> {
-        var types: Set<String> = []
-        var current = document
-        for index in path.dropLast() {
-            guard current.children.indices.contains(index) else { break }
-            current = current.children[index]
-            types.insert(current.type)
-        }
-        return types
     }
 
     /// Commands that fit at the active block's position; all of them without an active block (floating "+").
@@ -1126,7 +863,7 @@ final class DocumentModel {
             commands.removeAll { command in command.blockType.map { !fitting.contains($0) } ?? false }
         }
         // Columns hold columns, but the app puts none into a column.
-        if inPlace, slashQuery != nil, ancestorTypes(of: active.ref.path).contains("columns") {
+        if inPlace, slashQuery != nil, document.ancestorTypes(of: active.ref.path).contains("columns") {
             commands.removeAll { if case .columns = $0 { true } else { false } }
         }
         return commands
@@ -1170,24 +907,7 @@ final class DocumentModel {
         guard let active, active.type != "codeBlock",
               case .insertionPoint(let cursor) = activeSelection.indices(in: activeText)
         else { return nil }
-        return trigger("/", maxLength: 24, cursor: cursor)
-    }
-
-    /// `mark` ("/" or "@") before the cursor, at block start or after whitespace (incl. the line break U+2028),
-    /// followed by at most `maxLength` non-whitespace characters. The limits only end a menu once a longer word is
-    /// typed: 24 is above every command keyword ("/"), 30 above most names ("@").
-    private func trigger(_ mark: Character, maxLength: Int, cursor: AttributedString.Index) -> (query: String, offset: Int)? {
-        let text = activeText
-        let before = Array(text[text.startIndex..<cursor].characters)
-        guard let offset = before.lastIndex(of: mark) else { return nil }
-        let query = before[(offset + 1)...]
-        guard query.count <= maxLength, !query.contains(where: \.isWhitespace) else { return nil }
-        guard offset == 0 || before[offset - 1].isWhitespace else { return nil }
-        // Mark and query are typed text, never an atom's: a user mention shows as "@label", a status or math may
-        // contain either, and an atom between mark and cursor would be lost with the pick.
-        let index = text.characters.index(text.startIndex, offsetBy: offset)
-        if text[index..<cursor].runs.contains(where: { $0.docmost.inlineNode != nil }) { return nil }
-        return (String(query), offset)
+        return TriggerParser.slash(in: activeText, cursor: cursor)
     }
 
     /// Removes "/query" from the active text and returns the offset where it was.
@@ -1295,7 +1015,7 @@ final class DocumentModel {
         case .subpages:
             Task { await insertBlocks([PMNode(type: "subpages")], placement: placement, focus: .after) }
         case .tabs:
-            Task { await insertBlocks([Self.tabsNode()], placement: placement, focus: .inside([0, 1, 0])) }
+            Task { await insertBlocks([NodeFactory.tabs()], placement: placement, focus: .inside([0, 1, 0])) }
         case .drawio, .excalidraw:
             Task { await insertBlocks([PMNode(type: command == .drawio ? "drawio" : "excalidraw")], placement: placement, focus: .after) }
         case .mermaid:
@@ -1305,7 +1025,7 @@ final class DocumentModel {
         case .syncedBlock:
             Task { await insertBlocks([PMNode(type: "transclusionSource", content: [PMNode(type: "paragraph")])], placement: placement, focus: .inside([0])) }
         case .columns(let count):
-            Task { await insertBlocks([Self.columnsNode(count: count)], placement: placement, focus: .inside([0, 0])) }
+            Task { await insertBlocks([NodeFactory.columns(count: count)], placement: placement, focus: .inside([0, 0])) }
         case .image: requestMedia(.images, placement: placement)
         case .camera: requestMedia(.camera, placement: placement)
         case .video: requestMedia(.videos, placement: placement)
@@ -1333,7 +1053,7 @@ final class DocumentModel {
         case .mathInline: editorSheet = .mathInline(.insert(offset: offset), latex: "")
         case .footnote:
             let node = PMNode(type: "footnoteReference", attrs: [
-                "data-id": .string(Self.newNodeId()), "referenceNumber": .string("\(footnoteNumber(at: offset))"),
+                "data-id": .string(NodeFactory.newNodeId()), "referenceNumber": .string("\(footnoteNumber(at: offset))"),
             ])
             insertAtom(node, offset: offset)
         default: break
@@ -1382,26 +1102,11 @@ final class DocumentModel {
         case card, mention, link
     }
 
-    static func integrationMention(url: String, provider: String) -> PMNode {
-        PMNode(type: "integrationMention", attrs: ["url": .string(url), "provider": .string(provider)])
-    }
-
-    static func integrationCard(url: String, provider: String) -> PMNode {
-        PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": .string(provider)])
-    }
-
-    /// The link as text, with its service as the web keeps it.
-    static func integrationLinkText(url: String, provider: String) -> PMNode {
-        var attrs: [String: JSONValue] = ["href": .string(url), "target": "_blank", "internal": false]
-        if !provider.isEmpty { attrs["integrationProvider"] = .string(provider) }
-        return PMNode(type: "text", marks: [PMMark(type: "link", attrs: attrs)], text: url)
-    }
-
     /// Shows an integration card as a mention or a link, in a paragraph of its own.
     func showIntegrationCard(_ ref: NodeRef, as display: IntegrationDisplay) async {
-        guard display != .card, let (_, card) = locate(ref) else { return }
+        guard display != .card, let (_, card) = document.locate(ref) else { return }
         let url = card.string("url") ?? "", provider = card.string("provider") ?? ""
-        let inline = display == .mention ? Self.integrationMention(url: url, provider: provider) : Self.integrationLinkText(url: url, provider: provider)
+        let inline = display == .mention ? NodeFactory.integrationMention(url: url, provider: provider) : NodeFactory.integrationLinkText(url: url, provider: provider)
         await replace(ref, withNodes: [PMNode(type: "paragraph", content: [inline])])
     }
 
@@ -1412,7 +1117,7 @@ final class DocumentModel {
             return
         case .link:
             await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index,
-                              with: Self.integrationLinkText(url: target.url, provider: target.provider))
+                              with: NodeFactory.integrationLinkText(url: target.url, provider: target.provider))
         case .card:
             guard let nodes = cardReplacement(for: target) else { return }
             await replace(target.ref, withNodes: nodes)
@@ -1427,14 +1132,10 @@ final class DocumentModel {
     }
 
     private func cardReplacement(for target: MentionTarget) -> [PMNode]? {
-        guard let (_, block) = locate(target.ref) else { return nil }
-        var seen = -1
-        guard let position = block.children.firstIndex(where: { child in
-            guard child.type == "integrationMention" else { return false }
-            seen += 1
-            return seen == target.index
-        }) else { return nil }
-        return blockReplacement(Self.integrationCard(url: target.url, provider: target.provider), paragraph: target.ref,
+        guard let (_, block) = document.locate(target.ref),
+              let position = block.childPosition(ofType: "integrationMention", index: target.index)
+        else { return nil }
+        return blockReplacement(NodeFactory.integrationCard(url: target.url, provider: target.provider), paragraph: target.ref,
                                 before: Array(block.children[..<position]), after: Array(block.children[(position + 1)...]))
     }
 
@@ -1463,9 +1164,10 @@ final class DocumentModel {
         case .mention:
             let offset = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
             activeText.removeSubrange(range)
-            insertIntoActiveText(Self.editorText(from: [Self.integrationMention(url: url, provider: provider)]), at: offset)
+            let mention = NodeFactory.integrationMention(url: url, provider: provider)
+            insertIntoActiveText(Self.editorText(from: [mention]), offset: offset, plainAfter: true)
         case .card:
-            placeBlockInActiveText(Self.integrationCard(url: url, provider: provider), replacing: range)
+            placeBlockInActiveText(NodeFactory.integrationCard(url: url, provider: provider), replacing: range)
         }
     }
 
@@ -1476,7 +1178,7 @@ final class DocumentModel {
     /// it isn't empty. Nil outside a paragraph. Whether they fit there is the engine's to say, as the web asks its schema
     /// (`getBlockPlacement`): not in table cells, synced blocks and footnotes, nor in place of a list item's first line.
     private func blockReplacement(_ block: PMNode, paragraph ref: NodeRef, before: [PMNode], after: [PMNode]) -> [PMNode]? {
-        guard ref.type == "paragraph", let (_, paragraph) = locate(ref) else { return nil }
+        guard ref.type == "paragraph", let (_, paragraph) = document.locate(ref) else { return nil }
         let before = Self.trimmingSpaces(before, atEnd: true), after = Self.trimmingSpaces(after, atEnd: false)
         return (before.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: before)]) + [block]
             + (after.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: after)])
@@ -1525,7 +1227,7 @@ final class DocumentModel {
     /// next text block, else a new paragraph if nothing follows (as after inserting other blocks).
     @discardableResult
     private func placeBlockInActiveText(_ block: PMNode, replacing range: Range<AttributedString.Index>) -> Bool {
-        guard let engine, let active, let (path, paragraph) = locate(active.ref) else { return false }
+        guard let engine, let active, let (path, paragraph) = document.locate(active.ref) else { return false }
         let (before, after) = activeInlines(around: range)
         // Asked before the active line's input goes into the new blocks: refused there, it would be lost.
         guard blockFitsInActiveLine(block.type, around: range),
@@ -1538,7 +1240,7 @@ final class DocumentModel {
         if nodes.last == block {
             let siblings = parentPath.isEmpty ? document.children : node(at: parentPath)?.children ?? []
             if siblings.indices.contains(index + 1), siblings[index + 1].type != "footnotes" {
-                if !Self.editableTextTypes.contains(siblings[index + 1].type) { focus = nil }
+                if !PMNode.editableTextTypes.contains(siblings[index + 1].type) { focus = nil }
             } else {
                 nodes.append(PMNode(type: "paragraph"))
             }
@@ -1650,16 +1352,8 @@ final class DocumentModel {
 
     /// A mention of the page, as the web makes one from a pasted link ("Untitled" unlocalized as there).
     private func pageMention(_ page: LinkedPage) -> PMNode {
-        var attrs: [String: JSONValue] = [
-            "id": .string(UUID().uuidString.lowercased()),
-            "label": .string(page.title.isEmpty ? "Untitled" : page.title),
-            "entityType": "page",
-            "entityId": .string(page.id),
-            "slugId": page.slugId.map { .string($0) } ?? .null,
-        ]
-        if let currentUserId { attrs["creatorId"] = .string(currentUserId) }
-        if let anchor = page.anchor, !anchor.isEmpty { attrs["anchorId"] = .string(anchor) }
-        return PMNode(type: "mention", attrs: attrs)
+        NodeFactory.mention(entityType: "page", entityId: page.id, label: page.title.isEmpty ? "Untitled" : page.title,
+                            slugId: page.slugId, creatorId: currentUserId, anchorId: page.anchor)
     }
 
     /// Replaces the paste as chosen; nil (the question dismissed) keeps it.
@@ -1670,7 +1364,7 @@ final class DocumentModel {
         let url = link.url.absoluteString, provider = link.provider?.rawValue ?? ""
         switch choice {
         case .card:
-            placeBlockInActiveText(Self.integrationCard(url: url, provider: provider), replacing: range)
+            placeBlockInActiveText(NodeFactory.integrationCard(url: url, provider: provider), replacing: range)
         case .embeddedBase:
             if let base = link.base {
                 placeBlockInActiveText(PMNode(type: "base", attrs: ["pageId": .string(base.id)]), replacing: range)
@@ -1678,7 +1372,7 @@ final class DocumentModel {
         case .mention:
             // A database link is its mention already.
             if link.base == nil {
-                replaceActiveText(range, with: Self.editorText(from: [Self.integrationMention(url: url, provider: provider)]))
+                replaceActiveText(range, with: Self.editorText(from: [NodeFactory.integrationMention(url: url, provider: provider)]))
             }
         case .link:
             break
@@ -1747,18 +1441,8 @@ final class DocumentModel {
         var run = AttributedString(url.absoluteString)
         run.link = url
         if let provider { run.docmost.linkProvider = provider.rawValue }
-        insertIntoActiveText(run, at: offset)
+        insertIntoActiveText(run, offset: offset, plainAfter: true)
         return url.absoluteString
-    }
-
-    /// Inserts at `offset` (0: the start) and puts the cursor after it, with plain typing attributes.
-    private func insertIntoActiveText(_ run: AttributedString, at offset: Int) {
-        guard active != nil else { return }
-        let position = min(max(offset, 0), activeText.characters.count)
-        activeText.insert(run, at: activeText.characters.index(activeText.startIndex, offsetBy: position))
-        let end = activeText.characters.index(activeText.startIndex, offsetBy: min(position + run.characters.count, activeText.characters.count))
-        activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: AttributeContainer())
-        scheduleCommit(debounce: .zero)
     }
 
     /// Applies the emoji keyboard's pick (`nil`: closed without one). The editor regains focus only once that
@@ -1787,22 +1471,16 @@ final class DocumentModel {
     }
 
     func atom(ofType type: String, in ref: NodeRef, index: Int) -> PMNode? {
-        guard let (_, node) = locate(ref) else { return nil }
-        let atoms = node.children.filter { $0.type == type }
-        return atoms.indices.contains(index) ? atoms[index] : nil
+        guard let (_, node) = document.locate(ref), let position = node.childPosition(ofType: type, index: index) else { return nil }
+        return node.children[position]
     }
 
     /// Replaces or removes the `index`-th atom of type `type` in a (non-active) block.
     func replaceAtom(ofType type: String, in ref: NodeRef, index: Int, with replacement: PMNode?) async {
         guard let engine, let block = await currentBlock(ref) else { return }
         let node = block.latest
+        guard let position = node.childPosition(ofType: type, index: index) else { return }
         var children = node.children
-        var seen = -1
-        guard let position = children.firstIndex(where: { child in
-            guard child.type == type else { return false }
-            seen += 1
-            return seen == index
-        }) else { return }
         if let replacement { children[position] = replacement } else { children.remove(at: position) }
         let updated = PMNode(type: node.type, attrs: node.attrs, content: children.isEmpty ? nil : children)
         report(await engine.replaceBlock(block.ref.target, with: updated, base: nil, expected: block.source))
@@ -1815,7 +1493,7 @@ final class DocumentModel {
         func walk(_ node: PMNode, path: [Int]) {
             for (index, child) in node.children.enumerated() where child.type != "footnotes" {
                 if child.type == "footnoteReference" {
-                    if Self.precedes(path, active.ref.path) { count += 1 }
+                    if path.precedes(active.ref.path) { count += 1 }
                 } else {
                     walk(child, path: path + [index])
                 }
@@ -1830,11 +1508,6 @@ final class DocumentModel {
         return count + 1
     }
 
-    /// New ID like `generateNodeId` in the web client (12 lowercase letters).
-    static func newNodeId() -> String {
-        String((0..<12).map { _ in "abcdefghijklmnopqrstuvwxyz".randomElement()! })
-    }
-
     // MARK: Blocks
 
     /// Inserts blocks at `placement`, then moves the cursor per `focus`; without `focus`, editing ends.
@@ -1845,7 +1518,7 @@ final class DocumentModel {
         var anchor: NodeRef?
         switch placement {
         case .replaceOrAfter(let ref):
-            anchor = locate(ref).map { NodeRef(path: $0.path, node: $0.node) }
+            anchor = document.locate(ref).map { NodeRef(path: $0.path, node: $0.node) }
         case .afterTopLevel(let ref):
             let top = [ref.path[0]]
             anchor = node(at: top).map { NodeRef(path: top, node: $0) }
@@ -1894,7 +1567,7 @@ final class DocumentModel {
             focusTarget = (newPath + relative, .end)
         case .after:
             if let next, next.type != "footnotes" {
-                if Self.editableTextTypes.contains(next.type) { focusTarget = (afterPath, .start) }
+                if PMNode.editableTextTypes.contains(next.type) { focusTarget = (afterPath, .start) }
             } else {
                 blocks.append(PMNode(type: "paragraph"))
                 focusTarget = (afterPath, .start)
@@ -1934,7 +1607,7 @@ final class DocumentModel {
         let place: BlockPlace
         switch placement {
         case .replaceOrAfter(let ref):
-            guard let (path, node) = locate(ref) else { return false }
+            guard let (path, node) = document.locate(ref) else { return false }
             let empty = node.type == "paragraph" && node.children.isEmpty
             place = BlockPlace(target: NodeRef(path: path, node: node).target, position: empty ? .replace : .after)
         case .afterTopLevel(let ref):
@@ -1949,20 +1622,6 @@ final class DocumentModel {
     /// Inserts an empty `template` block and puts the cursor in its first text.
     func insertTemplate(_ template: BlockTemplate, placement: BlockPlacement) async {
         await insertBlocks([template.node()], placement: placement, focus: template.firstTextPath.map { .inside($0) } ?? .after)
-    }
-
-    static func columnsNode(count: Int) -> PMNode {
-        PMNode(type: "columns", attrs: ["layout": .string(defaultColumnsLayout(count))],
-               content: (0..<count).map { _ in PMNode(type: "column", content: [PMNode(type: "paragraph")]) })
-    }
-
-    static func defaultColumnsLayout(_ count: Int) -> String {
-        switch count {
-        case 3: "three_equal"
-        case 4: "four_equal"
-        case 5: "five_equal"
-        default: "two_equal"
-        }
     }
 
     /// Result of the math block sheet: insert, change, or (for `nil`) delete.
@@ -2123,7 +1782,7 @@ final class DocumentModel {
     /// the page already (a second tap's late answer), nothing happens.
     func unsyncReference(_ reference: PMNode, at ref: NodeRef, content nodes: [PMNode]) async {
         guard let engine, let sourcePageId = reference.string("sourcePageId"), let transclusionId = reference.string("transclusionId"),
-              node(at: ref.path) == reference || path(where: { $0 == reference }) != nil
+              node(at: ref.path) == reference || document.path(where: { $0 == reference }) != nil
         else { return }
         if active != nil { deactivate() }
         report(await engine.replaceReference(at: ref.path, sourcePageId: sourcePageId, transclusionId: transclusionId, with: nodes))
@@ -2165,19 +1824,6 @@ final class DocumentModel {
 
     // MARK: Tabs
 
-    /// A new tabs block as the web makes it: "Tab 1" and "Tab 2", each with an empty paragraph.
-    static func tabsNode() -> PMNode {
-        PMNode(type: "tabs", content: [tabNode(label: "Tab 1"), tabNode(label: "Tab 2")])
-    }
-
-    /// A tab without an id (Docmost gives it one): its label and a panel with an empty paragraph.
-    static func tabNode(label: String, panel: [PMNode] = [PMNode(type: "paragraph")]) -> PMNode {
-        PMNode(type: "tab", content: [
-            PMNode(type: "tabLabel", content: label.isEmpty ? nil : [PMNode(type: "text", text: label)]),
-            PMNode(type: "tabPanel", content: panel),
-        ])
-    }
-
     /// The label of a tab node as plain text.
     static func tabLabel(of tab: PMNode) -> String {
         tab.children.first { $0.type == "tabLabel" }?.plainText ?? ""
@@ -2186,17 +1832,17 @@ final class DocumentModel {
     /// Adds a tab at the end like the web's "+" ("Tab N", unlocalized as there); returns its path.
     @discardableResult
     func addTab(to tabsRef: NodeRef) async -> [Int]? {
-        guard let engine, let (path, tabs) = locate(tabsRef), let last = tabs.children.last else { return nil }
+        guard let engine, let (path, tabs) = document.locate(tabsRef), let last = tabs.children.last else { return nil }
         if active != nil { deactivate() }
         let lastRef = NodeRef(path: path + [tabs.children.count - 1], node: last)
-        let tab = Self.tabNode(label: "Tab \(tabs.children.count + 1)")
+        let tab = NodeFactory.tab(label: "Tab \(tabs.children.count + 1)")
         return report(await engine.insertBlock(tab, relativeTo: lastRef.target, position: .after)) ? path + [tabs.children.count] : nil
     }
 
     /// Sets a tab's label; empty or unchanged labels are left alone, as on the web.
     func renameTab(_ tabRef: NodeRef, to label: String) async {
         let label = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let engine, let (path, tab) = locate(tabRef), !label.isEmpty, label != Self.tabLabel(of: tab),
+        guard let engine, let (path, tab) = document.locate(tabRef), !label.isEmpty, label != Self.tabLabel(of: tab),
               let index = tab.children.firstIndex(where: { $0.type == "tabLabel" })
         else { return }
         let labelRef = NodeRef(path: path + [index], node: tab.children[index])
@@ -2217,7 +1863,7 @@ final class DocumentModel {
 
     /// Deletes a tab; deleting the last one removes the tabs block, as on the web.
     func deleteTab(_ tabRef: NodeRef, in tabsRef: NodeRef) async {
-        guard let (_, tabs) = locate(tabsRef) else { return }
+        guard let (_, tabs) = document.locate(tabsRef) else { return }
         if let active, active.ref.path.starts(with: tabs.children.count == 1 ? tabsRef.path : tabRef.path) { deactivate() }
         await delete(tabs.children.count == 1 ? tabsRef : tabRef)
     }
@@ -2230,7 +1876,7 @@ final class DocumentModel {
         guard isEditable, let listIndex = document.children.firstIndex(where: { $0.type == "footnotes" }) else { return false }
         let footnotes = document.children[listIndex]
         guard let index = footnotes.children.firstIndex(where: { $0.string("data-id") == dataId }),
-              let paragraph = footnotes.children[index].children.last, Self.editableTextTypes.contains(paragraph.type)
+              let paragraph = footnotes.children[index].children.last, PMNode.editableTextTypes.contains(paragraph.type)
         else { return false }
         let path = [listIndex, index, footnotes.children[index].children.count - 1]
         activate(NodeRef(path: path, node: paragraph), node: paragraph, cursor: .end)
@@ -2264,7 +1910,7 @@ final class DocumentModel {
             let path = identity.dropFirst(5).split(separator: ".").compactMap { Int($0) }
             return node(at: path).map { NodeRef(path: path, node: $0) }
         }
-        return locate(NodeRef(path: [], id: identity)).map { NodeRef(path: $0.path, node: $0.node) }
+        return document.locate(NodeRef(path: [], id: identity)).map { NodeRef(path: $0.path, node: $0.node) }
     }
 
     // MARK: Active text
@@ -2484,15 +2130,15 @@ final class DocumentModel {
         case .join(let path):
             // Only where the page shows that block right before the line: answers from a document the page doesn't show
             // yet (a collaborator's change above) can name another block there.
-            guard lastTextBlock(before: active.ref.path)?.path == path, let previous = node(at: path),
-                  Self.editableTextTypes.contains(previous.type) else { return false }
+            guard document.lastTextBlock(before: active.ref.path)?.path == path, let previous = node(at: path),
+                  PMNode.editableTextTypes.contains(previous.type) else { return false }
             let children = previous.children + typed
             // In the editor's characters, the unit `.offset` counts in: a mention or a line break isn't its plain text.
             activate(NodeRef(path: path, node: previous), node: PMNode(type: previous.type, attrs: previous.attrs, content: children.isEmpty ? nil : children),
                      cursor: .offset(Self.editorText(from: previous.children).characters.count))
             return true
         case .remove:
-            if let target = lastTextBlock(before: active.ref.path), let node = node(at: target.path) {
+            if let target = document.lastTextBlock(before: active.ref.path), let node = node(at: target.path) {
                 activate(target, node: node, cursor: .end)
             } else {
                 deactivate()
@@ -2511,43 +2157,6 @@ final class DocumentModel {
         deactivate()
     }
 
-    /// Containers whose content is edited directly (unlike columns, synced blocks, etc.).
-    private static let inPlaceContainers: Set<String> = [
-        "bulletList", "orderedList", "listItem", "taskList", "taskItem", "blockquote", "callout",
-        "details", "detailsContent", "table", "tableRow", "tableCell", "tableHeader",
-    ]
-
-    /// Last directly editable text or non-mermaid code block before `path` in document order: in a table its last
-    /// cell, for a collapsed toggle its summary.
-    private func lastTextBlock(before path: [Int]) -> NodeRef? {
-        var result: NodeRef?
-        /// Visits the children in document order; returns `false` once `path` is reached.
-        func visit(_ node: PMNode, at nodePath: [Int]) -> Bool {
-            for (index, child) in node.children.enumerated() {
-                let childPath = nodePath + [index]
-                let isAncestor = childPath.count < path.count && path.starts(with: childPath)
-                guard isAncestor || Self.precedes(childPath, path) else { return false }
-                if Self.editableTextTypes.contains(child.type) || (child.type == "codeBlock" && child.string("language") != "mermaid") {
-                    if !isAncestor { result = NodeRef(path: childPath, node: child) }
-                } else if child.type == "details", child.bool("open") != true, !isAncestor {
-                    if let summary = child.children.first, summary.type == "detailsSummary" {
-                        result = NodeRef(path: childPath + [0], node: summary)
-                    }
-                } else if Self.inPlaceContainers.contains(child.type) {
-                    if !visit(child, at: childPath) { return false }
-                }
-            }
-            return true
-        }
-        _ = visit(document, at: [])
-        return result
-    }
-
-    /// `a` comes before `b` in document order and is neither `b` itself nor an ancestor of it.
-    private static func precedes(_ a: [Int], _ b: [Int]) -> Bool {
-        for (x, y) in zip(a, b) where x != y { return x < y }
-        return false
-    }
 
     // MARK: - Block operations
 
@@ -2591,7 +2200,7 @@ final class DocumentModel {
         // Uses the latest text, even if the last input hasn't reached the engine yet.
         guard let engine, let node = latestNode(at: ref.path) else { return }
         if active != nil { deactivate() }
-        report(await engine.insertBlock(Self.strippingIds(node), relativeTo: ref.target, position: .after))
+        report(await engine.insertBlock(node.strippingIds(), relativeTo: ref.target, position: .after))
     }
 
     func moveBlocks(from source: IndexSet, to destination: Int) async {
@@ -2612,130 +2221,9 @@ final class DocumentModel {
 
     // MARK: - Tables
 
-    struct TablePosition: Equatable {
-        let tablePath: [Int]
-        let row: Int
-        let column: Int
-    }
-
     /// Table, row and column of the active block (if it is in a cell).
     var activeTablePosition: TablePosition? {
-        guard let path = active?.ref.path, let table = ancestorPath(of: path, types: ["table"]), path.count >= table.count + 2 else { return nil }
-        return TablePosition(tablePath: table, row: path[table.count], column: path[table.count + 1])
-    }
-
-    /// The cells a format edit changes: the cell being edited, its row or its column (the web's cell menu and its row
-    /// and column handles).
-    enum TableScope: String, CaseIterable {
-        case cell, row, column
-    }
-
-    /// The web's cell colors (Docmost's `TABLE_COLORS`); a cell keeps the name in `backgroundColorName` as the web does.
-    enum TableColor: String, CaseIterable {
-        case none, blue, green, yellow, red, pink, gray, purple
-
-        init(name: String?) {
-            self = name.flatMap { TableColor(rawValue: $0.lowercased()) } ?? .none
-        }
-
-        /// As the web stores it ("Blue"); none for the default.
-        var name: String? { self == .none ? nil : rawValue.capitalized }
-
-        var hex: String? {
-            switch self {
-            case .none: nil
-            case .blue: "#b4d5ff"
-            case .green: "#acf5d2"
-            case .yellow: "#fef1b4"
-            case .red: "#ffbead"
-            case .pink: "#ffc7fe"
-            case .gray: "#eaecef"
-            case .purple: "#c1b7f2"
-            }
-        }
-
-        var title: LocalizedStringResource {
-            switch self {
-            case .none: "Default"
-            case .blue: "Blue"
-            case .green: "Green"
-            case .yellow: "Yellow"
-            case .red: "Red"
-            case .pink: "Pink"
-            case .gray: "Gray"
-            case .purple: "Purple"
-            }
-        }
-    }
-
-    /// The keyboard toolbar's table actions, run by the engine as the web's table menus run them.
-    enum TableEdit: Equatable {
-        case insertRowAbove, insertRowBelow, insertColumnLeft, insertColumnRight, deleteRow, deleteColumn, deleteTable
-        case toggleHeaderRow, toggleHeaderColumn, toggleHeaderCell
-        /// With the neighbor, and every cell the rectangle around both takes in; splitting undoes a merge.
-        case mergeRight, mergeDown, split
-        case moveRowUp, moveRowDown, moveColumnLeft, moveColumnRight
-        /// The rows by their cells in the cell's column.
-        case sort(descending: Bool)
-        case background(TableColor, TableScope)
-        case align(TextAlign, TableScope)
-        case clear(TableScope)
-
-        /// The engine's command (`TableCommand` in Engine/src/tables.ts).
-        var engineCommand: [String: JSONValue] {
-            switch self {
-            case .insertRowAbove: ["name": "addRowBefore"]
-            case .insertRowBelow: ["name": "addRowAfter"]
-            case .insertColumnLeft: ["name": "addColumnBefore"]
-            case .insertColumnRight: ["name": "addColumnAfter"]
-            case .deleteRow: ["name": "deleteRow"]
-            case .deleteColumn: ["name": "deleteColumn"]
-            case .deleteTable: ["name": "deleteTable"]
-            case .toggleHeaderRow: ["name": "toggleHeaderRow"]
-            case .toggleHeaderColumn: ["name": "toggleHeaderColumn"]
-            case .toggleHeaderCell: ["name": "toggleHeaderCell"]
-            case .mergeRight: ["name": "mergeRight"]
-            case .mergeDown: ["name": "mergeDown"]
-            case .split: ["name": "split"]
-            case .moveRowUp: ["name": "moveRowUp"]
-            case .moveRowDown: ["name": "moveRowDown"]
-            case .moveColumnLeft: ["name": "moveColumnLeft"]
-            case .moveColumnRight: ["name": "moveColumnRight"]
-            case .sort(let descending): ["name": "sort", "descending": .bool(descending)]
-            case .background(let color, let scope):
-                ["name": "background", "scope": .string(scope.rawValue), "color": color.hex.map(JSONValue.string) ?? .null,
-                 "colorName": color.name.map(JSONValue.string) ?? .null]
-            case .align(let align, let scope): ["name": "align", "scope": .string(scope.rawValue), "align": .string(align.rawValue)]
-            case .clear(let scope): ["name": "clear", "scope": .string(scope.rawValue)]
-            }
-        }
-
-        /// The cursor goes to the cell the engine names: in the new row or column, next to the deleted one. Otherwise it
-        /// stays in its block wherever that went (a moved row, a merged cell), or in the cell when its block is gone.
-        var movesCursor: Bool {
-            switch self {
-            case .insertRowAbove, .insertRowBelow, .insertColumnLeft, .insertColumnRight, .deleteRow, .deleteColumn: true
-            default: false
-            }
-        }
-    }
-
-    /// What the keyboard toolbar's table rows show for the cell being edited.
-    struct TableState {
-        var headerRow = false
-        var headerColumn = false
-        var headerCell = false
-        var canMergeRight = false
-        var canMergeDown = false
-        var canSplit = false
-        var canMoveRowUp = false
-        var canMoveRowDown = false
-        var canMoveColumnLeft = false
-        var canMoveColumnRight = false
-        var canSort = false
-        var color = TableColor.none
-        /// Of the block being edited.
-        var align = TextAlign.left
+        active.flatMap { TablePosition(of: $0.ref.path, in: document) }
     }
 
     /// What the cell allows (merging, splitting, moving, sorting) is the engine's to say (`answers`); the app kept its own
@@ -2744,25 +2232,14 @@ final class DocumentModel {
         guard let position = activeTablePosition, let table = node(at: position.tablePath),
               let cell = node(at: [position.row, position.column], in: table)
         else { return nil }
-        let headers = activeTableHeaders
-        let applies = activeAnswers?.tableCommands ?? []
-        return TableState(
-            headerRow: headers.row, headerColumn: headers.column, headerCell: cell.type == "tableHeader",
-            canMergeRight: applies.contains("mergeRight"), canMergeDown: applies.contains("mergeDown"), canSplit: applies.contains("split"),
-            canMoveRowUp: applies.contains("moveRowUp"), canMoveRowDown: applies.contains("moveRowDown"),
-            canMoveColumnLeft: applies.contains("moveColumnLeft"), canMoveColumnRight: applies.contains("moveColumnRight"),
-            canSort: applies.contains("sort"),
-            color: TableColor(name: cell.string("backgroundColorName")),
-            align: active?.attrs?["textAlign"]?.stringValue.flatMap(TextAlign.init(rawValue:)) ?? .left
-        )
+        return TableState(table: table, cell: cell, applies: activeAnswers?.tableCommands ?? [],
+                          align: active?.attrs?["textAlign"]?.stringValue.flatMap(TextAlign.init(rawValue:)) ?? .left)
     }
 
     /// Whether the active table's first row / first column consists of header cells.
     var activeTableHeaders: (row: Bool, column: Bool) {
-        guard let position = activeTablePosition, let table = node(at: position.tablePath), let first = table.children.first else { return (false, false) }
-        let row = !first.children.isEmpty && first.children.allSatisfy { $0.type == "tableHeader" }
-        let column = table.children.allSatisfy { $0.children.first?.type == "tableHeader" }
-        return (row, column)
+        guard let position = activeTablePosition, let table = node(at: position.tablePath) else { return (false, false) }
+        return Self.headers(of: table)
     }
 
     func editTable(_ edit: TableEdit) async {
@@ -2781,17 +2258,14 @@ final class DocumentModel {
             deactivate()
             return
         }
-        if !edit.movesCursor, let active, active.ref.id != nil, locate(active.ref) != nil {
+        if !edit.movesCursor, let active, active.ref.id != nil, document.locate(active.ref) != nil {
             // The block stays edited with its cursor, in its new place and with what changed (its alignment). Input
             // typed meanwhile stays: its save keeps the engine's changes (`rebase`).
             if overrides[active.ref.identity] == nil { adoptActiveBlock() } else { followMovedBlocks() }
             return
         }
         // To the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
-        var path = position.tablePath + focus
-        while let node = node(at: path), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock", !node.children.isEmpty {
-            path.append(0)
-        }
+        let path = document.textPath(from: position.tablePath + focus)
         pendingFocus = (path, { _ in .end })
         adopt(latest)
         pendingFocus = nil
@@ -2823,7 +2297,7 @@ final class DocumentModel {
     /// the cursor keeps its offset, after a collaborator's change it moves with the text around it.
     private func adoptActiveBlock(followingChange: Bool = false) {
         guard let current = active else { return }
-        guard let (path, node) = locate(current.ref) else {
+        guard let (path, node) = document.locate(current.ref) else {
             deactivate()
             return
         }
@@ -2862,12 +2336,6 @@ final class DocumentModel {
         return new.count - suffix
     }
 
-    /// Path and node of a block: by its ID (stable when something before it changes), otherwise by path.
-    private func locate(_ ref: NodeRef) -> (path: [Int], node: PMNode)? {
-        guard let id = ref.id else { return node(at: ref.path).map { (ref.path, $0) } }
-        return path(where: { $0.string("id") == id }).flatMap { path in node(at: path).map { (path, $0) } }
-    }
-
     /// A block's current state, including unsaved input.
     private func latestNode(at path: [Int]) -> PMNode? {
         if let active, active.ref.path == path, let node = currentActiveNode() { return node }
@@ -2887,7 +2355,7 @@ final class DocumentModel {
             report(.unavailable)
             return nil
         }
-        let found = ref.id.map { id in path(where: { $0.string("id") == id }, in: current) } ?? ref.path
+        let found = ref.id.map { id in current.path(where: { $0.string("id") == id }) } ?? ref.path
         guard let found, let source = node(at: found, in: current), ref.type == nil || source.type == ref.type else {
             report(.refused)
             return nil
@@ -2897,46 +2365,18 @@ final class DocumentModel {
 
     // MARK: - Helpers
 
+    /// The node at `path` in `root`, the page's document by default (DocumentTree.swift).
     func node(at path: [Int], in root: PMNode? = nil) -> PMNode? {
-        var current = root ?? document
-        for index in path {
-            guard current.children.indices.contains(index) else { return nil }
-            current = current.children[index]
-        }
-        return current
-    }
-
-    /// Path of the nearest ancestor (not the node itself) whose type is one of `types`.
-    private func ancestorPath(of path: [Int], types: Set<String>) -> [Int]? {
-        for length in stride(from: path.count - 1, through: 1, by: -1) {
-            let prefix = Array(path.prefix(length))
-            if let type = node(at: prefix)?.type, types.contains(type) { return prefix }
-        }
-        return nil
+        (root ?? document).node(at: path)
     }
 
     private func enclosingItemPath(_ path: [Int]) -> [Int]? {
-        ancestorPath(of: path, types: ["listItem", "taskItem"])
+        document.ancestorPath(of: path, types: ["listItem", "taskItem"])
     }
 
     /// A document with the local, unconfirmed changes applied.
     private func withOverrides(_ root: PMNode) -> PMNode {
-        overrides.isEmpty ? root : applyOverrides(to: root, path: [])
-    }
-
-    private func applyOverrides(to node: PMNode, path: [Int]) -> PMNode {
-        let ref = NodeRef(path: path, node: node)
-        // Kept by path for a block without an id: it stands only for a block of its type.
-        if !path.isEmpty, let override = overrides[ref.identity], override.type == node.type { return override }
-        guard let content = node.content else { return node }
-        let children = content.enumerated().map { applyOverrides(to: $0.element, path: path + [$0.offset]) }
-        return PMNode(type: node.type, attrs: node.attrs, content: children, marks: node.marks, text: node.text)
-    }
-
-    static func strippingIds(_ node: PMNode) -> PMNode {
-        var attrs = node.attrs
-        attrs?["id"] = nil
-        return PMNode(type: node.type, attrs: attrs?.isEmpty == true ? nil : attrs, content: node.content?.map(strippingIds), marks: node.marks, text: node.text)
+        root.applyingOverrides(overrides)
     }
 
     /// Inline nodes from the editor text (with the formatting that arrives only as SwiftUI attributes while typing).
@@ -2976,10 +2416,8 @@ final class DocumentModel {
         if let target = DebugLaunch.focusTarget {
             var path = [target.block]
             if let item = target.item { path += [item, 0] }
-            // Descend to the first text node (e.g. table → row → cell → paragraph).
-            while let node = node(at: path), !Self.editableTextTypes.contains(node.type), node.type != "codeBlock", !node.children.isEmpty {
-                path.append(0)
-            }
+            // Down to the first text node (e.g. table → row → cell → paragraph).
+            path = document.textPath(from: path)
             if let node = node(at: path) {
                 activate(NodeRef(path: path, node: node), node: node)
                 if let typed = DebugLaunch.typeText {
@@ -2991,13 +2429,4 @@ final class DocumentModel {
         }
     }
     #endif
-}
-
-/// How the page's one text editor draws the active block's text: as the block would (font, leading, alignment).
-struct EditorStyle: Equatable {
-    var font: Font
-    var leading: CGFloat
-    var alignment: TextAlignment
-    /// A code block: no autocorrection or capitalization.
-    var isCode = false
 }

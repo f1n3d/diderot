@@ -300,7 +300,6 @@ struct EditorToolbar: View {
         let enabled = hasIntent(intent)
         let base = model.activeFont
         EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setIntent(intent, !enabled, in: &$0, base: base) }
-        model.activeTextChanged()
     }
 
     // Underline, strikethrough, code and highlight also set SwiftUI attributes that survive typing (`EditorText`), both
@@ -319,7 +318,6 @@ struct EditorToolbar: View {
             container.docmost.underline = enabled ? nil : true
             container.underlineStyle = enabled ? nil : .single
         }
-        model.activeTextChanged()
     }
 
     private func toggleStrikethrough() {
@@ -330,7 +328,6 @@ struct EditorToolbar: View {
             container.inlinePresentationIntent = intents.isEmpty ? nil : intents
             container.strikethroughStyle = enabled ? nil : .single
         }
-        model.activeTextChanged()
     }
 
     /// Like "/code": block to code block (keeping its text), code block back to paragraph. Where the line can't become
@@ -349,13 +346,11 @@ struct EditorToolbar: View {
     private func toggleCode() {
         let enabled = isCodeFormatted
         EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setCode(!enabled, in: &$0) }
-        model.activeTextChanged()
     }
 
     private func toggleHighlight() {
         let enabled = isHighlighted
         EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setHighlight(!enabled, in: &$0) }
-        model.activeTextChanged()
     }
 }
 
@@ -489,7 +484,6 @@ struct LinkSheet: View {
                 if existingLink != nil {
                     Button("Remove Link", role: .destructive) {
                         if let range = targetRange { model.activeText[range].link = nil }
-                        model.activeTextChanged()
                         dismiss()
                     }
                 }
@@ -536,7 +530,6 @@ struct LinkSheet: View {
                 text.insert(run, at: index)
             }
         }
-        model.activeTextChanged()
         dismiss()
     }
 }
