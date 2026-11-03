@@ -33,7 +33,7 @@ struct WebIslandView: View {
             // One element for VoiceOver, read with the label its user sets (formula, diagram): not the web content
             // and its two scroll bars.
             .accessibilityElement(children: .ignore)
-            .frame(height: height ?? minHeight)
+            .frame(height: height ?? Self.lastHeight(of: html, width: width, typeSize: typeSize) ?? minHeight)
             .opacity(height == nil ? 0 : 1)
             .overlay {
                 if height == nil { ProgressView() }
@@ -70,7 +70,30 @@ struct WebIslandView: View {
     private func measureHeight(afterFonts: Bool = false) async throws {
         let script = (afterFonts ? "await document.fonts.ready; " : "") + "return Math.ceil(document.body.getBoundingClientRect().height);"
         let measured = try await page.callJavaScript(script)
-        height = Self.height(measured: (measured as? NSNumber)?.doubleValue ?? 0, minHeight: minHeight)
+        let height = Self.height(measured: (measured as? NSNumber)?.doubleValue ?? 0, minHeight: minHeight)
+        self.height = height
+        Self.remember(height, of: html, width: width, typeSize: typeSize)
+    }
+
+    /// The heights islands last measured, by content, width and text size. The page's list drops an island scrolled out
+    /// of view, and builds it anew when it shows again: without its height it came back at `minHeight` while it
+    /// rendered, then grew, and what was below it jumped (code review R48).
+    private static var lastHeights: [HeightKey: CGFloat] = [:]
+
+    private struct HeightKey: Hashable {
+        let html: Int
+        let width: CGFloat
+        let typeSize: DynamicTypeSize
+    }
+
+    static func lastHeight(of html: String, width: CGFloat, typeSize: DynamicTypeSize) -> CGFloat? {
+        lastHeights[HeightKey(html: html.hashValue, width: width, typeSize: typeSize)]
+    }
+
+    static func remember(_ height: CGFloat, of html: String, width: CGFloat, typeSize: DynamicTypeSize) {
+        // Pages with many islands, many pages: a few hundred heights are plenty for the pages in reach.
+        if lastHeights.count > 500 { lastHeights.removeAll() }
+        lastHeights[HeightKey(html: html.hashValue, width: width, typeSize: typeSize)] = height
     }
 
     /// At most this tall; the rest is cut off, as the island doesn't scroll. A diagram or picture from the page can be
