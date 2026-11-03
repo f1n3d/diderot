@@ -124,7 +124,7 @@ struct AppSessionRaceTests {
         let aStore = try #require(session.ready?.unsentChanges)
         await session.switchTo(StoredSession(serverURL: b, token: "b"))
         await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: nil, in: aStore)
-        #expect(await aStore.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"]?.title == "Neu")
+        #expect(try await aStore.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"]?.title == "Neu")
         #expect(await session.unsentTitle(pageId: "p1") == nil, "not in b's store")
 
         await session.keepUnsentTitle("Zwei", pageId: "p2", spaceId: nil)
@@ -154,9 +154,9 @@ struct AppSessionRaceTests {
         let server = URL(string: "https://unsent-\(UUID().uuidString).example.com")!
         #expect(!UnsentChanges.hasEntries(server: server))
         let store = UnsentChanges.store(server: server, userId: "u1")
-        await store.write([String: UnsentTitle](), key: CacheKey.unsentTitles)
+        try await store.write([String: UnsentTitle](), key: CacheKey.unsentTitles)
         #expect(!UnsentChanges.hasEntries(server: server), "an emptied title list")
-        await store.writeData(Data([1, 2, 3]), key: CacheKey.unsentChanges("p1"))
+        try await store.writeData(Data([1, 2, 3]), key: CacheKey.unsentChanges("p1"))
         #expect(UnsentChanges.hasEntries(server: server))
         UnsentChanges.removeAll(server: server)
         #expect(!UnsentChanges.hasEntries(server: server))
@@ -165,14 +165,14 @@ struct AppSessionRaceTests {
     @Test func removingAServerDeletesItsUnsentChanges() async throws {
         let session = try await sessionOnA()
         let key = CacheKey.unsentChanges("p")
-        await UnsentChanges.store(server: a, userId: "u1").writeData(Data("a".utf8), key: key)
-        await UnsentChanges.store(server: b, userId: "u1").writeData(Data("b".utf8), key: key)
-        #expect(await UnsentChanges.store(server: a, userId: "u2").readData(key: key) == nil)
+        try await UnsentChanges.store(server: a, userId: "u1").writeData(Data("a".utf8), key: key)
+        try await UnsentChanges.store(server: b, userId: "u1").writeData(Data("b".utf8), key: key)
+        #expect(try await UnsentChanges.store(server: a, userId: "u2").readData(key: key) == nil)
         await session.removeAccount(StoredSession(serverURL: b, token: "b"))
-        #expect(await UnsentChanges.store(server: b, userId: "u1").readData(key: key) == nil)
+        #expect(try await UnsentChanges.store(server: b, userId: "u1").readData(key: key) == nil)
         await session.clearCache()
         await session.signOut()
-        #expect(await UnsentChanges.store(server: a, userId: "u1").readData(key: key) == Data("a".utf8))
+        #expect(try await UnsentChanges.store(server: a, userId: "u1").readData(key: key) == Data("a".utf8))
         UnsentChanges.removeAll(server: a)
         await removeCaches()
     }
@@ -704,7 +704,7 @@ struct AppSessionRaceTests {
 
     private func keptCells(_ session: AppSession) async throws -> [UnsentCell] {
         let store = try #require(session.ready?.unsentChanges)
-        return Array((try await store.readThrowing([String: UnsentCell].self, key: CacheKey.unsentCells) ?? [:]).values)
+        return Array((try await store.read([String: UnsentCell].self, key: CacheKey.unsentCells) ?? [:]).values)
     }
 
     /// A write queued while a's server didn't answer goes nowhere after a switch to b, with a notice: it used to reach b,
@@ -1530,6 +1530,35 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// A server added before keeps the URL it was added with when its address is typed again in another spelling: what
+    /// the app keeps for it, such as its kept titles, is named by that URL.
+    @Test func aServerTypedAgainKeepsTheURLItWasAddedWith() async throws {
+        let added = URL(string: "https://A.example.com:443")!
+        try store.save(StoredSession(serverURL: added, token: "a"))
+        defer { UnsentChanges.removeAll(server: added) }
+        try await UnsentChanges.store(server: added, userId: "u1").update([String: UnsentTitle].self, key: CacheKey.unsentTitles, initial: [:]) {
+            $0["p1"] = UnsentTitle(title: "Wartet", spaceId: nil)
+        }
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
+        await session.restore()
+        try #require(session.ready?.server.url == added)
+
+        session.beginAddingServer()
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "w1", "name": "Docs"}}"# }
+        let server = try await session.connect(to: "a.example.com")
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(server.url == added)
+        let payload = Data(#"{"type":"access","exp":4102444800}"#.utf8).base64EncodedString()
+            .replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+        try await session.signIn(withToken: "e30.\(payload).sig", at: server)
+        #expect(session.ready?.server.url == added)
+        #expect(try store.loadAccounts().sessions.map(\.serverURL) == [added])
+        #expect(await session.unsentTitle(pageId: "p1") == "Wartet")
+        try store.setPendingLogouts([])
+        await DiskCache(scope: added.absoluteString).removeAll()
+        await removeCaches()
+    }
+
     /// A title for a page deleted (or out of reach) meanwhile can never go: it doesn't wait forever, and is named for the
     /// notice (it used to go only to the log).
     @Test func keptTitleOfAGonePageIsDropped() async throws {
@@ -1601,7 +1630,7 @@ struct AppSessionRaceTests {
         await onA.cache.write(crumbs, key: CacheKey.breadcrumbs("p1"))
         await onA.cache.write(["Kind"], key: CacheKey.tree(spaceId: "s1", parentPageId: "p1"))
         let unsent = PMNode(type: "doc", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Ungesendet")])])
-        await onA.unsentChanges.write(unsent, key: CacheKey.unsentDocument("p1"))
+        try await onA.unsentChanges.write(unsent, key: CacheKey.unsentDocument("p1"))
         let loader = PageLoader(pageId: "Ab12", owner: onA, session: session)
 
         let shown = try #require(await loader.saved())
@@ -1689,7 +1718,7 @@ struct AppSessionRaceTests {
         await edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: {}) { reports.append($0) }?.value
         #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.hasSuffix("/api/pages/update") })
         #expect(reports.isEmpty, "it waits without a word, like the text")
-        #expect(await onA.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"]?.title == "Neu")
+        #expect(try await onA.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"]?.title == "Neu")
         await removeCaches()
     }
 
@@ -1701,7 +1730,7 @@ struct AppSessionRaceTests {
         // Started together, they take turns at every await.
         let keeps = (0..<20).map { index in Task { await session.keepUnsentTitle("T\(index)", pageId: "p\(index)", spaceId: nil) } }
         for keep in keeps { #expect(await keep.value) }
-        let kept = await session.ready?.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)
+        let kept = try await session.ready?.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)
         #expect(kept?.count == 20)
         await removeCaches()
     }
@@ -1712,10 +1741,10 @@ struct AppSessionRaceTests {
         let session = try await sessionOnA()
         defer { UnsentChanges.removeAll(server: a) }
         let store = try #require(session.ready?.unsentChanges)
-        await store.write(["p1": "not a title"], key: CacheKey.unsentTitles)
+        try await store.write(["p1": "not a title"], key: CacheKey.unsentTitles)
         #expect(await session.keepUnsentTitle("Neu", pageId: "p2", spaceId: nil) == false)
         #expect(await session.sendUnsentTitles().spaces.isEmpty)
-        #expect(await store.read([String: String].self, key: CacheKey.unsentTitles) == ["p1": "not a title"])
+        #expect(try await store.read([String: String].self, key: CacheKey.unsentTitles) == ["p1": "not a title"])
         await removeCaches()
     }
 

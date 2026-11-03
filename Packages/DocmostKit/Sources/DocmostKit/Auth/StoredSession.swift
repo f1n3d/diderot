@@ -30,7 +30,8 @@ public struct StoredAccounts: Codable, Sendable, Hashable {
         self.currentServerURL = currentServerURL
     }
 
-    /// Comparison key for server URLs: the whole URL lowercased, without trailing slashes.
+    /// The name of what the app keeps for a server added with `url` (its web editor's store, its downloads): the whole
+    /// URL lowercased, without trailing slashes. Fixed, as that is kept under it. Servers compare by `ServerKey`.
     public static func key(for url: URL) -> String {
         var text = url.absoluteString.lowercased()
         while text.hasSuffix("/") { text.removeLast() }
@@ -42,14 +43,17 @@ public struct StoredAccounts: Codable, Sendable, Hashable {
     }
 
     public func session(for url: URL) -> StoredSession? {
-        let key = Self.key(for: url)
-        return sessions.first { Self.key(for: $0.serverURL) == key }
+        let key = ServerKey(url)
+        return sessions.first { ServerKey($0.serverURL) == key }
     }
 
-    /// Adds the sign-in or replaces the one for the same server, and makes it current.
+    /// Adds the sign-in or replaces the one for the same server, and makes it current. A server added before keeps the
+    /// URL it was added with, however it is spelled now: what the app keeps for it is named by that.
     public mutating func upsert(_ session: StoredSession) {
-        let key = Self.key(for: session.serverURL)
-        if let index = sessions.firstIndex(where: { Self.key(for: $0.serverURL) == key }) {
+        let key = ServerKey(session.serverURL)
+        var session = session
+        if let index = sessions.firstIndex(where: { ServerKey($0.serverURL) == key }) {
+            session.serverURL = sessions[index].serverURL
             sessions[index] = session
         } else {
             sessions.append(session)
@@ -59,9 +63,9 @@ public struct StoredAccounts: Codable, Sendable, Hashable {
 
     /// Removes the server; if it was current, none is selected afterwards.
     public mutating func remove(serverURL: URL) {
-        let key = Self.key(for: serverURL)
-        sessions.removeAll { Self.key(for: $0.serverURL) == key }
-        if currentServerURL.map(Self.key(for:)) == key {
+        let key = ServerKey(serverURL)
+        sessions.removeAll { ServerKey($0.serverURL) == key }
+        if currentServerURL.map(ServerKey.init) == key {
             currentServerURL = nil
         }
     }

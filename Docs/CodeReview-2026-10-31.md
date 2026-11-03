@@ -48,10 +48,9 @@ The debt sits in two places.
 
 - loading
 - "is this answer still current?"
-- server identity
 - media loading
 
-So a bug gets fixed in one place and stays in others. Example: the race fixed for favorites and notifications was still open in comments (R18, fixed in package B). Web views are set up by role in one place since S3 (`WebViews`), and every error shown reads as a sentence (`Error.userMessage`).
+So a bug gets fixed in one place and stays in others. Example: the race fixed for favorites and notifications was still open in comments (R18, fixed in package B). Web views are set up by role in one place since S3 (`WebViews`), every error shown reads as a sentence (`Error.userMessage`), a server is one origin however its address is spelled (`ServerKey`), and unsent changes have a store of their own (`UnsentStore`).
 
 ## Order of work
 
@@ -117,8 +116,6 @@ Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), th
 | Topic | Today | Target |
 |---|---|---|
 | Loading | `RemoteValue` loads history, members, trash, templates, sessions, spaces, recent pages, comments, a database's card, synced block references and sub-pages: its state, a later load winning, the saved copy first, a failed refresh keeping what shows. `AsyncContentView` has an inline layout (Home's spaces, a space's tree and recent pages). Loaders of their own stay where they add rules: favorites and notifications (marks and toggles merged in), the page tree, the page, databases, the space header (a gone space shows so over its saved copy), a synced block, attachments (per query); the notifications popover and a database's status lay out their own states. | Move them where their rules allow. (S) |
-| Server identity | Three forms: lowercased `StoredAccounts.key` (Keychain, web editor stores), the raw URL string (offline cache, unsent changes), host plus default port (links). The normaliser keeps host case and an explicit `:443`, so re-adding a server with another spelling strands its unsent changes (○). `UnsentChanges` builds its folder from DiskCache's private layout (`docmost-cache/` + `safeName`), so a cache refactor would orphan every user's unsent changes. | `ServerKey` and `Origin` types in DocmostKit; canonicalise in the normaliser (lowercase host, drop default ports); a fixed path for the unsent store. (S–M) |
-| Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes. Kept titles and database fields use its throwing `readThrowing` and `update`; the rest of its API swallows every error (M55). | A small store of its own that throws and updates atomically, made by `SessionEnvironment` so tests can give their own. (S–M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links, which can't use the app's schemes since R13. | (M) |
 
 ### S4 Time as a control mechanism

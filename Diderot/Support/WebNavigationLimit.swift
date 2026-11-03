@@ -1,4 +1,5 @@
 import WebKit
+import DocmostKit
 
 /// Keeps a web view on the pages the app loads into it, so neither a link nor a script takes it elsewhere: where
 /// `reach` says, from `home` (the base URL its HTML loads with). A link tapped there, or a window it opens, goes to
@@ -81,11 +82,7 @@ final class WebNavigationLimit: NSObject, WebPage.NavigationDeciding, WKNavigati
     }
 
     nonisolated static func sameOrigin(_ a: URL, _ b: URL) -> Bool {
-        func origin(_ url: URL) -> (String?, String, Int?) {
-            let scheme = url.scheme?.lowercased()
-            return (scheme, url.host()?.lowercased() ?? "", url.port ?? ["http": 80, "https": 443][scheme ?? ""])
-        }
-        return origin(a) == origin(b)
+        Origin(a) == Origin(b)
     }
 
     /// The same page, whatever its fragment (an anchor on it).

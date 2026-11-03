@@ -9,17 +9,17 @@ import DocmostKit
 /// user's sign-in keep them; removing the server from the app deletes them. Not in backups, like the cache.
 enum UnsentChanges {
     private static let root = URL.applicationSupportDirectory.appending(path: "unsent", directoryHint: .isDirectory)
-    private static let stores = Mutex<[URL: DiskCache]>([:])
+    private static let stores = Mutex<[URL: UnsentStore]>([:])
 
     /// The same store for every caller of a server and user, so its `update`s come one after another (two windows, or a
     /// title kept while the kept ones go out).
-    static func store(server: URL, userId: String) -> DiskCache {
+    static func store(server: URL, userId: String) -> UnsentStore {
         excludeFromBackup()
-        // Written as the app goes to the background, when the device may lock any moment: readable after the first unlock.
-        let store = DiskCache(scope: userId, baseDirectory: directory(of: server), protection: .afterFirstUnlock)
+        let directory = directory(of: server).appending(path: "docmost-cache/\(UnsentStore.name(for: userId))", directoryHint: .isDirectory)
         return stores.withLock { stores in
-            if let existing = stores[store.directory] { return existing }
-            stores[store.directory] = store
+            if let existing = stores[directory] { return existing }
+            let store = UnsentStore(directory: directory)
+            stores[directory] = store
             return store
         }
     }
@@ -48,8 +48,11 @@ enum UnsentChanges {
         try? FileManager.default.removeItem(at: directory(of: server))
     }
 
-    private static func directory(of server: URL) -> URL {
-        DiskCache(scope: server.absoluteString, baseDirectory: root).directory
+    /// The server's folder: `unsent/docmost-cache/<server>`, and in it `docmost-cache/<user>`. The offline cache's
+    /// layout when these first went there, fixed since (`UnsentStore.name(for:)`): every user's are found by it. The
+    /// server's URL as it was added (`StoredAccounts.upsert` keeps that).
+    static func directory(of server: URL) -> URL {
+        root.appending(path: "docmost-cache/\(UnsentStore.name(for: server.absoluteString))", directoryHint: .isDirectory)
     }
 
     private static func excludeFromBackup() {

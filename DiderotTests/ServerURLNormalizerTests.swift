@@ -22,6 +22,14 @@ struct ServerURLNormalizerTests {
         #expect(ServerURLNormalizer.normalize("https://localhost:3000")?.absoluteString == "https://localhost:3000")
     }
 
+    /// One server is spelled one way: the host in lower case, without the scheme's default port.
+    @Test func spellsAServerOneWay() {
+        #expect(ServerURLNormalizer.normalize("Wiki.Example.com")?.absoluteString == "https://wiki.example.com")
+        #expect(ServerURLNormalizer.normalize("https://wiki.example.com:443")?.absoluteString == "https://wiki.example.com")
+        #expect(ServerURLNormalizer.normalize("http://Wiki.example.com:80/")?.absoluteString == "http://wiki.example.com")
+        #expect(ServerURLNormalizer.normalize("http://wiki.example.com:443")?.absoluteString == "http://wiki.example.com:443")
+    }
+
     @Test func rejectsGarbage() {
         #expect(ServerURLNormalizer.normalize("") == nil)
         #expect(ServerURLNormalizer.normalize("   ") == nil)

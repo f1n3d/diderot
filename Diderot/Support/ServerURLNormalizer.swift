@@ -1,6 +1,7 @@
 import Foundation
 
-/// Turns input like `wiki.example.com`, `https://wiki.example.com/login` or `localhost:3000` into scheme, host, port.
+/// Turns input like `wiki.example.com`, `https://Wiki.example.com:443/login` or `localhost:3000` into scheme, host, port:
+/// the host in lower case and without the scheme's default port, so one server is always spelled one way.
 nonisolated enum ServerURLNormalizer {
     static func normalize(_ input: String) -> URL? {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -19,6 +20,11 @@ nonisolated enum ServerURLNormalizer {
             components.scheme = "http"
         } else {
             components.scheme = scheme
+        }
+        // Only when it changes: setting it again could change how an IPv6 literal is written.
+        if host != host.lowercased() { components.host = host.lowercased() }
+        if components.port == ["http": 80, "https": 443][components.scheme ?? ""] {
+            components.port = nil
         }
         components.path = ""
         components.query = nil

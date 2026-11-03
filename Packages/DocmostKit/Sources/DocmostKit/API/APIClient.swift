@@ -77,7 +77,7 @@ public actor APIClient {
     public func fetchFile(at url: URL) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        applyHeaders(to: &request, requiresAuth: origin(of: url) == origin(of: baseURL))
+        applyHeaders(to: &request, requiresAuth: Origin(url) == Origin(baseURL))
         // File names are user content and logs can be exported, so log only the folder (`/api/files/<id>`).
         return try await execute(request, path: url.deletingLastPathComponent().path, readsClock: false)
     }
@@ -163,12 +163,6 @@ public actor APIClient {
         }
     }
 
-    /// Scheme, host and port; a missing port is the scheme's default.
-    private func origin(of url: URL) -> (String?, String?, Int) {
-        let scheme = url.scheme?.lowercased()
-        return (scheme, url.host()?.lowercased(), url.port ?? (scheme == "http" ? 80 : 443))
-    }
-
     /// `send`: how the request goes out, if not as `session.data(for:delegate:)` (an upload from a file); it gets the
     /// delegate to pass on. `readsClock`: the response's `Date` header sets `serverClockOffset`. API calls and uploads
     /// go to the server and no cache answers them; a file can come from another host, or from the session's cache with
@@ -182,7 +176,7 @@ public actor APIClient {
         // Requests to the server don't follow redirects: Docmost sends none, and URLSession would send a request's body
         // and cookie (a password, the MFA cookie, page content) on to wherever one points, another host or plain HTTP
         // included, and drop its token, so the server's 401 would sign out. Files on other hosts follow them.
-        let delegate = request.url.map { origin(of: $0) == origin(of: baseURL) } == true ? RedirectRefusal() : nil
+        let delegate = request.url.map { Origin($0) == Origin(baseURL) } == true ? RedirectRefusal() : nil
         do {
             let (data, response): (Data, URLResponse)
             if let send {

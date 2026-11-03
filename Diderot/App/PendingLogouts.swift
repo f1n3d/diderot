@@ -22,7 +22,7 @@ final class PendingLogouts {
     /// Keeps the sign-out of `session` until its server answers.
     func keep(_ session: StoredSession) throws {
         var pending = try store.pendingLogouts()
-        pending.removeAll { StoredAccounts.key(for: $0.serverURL) == StoredAccounts.key(for: session.serverURL) && $0.token == session.token }
+        pending.removeAll { ServerKey($0.serverURL) == ServerKey(session.serverURL) && $0.token == session.token }
         pending.append(session)
         try store.setPendingLogouts(pending)
     }

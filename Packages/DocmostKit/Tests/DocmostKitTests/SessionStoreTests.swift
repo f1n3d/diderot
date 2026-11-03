@@ -21,7 +21,8 @@ struct SessionStoreTests {
         accounts.upsert(session(URL(string: "https://WIKI.example.com/")!, token: "new"))
         #expect(accounts.sessions.count == 2)
         #expect(accounts.current?.token == "new")
-        #expect(accounts.sessions.map(\.serverURL) == [URL(string: "https://WIKI.example.com/")!, docs])
+        // The URL the server was added with stays: what the app keeps for it is named by that one.
+        #expect(accounts.sessions.map(\.serverURL) == [wiki, docs] && accounts.current?.serverURL == wiki)
     }
 
     @Test func removeClearsSelectionOnlyForCurrent() {

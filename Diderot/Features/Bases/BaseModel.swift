@@ -648,7 +648,7 @@ final class BaseModel {
 
     /// The inputs kept for this database's fields (`keepUnsent`): their fields show them until they reach the server.
     private func restoreUnsent() async {
-        guard let cells = await owner?.unsentChanges.read([String: UnsentCell].self, key: CacheKey.unsentCells) else { return }
+        guard let cells = try? await owner?.unsentChanges.read([String: UnsentCell].self, key: CacheKey.unsentCells) else { return }
         for cell in cells.values where cell.basePageId == pageId {
             unsavedDrafts["\(cell.rowId)/\(cell.propertyId)"] = cell.typed
         }

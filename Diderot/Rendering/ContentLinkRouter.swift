@@ -1,4 +1,5 @@
 import Foundation
+import DocmostKit
 
 /// Maps links in page content to a destination, like the web client (`apps/client/src/lib/constants.ts`,
 /// `utils.tsx`). Page URLs: `/s/<space>/p/<slug>-<slugId>`, `/p/<slug>`, `/share/<key>/p/<slug>`,
@@ -118,9 +119,7 @@ nonisolated enum ContentLinkRouter {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
             return .external(url)
         }
-        if let serverURL, let host = url.host()?.lowercased(), let serverHost = serverURL.host()?.lowercased(),
-           host == serverHost, (url.port ?? defaultPort(scheme)) == (serverURL.port ?? defaultPort(serverURL.scheme ?? "https")),
-           let slugId = pageSlugId(in: url.path())
+        if let serverURL, Origin(url) == Origin(serverURL), let slugId = pageSlugId(in: url.path())
         {
             // The entry's database: the linked page, or the database embedded in it.
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -159,9 +158,5 @@ nonisolated enum ContentLinkRouter {
             return parts[2]
         }
         return nil
-    }
-
-    private static func defaultPort(_ scheme: String) -> Int {
-        scheme == "http" ? 80 : 443
     }
 }

@@ -32,7 +32,7 @@ struct FileProtectionTests {
         let server = URL(string: "https://protection-test.example.com")!
         defer { UnsentChanges.removeAll(server: server) }
         let store = UnsentChanges.store(server: server, userId: "u1")
-        await store.writeData(Data("x".utf8), key: "change")
+        try await store.writeData(Data("x".utf8), key: "change")
         #expect(try protection(of: onlyFile(in: store.directory)) == .completeUntilFirstUserAuthentication)
     }
 }
