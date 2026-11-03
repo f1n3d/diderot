@@ -221,6 +221,7 @@ final class AppSession {
                     let version = await cache.read(String.self, key: CacheKey.serverVersion)
                     state = .ready(ReadySession(
                         server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,
+                        unsentChanges: environment.makeUnsentStore(server.url, cachedUser.user.id),
                         token: stored.token, currentUser: cachedUser, entitlements: entitlements,
                         serverVersion: Self.reportedVersion(version), restoredOffline: true
                     ))
@@ -439,7 +440,7 @@ final class AppSession {
     /// `store`: the unsent changes of the session the page was opened in, as the editor engine keeps its own; a 401 or a
     /// switch may have ended that session meanwhile. Without one, the current session's.
     @discardableResult
-    func keepUnsentTitle(_ title: String, pageId: String, spaceId: String?, in store: DiskCache? = nil) async -> Bool {
+    func keepUnsentTitle(_ title: String, pageId: String, spaceId: String?, in store: UnsentStore? = nil) async -> Bool {
         guard let store = store ?? ready?.unsentChanges else { return false }
         return await UnsentEdits.keepTitle(title, pageId: pageId, spaceId: spaceId, in: store)
     }
@@ -642,6 +643,7 @@ final class AppSession {
         }
         keychain("save") { try sessionStore.save(stored) }
         reloadAccounts()
+            unsentChanges: environment.makeUnsentStore(server.url, currentUser.user.id),
         Task.detached(priority: .utility) { await cache.prune() }
         state = .ready(ReadySession(
             server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,

@@ -16,6 +16,8 @@ struct ReadySession: Sendable {
     let imageLoader: ImageLoader
     /// Offline cache for this server's lists, pages and images.
     let cache: DiskCache
+    /// This user's changes the server hasn't confirmed yet (`UnsentChanges`).
+    let unsentChanges: UnsentStore
     /// Access token, e.g. for WebViews that need the `authToken` cookie.
     let token: String
     var currentUser: CurrentUser
@@ -26,9 +28,6 @@ struct ReadySession: Sendable {
     var tokenClaims: JWTClaims? { JWTClaims(token: token) }
     /// Restored from the cache without reaching the server.
     var restoredOffline = false
-
-    /// This user's changes the server hasn't confirmed yet.
-    var unsentChanges: DiskCache { UnsentChanges.store(server: server.url, userId: currentUser.user.id) }
 
     /// The server's version if it is newer than the bundled editor's (Docmost 0.97, `Engine/`), which could damage
     /// content it doesn't know: pages there open read-only. An unknown version counts as supported.

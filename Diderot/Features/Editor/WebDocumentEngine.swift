@@ -259,7 +259,7 @@ final class WebDocumentEngine: DocumentEngine {
     /// Bumped by open and close so an earlier open's ready timeout and late events leave a reopened page alone.
     private var opens = 0
     /// Where `close` keeps the open page's unsent changes (`UnsentChanges`).
-    private var unsentStore: (store: DiskCache, pageId: String)?
+    private var unsentStore: (store: UnsentStore, pageId: String)?
 
     init(session: AppSession) {
         self.session = session
@@ -287,11 +287,20 @@ final class WebDocumentEngine: DocumentEngine {
 
         let token = try await session.send(Endpoints.Auth.collabToken).token
         let unsentStore = (store: ready.unsentChanges, pageId: pageId)
-        var unsent = await unsentStore.store.readData(key: CacheKey.unsentChanges(pageId))
+        var unsent: Data?
+        do {
+            unsent = try await unsentStore.store.readData(key: CacheKey.unsentChanges(pageId))
+        } catch {
+            AppLog.ui.error("Unsent changes unreadable: \(error.localizedDescription, privacy: .public)")
+        }
         if unsent == nil, let legacy = await ready.cache.readData(key: CacheKey.unsentChanges(pageId)) {
-            // Kept in the offline cache by earlier builds.
-            await unsentStore.store.writeData(legacy, key: CacheKey.unsentChanges(pageId))
-            await ready.cache.remove(key: CacheKey.unsentChanges(pageId))
+            // Kept in the offline cache by earlier builds; they leave it once the store has them.
+            do {
+                try await unsentStore.store.writeData(legacy, key: CacheKey.unsentChanges(pageId))
+                await ready.cache.remove(key: CacheKey.unsentChanges(pageId))
+            } catch {
+                AppLog.ui.error("Unsent changes left in the cache: \(error.localizedDescription, privacy: .public)")
+            }
             unsent = legacy
         }
         guard opens == attempt else { return }
@@ -373,14 +382,18 @@ final class WebDocumentEngine: DocumentEngine {
               let unsent = try? await page.callJavaScript("return window.DocmostEngine.unsentChanges();") as? String
         else { return }
         let (store, pageId) = unsentStore
-        if unsent.isEmpty {
-            await store.remove(key: CacheKey.unsentChanges(pageId))
-            await store.remove(key: CacheKey.unsentDocument(pageId))
-        } else if let data = Data(base64Encoded: unsent) {
-            await store.writeData(data, key: CacheKey.unsentChanges(pageId))
-            if let current = await currentDocument() {
-                await store.write(current, key: CacheKey.unsentDocument(pageId))
+        do {
+            if unsent.isEmpty {
+                try await store.remove(key: CacheKey.unsentChanges(pageId))
+                try await store.remove(key: CacheKey.unsentDocument(pageId))
+            } else if let data = Data(base64Encoded: unsent) {
+                try await store.writeData(data, key: CacheKey.unsentChanges(pageId))
+                if let current = await currentDocument() {
+                    try await store.write(current, key: CacheKey.unsentDocument(pageId))
+                }
             }
+        } catch {
+            AppLog.ui.error("Unsent changes not kept: \(error.localizedDescription, privacy: .public)")
         }
     }
 

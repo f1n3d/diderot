@@ -10,6 +10,8 @@ struct SessionEnvironment {
     var makeClient: (URL, String?) -> APIClient
     /// The server's offline cache.
     var makeCache: (URL) -> DiskCache
+    /// The store for what a user's edits on the server haven't confirmed yet (`UnsentChanges`).
+    var makeUnsentStore: (URL, _ userId: String) -> UnsentStore
     /// Removes what the server's offline cache doesn't cover: downloads, the system URL cache (files of older builds,
     /// logos and avatars) and the server's web editor data; with `uploads`, also the files staged for upload.
     var removeLocalData: (URL, _ uploads: Bool) async -> Void
@@ -29,6 +31,7 @@ struct SessionEnvironment {
                              logger: AppLog.apiRequestLogger)
         }
         makeCache = { DiskCache(scope: $0.absoluteString) }
+        makeUnsentStore = { UnsentChanges.store(server: $0, userId: $1) }
         removeLocalData = { url, uploads in
             TempFile.removeAll(server: url, uploads: uploads)
             // Holds only member avatars, of every server: it can't be cleared for one.

@@ -16,7 +16,7 @@ struct PageLoader {
     /// The saved copy, with the document its unsent changes make (`UnsentChanges`) and its breadcrumbs.
     func saved() async -> (page: Page, unsent: PMNode?, breadcrumbs: [Breadcrumb])? {
         guard let page = await cache.read(Page.self, key: CacheKey.page(pageId)) else { return nil }
-        let unsent = await owner.unsentChanges.read(PMNode.self, key: CacheKey.unsentDocument(page.id))
+        let unsent = try? await owner.unsentChanges.read(PMNode.self, key: CacheKey.unsentDocument(page.id))
         return (page, unsent, await cache.read([Breadcrumb].self, key: CacheKey.breadcrumbs(page.id)) ?? [])
     }
 
