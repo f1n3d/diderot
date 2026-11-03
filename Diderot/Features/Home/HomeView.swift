@@ -73,7 +73,7 @@ struct HomeView: View {
         .badge(notifications.unreadCount)
         .accessibilityIdentifier("home-activity")
         .accessibilityValue(notifications.unreadCount > 0 ? "\(notifications.unreadCount) unread" : "")
-        .popover(isPresented: $showsNotifications) {
+        .linkPopover(isPresented: $showsNotifications) {
             NotificationsPopover { selection in
                 showsNotifications = false
                 navigation.open(selection)

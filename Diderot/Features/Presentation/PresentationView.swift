@@ -141,16 +141,15 @@ struct PresentationView: View {
             return .handled
         }
         .handlesLinks { url, outside in
-            switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
+            switch LinkTarget.of(url, serverURL: session.server?.url) {
             case .anchor(let anchor): show(anchor: anchor)
-            case .external(let external): outside(external)
-            case .user: break
-            case .page, .databaseEntry, .comment:
+            case .outside(let external): outside(external)
+            case .none: break
+            case .page:
                 dismiss()
                 openLink(url)
             }
         }
-        .opensExternalLinks()
         .mediaViewer { document }
         .environment(\.renderContext, RenderContext(session: session, pageId: pageId))
         .environment(\.linkPreviews, session.linkPreviews)

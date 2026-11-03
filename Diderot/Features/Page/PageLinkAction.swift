@@ -1,5 +1,26 @@
 import Foundation
 
+/// What a link tapped in shown content opens, wherever it shows (a page, a version, a presentation, a template): a page,
+/// a database entry or a page's comment; an anchor in what shows; a link that leaves the app; or nothing (a user).
+/// Where it shows decides what it does with each (`PageLinkAction` for a page).
+enum LinkTarget: Equatable {
+    case page(PageSelection, anchor: String?)
+    case anchor(String)
+    case outside(URL)
+    case none
+
+    static func of(_ url: URL, serverURL: URL?) -> LinkTarget {
+        switch ContentLinkRouter.destination(for: url, serverURL: serverURL) {
+        case .page(let slugId, let anchor): .page(PageSelection(pageId: slugId), anchor: anchor)
+        case .databaseEntry(let basePageId, let rowId): .page(PageSelection(pageId: basePageId, rowId: rowId), anchor: nil)
+        case .comment(let slugId, let commentId): .page(PageSelection(pageId: slugId, commentId: commentId), anchor: nil)
+        case .anchor(let anchor): .anchor(anchor)
+        case .user: .none
+        case .external(let external): .outside(external)
+        }
+    }
+}
+
 /// What a link tapped on a page does (`PageView`): decided from the link and the page alone.
 enum PageLinkAction: Equatable {
     /// A comment of this page: the comments open on it.
@@ -23,20 +44,18 @@ enum PageLinkAction: Equatable {
     static func action(for url: URL, serverURL: URL?, pageIds: [String?]) -> PageLinkAction {
         if let commentId = CommentLink.commentId(from: url) { return .showComment(commentId) }
         if let atom = AtomLink.parse(url) { return .editAtom(block: atom.block, type: atom.type, index: atom.index) }
-        switch ContentLinkRouter.destination(for: url, serverURL: serverURL) {
-        case .page(let slugId, let anchor):
-            guard pageIds.contains(slugId) else { return .open(PageSelection(pageId: slugId)) }
+        switch LinkTarget.of(url, serverURL: serverURL) {
+        case .page(let selection, let anchor):
+            // An entry opens in its database, also one of this page's.
+            guard selection.rowId == nil, pageIds.contains(selection.pageId) else { return .open(selection) }
+            if let commentId = selection.commentId { return .showComment(commentId) }
             return anchor.map { .scroll(to: $0) } ?? .none
-        case .databaseEntry(let basePageId, let rowId):
-            return .open(PageSelection(pageId: basePageId, rowId: rowId))
-        case .comment(let slugId, let commentId):
-            return pageIds.contains(slugId) ? .showComment(commentId) : .open(PageSelection(pageId: slugId, commentId: commentId))
         case .anchor(let anchor):
             return .anchor(anchor)
-        case .user:
-            return .none
-        case .external(let external):
+        case .outside(let external):
             return .outside(external)
+        case .none:
+            return .none
         }
     }
 }

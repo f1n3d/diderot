@@ -122,16 +122,13 @@ private struct HistoryDetailView: View {
         // Links as on a page: pages and database entries open there (the history closes), anchors scroll within the
         // version, the rest leaves the app as from a page.
         .handlesLinks { url, outside in
-            switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
-            case .page(let slugId, _): navigation.open(PageSelection(pageId: slugId))
-            case .databaseEntry(let basePageId, let rowId): navigation.open(PageSelection(pageId: basePageId, rowId: rowId))
-            case .comment(let slugId, let commentId): navigation.open(PageSelection(pageId: slugId, commentId: commentId))
+            switch LinkTarget.of(url, serverURL: session.server?.url) {
+            case .page(let selection, _): navigation.open(selection)
             case .anchor(let target): anchor = target
-            case .user: break
-            case .external(let external): outside(external)
+            case .none: break
+            case .outside(let external): outside(external)
             }
         }
-        .opensExternalLinks()
         .task { if detail.value == nil { await load() } }
     }
 

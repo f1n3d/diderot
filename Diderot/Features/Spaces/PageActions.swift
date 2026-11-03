@@ -125,7 +125,7 @@ struct PageActionSheets: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(item: $runner.pending) { pending in
+            .linkSheet(item: $runner.pending) { pending in
                 switch pending {
                 case .export(let page):
                     ExportOptionsSheet(page: page, runner: runner)
@@ -139,7 +139,7 @@ struct PageActionSheets: ViewModifier {
                     }
                 }
             }
-            .sheet(item: $runner.shareFile) { url in
+            .linkSheet(item: $runner.shareFile) { url in
                 ShareSheet(items: [url])
             }
             .toast($runner.toast)

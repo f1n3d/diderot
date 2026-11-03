@@ -447,7 +447,7 @@ struct BaseFileEditor: View {
             photoItem = nil
             upload { try await UploadFile.photo(item, server: $0) }
         }
-        .fullScreenCover(isPresented: $showsCamera) {
+        .linkFullScreenCover(isPresented: $showsCamera) {
             CameraPicker { data in
                 upload { try UploadFile.camera(data, server: $0) }
             }

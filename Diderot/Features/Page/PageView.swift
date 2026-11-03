@@ -172,7 +172,7 @@ struct PageView: View {
         } message: { link in
             Text(link.url.absoluteString)
         }
-        .sheet(item: $browsing) { url in
+        .linkSheet(item: $browsing) { url in
             SafariView(url: url).ignoresSafeArea()
         }
         .confirmationDialog("Link", isPresented: Binding { model?.mentionActions != nil } set: { if !$0 { model?.mentionActions = nil } },
@@ -188,7 +188,7 @@ struct PageView: View {
                 Task { await model?.replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index, with: nil) }
             }
         }
-        .sheet(isPresented: $showsComments, onDismiss: { commentsFocusId = nil }) {
+        .linkSheet(isPresented: $showsComments, onDismiss: { commentsFocusId = nil }) {
             if let page = state.value, let comments {
                 CommentsView(page: page, comments: comments, canComment: canComment(on: page),
                              isSpaceAdmin: spaces.state.value?.first { $0.id == page.spaceId }?.role == .admin,
@@ -197,47 +197,45 @@ struct PageView: View {
                 }
                 .handlesLinks { url, outside in
                     // Pages and anchors open on the page, so the comments make way; web links open over them.
-                    switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
-                    case .page, .databaseEntry, .anchor, .comment:
+                    switch LinkTarget.of(url, serverURL: session.server?.url) {
+                    case .page, .anchor:
                         showsComments = false
                         handle(url, outside: outside)
-                    case .user: break
-                    case .external(let external): outside(external)
+                    case .none: break
+                    case .outside(let external): outside(external)
                     }
                 }
-                .opensExternalLinks()
             }
         }
-        .sheet(isPresented: Binding(get: { model?.editsComment ?? false }, set: { model?.editsComment = $0 })) {
+        .linkSheet(isPresented: Binding(get: { model?.editsComment ?? false }, set: { model?.editsComment = $0 })) {
             if let model, let comments { InlineCommentSheet(model: model, comments: comments) }
         }
-        .sheet(isPresented: $showsHistory) {
+        .linkSheet(isPresented: $showsHistory) {
             if let page = state.value { HistoryView(page: page) }
         }
-        .sheet(isPresented: $showsAppendNote) {
+        .linkSheet(isPresented: $showsAppendNote) {
             if let page = state.value {
                 AppendNoteSheet(page: page) { Task { await load(force: true) } }
             }
         }
-        .sheet(isPresented: $showsArrange) {
+        .linkSheet(isPresented: $showsArrange) {
             if let model { ArrangeSheet(model: model) }
         }
-        .sheet(isPresented: $showsAttachments) {
+        .linkSheet(isPresented: $showsAttachments) {
             if let page = state.value { PageAttachmentsView(page: page, canDelete: canDeleteAttachments(of: page)) }
         }
-        .sheet(isPresented: Binding(get: { model?.editsLink ?? false }, set: { model?.editsLink = $0 })) {
+        .linkSheet(isPresented: Binding(get: { model?.editsLink ?? false }, set: { model?.editsLink = $0 })) {
             if let model { LinkSheet(model: model) }
         }
-        .sheet(item: Binding(get: { model?.editorSheet }, set: { model?.editorSheet = $0 }), onDismiss: { model?.editorSheetDismissed() }) { sheet in
+        .linkSheet(item: Binding(get: { model?.editorSheet }, set: { model?.editorSheet = $0 }), onDismiss: { model?.editorSheetDismissed() }) { sheet in
             if let model { EditorSheetView(model: model, sheet: sheet) }
         }
-        .fullScreenCover(isPresented: $showsWebEditor) {
+        .linkFullScreenCover(isPresented: $showsWebEditor) {
             if let page = state.value, let serverURL = session.server?.url, let token = session.ready?.token {
                 WebEditorView(page: page, serverURL: serverURL, token: token) {
                     Task { await load(force: true) }
                     changes.pageChanged(in: page.spaceId)
                 }
-                .opensExternalLinks()
             }
         }
         .photosPicker(isPresented: $showsPhotoPicker, selection: $photoItems, maxSelectionCount: nil,
@@ -248,12 +246,12 @@ struct PageView: View {
             photoItems = []
             model.upload(items.count, to: target) { try await UploadFile.photo(items[$0], server: $1) }
         }
-        .fullScreenCover(item: $presentation) { presentation in
+        .linkFullScreenCover(item: $presentation) { presentation in
             PresentationView(pageId: presentation.pageId, title: presentation.title, document: presentation.document) { url in
                 handle(url, outside: OpenURLAction { _ in .discarded })
             }
         }
-        .fullScreenCover(isPresented: $showsCamera) {
+        .linkFullScreenCover(isPresented: $showsCamera) {
             CameraPicker { data in
                 guard let model else { return }
                 let target = model.takeMediaTarget()

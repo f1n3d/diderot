@@ -87,8 +87,8 @@ struct WorkspaceMenu: View {
         }
         .accessibilityLabel("Workspace menu")
         .accessibilityIdentifier("workspace-menu")
-        .sheet(isPresented: $showsSettings) { SettingsView() }
-        .sheet(isPresented: $showsOpenLink) { OpenLinkSheet() }
+        .linkSheet(isPresented: $showsSettings) { SettingsView() }
+        .linkSheet(isPresented: $showsOpenLink) { OpenLinkSheet() }
     }
 
     private var serverSelection: Binding<String?> {

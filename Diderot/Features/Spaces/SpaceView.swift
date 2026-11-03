@@ -96,7 +96,7 @@ struct SpaceView: View {
                 .keyboardShortcut("n", modifiers: .command)
             }
         }
-        .sheet(isPresented: $showsTemplates) {
+        .linkSheet(isPresented: $showsTemplates) {
             TemplatePickerView(spaceId: space.id) { template in try await createPage(from: template) }
         }
         .modifier(OptionalPageActionSheets(runner: runner))

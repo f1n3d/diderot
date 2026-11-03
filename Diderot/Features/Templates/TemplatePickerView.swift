@@ -198,9 +198,8 @@ private struct TemplatePreviewView: View {
         .environment(previewNavigation)
         // Only web links open (in the app's browser); pages and anchors belong to wherever the template is used.
         .handlesLinks { url, outside in
-            if case .external(let external) = ContentLinkRouter.destination(for: url, serverURL: session.server?.url) { outside(external) }
+            if case .outside(let external) = LinkTarget.of(url, serverURL: session.server?.url) { outside(external) }
         }
-        .opensExternalLinks()
         .navigationTitle(template.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -238,7 +237,7 @@ struct TemplatePickerSheet: ViewModifier {
     let use: (PageTemplate) async throws -> Void
 
     func body(content: Content) -> some View {
-        content.sheet(isPresented: $isPresented) {
+        content.linkSheet(isPresented: $isPresented) {
             TemplatePickerView(spaceId: spaceId, use: use)
         }
     }

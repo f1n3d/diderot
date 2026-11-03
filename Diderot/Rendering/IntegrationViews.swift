@@ -179,12 +179,11 @@ struct IntegrationCardView: View {
         .padding(12)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .task(id: link.url) { await previews?.load([link.url]) }
-        .sheet(item: $connecting, onDismiss: {
+        .linkSheet(item: $connecting, onDismiss: {
             Task { await previews?.load([link.url], force: true) }
         }) { request in
             if let server = context.baseURL {
                 IntegrationConnectSheet(server: server, token: context.token, type: request.type)
-                    .opensExternalLinks()
             }
         }
     }

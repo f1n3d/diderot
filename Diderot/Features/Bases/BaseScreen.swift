@@ -66,7 +66,7 @@ struct BaseScreen<Header: View>: View {
             #endif
         }
         .onChange(of: offline.isOffline) { _, isOffline in model?.isOffline = isOffline }
-        .sheet(item: $openRow) { route in
+        .linkSheet(item: $openRow) { route in
             if let model {
                 BaseRowDetailSheet(model: model, route: route)
             }

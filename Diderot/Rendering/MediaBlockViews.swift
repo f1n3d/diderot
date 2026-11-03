@@ -175,7 +175,7 @@ struct PDFBlockView: View {
             }
         }
         .task(id: "\(media.src ?? "")|\(loadsFromOtherServer)") { await load() }
-        .sheet(isPresented: $showsFullScreen) {
+        .linkSheet(isPresented: $showsFullScreen) {
             if let document {
                 NavigationStack {
                     PDFKitView(document: document)
@@ -183,7 +183,6 @@ struct PDFBlockView: View {
                         .navigationTitle(media.name ?? "PDF")
                         .navigationBarTitleDisplayMode(.inline)
                 }
-                .opensExternalLinks()
             }
         }
     }

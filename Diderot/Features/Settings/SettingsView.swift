@@ -99,7 +99,7 @@ struct SettingsView: View {
                             .accessibilityIdentifier("settings-done")
                     }
                 }
-                .sheet(item: $logFile) { url in
+                .linkSheet(item: $logFile) { url in
                     ShareSheet(items: [url])
                 }
                 .task { await updateCacheSize() }

@@ -1327,11 +1327,8 @@ final class DocumentModel {
     /// The page a link of this server points to, as the web matches it: a query such as `?commentId=` or a database
     /// entry's `?row=` doesn't count.
     private static func pageSlugId(of url: URL, serverURL: URL) -> String? {
-        switch ContentLinkRouter.destination(for: url, serverURL: serverURL) {
-        case .page(let slugId, _), .comment(let slugId, _): slugId
-        case .databaseEntry(let basePageId, _): basePageId
-        default: nil
-        }
+        guard case .page(let selection, _) = LinkTarget.of(url, serverURL: serverURL) else { return nil }
+        return selection.pageId
     }
 
     /// A mention of the page, as the web makes one from a pasted link ("Untitled" unlocalized as there).

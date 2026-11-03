@@ -4,10 +4,37 @@ import SwiftUI
 extension View {
     /// Opens the links tapped in here that leave the app as the web client in a browser does: web pages in the in-app
     /// browser, mail, phone and messages through the system, another app only after asking, scripts and files never,
-    /// saying so (`ContentLinkRouter.opening(for:)`). Every sheet that shows links needs its own: a view can't present
-    /// over a sheet it shows.
+    /// saying so (`ContentLinkRouter.opening(for:)`). Every sheet needs its own, as a view can't present over a sheet it
+    /// shows: the app's sheets get it from `linkSheet` and its siblings.
     func opensExternalLinks() -> some View {
         modifier(ExternalLinks())
+    }
+
+    /// A sheet whose links open as the page's do (`opensExternalLinks`). Presented with `sheet`, a sheet got the handler
+    /// of the view that showed it, which can't present over it: its links did nothing. The app presents its sheets,
+    /// full-screen covers and popovers only through these (`Tools/check-project.sh` checks it).
+    func linkSheet<Content: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil,
+                                  @ViewBuilder content: @escaping () -> Content) -> some View {
+        sheet(isPresented: isPresented, onDismiss: onDismiss) { content().opensExternalLinks() }
+    }
+
+    func linkSheet<Item: Identifiable, Content: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil,
+                                                      @ViewBuilder content: @escaping (Item) -> Content) -> some View {
+        sheet(item: item, onDismiss: onDismiss) { content($0).opensExternalLinks() }
+    }
+
+    func linkFullScreenCover<Content: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil,
+                                            @ViewBuilder content: @escaping () -> Content) -> some View {
+        fullScreenCover(isPresented: isPresented, onDismiss: onDismiss) { content().opensExternalLinks() }
+    }
+
+    func linkFullScreenCover<Item: Identifiable, Content: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil,
+                                                                @ViewBuilder content: @escaping (Item) -> Content) -> some View {
+        fullScreenCover(item: item, onDismiss: onDismiss) { content($0).opensExternalLinks() }
+    }
+
+    func linkPopover<Content: View>(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Content) -> some View {
+        popover(isPresented: isPresented) { content().opensExternalLinks() }
     }
 
     /// Links tapped in here go to `handle`, with `outside` (the enclosing `opensExternalLinks()`) for those that leave

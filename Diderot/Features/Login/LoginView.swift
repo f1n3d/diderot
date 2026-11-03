@@ -138,13 +138,13 @@ struct LoginView: View {
             // A restored sign-in has no workspace info (SSO, providers, logo) yet; retries after a failed sign-in.
             .task(id: isAuthenticating) { await session.loadWorkspaceInfo() }
             .task(id: server.url) { hasSavedContent = await session.hasSavedContent(of: server) }
-            .sheet(item: $browserLoginURL) { url in
+            .linkSheet(item: $browserLoginURL) { url in
                 BrowserLoginView(server: server, startURL: url)
             }
-            .sheet(item: $mfaChallenge) { challenge in
+            .linkSheet(item: $mfaChallenge) { challenge in
                 MFACodeView(challenge: challenge, server: server)
             }
-            .sheet(item: $ldapProvider) { provider in
+            .linkSheet(item: $ldapProvider) { provider in
                 LDAPLoginView(provider: provider, server: server)
             }
         }
@@ -306,7 +306,7 @@ struct LDAPLoginView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
-            .sheet(item: $mfaChallenge) { challenge in
+            .linkSheet(item: $mfaChallenge) { challenge in
                 MFACodeView(challenge: challenge, server: server)
             }
         }
