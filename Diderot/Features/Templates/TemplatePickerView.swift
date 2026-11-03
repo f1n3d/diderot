@@ -198,7 +198,7 @@ private struct TemplatePreviewView: View {
         .environment(previewNavigation)
         // Only web links open (in the app's browser); pages and anchors belong to wherever the template is used.
         .handlesLinks { url, outside in
-            if case .external(let external) = ContentLinkRouter.destination(for: url, serverURL: session.server?.url) { outside(external) }
+            if case .outside(let external) = LinkTarget.of(url, serverURL: session.server?.url) { outside(external) }
         }
         .navigationTitle(template.displayTitle)
         .navigationBarTitleDisplayMode(.inline)

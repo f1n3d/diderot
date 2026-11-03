@@ -197,12 +197,12 @@ struct PageView: View {
                 }
                 .handlesLinks { url, outside in
                     // Pages and anchors open on the page, so the comments make way; web links open over them.
-                    switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
-                    case .page, .databaseEntry, .anchor, .comment:
+                    switch LinkTarget.of(url, serverURL: session.server?.url) {
+                    case .page, .anchor:
                         showsComments = false
                         handle(url, outside: outside)
-                    case .user: break
-                    case .external(let external): outside(external)
+                    case .none: break
+                    case .outside(let external): outside(external)
                     }
                 }
             }
