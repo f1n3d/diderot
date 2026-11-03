@@ -79,20 +79,12 @@ final class DocumentModel {
     /// Text after "@" before the cursor; `nil` = no mention suggestions.
     private(set) var mentionQuery: String?
     private(set) var mentionSuggestions: [MentionSuggestion] = []
-    /// Suggestions for mentions and page links (set by the page view).
-    @ObservationIgnored var suggest: (@MainActor (String) async throws -> SearchSuggestions)?
-    @ObservationIgnored var currentUserId: String?
     @ObservationIgnored private var suggestTask: Task<Void, Never>?
     /// Media picker for the UI; `mediaPlacement` (where files go) stays until the upload; a cancel need not reset it.
     private(set) var pendingMedia: MediaRequest?
     private(set) var mediaPlacement: BlockPlacement?
     /// Uploads running for this page (`upload`); the page shows "Uploading…", and `leave` keeps its engine open for them.
     private(set) var uploads = 0
-    /// Sends a staged file to the server as an attachment of this page; set by the page view, bound to the session the
-    /// page opened in.
-    @ObservationIgnored var sendUpload: (@MainActor (UploadFile) async throws -> Attachment)?
-    /// Tells the whole app, also once the page is gone (an upload's error); set by the page view.
-    @ObservationIgnored var postAppNotice: (@MainActor (String) -> Void)?
     /// Open input sheet (status, math, embed); the active block stays active meanwhile.
     var editorSheet: EditorSheet?
     /// Block from the math or embed sheet, inserted once the sheet has closed (`editorSheetDismissed`): switching
@@ -105,13 +97,6 @@ final class DocumentModel {
     private(set) var emojiReturning = false
     /// The page should open in the app's web editor (Draw.io and Excalidraw drawings are made there).
     var requestsWebEditor = false
-    /// Workspace has the `bases` license feature.
-    var canCreateBases = false
-    /// The server is Docmost 0.97 or newer: tabs, integration links and sorted sub-pages can be added (an older
-    /// server's web couldn't show them).
-    var hasDocmost097Features = false
-    /// Creates a database (base) as a subpage (`template` "kanban" or `nil`) and returns its page ID.
-    @ObservationIgnored var createBase: (@MainActor (String?) async throws -> String)?
     private(set) var isCreatingBase = false
     /// Inline command from the floating "+": runs once the paragraph created for it at the end is active.
     @ObservationIgnored private var pendingInlineCommand: InsertCommand?
@@ -173,8 +158,13 @@ final class DocumentModel {
     @ObservationIgnored private var activeBase: PMNode?
     @ObservationIgnored private var adoptsChange = false
 
-    init(page: Page, initialDocument: PMNode?, engine: (any DocumentEngine)?, readOnlyReason: ReadOnlyReason?) {
+    /// What the model needs from outside its page; tests change it.
+    @ObservationIgnored var dependencies: Dependencies
+
+    init(page: Page, initialDocument: PMNode?, engine: (any DocumentEngine)?, readOnlyReason: ReadOnlyReason?,
+         dependencies: Dependencies = Dependencies()) {
         self.page = page
+        self.dependencies = dependencies
         self.document = initialDocument ?? PMNode(json: page.content ?? .null) ?? PMNode(type: "doc")
         self.engine = engine
         if engine != nil { lifecycle = .opening }
@@ -268,8 +258,6 @@ final class DocumentModel {
     /// The engine's document the page shows, without local input over it: a refused save for a block no longer edited
     /// shows the block from it again.
     @ObservationIgnored private var engineDocument: PMNode?
-    /// Whose cache (`LiveDocuments`) the engine's last document goes to on closing; set by the page view.
-    @ObservationIgnored var liveOwner: LiveDocuments.Owner?
 
     /// Opens the engine unless it is open: when the page appears, after `suspend`, and to retry a failed start.
     func resume() {
@@ -511,7 +499,7 @@ final class DocumentModel {
         await flush()
         if let engine {
             // None before the engine's first document (after the sync): its empty editor would hide the page.
-            if let liveOwner, let latest = await engine.currentDocument() {
+            if let liveOwner = dependencies.liveOwner, let latest = await engine.currentDocument() {
                 LiveDocuments.store(latest, for: page.id, owner: liveOwner)
             }
             await engine.close()
@@ -683,7 +671,7 @@ final class DocumentModel {
         suggestTask?.cancel()
         suggestTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled, let self, let suggest = self.suggest else { return }
+            guard !Task.isCancelled, let self, let suggest = self.dependencies.suggest else { return }
             if let result = try? await suggest(newQuery), self.mentionQuery == newQuery {
                 self.mentionSuggestions = MentionSuggestion.from(result)
             }
@@ -704,7 +692,7 @@ final class DocumentModel {
             return
         }
         let node = NodeFactory.mention(entityType: suggestion.kind == .user ? "user" : "page", entityId: suggestion.entityId,
-                                       label: suggestion.title, slugId: suggestion.slugId, creatorId: currentUserId)
+                                       label: suggestion.title, slugId: suggestion.slugId, creatorId: dependencies.currentUserId)
         var run = Self.editorText(from: [node])
         run.append(AttributedString(" "))
         let insertedCount = run.characters.count
@@ -848,7 +836,7 @@ final class DocumentModel {
         if SyncedBlockClipboard.hasAppContent, let index = commands.firstIndex(of: .syncedBlock) {
             commands.insert(.pasteSyncedBlock, at: index + 1)
         }
-        if !hasDocmost097Features { commands.removeAll { $0 == .tabs } }
+        if !dependencies.hasDocmost097Features { commands.removeAll { $0 == .tabs } }
         guard let active else { return commands }
         if active.type == "codeBlock" { commands.removeAll { $0.isInline } }
         let location = insertLocation(of: active)
@@ -886,7 +874,7 @@ final class DocumentModel {
     /// Database and kanban board need the `bases` license feature; without it they are grayed out (web parity).
     func isEnabled(_ command: InsertCommand) -> Bool {
         switch command {
-        case .base, .kanban: canCreateBases && createBase != nil
+        case .base, .kanban: dependencies.canCreateBases && dependencies.createBase != nil
         default: true
         }
     }
@@ -1142,7 +1130,7 @@ final class DocumentModel {
     /// The service of the link at `range` of the active text that the workspace can show as a card or mention: the
     /// link's own (`integrationProvider`) or its host's, if that integration is installed, as on the web.
     func integrationProvider(ofLinkIn range: Range<AttributedString.Index>) -> String? {
-        guard hasDocmost097Features, let previews = linkPreviews, let run = activeText[range].runs.first, let url = run.link
+        guard dependencies.hasDocmost097Features, let previews = dependencies.linkPreviews, let run = activeText[range].runs.first, let url = run.link
         else { return nil }
         let provider = run.docmost.linkProvider
             ?? IntegrationLinks.describe(url.absoluteString, unfurlHosts: previews.unfurlHosts).provider?.rawValue
@@ -1291,11 +1279,6 @@ final class DocumentModel {
 
     /// Asked by the page while set (`finishPastedLink`).
     private(set) var pastedLink: PastedLink?
-    /// The server's installed integrations; set by the page.
-    @ObservationIgnored var linkPreviews: LinkPreviewStore?
-    /// The page a link of this server points to (page mentions, database links); set by the page.
-    @ObservationIgnored var lookUpPage: (@MainActor (String) async -> Page?)?
-    @ObservationIgnored var serverURL: URL?
 
     /// The paste proxy's question for clipboard text that is a single web link: true if the page inserts it itself, as
     /// the web does, false for a plain paste. Over selected text the link goes onto that text. Otherwise the link goes in
@@ -1311,7 +1294,7 @@ final class DocumentModel {
         if linkSelection(to: url) { return true }
         let offset = cursorOffset()
         var provider: IntegrationLinks.Provider?
-        if hasDocmost097Features, active.type == "paragraph", let previews = linkPreviews {
+        if dependencies.hasDocmost097Features, active.type == "paragraph", let previews = dependencies.linkPreviews {
             provider = IntegrationLinks.provider(of: trimmed, installed: previews.installedTypes, unfurlHosts: previews.unfurlHosts)
         }
         let pasted = insertLinkText(url, provider: provider, at: offset)
@@ -1320,7 +1303,8 @@ final class DocumentModel {
                                     ref: active.ref, offset: offset, text: pasted)
             return true
         }
-        guard let serverURL, let lookUpPage, let slugId = Self.pageSlugId(of: url, serverURL: serverURL) else { return true }
+        guard let serverURL = dependencies.serverURL, let lookUpPage = dependencies.lookUpPage,
+              let slugId = Self.pageSlugId(of: url, serverURL: serverURL) else { return true }
         let ref = active.ref
         Task {
             // A page that can't be found (or not seen) stays a link, as on the web. So does one while a sheet holds the text:
@@ -1332,7 +1316,7 @@ final class DocumentModel {
             let mention = Self.editorText(from: [pageMention(linked)])
             replaceActiveText(range, with: mention)
             keyboardFollowsText()
-            if hasDocmost097Features, page.isBase == true, blockFits("base", replacing: offset, length: mention.characters.count) {
+            if dependencies.hasDocmost097Features, page.isBase == true, blockFits("base", replacing: offset, length: mention.characters.count) {
                 pastedLink = PastedLink(url: url, provider: nil, base: linked, allowsBlock: true, ref: ref, offset: offset,
                                         text: String(mention.characters))
             }
@@ -1353,7 +1337,7 @@ final class DocumentModel {
     /// A mention of the page, as the web makes one from a pasted link ("Untitled" unlocalized as there).
     private func pageMention(_ page: LinkedPage) -> PMNode {
         NodeFactory.mention(entityType: "page", entityId: page.id, label: page.title.isEmpty ? "Untitled" : page.title,
-                            slugId: page.slugId, creatorId: currentUserId, anchorId: page.anchor)
+                            slugId: page.slugId, creatorId: dependencies.currentUserId, anchorId: page.anchor)
     }
 
     /// Replaces the paste as chosen; nil (the question dismissed) keeps it.
@@ -1657,7 +1641,7 @@ final class DocumentModel {
 
     /// Creates a database (base) or kanban board as a subpage, like the web client, and embeds it.
     private func insertBase(kanban: Bool, placement: BlockPlacement) async {
-        guard let createBase else { return }
+        guard let createBase = dependencies.createBase else { return }
         // Asked first: its page is created on the server before the block goes in, and stayed there when the block
         // didn't fit (in a synced block).
         guard await fits([PMNode(type: "base")], at: placement) else {
@@ -1699,7 +1683,7 @@ final class DocumentModel {
         uploads += 1
         Task {
             defer { uploadEnded() }
-            guard let serverURL, let sendUpload else { return }
+            guard let serverURL = dependencies.serverURL, let sendUpload = dependencies.sendUpload else { return }
             var attachments: [Attachment] = []
             for index in 0..<count {
                 do {
@@ -1707,12 +1691,12 @@ final class DocumentModel {
                     defer { prepared.remove() }
                     attachments.append(try await sendUpload(prepared))
                 } catch {
-                    postAppNotice?(String(localized: "Not uploaded: \(error.userMessage)"))
+                    dependencies.postAppNotice?(String(localized: "Not uploaded: \(error.userMessage)"))
                 }
             }
             guard !attachments.isEmpty, await insertUploads(attachments, to: target) != .applied else { return }
             let title = page.title.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Untitled")
-            postAppNotice?(String(localized: "The upload couldn't be added to “\(title)”."))
+            dependencies.postAppNotice?(String(localized: "The upload couldn't be added to “\(title)”."))
         }
     }
 

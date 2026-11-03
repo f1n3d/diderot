@@ -281,10 +281,10 @@ struct DocumentModelTests {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
         engine.sendDocument()
-        model.serverURL = URL(string: "https://wiki.example.com")
-        model.currentUserId = "u1"
+        model.dependencies.serverURL = URL(string: "https://wiki.example.com")
+        model.dependencies.currentUserId = "u1"
         let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"Ziel"}"#.utf8))
-        model.lookUpPage = { slugId in slugId == "Ab12" ? target : nil }
+        model.dependencies.lookUpPage = { slugId in slugId == "Ab12" ? target : nil }
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
         func inlines() -> [PMNode] { DocumentModel.inlines(from: model.activeText, base: .body) }
@@ -312,9 +312,9 @@ struct DocumentModelTests {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
         engine.sendDocument()
-        model.serverURL = URL(string: "https://wiki.example.com")
+        model.dependencies.serverURL = URL(string: "https://wiki.example.com")
         let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"́Spec"}"#.utf8))
-        model.lookUpPage = { _ in target }
+        model.dependencies.lookUpPage = { _ in target }
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
 
@@ -336,10 +336,10 @@ struct DocumentModelTests {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
         engine.sendDocument()
-        model.serverURL = URL(string: "https://wiki.example.com")
+        model.dependencies.serverURL = URL(string: "https://wiki.example.com")
         let target = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p2","slugId":"Ab12","title":"Ziel"}"#.utf8))
         var answer: CheckedContinuation<Page?, Never>?
-        model.lookUpPage = { _ in await withCheckedContinuation { answer = $0 } }
+        model.dependencies.lookUpPage = { _ in await withCheckedContinuation { answer = $0 } }
         model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
         model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
 
@@ -800,8 +800,8 @@ struct DocumentModelTests {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
         var created = 0
-        model.canCreateBases = true
-        model.createBase = { _ in
+        model.dependencies.canCreateBases = true
+        model.dependencies.createBase = { _ in
             created += 1
             return "base"
         }
@@ -1735,7 +1735,7 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
         let model = try Self.model(engine)
         var notices: [String] = []
-        model.postAppNotice = { notices.append($0) }
+        model.dependencies.postAppNotice = { notices.append($0) }
         let uploads = HeldUploads(model)
         let error = APIError.server(status: 413, message: "Too large")
         uploads.nextError = error
@@ -1758,7 +1758,7 @@ struct DocumentModelTests {
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
         engine.sendDocument()
         var notices: [String] = []
-        model.postAppNotice = { notices.append($0) }
+        model.dependencies.postAppNotice = { notices.append($0) }
         let uploads = HeldUploads(model)
         engine.failsNextInsert = true
 
@@ -1780,8 +1780,8 @@ final class HeldUploads {
 
     init(_ model: DocumentModel) {
         self.model = model
-        model.serverURL = URL(string: "https://docs.example.com")!
-        model.sendUpload = { [self] file in
+        model.dependencies.serverURL = URL(string: "https://docs.example.com")!
+        model.dependencies.sendUpload = { [self] file in
             if let error = nextError {
                 nextError = nil
                 throw error
