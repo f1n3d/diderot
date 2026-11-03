@@ -57,47 +57,12 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
 | **E** Structure, in steps | S2 → S3 → S4 | unit tests and UI tests | medium to high |
-| **F** Measure first | R48, R49, R50 (with the backlog's M6, M51) | Instruments | — |
 
 S1 is done: what fits where, Return, Backspace, conversions, columns and unsync are decided and applied in the engine and checked in `pnpm run check`. Package C's stopgap for R1 remains for cards, atoms and templates. DocumentModel didn't get shorter by it (about 3,000 lines): the engine's answers it asks for and keeps took the place of the rules.
 
 ---
 
-## 1. Further findings
-
-### Performance: measure first
-
-#### R48 [medium] ? Every math block and diagram is its own web view
-
-**Where:** `WebIslandView.swift:10–17`.
-
-**Problem:** Every math block, Mermaid diagram and inline diagram owns a `WebPage`, a WKWebView with its own WebContent process, kept for the page's lifetime. Each Mermaid island parses the 3.8 MB `mermaid.min.js`, and islands in tables and columns start at once. The backlog's M51 (images) and M13 (presentation) don't cover this.
-
-**Measure:** WebContent processes and memory in Instruments, on a page with about 30 formulas and 10 diagrams.
-
-**Fix if it's bad:** One shared hidden renderer with snapshots. At least, drop the page on disappear and keep the measured height.
-
-#### R49 [low] ? An island can freeze at the wrong height
-
-**Where:** `WebIslandView.swift:50–67`.
-
-**Problem:** Each render waits for `.finished` on the page-wide `page.navigations`, and its `.task(id: look)` is cancelled routinely. If the stream ends when a consumer is cancelled, later renders measure the old document and freeze the wrong height.
-
-**Confirm:** Iterate `navigations`, cancel, iterate again.
-
-**Fix:** The page reports its own height (a ResizeObserver posting only a number).
-
-#### R50 [low] ○ Media load whole into memory, without a size cap
-
-**Where:** `ImageLoader.swift:50–66`; `MediaBlockViews.swift:70–75`, `:182–186`.
-
-**Problem:** PDFs, diagrams and images are fetched as one in-memory `Data` with no cap and load by themselves when scrolled into view. `PDFDocument(data:)` and `String(data:)` run on the main actor. Each file is also copied into the 300 MB offline cache, so one big PDF evicts the rest. The backlog's M9 covers only attachments and exports.
-
-**Fix:** Cap by `expectedContentLength`, download PDFs to a file and open them off the main thread.
-
----
-
-## 2. Structure
+## 1. Structure
 
 ### S2 Large types
 
@@ -165,7 +130,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 ---
 
-## 3. CI, tools, tests
+## 2. CI, tools, tests
 
 ### T3 [medium] ✔ Selected UI test runs discard every API check
 
@@ -193,7 +158,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 ---
 
-## 4. Checked and fine
+## 3. Checked and fine
 
 - ✔ **Keychain:** `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, data protection keychain, no iCloud sync; an update falls back to an add.
 - ✔ **Release builds:** `DebugLaunch` exists only in debug builds, so the compiler keeps every `DOCMOST_DEBUG_*` path (auto-login, server pin, form filler, start routes) out of release builds.
