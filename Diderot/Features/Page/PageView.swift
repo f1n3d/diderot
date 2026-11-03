@@ -272,7 +272,7 @@ struct PageView: View {
                 let target = model.takeMediaTarget()
                 model.upload(urls.count, to: target) { try await UploadFile.file(at: urls[$0], server: $1) }
             case .failure(let error):
-                toast = error.localizedDescription
+                toast = error.userMessage
                 model?.cancelMedia()
             }
         }

@@ -47,12 +47,11 @@ The debt sits in two places.
 **2. Missing shared building blocks.** Several questions are answered differently in many places:
 
 - loading
-- showing errors
 - "is this answer still current?"
 - server identity
 - media loading
 
-So a bug gets fixed in one place and stays in others. Example: the race fixed for favorites and notifications was still open in comments (R18, fixed in package B). Web views are set up by role in one place since S3 (`WebViews`).
+So a bug gets fixed in one place and stays in others. Example: the race fixed for favorites and notifications was still open in comments (R18, fixed in package B). Web views are set up by role in one place since S3 (`WebViews`), and every error shown reads as a sentence (`Error.userMessage`).
 
 ## Order of work
 
@@ -132,7 +131,6 @@ Split out (S2, part 3): centering above the keyboard (`CentersAboveKeyboard`), w
 | Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes. Kept titles and database fields use its throwing `readThrowing` and `update`; the rest of its API swallows every error (M55). | A small store of its own that throws and updates atomically, made by `SessionEnvironment` so tests can give their own. (S–M) |
 | Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema. Since package C the editor writes marks back as stored while they show the same, line breaks' too with their direction, checked over all fixtures and the dev instances' marks (R3). | One mark codec for the reader and the editor. (M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links, which can't use the app's schemes since R13. | (M) |
-| Showing errors | Toast (read out by VoiceOver since R17), the editor's banner (R19), inline text, silent revert or only the log. An error without a text of its own reads as a plain sentence (since R43). | One helper: toast plus a generic message. (S) |
 
 ### S4 Time as a control mechanism
 
