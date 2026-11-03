@@ -197,7 +197,7 @@ struct AppSessionRaceTests {
         // Signed out of the only saved server, so no switch follows that would empty it too.
         let only = SessionStore(keychain: MemorySecretStore())
         try only.save(StoredSession(serverURL: a, token: "a"))
-        let alone = AppSession(sessionStore: only, protocolClasses: [StubURLProtocol.self])
+        let alone = AppSession(sessionStore: only, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         await alone.restore()
         try #require(alone.ready?.server.url == a)
         LiveDocuments.store(document, for: "p", owner: alice)
@@ -296,7 +296,7 @@ struct AppSessionRaceTests {
     @Test func rejectedStartRemovesItsOwnSignIn() async throws {
         try store.save(StoredSession(serverURL: b, token: "b"))
         try store.save(StoredSession(serverURL: a, token: "a"))
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         let store = store, b = b
         StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
         defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
@@ -392,7 +392,7 @@ struct AppSessionRaceTests {
         let cache = DiskCache(scope: a.absoluteString)
         let business = try JSONDecoder().decode(Entitlements.self, from: Data(#"{"tier": "business", "features": ["bases"]}"#.utf8))
         await cache.write(business, key: CacheKey.entitlements)
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         await session.restore()
         #expect(session.ready?.entitlements == business)
         #expect(await cache.read(Entitlements.self, key: CacheKey.entitlements) == business, "the offline start reads it")
@@ -417,7 +417,7 @@ struct AppSessionRaceTests {
         let named = try await sessionOnA()
         StubURLProtocol.body.withLock { $0 = nil }
         #expect(named.ready?.hasDocmost097Features == true)
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         await session.restore()
         #expect(session.ready?.serverVersion == "0.97.0")
         await session.clearCache()
@@ -431,7 +431,7 @@ struct AppSessionRaceTests {
         _ = try await sessionOnA()
         StubURLProtocol.unanswered.withLock { $0 = 3 }  // the first try's user, license and version
         defer { StubURLProtocol.unanswered.withLock { $0 = 0 } }
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         session.startDeadline = .milliseconds(300)
         let start = ContinuousClock.now
         await session.restore()
@@ -446,7 +446,7 @@ struct AppSessionRaceTests {
     /// saved server used to take that long, and a link to a page there opened it only then.
     @Test func answeredStartEndsBeforeTheDeadline() async throws {
         _ = try await sessionOnA()
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         session.startDeadline = .seconds(10)
         let start = ContinuousClock.now
         await session.restore()
@@ -462,7 +462,7 @@ struct AppSessionRaceTests {
         StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
         defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
         StubURLProtocol.beforeNextAnswer.withLock { $0 = { try? await Task.sleep(for: .milliseconds(600)) } }
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         session.startDeadline = .milliseconds(200)
         await session.restore()
         #expect(session.ready?.server.url == a)
@@ -470,10 +470,24 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// Without a network (flight mode) a start shows the saved content at once and doesn't ask the server: its
+    /// requests could wait for their timeout.
+    @Test func startWithoutANetworkShowsTheSavedContentAtOnce() async throws {
+        _ = try await sessionOnA()
+        StubURLProtocol.requests.withLock { $0 = [] }
+        var environment = SessionEnvironment(protocolClasses: [StubURLProtocol.self])
+        environment.hasNoNetwork = { true }
+        let session = AppSession(sessionStore: store, environment: environment)
+        await session.restore()
+        #expect(session.ready?.restoredOffline == true)
+        #expect(!StubURLProtocol.requests.withLock { $0 }.contains("a.example.com/api/users/me"))
+        await removeCaches()
+    }
+
     /// On an iPad, a second window opens while the first shows the sign-in screen after the session ended.
     @Test func secondWindowKeepsTheSignInScreen() async throws {
         try store.save(StoredSession(serverURL: a, token: "a"))
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         await session.restoreAtLaunch()
         try #require(session.ready?.server.url == a)
         session.handleUnauthorized()
@@ -1256,7 +1270,7 @@ struct AppSessionRaceTests {
         _ = try await sessionOnA()
         let business = try JSONDecoder().decode(Entitlements.self, from: Data(#"{"tier": "business", "features": ["bases"]}"#.utf8))
         await DiskCache(scope: a.absoluteString).write(business, key: CacheKey.entitlements)
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         await session.restore()
         let pageId = "base-\(UUID().uuidString)"
         UserDefaults.standard.removeObject(forKey: "base.view.\(pageId)")
@@ -1324,6 +1338,22 @@ struct AppSessionRaceTests {
         StubURLProtocol.offline.withLock { $0 = false }
         #expect(session.ready == nil && session.uncheckedSignIn?.token == "a", "Still out of reach")
         await session.retryUncheckedSignIn()
+        #expect(session.ready?.token == "a" && session.uncheckedSignIn == nil)
+        await removeCaches()
+    }
+
+    /// The network changing (a VPN coming on) tries the unchecked sign-in again by itself.
+    @Test func networkChangeTriesTheUncheckedSignInAgain() async throws {
+        let (changes, change) = AsyncStream<Void>.makeStream()
+        let session = try await uncheckedStartOnA {
+            $0.networkReturns = {
+                for await _ in changes { return true }
+                return false
+            }
+        }
+        #expect(session.ready == nil)
+        change.yield()
+        for _ in 0..<100 where session.ready == nil { try await Task.sleep(for: .milliseconds(20)) }
         #expect(session.ready?.token == "a" && session.uncheckedSignIn == nil)
         await removeCaches()
     }
@@ -1432,6 +1462,25 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// Clearing the cache, removing another server and signing out remove what the offline cache doesn't cover (files,
+    /// web editor data) for that server; clearing the cache keeps the files staged for upload, which a running upload
+    /// reads.
+    @Test func localDataGoesWithTheServersData() async throws {
+        try store.save(StoredSession(serverURL: b, token: "b"))
+        try store.save(StoredSession(serverURL: a, token: "a"))
+        var removed: [String] = []
+        var environment = SessionEnvironment(protocolClasses: [StubURLProtocol.self])
+        environment.removeLocalData = { url, uploads in removed.append("\(url.host() ?? "")\(uploads ? " with uploads" : "")") }
+        let session = AppSession(sessionStore: store, environment: environment)
+        await session.restore()
+        try #require(session.ready?.server.url == a && removed.isEmpty)
+        await session.clearCache()
+        await session.removeAccount(StoredSession(serverURL: b, token: "b"))
+        await session.signOut()
+        #expect(removed == ["a.example.com", "b.example.com with uploads", "a.example.com with uploads"])
+        await removeCaches()
+    }
+
     /// The Keychain keeps sign-ins when the app is deleted: at a reinstall's first start they end, as on signing out,
     /// where the app used to start signed in. An update keeps its sign-ins, saved after its data were created, and a
     /// later start doesn't look again (code review R30).
@@ -1441,7 +1490,7 @@ struct AppSessionRaceTests {
         let suite = "install-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         session.endSignInsOfAnEarlierInstall(defaults: defaults, installed: .now + (reinstalled ? 3600 : -3600))
         #expect(try store.loadAccounts().sessions.map(\.token).sorted() == (reinstalled ? [] : ["a", "b"]))
         #expect(try store.pendingLogouts().map(\.token).sorted() == (reinstalled ? ["a", "b"] : []))
@@ -1520,7 +1569,7 @@ struct AppSessionRaceTests {
     private func sessionOnA() async throws -> AppSession {
         try store.save(StoredSession(serverURL: b, token: "b"))
         try store.save(StoredSession(serverURL: a, token: "a"))
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         await session.restore()
         try #require(session.ready?.server.url == a)
         return session
@@ -1545,11 +1594,14 @@ struct AppSessionRaceTests {
     }
 
     /// A start with a's sign-in saved, a out of reach and nothing of a saved to show: the sign-in screen, unchecked.
-    private func uncheckedStartOnA() async throws -> AppSession {
+    /// `change`: to the session's environment.
+    private func uncheckedStartOnA(_ change: (inout SessionEnvironment) -> Void = { _ in }) async throws -> AppSession {
         try store.save(StoredSession(serverURL: a, token: "a"))
         await removeCaches()
         StubURLProtocol.offline.withLock { $0 = true }
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        var environment = SessionEnvironment(protocolClasses: [StubURLProtocol.self])
+        change(&environment)
+        let session = AppSession(sessionStore: store, environment: environment)
         await session.restore()
         StubURLProtocol.offline.withLock { $0 = false }
         let signedOut = if case .signedOut(let server) = session.state { server.url == a } else { false }
@@ -1561,7 +1613,7 @@ struct AppSessionRaceTests {
     private func offlineSessionOnA() async throws -> AppSession {
         _ = try await sessionOnA()
         StubURLProtocol.offline.withLock { $0 = true }
-        let session = AppSession(sessionStore: store, protocolClasses: [StubURLProtocol.self])
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
         await session.restore()
         StubURLProtocol.offline.withLock { $0 = false }
         try #require(session.ready?.restoredOffline == true)

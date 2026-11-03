@@ -1,5 +1,4 @@
 import Foundation
-import Network
 import Observation
 import UIKit
 import DocmostKit
@@ -53,16 +52,13 @@ final class AppSession {
     /// Saved sign-ins, one per server, including the current one.
     private(set) var accounts: [StoredSession] = []
     private let sessionStore: SessionStore
-    /// Tests answer the API requests with a `URLProtocol`.
-    private let protocolClasses: [AnyClass]?
+    private let environment: SessionEnvironment
     private let pendingLogouts: PendingLogouts
 
-    init(sessionStore: SessionStore = SessionStore(), protocolClasses: [AnyClass]? = nil) {
+    init(sessionStore: SessionStore = SessionStore(), environment: SessionEnvironment = SessionEnvironment()) {
         self.sessionStore = sessionStore
-        self.protocolClasses = protocolClasses
-        pendingLogouts = PendingLogouts(store: sessionStore) { url, token in
-            Self.makeClient(for: url, token: token, protocolClasses: protocolClasses)
-        }
+        self.environment = environment
+        pendingLogouts = PendingLogouts(store: sessionStore) { environment.makeClient($0, $1) }
     }
 
     /// How long a start with saved content waits for the server: one that doesn't answer (behind a VPN that is off)
@@ -203,7 +199,7 @@ final class AppSession {
             var answeredLate = false
             do {
                 // Without a network (flight mode) the requests can wait for their timeout: start from the cache at once.
-                if await Self.hasNoNetwork() { throw APIError.network(URLError(.notConnectedToInternet)) }
+                if await environment.hasNoNetwork() { throw APIError.network(URLError(.notConnectedToInternet)) }
                 // With saved content to show, a server that doesn't answer in time doesn't keep the start waiting either.
                 if try await finishSignIn(server: server, client: client, token: stored.token,
                                           within: hasSavedContent ? startDeadline : nil) { return }
@@ -662,18 +658,11 @@ final class AppSession {
     }
 
     private func makeClient(for url: URL, token: String?) -> APIClient {
-        Self.makeClient(for: url, token: token, protocolClasses: protocolClasses)
-    }
-
-    private static func makeClient(for url: URL, token: String?, protocolClasses: [AnyClass]?) -> APIClient {
-        // A fresh configuration per client: clients made from one share its in-memory URL cache.
-        let configuration = URLSessionConfiguration.ephemeral
-        if let protocolClasses { configuration.protocolClasses = protocolClasses }
-        return APIClient(baseURL: url, token: token, userAgent: userAgent, configuration: configuration, logger: AppLog.apiRequestLogger)
+        environment.makeClient(url, token)
     }
 
     private func makeCache(for url: URL) -> DiskCache {
-        DiskCache(scope: url.absoluteString)
+        environment.makeCache(url)
     }
 
     /// Writes the user to the per-server offline cache. If another user (or workspace) was cached, it clears the cache
@@ -689,19 +678,9 @@ final class AppSession {
         return isOtherUser
     }
 
-    /// Removes what the offline cache doesn't cover: downloads, the system URL cache (files of older builds, logos and
-    /// avatars) and the server's web editor data.
+    /// Removes what the offline cache doesn't cover (`SessionEnvironment.removeLocalData`).
     private func removeLocalData(for serverURL: URL, uploads: Bool = true) async {
-        TempFile.removeAll(server: serverURL, uploads: uploads)
-        // Holds only member avatars, of every server: it can't be cleared for one.
-        URLCache.shared.removeAllCachedResponses()
-        await WebEditorStores.remove(for: serverURL)
-    }
-
-    /// The current network path; a monitor reports it right after starting.
-    private static func hasNoNetwork() async -> Bool {
-        for await path in NWPathMonitor() { return path.status != .satisfied }
-        return false
+        await environment.removeLocalData(serverURL, uploads)
     }
 
     /// Checks the saved sign-in the start couldn't check (`uncheckedSignIn`) again. Its result counts only while the
@@ -730,14 +709,9 @@ final class AppSession {
     /// doesn't answer on it would be asked again and again.
     private func retryUncheckedSignInWhenTheNetworkChanges() {
         uncheckedSignInRetry?.cancel()
-        uncheckedSignInRetry = Task { [weak self] in
-            var paths = NWPathMonitor().makeAsyncIterator()
-            _ = await paths.next()
-            while let path = await paths.next(), !Task.isCancelled {
-                guard path.status == .satisfied else { continue }
-                await self?.retryUncheckedSignIn()
-                return
-            }
+        uncheckedSignInRetry = Task { [weak self, environment] in
+            guard await environment.networkReturns() else { return }
+            await self?.retryUncheckedSignIn()
         }
     }
 
