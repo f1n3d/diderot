@@ -329,8 +329,8 @@ final class DocumentModel {
     /// (after 30 s), the page said "Saved" and kept nothing.
     private func scheduleUnsentSave() {
         unsentSave?.cancel()
-        unsentSave = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+        unsentSave = Task { [weak self, clock = dependencies.clock] in
+            try? await clock.sleep(for: .seconds(2))
             guard !Task.isCancelled, let self else { return }
             // Queued like opening and closing: beside a close, an older state could be kept after it.
             let previous = engineStep
@@ -380,8 +380,8 @@ final class DocumentModel {
             // keyboard or sheet appearing sooner would take that focus away.
             if let command = pendingInlineCommand, let ref = active?.ref {
                 pendingInlineCommand = nil
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .milliseconds(400))
+                Task { @MainActor [weak self, clock = dependencies.clock] in
+                    try? await clock.sleep(for: .milliseconds(400))
                     guard let self, self.active?.ref == ref else { return }
                     self.insertInline(command, at: self.activeText.characters.count)
                 }
@@ -548,8 +548,8 @@ final class DocumentModel {
         if focusedEditor == instance { focusedEditor = nil }
         if active?.ref == ref {
             guard !editsInSheet else { return }
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(150))
+            Task { @MainActor [weak self, clock = dependencies.clock] in
+                try? await clock.sleep(for: .milliseconds(150))
                 guard let self, self.active?.ref == ref, self.focusedEditor == nil, !self.editsInSheet else { return }
                 self.deactivate()
             }
@@ -669,8 +669,8 @@ final class DocumentModel {
         guard newQuery != mentionQuery else { return }
         mentionQuery = newQuery
         suggestTask?.cancel()
-        suggestTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
+        suggestTask = Task { [weak self, clock = dependencies.clock] in
+            try? await clock.sleep(for: .milliseconds(250))
             guard !Task.isCancelled, let self, let suggest = self.dependencies.suggest else { return }
             if let result = try? await suggest(newQuery), self.mentionQuery == newQuery {
                 self.mentionSuggestions = MentionSuggestion.from(result)
@@ -1371,17 +1371,17 @@ final class DocumentModel {
     /// (BACKLOG).
     private func keyboardFollowsText() {
         let expected = String(activeText.characters)
-        Task { @MainActor [weak self] in
+        Task { @MainActor [weak self, clock = dependencies.clock] in
             for _ in 0..<20 {
                 guard let view = self?.editorTextView else { return }
                 if view.text == expected {
                     view.reloadInputViews()
-                    try? await Task.sleep(for: .milliseconds(300))
+                    try? await clock.sleep(for: .milliseconds(300))
                     // Nothing typed meanwhile: then reloading again costs nothing.
                     if view.text == expected, view === self?.editorTextView { view.reloadInputViews() }
                     return
                 }
-                try? await Task.sleep(for: .milliseconds(25))
+                try? await clock.sleep(for: .milliseconds(25))
             }
         }
     }
@@ -1438,8 +1438,8 @@ final class DocumentModel {
         editsEmoji = false
         emojiReturning = true
         if let emoji, let offset { insertIntoActiveText(AttributedString(emoji), offset: offset) }
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
+        Task { @MainActor [weak self, clock = dependencies.clock] in
+            try? await clock.sleep(for: .milliseconds(250))
             self?.emojiReturning = false
         }
     }
@@ -1949,8 +1949,8 @@ final class DocumentModel {
         guard let active, let node = currentActiveNode() else { return }
         overrides[active.ref.identity] = node
         commitTask?.cancel()
-        commitTask = Task { [weak self] in
-            try? await Task.sleep(for: debounce)
+        commitTask = Task { [weak self, clock = dependencies.clock] in
+            try? await clock.sleep(for: debounce)
             guard !Task.isCancelled, let self else { return }
             await self.commit(active.ref, node: node, base: self.takeBase(of: active.ref, sending: node))
         }
@@ -2405,7 +2405,7 @@ final class DocumentModel {
             if let node = node(at: path) {
                 activate(NodeRef(path: path, node: node), node: node)
                 if let typed = DebugLaunch.typeText {
-                    try? await Task.sleep(for: .milliseconds(300))
+                    try? await dependencies.clock.sleep(for: .milliseconds(300))
                     activeText.append(AttributedString(typed))
                     activeTextChanged()
                 }

@@ -28,5 +28,8 @@ extension DocumentModel {
         var sendUpload: (@MainActor (UploadFile) async throws -> Attachment)?
         /// Tells the whole app, also once the page is gone (an upload's error).
         var postAppNotice: (@MainActor (String) -> Void)?
+        /// What the model's waits run on: a save's and the suggestions' wait for more input, the unsent changes' save,
+        /// the waits for the text view and its focus. Tests move a clock of their own (`TestClock`).
+        var clock: any Clock<Duration> = ContinuousClock()
     }
 }
