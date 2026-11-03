@@ -5,7 +5,7 @@
 #   Tools/run-uitests.sh <pageId>                        # iPhone 18 Pro simulator; modifies the page!
 #   DEVICE="iPad Pro 11-inch (M5)" Tools/run-uitests.sh <pageId>
 #   UDID=<device UDID> Tools/run-uitests.sh <pageId>     # on the connected iPhone (server <mac>.local:$PORT)
-#   ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests only
+#   ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests and their checks
 #   SHOTS_DIR=Tools/.cache/shots Tools/run-uitests.sh <pageId>                                 # screenshots as files too
 #   AREA=schnell Tools/run-uitests.sh <pageId>   # one app area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
 #   PORT=3001 Tools/run-uitests.sh <pageId>      # against the Docmost 0.97 dev instance (~/Repositories/docmost-dev-097)
@@ -220,9 +220,13 @@ echo "Screenshots: $ATTACHMENTS"
 echo "Waiting for the server state (stamp $STAMP) …"
 perl -e 'sleep 12'
 CHECKS_FAILED=0
+# Each check names its test; with ONLY (and so with AREA) those of the tests that didn't run are left out
+# (Tools/uitest_checks.py).
+export ONLY="${ONLY:-}" PYTHONPATH="$PWD/Tools${PYTHONPATH:+:$PYTHONPATH}"
 curl -s -X POST "$DOCMOST_SEED_URL/api/pages/info" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d "{\"pageId\":\"$PAGE\",\"format\":\"json\"}" | python3 -c '
 import json, sys
+from uitest_checks import report
 stamp, page = sys.argv[1], sys.argv[2]
 doc = json.load(sys.stdin)["data"]["content"]
 runs = []
@@ -276,46 +280,47 @@ def page_mentions(node):
         found += page_mentions(child)
     return found
 pasted = next((b for b in doc.get("content", []) if ("Verweis" + stamp) in block_text_of(b)), {})
+E = "EditorUITests/"
 checks = [
-    ("Paragraph: Tipp" + stamp, has("Tipp" + stamp)),
-    ("Paste: the link to the test page became its mention (paragraph with Verweis" + stamp + ")",
+    (E + "test1_TapParagraphTypeAndBold", "Paragraph: Tipp" + stamp, has("Tipp" + stamp)),
+    (E + "test74_PastePageLink", "Paste: the link to the test page became its mention (paragraph with Verweis" + stamp + ")",
      len(page_mentions(pasted)) == 1 and "http" not in block_text_of(pasted)),
-    ("Paragraph: Fett" + stamp + " bold", has("Fett" + stamp, "bold")),
-    ("Paragraph: cursor at the end (paragraph ends with Fett" + stamp + ")", block_text("Erster Absatz").endswith("Fett" + stamp)),
-    ("New paragraph: Neu" + stamp, has("Neu" + stamp)),
-    ("New paragraph: NeuFett" + stamp + " bold", has("NeuFett" + stamp, "bold")),
-    ("New paragraph: Taste" + stamp + " bold from Cmd-B", has("Taste" + stamp, "bold")),
-    ("List item: Liste" + stamp, has("Liste" + stamp)),
-    ("Reader path: Weg" + stamp, has("Weg" + stamp)),
-    ("Return: separate paragraph Return" + stamp, any(block_text(t).strip() == "Return" + stamp for t in ["Return" + stamp])),
-    ("Backspace: Merge" + stamp + " at the end of Letzter Absatz", block_text("Letzter Absatz").endswith("Merge" + stamp)),
-    ("Drag: Letzter Absatz before Überschrift", first_index("Letzter Absatz") < first_index("Überschrift")),
-    ("Table: 4 rows with Zelle" + stamp, any(b.get("type") == "table" and len(b.get("content", [])) == 4 for b in doc.get("content", [])) and has("Zelle" + stamp)),
-    ("Slash: quote with Zitat" + stamp, any(b.get("type") == "blockquote" and ("Zitat" + stamp) in block_text_of(b) for b in doc.get("content", []))),
-    ("Slash: code block keeps language swift with Sprache" + stamp, any(b.get("type") == "codeBlock" and (b.get("attrs") or {}).get("language") == "swift" and ("Sprache" + stamp) in block_text_of(b) for b in doc.get("content", []))),
-    ("Slash: toggle with title Klapp" + stamp + " and Inhalt" + stamp + " weiter in its content", any(b.get("type") == "details" and [block_text_of(c) for c in b.get("content", [])] == ["Klapp" + stamp, "Inhalt" + stamp + " weiter"] for b in doc.get("content", []))),
-    ("Callout: long text Hinweis" + stamp + " in a callout", any(b.get("type") == "callout" and ("Hinweis" + stamp) in block_text_of(b) for b in doc.get("content", []))),
-    ("Toggle: Return after the title Titel" + stamp + " continues in its content with Zeile" + stamp, [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "details" and ("Titel" + stamp) in block_text_of(b)] == [["Titel" + stamp, "Zeile" + stamp]]),
-    ("Toggle: Zu" + stamp + " with Versteckt" + stamp + " collapsed in the app is stored closed (open: false)", [((b.get("attrs") or {}).get("open"), [block_text_of(c) for c in b.get("content", [])]) for b in doc.get("content", []) if b.get("type") == "details" and ("Zu" + stamp) in block_text_of(b)] == [(False, ["Zu" + stamp, "Versteckt" + stamp])]),
-    ("List: Backspace at the start of Unten" + stamp + " joins it into Oben" + stamp + ", one item left", [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "bulletList" and ("Oben" + stamp) in block_text_of(b)] == [["Oben" + stamp + "Unten" + stamp]]),
-    ("Back on the page: Erneut" + stamp + " typed after leaving and returning", has("Erneut" + stamp)),
-    ("Mention: mention Editor-Test before danach" + stamp, has_mention("Editor-Test") and has("danach" + stamp)),
-    ("Paragraph: existing formatting kept (fett, kursiv, code)", has("fett", "bold") and has("kursiv", "italic") and has("code", "code")),
-    ("Tap: caret where tapped (Anfang" + stamp + " starts the paragraph after the table)", block_text("Nach der Tabelle").startswith("Anfang" + stamp)),
-    ("Long press: the magnifier moves the caret in the edited text (Lupe" + stamp + " starts Erster Absatz)", block_text("Erster Absatz").startswith("Lupe" + stamp)),
-    ("Long press: holding another paragraph while editing puts the caret there (Halten" + stamp + " starts Letzter Absatz)",
+    (E + "test1_TapParagraphTypeAndBold", "Paragraph: Fett" + stamp + " bold", has("Fett" + stamp, "bold")),
+    (E + "test1_TapParagraphTypeAndBold", "Paragraph: cursor at the end (paragraph ends with Fett" + stamp + ")", block_text("Erster Absatz").endswith("Fett" + stamp)),
+    (E + "test2_AddParagraphTypeAndBold", "New paragraph: Neu" + stamp, has("Neu" + stamp)),
+    (E + "test2_AddParagraphTypeAndBold", "New paragraph: NeuFett" + stamp + " bold", has("NeuFett" + stamp, "bold")),
+    (E + "test2_AddParagraphTypeAndBold", "New paragraph: Taste" + stamp + " bold from Cmd-B", has("Taste" + stamp, "bold")),
+    (E + "test3_TapListItemAndType", "List item: Liste" + stamp, has("Liste" + stamp)),
+    (E + "test4_NavigateAndEdit", "Reader path: Weg" + stamp, has("Weg" + stamp)),
+    (E + "test5_ReturnAndBackspace", "Return: separate paragraph Return" + stamp, any(block_text(t).strip() == "Return" + stamp for t in ["Return" + stamp])),
+    (E + "test5_ReturnAndBackspace", "Backspace: Merge" + stamp + " at the end of Letzter Absatz", block_text("Letzter Absatz").endswith("Merge" + stamp)),
+    (E + "test7_DragBlock", "Drag: Letzter Absatz before Überschrift", first_index("Letzter Absatz") < first_index("Überschrift")),
+    (E + "test8_TableInsertRow", "Table: 4 rows with Zelle" + stamp, any(b.get("type") == "table" and len(b.get("content", [])) == 4 for b in doc.get("content", [])) and has("Zelle" + stamp)),
+    (E + "test9_SlashCommandQuote", "Slash: quote with Zitat" + stamp, any(b.get("type") == "blockquote" and ("Zitat" + stamp) in block_text_of(b) for b in doc.get("content", []))),
+    (E + "test40_CodeBlockLanguage", "Slash: code block keeps language swift with Sprache" + stamp, any(b.get("type") == "codeBlock" and (b.get("attrs") or {}).get("language") == "swift" and ("Sprache" + stamp) in block_text_of(b) for b in doc.get("content", []))),
+    (E + "test41_ToggleContent", "Slash: toggle with title Klapp" + stamp + " and Inhalt" + stamp + " weiter in its content", any(b.get("type") == "details" and [block_text_of(c) for c in b.get("content", [])] == ["Klapp" + stamp, "Inhalt" + stamp + " weiter"] for b in doc.get("content", []))),
+    (E + "test68_CalloutGrowsWithItsText", "Callout: long text Hinweis" + stamp + " in a callout", any(b.get("type") == "callout" and ("Hinweis" + stamp) in block_text_of(b) for b in doc.get("content", []))),
+    (E + "test43_ReturnInToggleTitle", "Toggle: Return after the title Titel" + stamp + " continues in its content with Zeile" + stamp, [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "details" and ("Titel" + stamp) in block_text_of(b)] == [["Titel" + stamp, "Zeile" + stamp]]),
+    (E + "test45_CollapseToggle", "Toggle: Zu" + stamp + " with Versteckt" + stamp + " collapsed in the app is stored closed (open: false)", [((b.get("attrs") or {}).get("open"), [block_text_of(c) for c in b.get("content", [])]) for b in doc.get("content", []) if b.get("type") == "details" and ("Zu" + stamp) in block_text_of(b)] == [(False, ["Zu" + stamp, "Versteckt" + stamp])]),
+    (E + "test44_BackspaceJoinsListItems", "List: Backspace at the start of Unten" + stamp + " joins it into Oben" + stamp + ", one item left", [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "bulletList" and ("Oben" + stamp) in block_text_of(b)] == [["Oben" + stamp + "Unten" + stamp]]),
+    (E + "test42_EditAfterReturningToPage", "Back on the page: Erneut" + stamp + " typed after leaving and returning", has("Erneut" + stamp)),
+    (E + "test10_MentionPage", "Mention: mention Editor-Test before danach" + stamp, has_mention("Editor-Test") and has("danach" + stamp)),
+    (E + "test1_TapParagraphTypeAndBold", "Paragraph: existing formatting kept (fett, kursiv, code)", has("fett", "bold") and has("kursiv", "italic") and has("code", "code")),
+    (E + "test52_TapPlacesCaret", "Tap: caret where tapped (Anfang" + stamp + " starts the paragraph after the table)", block_text("Nach der Tabelle").startswith("Anfang" + stamp)),
+    (E + "test75_LongPressWhileEditingBelongsToTheText", "Long press: the magnifier moves the caret in the edited text (Lupe" + stamp + " starts Erster Absatz)", block_text("Erster Absatz").startswith("Lupe" + stamp)),
+    (E + "test75_LongPressWhileEditingBelongsToTheText", "Long press: holding another paragraph while editing puts the caret there (Halten" + stamp + " starts Letzter Absatz)",
      block_text("Letzter Absatz").startswith("Halten" + stamp)),
-    ("Long press: holding and moving the list while editing leaves it in place (after Überschrift)", first_index("Punkt zwei") > first_index("Überschrift")),
-    ("List: Return on an empty middle item splits the list, Mitte" + stamp + " between Punkt eins and Punkt zwei",
+    (E + "test75_LongPressWhileEditingBelongsToTheText", "Long press: holding and moving the list while editing leaves it in place (after Überschrift)", first_index("Punkt zwei") > first_index("Überschrift")),
+    (E + "test54_EmptyItemSplitsList", "List: Return on an empty middle item splits the list, Mitte" + stamp + " between Punkt eins and Punkt zwei",
      [(b.get("type"), "Punkt eins" in block_text_of(b), "Punkt zwei" in block_text_of(b)) for b in doc.get("content", [])][max(first_index("Mitte" + stamp) - 1, 0):first_index("Mitte" + stamp) + 2]
      == [("bulletList", True, False), ("paragraph", False, False), ("bulletList", False, True)]),
-    ("List: \"/Überschrift\" takes Kopf" + stamp + " out of its list as a heading 2",
+    (E + "test55_HeadingLeavesList", "List: \"/Überschrift\" takes Kopf" + stamp + " out of its list as a heading 2",
      any(b.get("type") == "heading" and (b.get("attrs") or {}).get("level") == 2 and block_text_of(b).strip() == "Kopf" + stamp for b in doc.get("content", []))
      and not any(b.get("type") in ("bulletList", "orderedList", "taskList") and ("Kopf" + stamp) in block_text_of(b) for b in doc.get("content", []))),
-    ("Quote: Return on its empty line leaves it, Draussen" + stamp + " right after the quote with Innen" + stamp,
+    (E + "test56_EmptyLineLeavesQuote", "Quote: Return on its empty line leaves it, Draussen" + stamp + " right after the quote with Innen" + stamp,
      [(b.get("type"), block_text_of(b)) for b in doc.get("content", [])][max(first_index("Draussen" + stamp) - 1, 0):first_index("Draussen" + stamp) + 1]
      == [("blockquote", "Innen" + stamp), ("paragraph", "Draussen" + stamp)]),
-    ("Table: Return in cell b1 adds the paragraph Zweite" + stamp + " to that cell",
+    (E + "test53_TableCellGrows", "Table: Return in cell b1 adds the paragraph Zweite" + stamp + " to that cell",
      any(c.get("type") in ("tableCell", "tableHeader") and [block_text_of(p) for p in c.get("content", [])][:2] == ["b1", "Zweite" + stamp]
          for b in doc.get("content", []) if b.get("type") == "table" for r in b.get("content", []) for c in r.get("content", []))),
 ]
@@ -328,7 +333,7 @@ def table_toolbar(table):
     return (("Kopf" + stamp) in block_text_of(first) and first.get("type") == "tableHeader" and attrs.get("colspan") == 2
             and attrs.get("backgroundColorName") == "Blue" and ("Neu" + stamp) in block_text_of(below))
 checks += [
-    ("Table toolbar: Kopf" + stamp + " merged over two columns and blue, Neu" + stamp + " in the row added below",
+    (E + "test80_TableToolbar", "Table toolbar: Kopf" + stamp + " merged over two columns and blue, Neu" + stamp + " in the row added below",
      any(b.get("type") == "table" and table_toolbar(b) for b in doc.get("content", []))),
 ]
 # Exiting the list (test16) and Backspace after the table (test17).
@@ -340,10 +345,10 @@ after_tasks = blocks_all[tasks + 1] if 0 <= tasks < len(blocks_all) - 1 else {}
 table = index_of(lambda b: b.get("type") == "table" and "ZeileVier" in block_text_of(b))
 after_table = blocks_all[table + 1] if 0 <= table < len(blocks_all) - 1 else {}
 checks += [
-    ("Exit list: paragraph Ausstieg" + stamp + " right after the task list with 2 items",
+    (E + "test16_ExitListKeepsKeyboard", "Exit list: paragraph Ausstieg" + stamp + " right after the task list with 2 items",
      tasks >= 0 and len(blocks_all[tasks].get("content", [])) == 2
      and after_tasks.get("type") == "paragraph" and block_text_of(after_tasks) == "Ausstieg" + stamp),
-    ("Backspace after table: Zellende" + stamp + " at the end of b4, no empty paragraph after it",
+    (E + "test17_BackspaceAfterTableKeepsKeyboard", "Backspace after table: Zellende" + stamp + " at the end of b4, no empty paragraph after it",
      has("b4Zellende" + stamp) and "Nach der Tabelle" in block_text_of(after_table)),
 ]
 # Keyboard toolbar (test15): its own paragraph "Leiste<stamp>" with formats, line break, link, undo, block type,
@@ -363,28 +368,27 @@ def walk_marks(node):
         walk_marks(child)
 walk_marks(doc)
 checks += [
-    ("Toolbar: italic, underline, strikethrough, code, highlight",
+    (E + "test15_ToolbarActions", "Toolbar: italic, underline, strikethrough, code, highlight",
      has("Kursiv" + stamp, "italic") and has("Unter" + stamp, "underline") and has("Durch" + stamp, "strike")
      and has("Kode" + stamp, "code") and has("Mark" + stamp, "highlight")),
-    ("Toolbar: line break before Umbruch" + stamp,
+    (E + "test15_ToolbarActions", "Toolbar: line break before Umbruch" + stamp,
      any(inline[i].get("type") == "hardBreak" and i + 1 < len(inline) and inline[i + 1].get("text", "").startswith("Umbruch" + stamp) for i in range(len(inline)))),
-    ("Toolbar: link https://example.com/" + stamp, link_to("https://example.com/" + stamp)),
-    ("Toolbar: Danach typed after the link is outside it", has("Danach") and not has("Danach", "link")),
-    ("Toolbar: undo removes Rueck" + stamp, not has("Rueck" + stamp)),
-    ("Toolbar: heading 2 after undo/redo", block.get("type") == "heading" and (block.get("attrs") or {}).get("level") == 2),
-    ("Toolbar: Eingefuegt" + stamp + " right after it, code block via the code block button",
+    (E + "test15_ToolbarActions", "Toolbar: link https://example.com/" + stamp, link_to("https://example.com/" + stamp)),
+    (E + "test15_ToolbarActions", "Toolbar: Danach typed after the link is outside it", has("Danach") and not has("Danach", "link")),
+    (E + "test15_ToolbarActions", "Toolbar: undo removes Rueck" + stamp, not has("Rueck" + stamp)),
+    (E + "test15_ToolbarActions", "Toolbar: heading 2 after undo/redo", block.get("type") == "heading" and (block.get("attrs") or {}).get("level") == 2),
+    (E + "test15_ToolbarActions", "Toolbar: Eingefuegt" + stamp + " right after it, code block via the code block button",
      index >= 0 and index + 1 < len(blocks) and ("Eingefuegt" + stamp) in block_text_of(blocks[index + 1]) and blocks[index + 1].get("type") == "codeBlock"),
-    ("Toolbar: duplicate deleted again", len(leiste) == 1),
+    (E + "test15_ToolbarActions", "Toolbar: duplicate deleted again", len(leiste) == 1),
 ]
-for label, ok in checks:
-    print(("OK     " if ok else "MISSING") + " " + label)
-sys.exit(0 if all(ok for _, ok in checks) else 1)
+sys.exit(0 if report(checks) else 1)
 ' "$STAMP" "$PAGE" || CHECKS_FAILED=1
 
 # Databases (BaseUITests test26–28): created row with its values; card gone after deletion.
 if [ -n "${TEST_RUNNER_DOCMOST_UITEST_BASE_FULL:-}" ]; then
   python3 - "$STAMP" "$TEST_RUNNER_DOCMOST_UITEST_BASE_FULL" "$TOKEN" "$TEST_RUNNER_DOCMOST_UITEST_BASE_IDS" <<'PY' || CHECKS_FAILED=1
 import json, os, sys, urllib.request
+from uitest_checks import report
 stamp, page_id, token, ids = sys.argv[1], sys.argv[2], sys.argv[3], json.loads(sys.argv[4])
 def call(path, body):
     request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
@@ -400,20 +404,19 @@ option = next((c["id"] for c in (tags.get("typeOptions") or {}).get("choices", [
 entry = next((r for r in rows if r["cells"].get(ids["Title"]) == "UITest-Eintrag" + stamp), None)
 cells = (entry or {}).get("cells", {})
 person = cells.get(ids["Verantwortlich"])
+B = "BaseUITests/"
 checks = [
-    ("Database: row UITest-Eintrag" + stamp + " created", entry is not None),
-    ("Database: status \"In Arbeit\"", cells.get(ids["Status"]) == ids["status:In Arbeit"]),
-    ("Database: new tag option UITest-Option" + stamp + " created and set", option is not None and option in (cells.get(ids["Tags"]) or [])),
-    ("Database: Aufwand 4.5 and formula Doppelt 9", cells.get(ids["Aufwand"]) == 4.5 and cells.get(ids["Doppelt"]) == 9),
-    ("Database: checkbox checked", cells.get(ids["Erledigt"]) is True),
-    ("Database: person Test-Kollegin", isinstance(person, str) and (users.get(person) or {}).get("name") == "Test-Kollegin"),
-    ("Database: link without scheme stored as https://docmost.com/uitest-" + stamp, cells.get(ids["Link"]) == "https://docmost.com/uitest-" + stamp),
-    ("Database: card UITest-Karte" + stamp + " deleted via the menu", not any(r["cells"].get(ids["Title"]) == "UITest-Karte" + stamp for r in rows)),
-    ("Database: card UITest-Zieh" + stamp + " deleted in the detail view", not any(r["cells"].get(ids["Title"]) == "UITest-Zieh" + stamp for r in rows)),
+    (B + "test26_BaseCreateAndEditEntry", "Database: row UITest-Eintrag" + stamp + " created", entry is not None),
+    (B + "test26_BaseCreateAndEditEntry", "Database: status \"In Arbeit\"", cells.get(ids["Status"]) == ids["status:In Arbeit"]),
+    (B + "test26_BaseCreateAndEditEntry", "Database: new tag option UITest-Option" + stamp + " created and set", option is not None and option in (cells.get(ids["Tags"]) or [])),
+    (B + "test26_BaseCreateAndEditEntry", "Database: Aufwand 4.5 and formula Doppelt 9", cells.get(ids["Aufwand"]) == 4.5 and cells.get(ids["Doppelt"]) == 9),
+    (B + "test26_BaseCreateAndEditEntry", "Database: checkbox checked", cells.get(ids["Erledigt"]) is True),
+    (B + "test26_BaseCreateAndEditEntry", "Database: person Test-Kollegin", isinstance(person, str) and (users.get(person) or {}).get("name") == "Test-Kollegin"),
+    (B + "test26_BaseCreateAndEditEntry", "Database: link without scheme stored as https://docmost.com/uitest-" + stamp, cells.get(ids["Link"]) == "https://docmost.com/uitest-" + stamp),
+    (B + "test27_BaseKanbanCreateMoveDelete", "Database: card UITest-Karte" + stamp + " deleted via the menu", not any(r["cells"].get(ids["Title"]) == "UITest-Karte" + stamp for r in rows)),
+    (B + "test28_BaseKanbanDragAndDeleteInDetail", "Database: card UITest-Zieh" + stamp + " deleted in the detail view", not any(r["cells"].get(ids["Title"]) == "UITest-Zieh" + stamp for r in rows)),
 ]
-for label, ok in checks:
-    print(("OK     " if ok else "MISSING") + " " + label)
-sys.exit(0 if all(ok for _, ok in checks) else 1)
+sys.exit(0 if report(checks) else 1)
 PY
 fi
 
@@ -422,6 +425,7 @@ fi
 if [ -n "$TEMPLATES" ]; then
 python3 - "$STAMP" "$PAGE" "$TOKEN" "$TEMPLATES" <<'PY' || CHECKS_FAILED=1
 import json, os, sys, urllib.request
+from uitest_checks import report
 stamp, page, token, templates = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split(",")
 def call(path, body):
     request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
@@ -440,21 +444,21 @@ made = {title: next((p for p in roots if p.get("title") == title), None)
 checks = []
 for title, found in made.items():
     content = call("pages/info", {"pageId": found["id"], "format": "json"})["content"] if found else None
-    checks.append(("Templates: page " + title + " with Agenda" + stamp, found is not None and ("Agenda" + stamp) in plain(content)))
-for label, ok in checks:
-    print(("OK     " if ok else "MISSING") + " " + label)
+    checks.append(("EditorUITests/test78_Templates", "Templates: page " + title + " with Agenda" + stamp, found is not None and ("Agenda" + stamp) in plain(content)))
+passed = report(checks)
 for found in made.values():
     if found:
         call("pages/delete", {"pageId": found["id"], "permanentlyDelete": True})
 for template in templates:
     call("templates/delete", {"templateId": template})
-sys.exit(0 if all(ok for _, ok in checks) else 1)
+sys.exit(0 if passed else 1)
 PY
 fi
 
 # Comments (EditorUITests test33): inline comment with its mark in the content; page comment deleted again.
 python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || CHECKS_FAILED=1
 import json, os, sys, urllib.request
+from uitest_checks import report
 stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
 def call(path, body):
     request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
@@ -476,16 +480,15 @@ def walk(node):
     for child in node.get("content") or []:
         walk(child)
 walk(call("pages/info", {"pageId": page, "format": "json"})["content"])
+E = "EditorUITests/"
 checks = [
-    ("Comment: text \"" + str((inline or {}).get("selection")) + "\" as inline comment Inline" + stamp,
+    (E + "test33_Comments", "Comment: text \"" + str((inline or {}).get("selection")) + "\" as inline comment Inline" + stamp,
      inline is not None and inline.get("type") == "inline" and bool(inline.get("selection"))),
-    ("Comment: mark on the commented text in the page content", inline is not None and inline["id"] in mark_ids),
-    ("Comment: Seitenkommentar" + stamp + " edited and deleted again",
+    (E + "test33_Comments", "Comment: mark on the commented text in the page content", inline is not None and inline["id"] in mark_ids),
+    (E + "test33_Comments", "Comment: Seitenkommentar" + stamp + " edited and deleted again",
      not any(plain(c.get("content")).startswith("Seitenkommentar" + stamp) for c in comments)),
 ]
-for label, ok in checks:
-    print(("OK     " if ok else "MISSING") + " " + label)
-sys.exit(0 if all(ok for _, ok in checks) else 1)
+sys.exit(0 if report(checks) else 1)
 PY
 
 # Attachments (EditorUITests test77): from 0.97 on the uploaded Anhang<stamp>.txt deleted from the list, and the files
@@ -493,6 +496,7 @@ PY
 docmost_097 && DELETES_FILES=1 || DELETES_FILES=0
 python3 - "$STAMP" "$PAGE" "$TOKEN" "$DELETES_FILES" <<'PY' || CHECKS_FAILED=1
 import json, os, re, sys, urllib.request
+from uitest_checks import report
 stamp, page, token, deletes = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
 if not deletes:
     sys.exit(0)
@@ -503,18 +507,18 @@ def call(path, body):
     with urllib.request.urlopen(request) as response:
         return json.loads(response.read() or b"{}").get("data")
 left = call("pages/attachments", {"pageId": page, "query": "Anhang" + stamp, "limit": 10})["items"]
-ok = not left
-print(("OK     " if ok else "MISSING") + " Attachments: Anhang" + stamp + ".txt deleted from the list")
+passed = report([("EditorUITests/test77_PageAttachments", "Attachments: Anhang" + stamp + ".txt deleted from the list", not left)])
 for attachment in call("pages/attachments", {"pageId": page, "query": "Anhang", "limit": 100})["items"]:
     if re.fullmatch(r"Anhang\d+\.txt", attachment["fileName"]):
         call("attachments/delete", {"attachmentId": attachment["id"]})
-sys.exit(0 if ok else 1)
+sys.exit(0 if passed else 1)
 PY
 
 # Inserting via "/" and "+" (EditorUITests test34–39): expects the nodes the web editor creates.
 # Afterwards deletes the databases the tests created.
 python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || CHECKS_FAILED=1
 import json, os, re, sys, urllib.request
+from uitest_checks import report
 stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
 def call(path, body):
     request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
@@ -566,45 +570,46 @@ plus_next = after(lambda b: b.get("type") == "paragraph" and text(b) == "Plus" +
 fab_date = next((b for b in blocks if b.get("type") == "paragraph" and ("FabDatum" + stamp) in text(b)), {})
 bases = [b for b in blocks if b.get("type") == "base" and attrs(b).get("pageId")]
 
+E = "EditorUITests/"
 checks = [
-    ("Slash: divider via \"/trenn\" + Return, followed by NachTrenn" + stamp,
+    (E + "test34_InsertMenuListsWebCommands", "Slash: divider via \"/trenn\" + Return, followed by NachTrenn" + stamp,
      any(b.get("type") == "paragraph" and text(b) == "NachTrenn" + stamp for b in hr_then)),
-    ("Slash: date (" + year + ") and time in the text", year in text(inline) and re.search(r"\d{1,2}:\d{2}", text(inline)) is not None),
-    ("Slash: status Offen" + stamp + " (red after the tap)", attrs(status).get("text") == "Offen" + stamp and attrs(status).get("color") == "red"),
-    ("Slash: inline math x^2", attrs(math).get("text") == "x^2"),
-    ("Slash: emoji before Fest" + stamp, ("🎉Fest" + stamp) in text(inline)),
-    ("Slash: footnote reference in the paragraph, footnote text Quelle" + stamp,
+    (E + "test35_InlineCommands", "Slash: date (" + year + ") and time in the text", year in text(inline) and re.search(r"\d{1,2}:\d{2}", text(inline)) is not None),
+    (E + "test35_InlineCommands", "Slash: status Offen" + stamp + " (red after the tap)", attrs(status).get("text") == "Offen" + stamp and attrs(status).get("color") == "red"),
+    (E + "test35_InlineCommands", "Slash: inline math x^2", attrs(math).get("text") == "x^2"),
+    (E + "test35_InlineCommands", "Slash: emoji before Fest" + stamp, ("🎉Fest" + stamp) in text(inline)),
+    (E + "test35_InlineCommands", "Slash: footnote reference in the paragraph, footnote text Quelle" + stamp,
      any(n.get("type") == "footnoteReference" for n in items) and ("Quelle" + stamp) in text(footnotes)),
-    ("Slash: subpages, page break, Draw.io", "subpages" in types and "pageBreak" in types and "drawio" in types),
-    ("Slash: math block a^2+b^2=c^2", attrs(math_block).get("text") == "a^2+b^2=c^2"),
-    ("Slash: YouTube embed with link", attrs(embed).get("provider") == "youtube" and "youtube.com/watch?v=dQw4w9WgXcQ" in (attrs(embed).get("src") or "")),
-    ("Slash: Mermaid code block with example", "A --> B" in text(mermaid)),
-    ("Columns: three (three_equal), Links" + stamp + " in the first, Mitte" + stamp + " in the second",
+    (E + "test36_BlockCommands", "Slash: subpages, page break, Draw.io", "subpages" in types and "pageBreak" in types and "drawio" in types),
+    (E + "test36_BlockCommands", "Slash: math block a^2+b^2=c^2", attrs(math_block).get("text") == "a^2+b^2=c^2"),
+    (E + "test36_BlockCommands", "Slash: YouTube embed with link", attrs(embed).get("provider") == "youtube" and "youtube.com/watch?v=dQw4w9WgXcQ" in (attrs(embed).get("src") or "")),
+    (E + "test36_BlockCommands", "Slash: Mermaid code block with example", "A --> B" in text(mermaid)),
+    (E + "test37_Columns", "Columns: three (three_equal), Links" + stamp + " in the first, Mitte" + stamp + " in the second",
      len(cols) == 3 and attrs(columns).get("layout") == "three_equal" and ("Links" + stamp) in text(cols[0]) and ("Mitte" + stamp) in text(cols[1])),
-    ("Synced: original with Sync" + stamp + " and two embeds (Paste, /)", bool(attrs(sync).get("id")) and len(references) >= 2),
-    ("Synced: \"Text ▾\" turns Wrap" + stamp + " into a synced block", bool(wrapped)),
-    ("Plus: heading 2 PlusH2" + stamp + " right after Plus" + stamp,
+    (E + "test38_SyncedBlocks", "Synced: original with Sync" + stamp + " and two embeds (Paste, /)", bool(attrs(sync).get("id")) and len(references) >= 2),
+    (E + "test38_SyncedBlocks", "Synced: \"Text ▾\" turns Wrap" + stamp + " into a synced block", bool(wrapped)),
+    (E + "test39_PlusMenusAndDatabase", "Plus: heading 2 PlusH2" + stamp + " right after Plus" + stamp,
      plus_next.get("type") == "heading" and attrs(plus_next).get("level") == 2 and text(plus_next) == "PlusH2" + stamp),
-    ("Plus: date from the floating \"+\" (FabDatum" + stamp + ")", year in text(fab_date)),
-    ("Plus: FabDatum" + stamp + " right after PlusH2" + stamp + " (no empty paragraph between)",
+    (E + "test39_PlusMenusAndDatabase", "Plus: date from the floating \"+\" (FabDatum" + stamp + ")", year in text(fab_date)),
+    (E + "test39_PlusMenusAndDatabase", "Plus: FabDatum" + stamp + " right after PlusH2" + stamp + " (no empty paragraph between)",
      ("FabDatum" + stamp) in text(after(lambda b: text(b) == "PlusH2" + stamp))),
-    ("Plus: database (inline) embedded", len(bases) >= 1),
+    (E + "test39_PlusMenusAndDatabase", "Plus: database (inline) embedded", len(bases) >= 1),
 ]
-for label, ok in checks:
-    print(("OK     " if ok else "MISSING") + " " + label)
+passed = report(checks)
 # Delete the created databases again (they are subpages of the test page).
 for base in bases:
     try:
         call("pages/delete", {"pageId": attrs(base)["pageId"], "permanentlyDelete": True})
     except Exception as error:
         print("Could not delete database " + attrs(base)["pageId"] + ": " + str(error))
-sys.exit(0 if all(ok for _, ok in checks) else 1)
+sys.exit(0 if passed else 1)
 PY
 
 # Content Docmost 0.97 introduced (EditorUITests test69, test70, test72, test73), on 0.97 and newer only.
 if docmost_097; then
   python3 - "$STAMP" "$PAGE" "$TOKEN" "$INTEGRATIONS" <<'PY' || CHECKS_FAILED=1
 import json, os, sys, urllib.request
+from uitest_checks import report
 stamp, page, token, integrations = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split(",")
 def call(path, body):
     request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
@@ -649,23 +654,22 @@ def walk(node):
 walk(doc)
 mentions = [m for m in nodes(doc, "integrationMention") if attrs(m).get("url") == link]
 
+E = "EditorUITests/"
 checks = [
-    ("Tabs: Tab 1, Dritter" + stamp + ", Tab 2 (" + ", ".join(labels) + ")", labels == ["Tab 1", "Dritter" + stamp, "Tab 2"]),
-    ("Tabs: Reiter" + stamp + " in the first tab", bool(items) and ("Reiter" + stamp) in text(part(items[0], "tabPanel"))),
-    ("Tabs: every tab has an id of its own", bool(ids) and all(ids) and len(set(ids)) == len(ids)),
-    ("Tabs: Tab 2 dragged before Tab 1 (" + ", ".join(dragged_labels) + "), Zieh" + stamp + " still in Tab 1",
+    (E + "test69_Tabs", "Tabs: Tab 1, Dritter" + stamp + ", Tab 2 (" + ", ".join(labels) + ")", labels == ["Tab 1", "Dritter" + stamp, "Tab 2"]),
+    (E + "test69_Tabs", "Tabs: Reiter" + stamp + " in the first tab", bool(items) and ("Reiter" + stamp) in text(part(items[0], "tabPanel"))),
+    (E + "test69_Tabs", "Tabs: every tab has an id of its own", bool(ids) and all(ids) and len(set(ids)) == len(ids)),
+    (E + "test73_TabDrag", "Tabs: Tab 2 dragged before Tab 1 (" + ", ".join(dragged_labels) + "), Zieh" + stamp + " still in Tab 1",
      dragged_labels == ["Tab 2", "Tab 1"] and ("Zieh" + stamp) in text(part(dragged_items[1], "tabPanel"))),
-    ("Subpages: sorted by title (sortBy title-asc)", len(sorted_subpages) >= 1),
+    (E + "test70_SubpagesSort", "Subpages: sorted by title (sortBy title-asc)", len(sorted_subpages) >= 1),
 ]
 if "github" in integrations:
     checks += [
-        ("Integration: card for " + link + " with provider github", len(cards) == 1 and attrs(cards[0]).get("provider") == "github"),
-        ("Integration: mention shown as a link with integrationProvider github",
+        (E + "test72_PasteIntegrationLink", "Integration: card for " + link + " with provider github", len(cards) == 1 and attrs(cards[0]).get("provider") == "github"),
+        (E + "test72_PasteIntegrationLink", "Integration: mention shown as a link with integrationProvider github",
          not mentions and any(l.get("integrationProvider") == "github" for l in links)),
     ]
-for label, ok in checks:
-    print(("OK     " if ok else "MISSING") + " " + label)
-sys.exit(0 if all(ok for _, ok in checks) else 1)
+sys.exit(0 if report(checks) else 1)
 PY
 fi
 
@@ -673,6 +677,7 @@ fi
 # Then deletes both pages with their subpages.
 python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || CHECKS_FAILED=1
 import json, os, sys, urllib.request
+from uitest_checks import report
 stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
 def call(path, body):
     request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
@@ -684,12 +689,12 @@ made = [p for p in call("pages/sidebar-pages", {"pageId": page, "limit": 100})["
         if p.get("title") in ("Baum-Ziel" + stamp, "Baum-Quelle" + stamp)]
 target = next((p for p in made if p.get("title") == "Baum-Ziel" + stamp), None)
 children = [p.get("title") for p in call("pages/sidebar-pages", {"pageId": target["id"], "limit": 100})["items"]] if target else []
-ok = children == ["Baum-Kind" + stamp, "Baum-Quelle" + stamp]
-print(("OK     " if ok else "MISSING") + " Tree: Baum-Quelle" + stamp + " in Baum-Ziel" + stamp + " after Baum-Kind" + stamp
-      + " (subpages: " + ", ".join(map(str, children)) + ")")
+passed = report([("EditorUITests/test79_TreeDropZones",
+                  "Tree: Baum-Quelle" + stamp + " in Baum-Ziel" + stamp + " after Baum-Kind" + stamp + " (subpages: " + ", ".join(map(str, children)) + ")",
+                  children == ["Baum-Kind" + stamp, "Baum-Quelle" + stamp])])
 for p in made:
     call("pages/delete", {"pageId": p["id"], "permanentlyDelete": True})
-sys.exit(0 if ok else 1)
+sys.exit(0 if passed else 1)
 PY
 
 # Page tree: after the drag test, the test page must be the first root page of its space.
@@ -698,11 +703,11 @@ SPACE_ID=$(curl -s -X POST "$DOCMOST_SEED_URL/api/pages/info" -H "Authorization:
 curl -s -X POST "$DOCMOST_SEED_URL/api/pages/sidebar-pages" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d "{\"spaceId\":\"$SPACE_ID\",\"limit\":5}" | python3 -c '
 import json, sys
+from uitest_checks import report
 items = json.load(sys.stdin)["data"]["items"]
 first = items[0] if items else {}
-ok = first.get("id") == sys.argv[1]
-print(("OK     " if ok else "MISSING") + " Tree: test page is the first root page (" + str(first.get("title")) + ")")
-sys.exit(0 if ok else 1)
+sys.exit(0 if report([("EditorUITests/test11_TreeDragToTop", "Tree: test page is the first root page (" + str(first.get("title")) + ")",
+                       first.get("id") == sys.argv[1])]) else 1)
 ' "$PAGE" || CHECKS_FAILED=1
 
 # Move the test page back to the end of the root level so the drag test stays repeatable.
@@ -734,6 +739,4 @@ print(key)
 ' "$PAGE" | xargs -I{} curl -s -o /dev/null -w "Test page moved to the end -> %{http_code}\n" -X POST "$DOCMOST_SEED_URL/api/pages/move" \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "{\"pageId\":\"$PAGE\",\"position\":\"{}\",\"parentPageId\":null}"
 
-# With ONLY, the checks of the tests that did not run report MISSING, so only the test result counts.
-if [ -n "${ONLY:-}" ]; then CHECKS_FAILED=0; fi
 exit $(( TEST_FAILED || CHECKS_FAILED ))

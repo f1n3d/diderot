@@ -30,7 +30,7 @@ Line numbers refer to commit `2db079b` (version 1.2.0 (17)). They drift as fixes
 - Work package by package, in the order below. Within a package, take the most severe first.
 - Confirm ○ and ? entries in the code before changing anything.
 - A fixed entry leaves this file (the commit records it). A postponed one moves to BACKLOG.md under its topic. When this file is empty, delete it and the line pointing to it in BACKLOG.md.
-- Changes to focus, keyboard, timing or layout need the UI tests: `AREA=schnell Tools/run-uitests.sh <pageId>`, and the full run before a release. Mind T3: with `ONLY` or `AREA`, the API checks don't count today.
+- Changes to focus, keyboard, timing or layout need the UI tests: `AREA=schnell Tools/run-uitests.sh <pageId>`, and the full run before a release. With `ONLY` or `AREA`, the API checks of the tests that ran count.
 
 ## Summary
 
@@ -166,25 +166,21 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 ## 3. CI, tools, tests
 
-### T3 [medium] ✔ Selected UI test runs discard every API check
+### T3 [low] ○ The UI test runner's checks are inline Python
 
-**Where:** `Tools/run-uitests.sh:737`.
+**Where:** `Tools/run-uitests.sh`.
 
-**Problem:** With `ONLY`, and so with `AREA`, `CHECKS_FAILED=0` discards every API check, also those of the tests that ran. Day-to-day runs never verify that edits reached the server.
+**Problem:** The script has 742 lines, about 600 of them inline Python, with 11 copies of `call()` and its own fractional indexing next to DocmostKit's tested one. The checks name their test and report through `Tools/uitest_checks.py`, which leaves out those of tests that didn't run.
 
-**Also (○):** The script has 738 lines, about 600 of them inline Python, with 11 copies of `call()` and its own fractional indexing next to DocmostKit's tested one.
-
-**Fix:** Map each check to its test and count those of the tests that ran. Move the checks into a Python module or into the UI tests.
+**Fix:** Move the checks into that module or into the UI tests.
 
 ### T6 [low] ○ The test setup invites flakes
 
 **Problems:**
 
-- **Shared temp folders:** Sign-out's `TempFile.removeAll()` deletes global temp folders that TempFileTests and UploadFileTests write to (noted at `AppSessionTests.swift:69–70`). CI runs serially (`ci.yml:61`), the scheme in parallel and random order (`project.yml:109–110`), and that hides the hazard. Give `TempFile` an injectable root.
 - **AppSessionTests:** 1,100 lines of race tests for many features (session, notifications, favorites, search, engine, databases). They share static `StubURLProtocol` hooks, so they must run serially. They touch the real Caches folder, WebKit and temp files, and `restore()` asks the real network monitor. Split the file per feature and inject the transport and the environment.
 - **EditorUITests:** 2,198 lines; 60 tests share one page whose state accumulates. 118 `Thread.sleep` calls add up to about 105 s. Use pages per test and condition-based waits.
 - **Missing tests for risky paths:**
-  - redirects
   - Keychain attributes
   - concurrent access to the unsent store
   - the SSO cookie capture

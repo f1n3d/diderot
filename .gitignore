@@ -20,6 +20,7 @@ Packages/*/.swiftpm/
 # Tools and local artifacts
 Tools/.cache/
 Tools/screenshots/
+Tools/__pycache__/
 .env
 .env.demo
 Config/Local.xcconfig
