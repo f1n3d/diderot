@@ -178,7 +178,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 **Problems:**
 
-- **AppSessionTests:** 1,100 lines of race tests for many features (session, notifications, favorites, search, engine, databases). They share static `StubURLProtocol` hooks, so they must run serially. They touch the real Caches folder, WebKit and temp files, and `restore()` asks the real network monitor. Split the file per feature and inject the transport and the environment.
+- **Session race tests** (`AppSessionRaceTests`): in a file per topic now, sharing `SessionTestSupport.swift`. They still share static `StubURLProtocol` hooks, so they must run serially, and still touch the real Caches folder, WebKit and temp files and ask the real network monitor. `SessionEnvironment` can replace the caches, the network and local data; only some start and sign-out tests do. A transport per test and a test environment by default would let them run in parallel.
 - **EditorUITests:** 2,198 lines; 60 tests share one page whose state accumulates. 118 `Thread.sleep` calls add up to about 105 s. Use pages per test and condition-based waits.
 
 ---
