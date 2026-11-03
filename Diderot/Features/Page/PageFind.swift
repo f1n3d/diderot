@@ -32,6 +32,8 @@ final class PageFind {
     private(set) var revealRequest = 0
     /// Frame (in document coordinates) of the block with the current match, once it is rendered.
     var currentFrame: (ref: NodeRef, frame: CGRect)?
+    /// Top edge of the find bar in window coordinates while it shows: the current match is centered above it.
+    @ObservationIgnored var barTop: CGFloat?
 
     var currentMatch: FindMatch? { matches.indices.contains(current) ? matches[current] : nil }
 
