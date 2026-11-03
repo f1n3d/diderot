@@ -693,28 +693,25 @@ struct PageView: View {
 
     // MARK: - Loading
 
+    /// The saved copy first, then the server's page (`PageLoader`), in the session current now: the page's from then on.
     private func load(force: Bool) async {
         guard let ready = session.ready else { return }
         pageSession = ready
-        let cache = ready.cache
+        let loader = PageLoader(pageId: selection.pageId, owner: ready, session: session)
         if state.value == nil || force {
             if state.value == nil {
-                if let cached = await cache.read(Page.self, key: CacheKey.page(selection.pageId)) {
-                    let unsent = await ready.unsentChanges.read(PMNode.self, key: CacheKey.unsentDocument(cached.id))
-                    apply(page: cached, unsent: unsent)
-                    breadcrumbs = await cache.read([Breadcrumb].self, key: CacheKey.breadcrumbs(cached.id)) ?? []
+                if let saved = await loader.saved() {
+                    apply(page: saved.page, unsent: saved.unsent)
+                    breadcrumbs = saved.breadcrumbs
                 } else {
                     state = .loading
                 }
             }
             do {
-                let page = try await session.load(Endpoints.Pages.info(pageId: selection.pageId), of: ready)
+                let page = try await loader.fetch()
                 apply(page: page)
                 recentlyOpened.record(page)
-                await cache.write(page, key: CacheKey.page(page.id))
-                if let slugId = page.slugId, slugId != page.id {
-                    await cache.write(page, key: CacheKey.page(slugId))
-                }
+                await loader.keep(page)
                 #if DEBUG
                 if let target = DebugLaunch.scrollBlockId {
                     position.scrollTo(id: target, anchor: .top)
@@ -727,12 +724,9 @@ struct PageView: View {
                 model = nil
                 comments = nil
                 find.close()
-                state = .failed(Self.gone(error))
+                state = .failed(error)
                 recentlyOpened.remove(pageId: stale?.id ?? selection.pageId)
-                for key in [stale?.id, stale?.slugId].compactMap({ $0 }) {
-                    await cache.remove(key: CacheKey.page(key))
-                }
-                if let stale { await Self.removeSavedData(of: stale, from: cache) }
+                await loader.forget(stale)
                 return
             } catch is CancellationError {
                 return
@@ -751,13 +745,10 @@ struct PageView: View {
             }
             if showsWebLayout { await loadWebHTML() }
         }
-        if let crumbs = try? await session.load(Endpoints.Pages.breadcrumbs(pageId: selection.pageId), of: ready) {
+        if let crumbs = await loader.breadcrumbs(of: state.value) {
             breadcrumbs = crumbs
-            if let pageId = state.value?.id {
-                await cache.write(crumbs, key: CacheKey.breadcrumbs(pageId))
-            }
         }
-        if let spaceId = state.value?.spaceId, let info = try? await session.load(Endpoints.Spaces.info(spaceId: spaceId), of: ready) {
+        if let info = await loader.space(of: state.value) {
             space = info
             if let page = state.value { model?.canComment = canComment(on: page) }
         }
@@ -801,17 +792,9 @@ struct PageView: View {
             // Trashed or edit rights lost since the cached state: the collab server drops every edit, so rebuild read-only.
             model.suspend()
         }
-        // Database page: no document and no engine; its content is rows, not text.
-        if page.isBase == true { return }
-        let reason: DocumentModel.ReadOnlyReason? = page.isInTrash ? .trash : !page.canEdit ? .noPermission : offline.isOffline ? .offline
-            : session.ready?.newerServerVersion.map { .newerServer($0) }
-        let owner = pageSession.map(LiveDocuments.Owner.init)
-        let live = owner.flatMap { owner in
-            LiveDocuments.document(for: page.id, owner: owner, newerThan: page.updatedAt, serverClockOffset: session.client?.serverClockOffset ?? 0)
-        }
-        let engine = reason == nil ? WebDocumentEngine(session: session) : nil
-        let created = DocumentModel(page: page, initialDocument: live ?? (reason == nil || reason == .offline ? unsent : nil), engine: engine,
-                                    readOnlyReason: reason, dependencies: dependencies(of: page, owner: owner))
+        // A database page gets none: no document and no engine; its content is rows, not text.
+        guard let pageSession, let created = PageLoader(pageId: selection.pageId, owner: pageSession, session: session)
+            .model(for: page, unsent: unsent, isOffline: offline.isOffline, notices: notices, changes: changes) else { return }
         created.canComment = canComment(on: page)
         if created.dependencies.hasDocmost097Features, let previews = session.linkPreviews {
             // A pasted link is recognized only with the workspace's integrations known.
@@ -824,35 +807,6 @@ struct PageView: View {
             registerSelectionCommands()
             created.resume()
         }
-    }
-
-    /// What the page's model needs from the session it loaded in (`pageSession`). Its requests are that session's: once
-    /// a switch (a link to another server) has replaced it, nothing goes out, as another server would get them.
-    private func dependencies(of page: Page, owner: LiveDocuments.Owner?) -> DocumentModel.Dependencies {
-        let session = session, notices = notices, changes = changes
-        var dependencies = DocumentModel.Dependencies(
-            serverURL: session.server?.url, currentUserId: session.ready?.currentUser.user.id, liveOwner: owner,
-            linkPreviews: session.linkPreviews, canCreateBases: session.ready?.entitlements.has("bases") == true,
-            hasDocmost097Features: session.ready?.hasDocmost097Features == true
-        )
-        dependencies.postAppNotice = { message in notices.post(message) }
-        guard let pageSession else { return dependencies }
-        dependencies.suggest = { query in
-            try await session.load(Endpoints.Search.suggest(query: query, users: true, pages: true, spaceId: page.spaceId, limit: 8),
-                                   of: pageSession)
-        }
-        dependencies.lookUpPage = { slugId in try? await session.load(Endpoints.Pages.info(pageId: slugId), of: pageSession) }
-        dependencies.createBase = { template in
-            let base = try await session.send(Endpoints.Bases.create(parentPageId: page.id, template: template), on: pageSession)
-            changes.pageChanged(in: page.spaceId)
-            return base.id
-        }
-        dependencies.sendUpload = { file in
-            try await session.perform(on: pageSession) { client in
-                try await client.uploadAttachment(pageId: page.id, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
-            }
-        }
-        return dependencies
     }
 
     // MARK: - Comments
@@ -890,25 +844,6 @@ struct PageView: View {
     private func registerSelectionCommands() {
         guard let model else { return }
         EditorSelectionCommands.model = model
-    }
-
-    /// The error for a page gone for good or no longer shared, in the app's language (the server's is English).
-    private static func gone(_ error: APIError) -> APIError {
-        if case .forbidden = error { return .forbidden(message: String(localized: "You no longer have access to this page.")) }
-        return .notFound(message: String(localized: "This page doesn't exist anymore."))
-    }
-
-    /// What else the device keeps of a page gone for good: its breadcrumbs, its level in the page tree and, for a
-    /// database, its views' rows.
-    private static func removeSavedData(of page: Page, from cache: DiskCache) async {
-        await cache.remove(key: CacheKey.breadcrumbs(page.id))
-        if let spaceId = page.spaceId {
-            await cache.remove(key: CacheKey.tree(spaceId: spaceId, parentPageId: page.id))
-        }
-        if let base = await cache.read(Base.self, key: CacheKey.base(page.id)) {
-            for view in base.views { await cache.remove(key: CacheKey.baseView(page.id, viewId: view.id)) }
-            await cache.remove(key: CacheKey.base(page.id))
-        }
     }
 
     private func loadWebHTML() async {
