@@ -61,6 +61,16 @@ protocol DocumentEngine: AnyObject, Observable {
     /// For each table command, whether `tableCommand` would apply it to the cell, run without changing anything; nil
     /// without an engine or the table.
     func tableCommandsThatApply(_ target: BlockTarget, cell: [Int], commands: [[String: JSONValue]]) async -> [Bool]?
+    /// Return in a text block (`enter` in Engine/src/keys.ts): it keeps `node`, its text before the cursor (saved on
+    /// `base`), and `after` continues in a new line, where the engine's document has room for it then, in one
+    /// transaction. The save and the new line used to be two.
+    func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult
+    /// Backspace at the start of a text block that holds `node` by now, its input (`backspace` in Engine/src/keys.ts).
+    func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult
+    /// A heading (`node`) for an item's only line: the line leaves the list as it (`liftLine` in Engine/src/keys.ts).
+    func liftLine(_ target: BlockTarget, as node: PMNode) async -> KeyResult
+    /// What Backspace at the start of the block does, empty and with text; nil without an engine or the block.
+    func backspacePlans(_ target: BlockTarget) async -> BackspacePlans?
 }
 
 extension DocumentEngine {
@@ -158,6 +168,53 @@ struct BlockPlace: Hashable, Sendable {
     var jsObject: [String: Any] {
         ["target": target?.jsObject ?? NSNull(), "position": position.rawValue]
     }
+}
+
+/// Where Return or Backspace leaves the cursor (`Cursor` in Engine/src/keys.ts): in the text block at `path`, `offset`
+/// into its content as the engine counts (a character of text per UTF-16 unit, an inline node 1).
+struct EngineCursor: Equatable, Sendable, Decodable {
+    var path: [Int]
+    var offset: Int
+}
+
+/// What Return or a heading out of a list came to: where the cursor goes; refused or unavailable as `EngineResult`.
+enum KeyResult: Equatable {
+    case moved(EngineCursor)
+    case refused, unavailable
+}
+
+/// What Backspace at a block's start does (`BackspacePlan` in Engine/src/keys.ts): joins it with the text block at a
+/// path, removes it (an empty line after an image, a table …), leaves the list (an empty first item), or nothing.
+enum BackspacePlan: Equatable, Sendable, Decodable {
+    case join([Int])
+    case remove, leave, nothing
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, path
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(String.self, forKey: .kind) {
+        case "join": self = .join(try container.decode([Int].self, forKey: .path))
+        case "remove": self = .remove
+        case "leave": self = .leave
+        default: self = .nothing
+        }
+    }
+}
+
+/// What Backspace at a block's start does when it's empty, and when it holds text.
+struct BackspacePlans: Equatable, Sendable, Decodable {
+    var empty: BackspacePlan
+    var text: BackspacePlan
+}
+
+/// What Backspace came to: what it did, with the cursor (none after a removal, or when it did nothing); refused or
+/// unavailable as `EngineResult`.
+enum BackspaceResult: Equatable {
+    case done(BackspacePlan, cursor: EngineCursor?)
+    case refused, unavailable
 }
 
 /// A step of `batch` (`Step` in Engine/src/steps.ts). Each finds its block where the steps before it left it, so later
@@ -387,6 +444,47 @@ final class WebDocumentEngine: DocumentEngine {
                       ["target": target.jsObject, "cell": cell, "commands": commands.map(Self.jsObject)])
     }
 
+    func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult {
+        let result: KeyAnswer<EngineCursor> = await key("return JSON.stringify(window.DocmostEngine.enter(target, json, after, base));",
+                                                        ["target": target.jsObject, "json": Self.jsObject(node), "after": after.map(Self.jsObject),
+                                                         "base": base.map { Self.jsObject($0) } ?? NSNull()])
+        return Self.moved(result)
+    }
+
+    func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult {
+        struct Outcome: Decodable {
+            var kind: String
+            var cursor: EngineCursor?
+        }
+        let result: KeyAnswer<Outcome> = await key("return JSON.stringify(window.DocmostEngine.backspace(target, json));",
+                                                   ["target": target.jsObject, "json": Self.jsObject(node)])
+        switch result {
+        case .value(let outcome):
+            let plan: BackspacePlan = switch outcome.kind {
+            case "join": .join(outcome.cursor?.path ?? [])
+            case "remove": .remove
+            case "leave": .leave
+            default: .nothing
+            }
+            return .done(plan, cursor: outcome.cursor)
+        case .refused: return .refused
+        case .unavailable: return .unavailable
+        }
+    }
+
+    func liftLine(_ target: BlockTarget, as node: PMNode) async -> KeyResult {
+        let result: KeyAnswer<EngineCursor> = await key("return JSON.stringify(window.DocmostEngine.liftLine(target, json));",
+                                                        ["target": target.jsObject, "json": Self.jsObject(node)])
+        return Self.moved(result)
+    }
+
+    func backspacePlans(_ target: BlockTarget) async -> BackspacePlans? {
+        let result: KeyAnswer<BackspacePlans> = await key("return JSON.stringify(window.DocmostEngine.backspacePlans(target));",
+                                                          ["target": target.jsObject])
+        if case .value(let plans) = result { return plans }
+        return nil
+    }
+
     func undo() async -> EngineResult { await call("return window.DocmostEngine.undo();", [:]) }
     func redo() async -> EngineResult { await call("return window.DocmostEngine.redo();", [:]) }
 
@@ -412,6 +510,35 @@ final class WebDocumentEngine: DocumentEngine {
         } catch {
             AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    /// A key's answer: a value, refused or unavailable.
+    private enum KeyAnswer<Value> {
+        case value(Value)
+        case refused, unavailable
+    }
+
+    private static func moved(_ answer: KeyAnswer<EngineCursor>) -> KeyResult {
+        switch answer {
+        case .value(let cursor): .moved(cursor)
+        case .refused: .refused
+        case .unavailable: .unavailable
+        }
+    }
+
+    /// The engine answers a key with JSON: its value, false (refused) or null (it takes no edits); no page, or a call
+    /// that throws (its web process ended), is unavailable too.
+    private func key<Value: Decodable>(_ script: String, _ arguments: [String: Any]) async -> KeyAnswer<Value> {
+        guard let page else { return .unavailable }
+        do {
+            guard let json = try await page.callJavaScript(script, arguments: arguments) as? String else { return .unavailable }
+            if json == "false" { return .refused }
+            guard let value = try? JSONDecoder().decode(Value.self, from: Data(json.utf8)) else { return .unavailable }
+            return .value(value)
+        } catch {
+            AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
+            return .unavailable
         }
     }
 
