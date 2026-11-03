@@ -1103,38 +1103,23 @@ struct PageView: View {
 
     /// A tapped link: pages, anchors, comments and atoms open here; links that leave the app go `outside`.
     private func handle(_ url: URL, outside: OpenURLAction) {
-        if let commentId = CommentLink.commentId(from: url) {
+        let pageIds = [state.value?.slugId, state.value?.id, selection.pageId]
+        switch PageLinkAction.action(for: url, serverURL: session.server?.url, pageIds: pageIds) {
+        case .showComment(let commentId):
             openComments(focus: commentId)
-            return
-        }
-        if let atom = AtomLink.parse(url) {
-            model?.editAtom(blockIdentity: atom.block, type: atom.type, index: atom.index)
-            return
-        }
-        switch ContentLinkRouter.destination(for: url, serverURL: session.server?.url) {
-        case .page(let slugId, let anchor):
-            if [state.value?.slugId, state.value?.id, selection.pageId].contains(slugId) {
-                // This page: scroll, never push a second copy of it.
-                if let anchor { scroll(to: anchor) }
-            } else {
-                navigation.open(PageSelection(pageId: slugId))
-            }
-        case .databaseEntry(let basePageId, let rowId):
-            navigation.open(PageSelection(pageId: basePageId, rowId: rowId))
-        case .comment(let slugId, let commentId):
-            if [state.value?.slugId, state.value?.id, selection.pageId].contains(slugId) {
-                openComments(focus: commentId)
-            } else {
-                navigation.open(PageSelection(pageId: slugId, commentId: commentId))
-            }
+        case .editAtom(let block, let type, let index):
+            model?.editAtom(blockIdentity: block, type: type, index: index)
+        case .scroll(let anchor):
+            scroll(to: anchor)
         case .anchor(let anchor):
-            // Footnote reference while editing: jump into the footnote text, like a double-click in the web editor.
             if model?.focusFootnote(dataId: anchor) == true { return }
             scroll(to: anchor)
-        case .user:
-            break
-        case .external(let external):
+        case .open(let selection):
+            navigation.open(selection)
+        case .outside(let external):
             outside(external)
+        case .none:
+            break
         }
     }
 
