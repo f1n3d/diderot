@@ -105,22 +105,12 @@ S1 is done: what fits where, Return, Backspace, conversions, columns and unsync 
 | Type | Lines | Notes |
 |---|---|---|
 | DocumentModel | 2,416 | its pure parts are out (see below) |
-| PageView | 1,145 | parts split out (see below) |
 
 #### DocumentModel
 
 Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), the lookups in a document (`DocumentTree.swift`), the nodes the editor makes (`NodeFactory.swift`), "/" and "@" in the text (`TriggerParser.swift`) and the table toolbar's types (`TableEditing.swift`). The insert rules S1 left are the menus' state and stay.
 
 **Then the stateful parts (L):** `EngineConnection` (the lifecycle, an enum since package C, unsent-save scheduling, uploads) and `ActiveTextSession` (text, selection, overrides, base, commit), behind a thin observable model. DocumentModelTests are a good safety net.
-
-#### PageView
-
-Split out (S2, part 3): centering above the keyboard (`CentersAboveKeyboard`), what the page's model needs from the session (`DocumentModel.Dependencies`, given at init instead of eleven properties set after it) and what a tapped link does (`PageLinkAction`).
-
-| Step | Size |
-|---|---|
-| A `PageLoader`: the saved copy and the server's page, breadcrumbs and space, and the model made with its dependencies | M |
-| Title handling, page actions | S each |
 
 ### S3 Missing shared building blocks
 
