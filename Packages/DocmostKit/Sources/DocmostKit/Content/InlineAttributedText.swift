@@ -179,30 +179,29 @@ public enum InlineAttributedText {
 
     private static func apply(marks: [PMMark], to run: inout AttributedString) {
         var intents: InlinePresentationIntent = []
-        for mark in marks {
-            switch mark.type {
-            case "bold": intents.insert(.stronglyEmphasized)
-            case "italic": intents.insert(.emphasized)
-            case "strike": intents.insert(.strikethrough)
-            case "code": intents.insert(.code)
-            case "underline": run.docmost.underline = true
-            case "superscript": run.docmost.superscript = true
-            case "subscript": run.docmost.subscript = true
-            case "link":
-                if let href = mark.string("href"), let url = URL(string: href) {
+        for mark in marks.compactMap(InlineMark.init) {
+            switch mark {
+            case .bold: intents.insert(.stronglyEmphasized)
+            case .italic: intents.insert(.emphasized)
+            case .strike: intents.insert(.strikethrough)
+            case .code: intents.insert(.code)
+            case .underline: run.docmost.underline = true
+            case .superscript: run.docmost.superscript = true
+            case .subscript: run.docmost.subscript = true
+            case .link(let href, let provider):
+                if let url = URL(string: href) {
                     run.link = url
-                    if let provider = mark.string("integrationProvider") { run.docmost.linkProvider = provider }
+                    if let provider { run.docmost.linkProvider = provider }
                 }
-            case "highlight":
-                run.docmost.highlight = mark.string("colorName") ?? mark.string("color") ?? "yellow"
-            case "textStyle":
-                if let color = mark.string("color") { run.docmost.textColor = color }
-            case "comment":
-                if let id = mark.string("commentId") {
+            case .highlight(let color, let colorName):
+                run.docmost.highlight = colorName ?? color ?? "yellow"
+            case .textColor(let color):
+                run.docmost.textColor = color
+            case .comment(let id, let resolved):
+                if let id {
                     run.docmost.comment = id
-                    if mark.bool("resolved") == true { run.docmost.commentResolved = true }
+                    if resolved { run.docmost.commentResolved = true }
                 }
-            default: break
             }
         }
         if !intents.isEmpty { run.inlinePresentationIntent = intents }
@@ -247,36 +246,25 @@ public enum InlineAttributedText {
         return run.runs.first.flatMap { shownMarks(for: $0).first }
     }
 
-    /// The marks the run's attributes show.
+    /// The marks the run's attributes show, written as the web writes new ones (`InlineMark.mark`).
     private static func shownMarks(for run: AttributedString.Runs.Run) -> [PMMark] {
-        var marks: [PMMark] = []
+        var marks: [InlineMark] = []
         let intents = run.inlinePresentationIntent ?? []
-        if intents.contains(.stronglyEmphasized) { marks.append(PMMark(type: "bold")) }
-        if intents.contains(.emphasized) { marks.append(PMMark(type: "italic")) }
-        if intents.contains(.strikethrough) { marks.append(PMMark(type: "strike")) }
-        if intents.contains(.code) { marks.append(PMMark(type: "code")) }
-        if run.docmost.underline == true { marks.append(PMMark(type: "underline")) }
-        if run.docmost.superscript == true { marks.append(PMMark(type: "superscript")) }
-        if run.docmost.subscript == true { marks.append(PMMark(type: "subscript")) }
-        if let url = run.link {
-            // Only relative links are internal; mailto: and tel: have no host, but the web must open them externally.
-            let isInternal = url.scheme == nil
-            var attrs: [String: JSONValue] = ["href": .string(url.absoluteString), "target": "_blank", "internal": .bool(isInternal)]
-            if let provider = run.docmost.linkProvider { attrs["integrationProvider"] = .string(provider) }
-            marks.append(PMMark(type: "link", attrs: attrs))
-        }
+        if intents.contains(.stronglyEmphasized) { marks.append(.bold) }
+        if intents.contains(.emphasized) { marks.append(.italic) }
+        if intents.contains(.strikethrough) { marks.append(.strike) }
+        if intents.contains(.code) { marks.append(.code) }
+        if run.docmost.underline == true { marks.append(.underline) }
+        if run.docmost.superscript == true { marks.append(.superscript) }
+        if run.docmost.subscript == true { marks.append(.subscript) }
+        if let url = run.link { marks.append(.link(href: url.absoluteString, integrationProvider: run.docmost.linkProvider)) }
         if let highlight = run.docmost.highlight {
-            if highlight.hasPrefix("#") {
-                marks.append(PMMark(type: "highlight", attrs: ["color": .string(highlight), "colorName": .null]))
-            } else {
-                marks.append(PMMark(type: "highlight", attrs: ["color": .string(HighlightColors.hex(for: highlight)), "colorName": .string(highlight)]))
-            }
+            marks.append(highlight.hasPrefix("#") ? .highlight(color: highlight, colorName: nil)
+                                                  : .highlight(color: HighlightColors.hex(for: highlight), colorName: highlight))
         }
-        if let color = run.docmost.textColor { marks.append(PMMark(type: "textStyle", attrs: ["color": .string(color)])) }
-        if let comment = run.docmost.comment {
-            marks.append(PMMark(type: "comment", attrs: ["commentId": .string(comment), "resolved": .bool(run.docmost.commentResolved == true)]))
-        }
-        return marks
+        if let color = run.docmost.textColor { marks.append(.textColor(color)) }
+        if let comment = run.docmost.comment { marks.append(.comment(id: comment, resolved: run.docmost.commentResolved == true)) }
+        return marks.map(\.mark)
     }
 
     private static func mergeAdjacentText(_ nodes: [PMNode]) -> [PMNode] {

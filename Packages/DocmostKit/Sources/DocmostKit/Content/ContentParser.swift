@@ -320,27 +320,19 @@ public enum ContentParser {
 
     private static func style(for marks: [PMMark]) -> InlineStyle {
         var style = InlineStyle()
-        for mark in marks {
-            switch mark.type {
-            case "bold": style.bold = true
-            case "italic": style.italic = true
-            case "strike": style.strike = true
-            case "underline": style.underline = true
-            case "code": style.code = true
-            case "superscript": style.superscript = true
-            case "subscript": style.subscript = true
-            case "link":
-                if let href = mark.string("href"), !href.isEmpty {
-                    style.link = Link(href: href, integrationProvider: mark.string("integrationProvider"))
-                }
-            case "highlight":
-                style.highlight = Highlight(color: mark.string("color"), colorName: mark.string("colorName"))
-            case "textStyle":
-                style.textColor = mark.string("color").flatMap { $0.isEmpty ? nil : $0 }
-            case "comment":
-                style.comment = CommentMark(commentId: mark.string("commentId"), resolved: mark.bool("resolved") ?? false)
-            default:
-                break
+        for mark in marks.compactMap(InlineMark.init) {
+            switch mark {
+            case .bold: style.bold = true
+            case .italic: style.italic = true
+            case .strike: style.strike = true
+            case .underline: style.underline = true
+            case .code: style.code = true
+            case .superscript: style.superscript = true
+            case .subscript: style.subscript = true
+            case .link(let href, let provider): style.link = Link(href: href, integrationProvider: provider)
+            case .highlight(let color, let colorName): style.highlight = Highlight(color: color, colorName: colorName)
+            case .textColor(let color): style.textColor = color
+            case .comment(let id, let resolved): style.comment = CommentMark(commentId: id, resolved: resolved)
             }
         }
         return style
