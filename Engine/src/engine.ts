@@ -3,7 +3,9 @@
 import { Editor, getSchema, type JSONContent } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
 import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
+import { Node as PMNode } from "@tiptap/pm/model";
 import * as Y from "yjs";
+import { fits, type Place } from "./fits";
 import { bindingChanges } from "./guards";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
@@ -218,6 +220,42 @@ class DocmostEngine {
       return true;
     });
     return focus;
+  }
+
+  // MARK: Questions
+  //
+  // What the app's menus may offer, answered from the document now and the schema, so the app keeps no copy of the
+  // rules. Null when the engine takes no edits, as the block operations return.
+
+  /** For each candidate, whether its blocks can go at `place` as the schema allows (src/fits.ts). */
+  fits(place: Place, candidates: JSONContent[][]): boolean[] | null {
+    if (!this.editor || this.failed) return null;
+    const doc = this.editor.state.doc;
+    return candidates.map((json) => {
+      try {
+        return fits(doc, place, json.map((item) => PMNode.fromJSON(doc.type.schema, item)));
+      } catch {
+        return false; // A type the schema doesn't know.
+      }
+    });
+  }
+
+  /**
+   * For each command, whether `tableCommand` would apply it to the cell (row, index in the row) of the table at
+   * `target`, run without changing anything; null when the table is gone too.
+   */
+  tableCommandsThatApply(target: Target, cell: [number, number], commands: TableCommand[]): boolean[] | null {
+    if (!this.editor || this.failed) return null;
+    const state = this.editor.state;
+    const found = locate(state.doc, target);
+    if (!found) return null;
+    return commands.map((command) => {
+      try {
+        return runTableCommand(state, found.pos, cell, command) !== null;
+      } catch {
+        return false;
+      }
+    });
   }
 
   /** False with nothing to undo (TipTap's Collaboration refuses an empty history). */

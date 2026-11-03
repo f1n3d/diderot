@@ -234,7 +234,7 @@ struct PageView: View {
             if let url = target.webURL {
                 Button("Open Link") { browsing = url }
             }
-            if model?.canShowAsCard(target) == true {
+            if target.canShowAsCard {
                 Button("Show as Card") { Task { await model?.showMention(target, as: .card) } }
             }
             Button("Show as URL") { Task { await model?.showMention(target, as: .link) } }

@@ -119,17 +119,14 @@ S1 comes before splitting DocumentModel (S2). Moving the structural edits into t
 **Today:**
 
 - Return, Backspace, leaving a list, merging, `convertList`, columns and unsync are rebuilt in Swift as path-addressed engine calls (about 600 lines). Since package C the structural edits among them read the engine's document and send the block they were built from (R1), and leaving a list and joining blocks go as one `batch` built the same way (R9).
-- Schema rules exist twice:
-  - `availableCommands`, `conversionTemplates`, `blockReplacement` (`DocumentModel.swift:917–940`) against `extensions.ts:48–52`
-  - `canSort` (`:2584`) against `tables.ts:191–221`
-- They have drifted already (○): inside a synced block, "/Page break" and "/Database" are offered, though `transclusionSource` excludes `pageBreak` and `base`. "/Database" even creates its server page before inserting.
-- `insertBlocks` returns true even when the transaction changed nothing.
+- `conversionTemplates` still decides in Swift which types the active block can turn into.
+
+Since part 1, the engine says what fits where (`fits` in `Engine/src/fits.ts`) and which table commands apply to a cell, for the insert menus, cards and the table toolbar, and it refuses blocks that don't fit instead of fitting them in elsewhere.
 
 **Target:**
 
-- Engine commands that run in one transaction and return the cursor, as `tableCommand` does.
+- Engine commands that run in one transaction and return the cursor, as `tableCommand` does: Return and Backspace (part 2), then conversions, columns and unsync (part 3), which also says which conversions apply.
 - The engine's `batch` (package C) for the rest.
-- Ask the engine whether a node fits (`contentMatchAt`).
 
 This fixes most position races, it replaces package C's stopgaps for R1 and R9 (edits in Swift that read the engine's document and send the block they were built from), and it can be tested in `pnpm run check`, as the batch's steps already are.
 

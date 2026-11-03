@@ -640,6 +640,8 @@ final class DocumentModel {
             adoptsChange = true
             Task { await adoptCollaboratorsChange() }
         }
+        // What fits around the block, and what its table allows, may have changed.
+        if active != nil { refreshAnswers() }
     }
 
     /// The engine's version of the block being edited differs from the one its editor text was made from (a
@@ -781,6 +783,7 @@ final class DocumentModel {
         mentionQuery = nil
         mentionSuggestions = []
         cursorRequest = cursor
+        refreshAnswers()
     }
 
     /// Editor instance with focus (see `editorFocusChanged`).
@@ -962,6 +965,96 @@ final class DocumentModel {
         scheduleCommit(debounce: .zero)
     }
 
+    // MARK: - What the engine says
+
+    /// The engine's answers about the active block, for the menus and the table row of the keyboard toolbar, which
+    /// show at once: which block types fit where new blocks go, which cards and inline databases can take its line's
+    /// place, which table commands apply to its cell. The app kept its own copy of these rules, and it drifted: a synced
+    /// block was offered page breaks and databases it can't hold. Asked when a block becomes active and after each
+    /// document; nil until answered, and for another block.
+    struct EngineAnswers: Equatable {
+        /// The active block's identity they are for.
+        let identity: String
+        /// Block types that fit after the active block, and in its place (an empty line a new block replaces), where
+        /// "/" puts them at the top level and in containers.
+        var afterBlock: Set<String> = []
+        var inPlaceOfBlock: Set<String> = []
+        /// Block types that fit after its top-level block, where "+" puts them, and "/" in lists and table cells.
+        var afterTopLevel: Set<String> = []
+        /// Cards and inline databases that can take the place of its line (a paragraph's).
+        var inLine: Set<InLine> = []
+        /// Table commands, by name, that apply to its cell.
+        var tableCommands: Set<String> = []
+    }
+
+    /// A card or inline database in place of a paragraph, with the paragraph's text before and after it, or not
+    /// (`blockReplacement`).
+    struct InLine: Hashable {
+        let type: String
+        let textBefore: Bool
+        let textAfter: Bool
+    }
+
+    private(set) var answers: EngineAnswers?
+    @ObservationIgnored private var answersTask: Task<Void, Never>?
+
+    /// The block types the menus put on the page.
+    private static let menuBlockTypes = Set(InsertCommand.all.compactMap(\.blockType) + ["transclusionReference"]).sorted()
+    /// The table commands the toolbar offers only where they apply.
+    private static let tableQuestions: [TableEdit] = [
+        .mergeRight, .mergeDown, .split, .moveRowUp, .moveRowDown, .moveColumnLeft, .moveColumnRight, .sort(descending: false),
+    ]
+
+    /// Asks the engine about the active block (`answers`); the newest question wins.
+    private func refreshAnswers() {
+        answersTask?.cancel()
+        guard engine != nil, let active, isEditable else {
+            answers = nil
+            return
+        }
+        let ref = active.ref, isParagraph = active.type == "paragraph", table = activeTablePosition
+        let top = [ref.path[0]]
+        let topTarget = node(at: top).map { NodeRef(path: top, node: $0).target } ?? .path(top)
+        answersTask = Task { [weak self] in
+            guard let self, let engine = self.engine else { return }
+            var answers = EngineAnswers(identity: ref.identity)
+            let types = Self.menuBlockTypes, blocks = types.map { [PMNode(type: $0)] }
+            var fitting: [Set<String>] = []
+            for place in [BlockPlace(target: ref.target, position: .after), BlockPlace(target: ref.target, position: .replace),
+                          BlockPlace(target: topTarget, position: .after)] {
+                // Without an answer the menus offer everything, and the engine refuses what doesn't fit.
+                guard let fits = await engine.fits(place, candidates: blocks), fits.count == types.count else { return }
+                fitting.append(Set(zip(types, fits).filter(\.1).map(\.0)))
+            }
+            (answers.afterBlock, answers.inPlaceOfBlock, answers.afterTopLevel) = (fitting[0], fitting[1], fitting[2])
+            if isParagraph {
+                var lines: [InLine] = []
+                for type in ["integrationCard", "base"] {
+                    for before in [false, true] {
+                        for after in [false, true] { lines.append(InLine(type: type, textBefore: before, textAfter: after)) }
+                    }
+                }
+                let text = PMNode(type: "paragraph")
+                let candidates = lines.map { ($0.textBefore ? [text] : []) + [PMNode(type: $0.type)] + ($0.textAfter ? [text] : []) }
+                if let fits = await engine.fits(BlockPlace(target: ref.target, position: .replace), candidates: candidates) {
+                    answers.inLine = Set(zip(lines, fits).filter(\.1).map(\.0))
+                }
+            }
+            if let table, let apply = await engine.tableCommandsThatApply(.path(table.tablePath, type: "table"), cell: [table.row, table.column],
+                                                                         commands: Self.tableQuestions.map(\.engineCommand)) {
+                answers.tableCommands = Set(zip(Self.tableQuestions, apply).filter(\.1).compactMap { $0.0.engineCommand["name"]?.stringValue })
+            }
+            guard !Task.isCancelled, self.active?.ref.identity == ref.identity else { return }
+            self.answers = answers
+        }
+    }
+
+    /// The answers if they are for the active block.
+    private var activeAnswers: EngineAnswers? {
+        guard let active, let answers, answers.identity == active.ref.identity else { return nil }
+        return answers
+    }
+
     // MARK: - Insert ("/" and "+")
 
     /// Where the active block sits: decides which commands fit and where new blocks go.
@@ -1014,16 +1107,24 @@ final class DocumentModel {
         if location == .footnote {
             return commands.filter { $0.isInline && $0 != .footnote }
         }
-        let ancestors = ancestorTypes(of: active.ref.path)
-        if ancestors.contains("transclusionSource") {
-            // Nor tabs: synced blocks don't hold them (nor do table cells).
-            commands.removeAll { $0 == .syncedBlock || $0 == .pasteSyncedBlock || $0 == .tabs }
+        let inPlace = location == .topLevel || location == .container
+        // Blocks only where the engine says they fit, where `perform` puts them; all of them until it answered.
+        if let answers = activeAnswers {
+            let fitting = !inPlace || slashQuery == nil ? answers.afterTopLevel
+                : lineIsEmptyButForTheQuery ? answers.inPlaceOfBlock : answers.afterBlock
+            commands.removeAll { command in command.blockType.map { !fitting.contains($0) } ?? false }
         }
-        if location == .tableCell { commands.removeAll { $0 == .tabs } }
-        if ancestors.contains("columns") || location == .tableCell {
+        // Columns hold columns, but the app puts none into a column.
+        if inPlace, slashQuery != nil, ancestorTypes(of: active.ref.path).contains("columns") {
             commands.removeAll { if case .columns = $0 { true } else { false } }
         }
         return commands
+    }
+
+    /// The active line holds only the "/query": a block from the menu replaces it (`insertBlocks`).
+    private var lineIsEmptyButForTheQuery: Bool {
+        guard active?.type == "paragraph", let slashQuery else { return false }
+        return activeText.characters.count == slashQuery.count + 1
     }
 
     /// Commands of the open menu; for the slash menu, filtered by the query.
@@ -1261,6 +1362,8 @@ final class DocumentModel {
         let index: Int
         let url: String
         let provider: String
+        /// As the engine said when the mention was tapped (`canShowAsCard`).
+        var canShowAsCard = false
         var id: String { "\(ref.identity)/\(index)" }
         /// What "Open Link" opens in the in-app browser: web addresses only, as the web treats a mention with another
         /// address as one without a link (Safari's view throws, ending the app, on any other).
@@ -1312,9 +1415,11 @@ final class DocumentModel {
         }
     }
 
-    /// Whether the mention can become a card where it is.
-    func canShowAsCard(_ target: MentionTarget) -> Bool {
-        cardReplacement(for: target) != nil
+    /// Whether the mention can become a card where it is, as the engine says (`fits`); its paragraph needn't be the one
+    /// being edited.
+    func canShowAsCard(_ target: MentionTarget) async -> Bool {
+        guard let engine, let nodes = cardReplacement(for: target) else { return false }
+        return await engine.fits(BlockPlace(target: target.ref.target, position: .replace), candidates: [nodes])?.first ?? false
     }
 
     private func cardReplacement(for target: MentionTarget) -> [PMNode]? {
@@ -1342,9 +1447,7 @@ final class DocumentModel {
 
     /// Whether the link at `range` of the active text can become a card where it is.
     func canShowLinkAsCard(in range: Range<AttributedString.Index>) -> Bool {
-        guard let active else { return false }
-        let (before, after) = activeInlines(around: range)
-        return blockReplacement(PMNode(type: "integrationCard"), paragraph: active.ref, before: before, after: after) != nil
+        blockFitsInActiveLine("integrationCard", around: range)
     }
 
     /// Shows the link at `range` of the active text as a mention or a card, as the web's "Display as" does.
@@ -1366,18 +1469,22 @@ final class DocumentModel {
 
     /// The blocks that take a paragraph's place when a card or inline database goes into it, as on the web: the text
     /// before (without its trailing spaces), the block, the text after (without its leading spaces), each part only if
-    /// it isn't empty. Nil where the web places none: outside a paragraph, in table cells, synced blocks and footnotes,
-    /// and in place of a list item's first line.
+    /// it isn't empty. Nil outside a paragraph. Whether they fit there is the engine's to say, as the web asks its schema
+    /// (`getBlockPlacement`): not in table cells, synced blocks and footnotes, nor in place of a list item's first line.
     private func blockReplacement(_ block: PMNode, paragraph ref: NodeRef, before: [PMNode], after: [PMNode]) -> [PMNode]? {
-        guard ref.type == "paragraph", let (path, paragraph) = locate(ref),
-              ancestorTypes(of: path).isDisjoint(with: ["tableCell", "tableHeader", "transclusionSource", "footnote", "footnotes"])
-        else { return nil }
+        guard ref.type == "paragraph", let (_, paragraph) = locate(ref) else { return nil }
         let before = Self.trimmingSpaces(before, atEnd: true), after = Self.trimmingSpaces(after, atEnd: false)
-        if before.isEmpty, path.last == 0, let parent = node(at: Array(path.dropLast())), ["listItem", "taskItem"].contains(parent.type) {
-            return nil
-        }
         return (before.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: before)]) + [block]
             + (after.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: after)])
+    }
+
+    /// Whether a card or inline database of `type` fits in place of the active line, with its text before and after
+    /// `range` (`answers`).
+    private func blockFitsInActiveLine(_ type: String, around range: Range<AttributedString.Index>) -> Bool {
+        guard let answers = activeAnswers else { return false }
+        let (before, after) = activeInlines(around: range)
+        return answers.inLine.contains(InLine(type: type, textBefore: !Self.trimmingSpaces(before, atEnd: true).isEmpty,
+                                              textAfter: !Self.trimmingSpaces(after, atEnd: false).isEmpty))
     }
 
     /// Inline nodes without the spaces at one end (text nodes only, as the web trims them).
@@ -1401,12 +1508,12 @@ final class DocumentModel {
          Self.inlines(from: AttributedString(activeText[range.upperBound..<activeText.endIndex]), base: activeFont))
     }
 
-    /// Whether a card or inline database can take the place of `length` characters at the active text's `offset`.
-    private func blockFits(replacing offset: Int, length: Int = 0) -> Bool {
-        guard let active, offset >= 0, offset + length <= activeText.characters.count else { return false }
+    /// Whether a card or inline database of `type` can take the place of `length` characters at the active text's
+    /// `offset`.
+    private func blockFits(_ type: String, replacing offset: Int, length: Int = 0) -> Bool {
+        guard offset >= 0, offset + length <= activeText.characters.count else { return false }
         let start = activeText.characters.index(activeText.startIndex, offsetBy: offset)
-        let (before, after) = activeInlines(around: start..<activeText.characters.index(start, offsetBy: length))
-        return blockReplacement(PMNode(type: "integrationCard"), paragraph: active.ref, before: before, after: after) != nil
+        return blockFitsInActiveLine(type, around: start..<activeText.characters.index(start, offsetBy: length))
     }
 
     /// Puts a card or inline database in place of `range` of the active text (an empty range: at the cursor), splitting
@@ -1416,7 +1523,9 @@ final class DocumentModel {
     private func placeBlockInActiveText(_ block: PMNode, replacing range: Range<AttributedString.Index>) -> Bool {
         guard let engine, let active, let (path, paragraph) = locate(active.ref) else { return false }
         let (before, after) = activeInlines(around: range)
-        guard var nodes = blockReplacement(block, paragraph: active.ref, before: before, after: after),
+        // Asked before the active line's input goes into the new blocks: refused there, it would be lost.
+        guard blockFitsInActiveLine(block.type, around: range),
+              var nodes = blockReplacement(block, paragraph: active.ref, before: before, after: after),
               let blockOffset = nodes.firstIndex(of: block)
         else { return false }
         let parentPath = Array(path.dropLast()), index = path[path.count - 1]
@@ -1501,7 +1610,7 @@ final class DocumentModel {
         }
         let pasted = insertLinkText(url, provider: provider, at: offset)
         if let provider {
-            pastedLink = PastedLink(url: url, provider: provider, base: nil, allowsBlock: blockFits(replacing: offset, length: pasted.count),
+            pastedLink = PastedLink(url: url, provider: provider, base: nil, allowsBlock: blockFits("integrationCard", replacing: offset, length: pasted.count),
                                     ref: active.ref, offset: offset, text: pasted)
             return true
         }
@@ -1517,7 +1626,7 @@ final class DocumentModel {
             let mention = Self.editorText(from: [pageMention(linked)])
             replaceActiveText(range, with: mention)
             keyboardFollowsText()
-            if hasDocmost097Features, page.isBase == true, blockFits(replacing: offset, length: mention.characters.count) {
+            if hasDocmost097Features, page.isBase == true, blockFits("base", replacing: offset, length: mention.characters.count) {
                 pastedLink = PastedLink(url: url, provider: nil, base: linked, allowsBlock: true, ref: ref, offset: offset,
                                         text: String(mention.characters))
             }
@@ -1814,6 +1923,25 @@ final class DocumentModel {
         return applied
     }
 
+    /// Whether `nodes` fit where `insertBlocks` puts them (in place of an empty line, or after a block), as the engine
+    /// says.
+    private func fits(_ nodes: [PMNode], at placement: BlockPlacement) async -> Bool {
+        guard let engine else { return false }
+        let place: BlockPlace
+        switch placement {
+        case .replaceOrAfter(let ref):
+            guard let (path, node) = locate(ref) else { return false }
+            let empty = node.type == "paragraph" && node.children.isEmpty
+            place = BlockPlace(target: NodeRef(path: path, node: node).target, position: empty ? .replace : .after)
+        case .afterTopLevel(let ref):
+            let top = [ref.path[0]]
+            place = BlockPlace(target: node(at: top).map { NodeRef(path: top, node: $0).target } ?? .path(top), position: .after)
+        case .end:
+            place = BlockPlace(target: nil, position: .after)
+        }
+        return await engine.fits(place, candidates: [nodes])?.first ?? false
+    }
+
     /// Inserts an empty `template` block and puts the cursor in its first text.
     func insertTemplate(_ template: BlockTemplate, placement: BlockPlacement) async {
         await insertBlocks([template.node()], placement: placement, focus: template.firstTextPath.map { .inside($0) } ?? .after)
@@ -1867,6 +1995,12 @@ final class DocumentModel {
     /// Creates a database (base) or kanban board as a subpage, like the web client, and embeds it.
     private func insertBase(kanban: Bool, placement: BlockPlacement) async {
         guard let createBase else { return }
+        // Asked first: its page is created on the server before the block goes in, and stayed there when the block
+        // didn't fit (in a synced block).
+        guard await fits([PMNode(type: "base")], at: placement) else {
+            notice = String(localized: "This can't be placed there.")
+            return
+        }
         isCreatingBase = true
         defer { isCreatingBase = false }
         do {
@@ -2125,7 +2259,11 @@ final class DocumentModel {
         case "mathInline":
             editorSheet = .mathInline(.edit(ref: ref, index: index), latex: node.string("text") ?? "")
         case "integrationMention":
-            mentionActions = MentionTarget(ref: ref, index: index, url: node.string("url") ?? "", provider: node.string("provider") ?? "")
+            var target = MentionTarget(ref: ref, index: index, url: node.string("url") ?? "", provider: node.string("provider") ?? "")
+            Task {
+                target.canShowAsCard = await canShowAsCard(target)
+                mentionActions = target
+            }
         default:
             break
         }
@@ -2742,27 +2880,20 @@ final class DocumentModel {
         var align = TextAlign.left
     }
 
+    /// What the cell allows (merging, splitting, moving, sorting) is the engine's to say (`answers`); the app kept its own
+    /// copy of the grid's rules.
     var activeTableState: TableState? {
         guard let position = activeTablePosition, let table = node(at: position.tablePath),
               let cell = node(at: [position.row, position.column], in: table)
         else { return nil }
-        let grid = TableGrid(table: table)
-        guard grid.areas.indices.contains(position.row), grid.areas[position.row].indices.contains(position.column) else { return nil }
-        let area = grid.areas[position.row][position.column]
         let headers = activeTableHeaders
+        let applies = activeAnswers?.tableCommands ?? []
         return TableState(
             headerRow: headers.row, headerColumn: headers.column, headerCell: cell.type == "tableHeader",
-            canMergeRight: grid.canMerge(row: position.row, index: position.column, right: true),
-            canMergeDown: grid.canMerge(row: position.row, index: position.column, right: false),
-            // By its attributes, as the engine splits.
-            canSplit: ContentParser.colspan(of: cell) > 1 || ContentParser.rowspan(of: cell) > 1,
-            canMoveRowUp: area.top > 0, canMoveRowDown: area.bottom < grid.height,
-            canMoveColumnLeft: area.left > 0, canMoveColumnRight: area.right < grid.width,
-            // As the engine (and the web) sort: no merged cells, and text to sort by in a row that isn't all headers.
-            canSort: !grid.hasMergedCells && table.children.count > 1 && table.children.contains { row in
-                !row.children.allSatisfy { $0.type == "tableHeader" } && row.children.indices.contains(area.left)
-                    && !row.children[area.left].plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            },
+            canMergeRight: applies.contains("mergeRight"), canMergeDown: applies.contains("mergeDown"), canSplit: applies.contains("split"),
+            canMoveRowUp: applies.contains("moveRowUp"), canMoveRowDown: applies.contains("moveRowDown"),
+            canMoveColumnLeft: applies.contains("moveColumnLeft"), canMoveColumnRight: applies.contains("moveColumnRight"),
+            canSort: applies.contains("sort"),
             color: TableColor(name: cell.string("backgroundColorName")),
             align: active?.attrs?["textAlign"]?.stringValue.flatMap(TextAlign.init(rawValue:)) ?? .left
         )

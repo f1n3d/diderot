@@ -89,5 +89,22 @@ expect("a block the schema can't hold", "invalid bulletList", run(two, [
   { op: "insert", target: null, json: [{ type: "bulletList", content: [paragraph("p", "P")] }] },
 ]));
 
+// Blocks go only where the schema holds them. ProseMirror fitted them in elsewhere (wrapping, splitting or dropping
+// them), and the insert counted as done.
+const synced = page({ type: "transclusionSource", content: [paragraph("s", "Synced")] });
+expect("a page break into a synced block", "transclusionSource(Synced)", run(synced, [
+  { op: "insert", target: { id: "s" }, json: [{ type: "pageBreak" }], position: "after" },
+]));
+expect("a list item at the top level", "One Two", run(two, [
+  { op: "insert", target: { id: "1" }, json: [item(paragraph("x", "X"))], position: "after" },
+]));
+expect("a heading in place of an item's first line", "bulletList(A)", run(page(list(item(paragraph("a", "A")))), [
+  { op: "replace", target: { id: "a" }, json: [{ type: "heading", attrs: { id: "a", level: 2 }, content: [{ type: "text", text: "A" }] }] },
+]));
+expect("a paragraph at the end goes before the footnotes", "One X footnotes(footnote(Note))", run(page(paragraph("1", "One"),
+  { type: "footnotes", content: [{ type: "footnote", attrs: { id: "f", "data-id": "f" }, content: [paragraph("n", "Note")] }] }), [
+  { op: "insert", target: null, json: [paragraph("x", "X")] },
+]));
+
 console.log(differences ? `${differences} step difference(s)` : "The steps apply whole or not at all.");
 process.exitCode = differences ? 1 : 0;

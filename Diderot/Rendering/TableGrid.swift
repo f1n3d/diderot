@@ -12,16 +12,8 @@ nonisolated struct TableGrid: Equatable, Sendable {
         var bottom: Int
         var right: Int
 
-        func contains(_ other: Area) -> Bool {
-            top <= other.top && left <= other.left && other.bottom <= bottom && other.right <= right
-        }
-
         func intersects(_ other: Area) -> Bool {
             top < other.bottom && other.top < bottom && left < other.right && other.left < right
-        }
-
-        func union(_ other: Area) -> Area {
-            Area(top: min(top, other.top), left: min(left, other.left), bottom: max(bottom, other.bottom), right: max(right, other.right))
         }
     }
 
@@ -29,8 +21,6 @@ nonisolated struct TableGrid: Equatable, Sendable {
     let areas: [[Area]]
     let width: Int
     var height: Int { areas.count }
-    /// A cell spans more than one row or column (by its attributes, also where the table ends first).
-    let hasMergedCells: Bool
 
     init(spans: [[(columns: Int, rows: Int)]]) {
         // Columns that cells from rows above still cover: `columns` until (before) row `until`.
@@ -50,7 +40,6 @@ nonisolated struct TableGrid: Equatable, Sendable {
             return areas
         }
         self.width = width
-        hasMergedCells = spans.joined().contains { $0.columns > 1 || $0.rows > 1 }
     }
 
     init(table: PMNode) {
@@ -71,16 +60,6 @@ nonisolated struct TableGrid: Equatable, Sendable {
         return nil
     }
 
-    /// Whether a cell merges with its neighbor to the right or below, as the engine's `mergeRight` and `mergeDown` do:
-    /// the rectangle around both takes in the cells inside it; no other cell may stick out of it.
-    func canMerge(row: Int, index: Int, right: Bool) -> Bool {
-        guard areas.indices.contains(row), areas[row].indices.contains(index) else { return false }
-        let area = areas[row][index]
-        let slot = right ? (row: area.top, column: area.right) : (row: area.bottom, column: area.left)
-        guard slot.row < height, slot.column < width, let neighbor = cell(row: slot.row, column: slot.column) else { return false }
-        let merged = area.union(areas[neighbor.row][neighbor.index])
-        return !areas.joined().contains { $0.intersects(merged) && !merged.contains($0) }
-    }
 }
 
 /// A table cell's area on its grid, for `TableGridLayout`.

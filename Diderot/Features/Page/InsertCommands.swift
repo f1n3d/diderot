@@ -320,6 +320,32 @@ enum InsertCommand: Hashable, Identifiable {
         }
     }
 
+    /// The type of the block a block command puts on the page: the menus offer it only where the engine says such a
+    /// block fits (`DocumentModel.availableCommands`). Nil for what goes into the text.
+    var blockType: String? {
+        switch self {
+        case .block(let template): template.node().type
+        case .pageBreak: "pageBreak"
+        case .image, .camera: "image"
+        case .video: "video"
+        case .audio: "audio"
+        case .pdf: "pdf"
+        case .attachment: "attachment"
+        case .base, .kanban: "base"
+        case .mathBlock: "mathBlock"
+        case .mermaid: "codeBlock"
+        case .drawio: "drawio"
+        case .excalidraw: "excalidraw"
+        case .subpages: "subpages"
+        case .syncedBlock: "transclusionSource"
+        case .pasteSyncedBlock: "transclusionReference"
+        case .tabs: "tabs"
+        case .columns: "columns"
+        case .embed: "embed"
+        case .footnote, .mathInline, .date, .time, .status, .emoji: nil
+        }
+    }
+
     /// Converts the current block (like "Turn into") instead of inserting a new one.
     var conversionTemplate: BlockTemplate? {
         guard case .block(let template) = self, template.firstTextPath != nil, template != .table else { return nil }

@@ -4,6 +4,7 @@
 import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
+import { endSlot, holds, slotAt } from "./fits";
 import { checkBlocks, unchanged } from "./guards";
 import { rebase } from "./rebase";
 
@@ -25,8 +26,8 @@ export type Step =
 
 /**
  * Adds the steps to `tr` in order. False as soon as one is refused (the block is gone, has another type, changed since,
- * or the step doesn't fit there); the caller then drops `tr`, steps before included. Throws for a block the schema
- * can't hold (`checkBlocks`).
+ * or the step doesn't fit there: what a replace or an insert brings must fit where it goes, `holds` in src/fits.ts); the
+ * caller then drops `tr`, steps before included. Throws for a block the schema can't hold (`checkBlocks`).
  */
 export function applySteps(tr: Transaction, steps: readonly Step[]): boolean {
   return steps.every((step) => applyStep(tr, step));
@@ -42,6 +43,7 @@ function applyStep(tr: Transaction, step: Step): boolean {
       let nodes = step.json.map((item) => PMNode.fromJSON(schema, item));
       if (step.base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(schema, step.base), nodes[0]) ?? nodes[0]];
       checkBlocks(nodes);
+      if (!holds(slotAt(tr.doc, found.pos, "replace"), nodes)) return false;
       tr.replaceWith(found.pos, found.pos + found.node.nodeSize, nodes);
       return true;
     }
@@ -50,13 +52,14 @@ function applyStep(tr: Transaction, step: Step): boolean {
       checkBlocks(nodes);
       let pos: number;
       if (!step.target) {
+        if (!holds(endSlot(tr.doc), nodes)) return false;
         pos = tr.doc.content.size;
         // Before the footnotes, which always stay last.
         const last = tr.doc.lastChild;
         if (last && last.type.name === "footnotes") pos -= last.nodeSize;
       } else {
         const found = locate(tr.doc, step.target);
-        if (!found) return false;
+        if (!found || !holds(slotAt(tr.doc, found.pos, step.position ?? "after"), nodes)) return false;
         pos = step.position === "before" ? found.pos : found.pos + found.node.nodeSize;
       }
       tr.insert(pos, nodes);
