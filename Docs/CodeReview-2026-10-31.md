@@ -116,7 +116,6 @@ Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), th
 | Topic | Today | Target |
 |---|---|---|
 | Loading | `RemoteValue` loads history, members, trash, templates, sessions, spaces, recent pages, comments, a database's card, synced block references and sub-pages: its state, a later load winning, the saved copy first, a failed refresh keeping what shows. `AsyncContentView` has an inline layout (Home's spaces, a space's tree and recent pages). Loaders of their own stay where they add rules: favorites and notifications (marks and toggles merged in), the page tree, the page, databases, the space header (a gone space shows so over its saved copy), a synced block, attachments (per query); the notifications popover and a database's status lay out their own states. | Move them where their rules allow. (S) |
-| Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links, which can't use the app's schemes since R13. | (M) |
 
 ### S4 Time as a control mechanism
 
