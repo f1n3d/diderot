@@ -149,7 +149,7 @@ DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_EDIT="Neuer Absatz" Tools/run-sim.sh
 # For the bell tests the script first creates two mentions of the admin (Tools/seed-notifications.py), for the database
 # tests the test database and a page embedding it (Tools/seed-bases.py).
 Tools/run-uitests.sh <pageId>
-ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests only
+ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests and their API checks
 AREA=schnell Tools/run-uitests.sh <pageId>   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
 PORT=3001 Tools/run-uitests.sh <pageId>      # against a second dev instance with a newer Docmost (tests of its content skip on older servers)
 
