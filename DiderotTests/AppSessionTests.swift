@@ -1550,6 +1550,64 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// The title field (`PageTitleEdit`): a title the server doesn't get stays on the device and shows as not sent yet;
+    /// one it gets is forgotten, and the page loads again; one for a page gone for good is dropped, saying why.
+    @Test(.timeLimit(.minutes(1))) func aTypedTitleIsKeptUntilTheServerHasIt() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        let onA = try #require(session.ready)
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+        let edit = PageTitleEdit()
+        var reports: [String] = []
+        var loads = 0
+        func commit(_ text: String) async {
+            edit.text = text
+            await edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: { loads += 1 }) { reports.append($0) }?.value
+        }
+
+        StubURLProtocol.offline.withLock { $0 = true }
+        await commit("Neu")
+        StubURLProtocol.offline.withLock { $0 = false }
+        #expect(edit.unsent == "Neu" && reports.count == 1)
+        #expect(await session.unsentTitle(pageId: "p1") == "Neu")
+
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Neuer"}}"# }
+        await commit("Neuer")
+        for _ in 0..<100 where loads == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(edit.unsent == nil && loads == 1 && reports.count == 1)
+        #expect(await session.unsentTitle(pageId: "p1") == nil)
+
+        StubURLProtocol.status.withLock { $0 = 404 }
+        StubURLProtocol.body.withLock { $0 = #"{"statusCode": 404, "message": "Page not found"}"# }
+        defer {
+            StubURLProtocol.status.withLock { $0 = 200 }
+            StubURLProtocol.body.withLock { $0 = nil }
+        }
+        await commit("Weg")
+        #expect(reports.last == "Page not found")
+        #expect(await session.unsentTitle(pageId: "p1") == nil)
+        await removeCaches()
+    }
+
+    /// A title typed on a page whose session a switch replaced waits for that server's next sign-in: it doesn't go to
+    /// the server now current.
+    @Test func aTypedTitleOfAReplacedSessionWaitsForItsServer() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        let onA = try #require(session.ready)
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt"}"#.utf8))
+        let edit = PageTitleEdit()
+        edit.text = "Neu"
+        var reports: [String] = []
+        StubURLProtocol.requests.withLock { $0 = [] }
+        await edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: {}) { reports.append($0) }?.value
+        #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.hasSuffix("/api/pages/update") })
+        #expect(reports.isEmpty, "it waits without a word, like the text")
+        #expect(await onA.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"]?.title == "Neu")
+        await removeCaches()
+    }
+
     /// Titles kept at the same moment (two windows going to the background) all stay: each keep read the list, waited and
     /// wrote it back, so one could drop another's.
     @Test func titlesKeptAtOnceAllStay() async throws {

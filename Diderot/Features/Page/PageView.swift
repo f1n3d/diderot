@@ -26,12 +26,8 @@ struct PageView: View {
     @State private var breadcrumbs: [Breadcrumb] = []
     @State private var position = ScrollPosition(edge: .top)
     @State private var toast: String?
-    /// A title the server didn't get yet (`UnsentTitle`): shown with a note until it goes out.
-    @State private var unsentTitle: String?
-    @State private var title = ""
+    @State private var titleEdit = PageTitleEdit()
     @FocusState private var titleFocused: Bool
-    /// Title whose save is running: a focus loss right after leaving the page would send it a second time.
-    @State private var savingTitle: String?
     /// The session the page loaded in: an edited title waits in its store when that session ends (401) or a link switches
     /// to another server, as the page's text does.
     @State private var pageSession: ReadySession?
@@ -334,11 +330,8 @@ struct PageView: View {
         .onChange(of: offline.isOffline) { _, isOffline in
             if !isOffline, model?.readOnlyReason == .offline { Task { await load(force: true) } }
         }
-        .onChange(of: title) { _, value in
-            if value.contains("\n") {
-                title = value.replacingOccurrences(of: "\n", with: " ")
-                titleFocused = false
-            }
+        .onChange(of: titleEdit.text) { _, _ in
+            if titleEdit.takeReturn() { titleFocused = false }
         }
         .onAppear {
             isOnScreen = true
@@ -549,19 +542,19 @@ struct PageView: View {
                     .frame(width: 1, height: 1)
                 }
                 if canEditMeta(page) {
-                    TextField("Untitled", text: $title, axis: .vertical)
+                    TextField("Untitled", text: $titleEdit.text, axis: .vertical)
                         .font(.largeTitle.bold())
                         .focused($titleFocused)
                         .submitLabel(.done)
                         .accessibilityIdentifier("page-title")
                 } else {
-                    Text(unsentTitle ?? page.displayTitle)
+                    Text(titleEdit.unsent ?? page.displayTitle)
                         .font(.largeTitle.bold())
                         .textSelection(.enabled)
                         .accessibilityAddTraits(.isHeader)
                 }
             }
-            if unsentTitle != nil {
+            if titleEdit.unsent != nil {
                 Label("Not sent yet: the title goes to the server once it can be reached.", systemImage: "icloud.and.arrow.up")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -670,7 +663,7 @@ struct PageView: View {
     private func present(_ page: Page) async {
         await model?.flush()
         model?.deactivate()
-        let shownTitle: String? = canEditMeta(page) ? title : unsentTitle ?? page.title
+        let shownTitle: String? = canEditMeta(page) ? titleEdit.text : titleEdit.unsent ?? page.title
         presentation = Presentation(pageId: page.id, title: PageTitle.display(shownTitle),
                                     document: model.map { ContentParser.parse($0.document) } ?? ContentDocument(json: page.content))
     }
@@ -770,7 +763,7 @@ struct PageView: View {
     private func apply(page: Page, unsent: PMNode? = nil) {
         let isFirst = state.value == nil
         state = .loaded(page)
-        if !titleFocused { title = unsentTitle ?? page.title ?? "" }
+        titleEdit.show(page, typing: titleFocused)
         if isFirst, selection.focusTitle, canEditMeta(page) {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(350))
@@ -926,42 +919,12 @@ struct PageView: View {
 
     // MARK: - Actions
 
-    /// Saves an edited title; reads the view's values before the task starts, so it also works from `onDisappear`. One
-    /// the server doesn't get (offline, unreachable) stays on the device and goes out later (`AppSession.sendUnsentTitles`).
-    /// Kept before it is sent, so it survives the app ending in the background meanwhile; it goes once sent.
+    /// Saves an edited title in the session the page loaded in (`PageTitleEdit.commit`).
     @discardableResult
     private func commitTitle() -> Task<Void, Never>? {
         guard let page = state.value, let pageSession else { return nil }
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed != (page.title ?? ""), trimmed != savingTitle else { return nil }
-        // Its session ended (401) or a link switched servers: the title waits for the next sign-in there, like the text.
-        guard session.isStillCurrent(pageSession) else {
-            return Task { await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges) }
-        }
-        savingTitle = trimmed
-        return Task {
-            // Replaces an older kept title, which then can't overwrite this one.
-            let kept = await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges)
-            do {
-                // With the page's session: a switch while the title was kept would take it to the other server.
-                _ = try await session.send(Endpoints.Pages.update(pageId: page.id, title: trimmed), on: pageSession)
-                await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
-                unsentTitle = nil
-                changes.pageChanged(in: page.spaceId)
-                // The response lacks permissions and space info, so reload instead of replacing the page; on its own, so
-                // a background task doesn't wait for it.
-                Task { await load(force: true) }
-            } catch where UnsentChanges.isFinal(error) {
-                await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
-                toast = error.userMessage
-            } catch where kept {
-                unsentTitle = trimmed
-                toast = String(localized: "The title goes to the server once it can be reached.")
-            } catch {
-                toast = String(localized: "Title not saved: \(error.userMessage)")
-            }
-            savingTitle = nil
-        }
+        return titleEdit.commit(page, in: pageSession, session: session, changes: changes,
+                                sent: { await load(force: true) }, report: { toast = $0 })
     }
 
     /// "Get started with" (`GetStartedRow`), as on the web: databases need the `bases` license feature, templates the
@@ -1004,27 +967,17 @@ struct PageView: View {
         guard await model.fill(with: full.content.flatMap(PMNode.init(json:))?.children ?? []) else {
             throw TemplateError.pageNotEmpty
         }
-        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let templateTitle = full.title, !templateTitle.isEmpty {
-            title = templateTitle
+        if titleEdit.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let templateTitle = full.title, !templateTitle.isEmpty {
+            titleEdit.text = templateTitle
             commitTitle()
         }
     }
 
     /// Shows the page's kept title, and sends it right away if the server answers again.
     private func showUnsentTitle() async {
-        guard let page = state.value, let kept = await session.unsentTitle(pageId: page.id) else {
-            unsentTitle = nil
-            return
-        }
-        unsentTitle = kept
-        if !titleFocused { title = kept }
-        guard !offline.isOffline else { return }
-        let sent = await session.sendUnsentTitles()
-        for spaceId in sent.spaces { changes.pageChanged(in: spaceId) }
-        if let notice = UnsentEdits.DroppedChange.notice(for: sent.dropped) { toast = notice }
-        guard await session.unsentTitle(pageId: page.id) == nil else { return }
-        unsentTitle = nil
-        await load(force: true)
+        let sent = await titleEdit.showUnsent(of: state.value, typing: { titleFocused }, isOffline: { offline.isOffline },
+                                              session: session, changes: changes) { toast = $0 }
+        if sent { await load(force: true) }
     }
 
     private func setIcon(_ emoji: String?) async {
