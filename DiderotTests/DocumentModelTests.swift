@@ -963,6 +963,17 @@ struct DocumentModelTests {
         #expect(model.errorMessage == String(localized: "The server refused the live connection. The page is read-only."))
     }
 
+    /// A page with content the bundled editor would change on opening it (the engine's `bindingChanges`, checked in
+    /// `pnpm run check`): the engine closes it, and the page is read-only, saying the web editor can edit it.
+    @Test func contentTheEditorWouldChangeMakesThePageReadOnly() throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        #expect(model.isEditable)
+        engine.onFailure?(.unsupportedContent)
+        #expect(!model.isEditable)
+        #expect(model.errorMessage == String(localized: "This page has content that this version of the app can't edit yet. You can edit it in the web editor."))
+    }
+
     /// Changes the server hasn't confirmed go into the store for unsent changes without leaving the page, 2 s after the
     /// last one: they lived only in the engine's web process until the page left or the app reached the background.
     /// Offline, and on a connection that died without notice, where the engine still says "synced" until it notices (it
