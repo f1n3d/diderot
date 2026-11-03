@@ -1530,6 +1530,35 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// A server added before keeps the URL it was added with when its address is typed again in another spelling: what
+    /// the app keeps for it, such as its kept titles, is named by that URL.
+    @Test func aServerTypedAgainKeepsTheURLItWasAddedWith() async throws {
+        let added = URL(string: "https://A.example.com:443")!
+        try store.save(StoredSession(serverURL: added, token: "a"))
+        defer { UnsentChanges.removeAll(server: added) }
+        try await UnsentChanges.store(server: added, userId: "u1").update([String: UnsentTitle].self, key: CacheKey.unsentTitles, initial: [:]) {
+            $0["p1"] = UnsentTitle(title: "Wartet", spaceId: nil)
+        }
+        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
+        await session.restore()
+        try #require(session.ready?.server.url == added)
+
+        session.beginAddingServer()
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "w1", "name": "Docs"}}"# }
+        let server = try await session.connect(to: "a.example.com")
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(server.url == added)
+        let payload = Data(#"{"type":"access","exp":4102444800}"#.utf8).base64EncodedString()
+            .replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+        try await session.signIn(withToken: "e30.\(payload).sig", at: server)
+        #expect(session.ready?.server.url == added)
+        #expect(try store.loadAccounts().sessions.map(\.serverURL) == [added])
+        #expect(await session.unsentTitle(pageId: "p1") == "Wartet")
+        try store.setPendingLogouts([])
+        await DiskCache(scope: added.absoluteString).removeAll()
+        await removeCaches()
+    }
+
     /// A title for a page deleted (or out of reach) meanwhile can never go: it doesn't wait forever, and is named for the
     /// notice (it used to go only to the log).
     @Test func keptTitleOfAGonePageIsDropped() async throws {

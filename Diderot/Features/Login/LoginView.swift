@@ -29,7 +29,7 @@ struct LoginView: View {
 
     /// The start couldn't check this server's saved sign-in (`AppSession.uncheckedSignIn`).
     private var hasUncheckedSignIn: Bool {
-        session.uncheckedSignIn.map { StoredAccounts.key(for: $0.serverURL) == StoredAccounts.key(for: server.url) } == true
+        session.uncheckedSignIn.map { ServerKey($0.serverURL) == ServerKey(server.url) } == true
     }
 
     private var providers: [AuthProvider] { server.workspace?.providers ?? [] }

@@ -39,7 +39,7 @@ final class AppSession {
         didSet {
             // Only its server's sign-in screen waits for it.
             if case .signedOut(let server) = state, let uncheckedSignIn,
-               StoredAccounts.key(for: server.url) == StoredAccounts.key(for: uncheckedSignIn.serverURL) { return }
+               ServerKey(server.url) == ServerKey(uncheckedSignIn.serverURL) { return }
             uncheckedSignIn = nil
             uncheckedSignInRetry?.cancel()
         }
@@ -84,7 +84,7 @@ final class AppSession {
 
     func isCurrent(_ account: StoredSession) -> Bool {
         guard let current = server?.url else { return false }
-        return StoredAccounts.key(for: account.serverURL) == StoredAccounts.key(for: current)
+        return ServerKey(account.serverURL) == ServerKey(current)
     }
 
     private func reloadAccounts() {
@@ -118,7 +118,7 @@ final class AppSession {
     /// `false` once a switch or sign-out replaced `session`; a late network answer for it must change nothing.
     func isStillCurrent(_ session: ReadySession) -> Bool {
         guard let ready else { return false }
-        return StoredAccounts.key(for: ready.server.url) == StoredAccounts.key(for: session.server.url) && ready.token == session.token
+        return ServerKey(ready.server.url) == ServerKey(session.server.url) && ready.token == session.token
     }
 
     var client: APIClient? { ready?.client }
@@ -248,9 +248,12 @@ final class AppSession {
     /// Validates the server via `workspace/public` and keeps it for sign-in.
     @discardableResult
     func connect(to input: String) async throws -> ServerInfo {
-        guard let url = ServerURLNormalizer.normalize(input) else {
+        guard var url = ServerURLNormalizer.normalize(input) else {
             throw AppSessionError.invalidServerURL
         }
+        // A server added before keeps the URL it was added with, however its address is typed now: what the app keeps
+        // for it (sign-in, offline copies, unsent changes) is named by that one.
+        if let added = accounts.first(where: { ServerKey($0.serverURL) == ServerKey(url) }) { url = added.serverURL }
         let client = makeClient(for: url, token: nil)
         let workspace = try await client.send(Endpoints.Workspace.publicInfo)
         let server = ServerInfo(url: url, workspace: workspace)
@@ -307,14 +310,8 @@ final class AppSession {
 
     /// The saved sign-in whose server matches a web URL (for links to another server).
     func account(matching url: URL) -> StoredSession? {
-        guard let host = url.host()?.lowercased() else { return nil }
-        return accounts.first { account in
-            account.serverURL.host()?.lowercased() == host && (account.serverURL.port ?? defaultPort(account.serverURL)) == (url.port ?? defaultPort(url))
-        }
-    }
-
-    private func defaultPort(_ url: URL) -> Int {
-        url.scheme?.lowercased() == "http" ? 80 : 443
+        guard url.host() != nil else { return nil }
+        return accounts.first { Origin($0.serverURL) == Origin(url) }
     }
 
     // MARK: - Sign in / sign out
@@ -394,7 +391,7 @@ final class AppSession {
     }
 
     private static func isSameServer(_ server: ServerInfo, as other: ServerInfo) -> Bool {
-        StoredAccounts.key(for: server.url) == StoredAccounts.key(for: other.url)
+        ServerKey(server.url) == ServerKey(other.url)
     }
 
     /// Signs out of the current server and continues with another saved one, if any.
@@ -637,16 +634,16 @@ final class AppSession {
         let stored = StoredSession(serverURL: server.url, token: token, email: currentUser.user.email, workspaceName: currentUser.workspace.name)
         // A sign-in anew replaces the server's saved one (one per server): its session ends on the server, as on
         // signing out, instead of staying open.
-        if let replaced = accounts.first(where: { StoredAccounts.key(for: $0.serverURL) == StoredAccounts.key(for: server.url) }),
+        if let replaced = accounts.first(where: { ServerKey($0.serverURL) == ServerKey(server.url) }),
            replaced.token != token {
             keepPendingLogout(replaced)
         }
         keychain("save") { try sessionStore.save(stored) }
         reloadAccounts()
-            unsentChanges: environment.makeUnsentStore(server.url, currentUser.user.id),
         Task.detached(priority: .utility) { await cache.prune() }
         state = .ready(ReadySession(
             server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,
+            unsentChanges: environment.makeUnsentStore(server.url, currentUser.user.id),
             token: token, currentUser: currentUser, entitlements: resolvedEntitlements,
             serverVersion: Self.reportedVersion(serverVersion)
         ))
@@ -779,8 +776,8 @@ final class AppSession {
         debugPinApplied = true
         guard let pinned = Self.debugServerURL else { return false }
         if let account = account(matching: pinned) {
-            let current = keychain("load", { try sessionStore.load() }).map { StoredAccounts.key(for: $0.serverURL) }
-            if current != StoredAccounts.key(for: account.serverURL) {
+            let current = keychain("load", { try sessionStore.load() }).map { ServerKey($0.serverURL) }
+            if current != ServerKey(account.serverURL) {
                 AppLog.session.notice("Debug server pin: switching to \(account.serverURL.absoluteString, privacy: .public)")
                 keychain("select") { try sessionStore.select(serverURL: account.serverURL) }
             }
