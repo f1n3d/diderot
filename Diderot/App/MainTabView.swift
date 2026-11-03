@@ -138,7 +138,7 @@ struct MainTabView: View {
     private func applyDebugLaunch() async {
         guard let ready = session.ready else { return }
         if let spaceId = DebugLaunch.spaceId {
-            if let space = try? await ready.client.send(Endpoints.Spaces.info(spaceId: spaceId)) {
+            if let space = try? await session.load(Endpoints.Spaces.info(spaceId: spaceId), of: ready) {
                 spacesNavigation.path.append(space)
             } else if let cached = await ready.cache.read([Space].self, key: CacheKey.spaces)?
                         .first(where: { $0.id == spaceId || $0.slug == spaceId })

@@ -218,13 +218,11 @@ struct WorkspaceMembersView: View {
     }
 
     private func load() async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         state = .loading
         do {
             let members = try await Paginated.all { cursor in
-                try await session.perform {
-                    try await client.send(Endpoints.Workspace.members(PaginationOptions(limit: 100, cursor: cursor)))
-                }
+                try await session.load(Endpoints.Workspace.members(PaginationOptions(limit: 100, cursor: cursor)), of: ready)
             }
             state = .loaded(members)
         } catch is CancellationError {

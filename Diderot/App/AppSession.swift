@@ -477,8 +477,10 @@ final class AppSession {
         }
     }
 
-    /// Runs an API call and ends its session on 401. All data loaders use it.
-    func perform<T: Sendable>(_ operation: () async throws -> T) async throws -> T {
+    /// Runs an API call of the session current now and ends that session on 401. Private: a caller's client of an earlier
+    /// session would have its 401 blamed on this one (a list of a signed-out server signing out the next); a flow binds
+    /// its session once (`perform(on:)`, `load(_:of:)`).
+    private func perform<T: Sendable>(_ operation: () async throws -> T) async throws -> T {
         let session = ready
         do {
             return try await operation()
@@ -510,6 +512,16 @@ final class AppSession {
     /// One request through `perform(on:)`.
     func send<Response>(_ endpoint: Endpoint<Response>, on owner: ReadySession) async throws -> Response {
         try await perform(on: owner) { try await $0.send(endpoint) }
+    }
+
+    /// `send(_:on:)` for what a screen shows from `owner`'s server (a list, a page): once a switch or sign-out has replaced
+    /// `owner`, nothing goes out and it ends as the closing screen's request does (`CancellationError`), without a word.
+    func load<Response>(_ endpoint: Endpoint<Response>, of owner: ReadySession) async throws -> Response {
+        do {
+            return try await send(endpoint, on: owner)
+        } catch is SwitchedServer {
+            throw CancellationError()
+        }
     }
 
     /// Handles a 401. Idempotent: concurrent 401s trigger only one transition.

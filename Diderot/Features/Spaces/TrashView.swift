@@ -79,11 +79,11 @@ struct TrashView: View {
     }
 
     private func load() async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         if state.value == nil { state = .loading }
         do {
             let pages = try await Paginated.all { cursor in
-                try await session.perform { try await client.send(Endpoints.Pages.trash(spaceId: route.spaceId, cursor: cursor)) }
+                try await session.load(Endpoints.Pages.trash(spaceId: route.spaceId, cursor: cursor), of: ready)
             }
             state = .loaded(pages)
         } catch is CancellationError {

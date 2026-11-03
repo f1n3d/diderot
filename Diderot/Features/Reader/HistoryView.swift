@@ -67,11 +67,11 @@ struct HistoryView: View {
     }
 
     private func load() async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         if state.value == nil { state = .loading }
         do {
             let entries = try await Paginated.all { cursor in
-                try await session.perform { try await client.send(Endpoints.History.list(pageId: page.id, cursor: cursor)) }
+                try await session.load(Endpoints.History.list(pageId: page.id, cursor: cursor), of: ready)
             }
             state = .loaded(entries)
         } catch is CancellationError {

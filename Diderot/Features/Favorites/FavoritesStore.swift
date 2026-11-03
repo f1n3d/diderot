@@ -24,10 +24,10 @@ final class FavoritesStore {
     func isFavorite(spaceId: String) -> Bool { spaceIds.contains(spaceId) }
 
     func loadIds() async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         do {
-            async let pages = session.perform { try await client.send(Endpoints.Favorites.ids(type: .page)) }
-            async let spaces = session.perform { try await client.send(Endpoints.Favorites.ids(type: .space)) }
+            async let pages = session.load(Endpoints.Favorites.ids(type: .page), of: ready)
+            async let spaces = session.load(Endpoints.Favorites.ids(type: .space), of: ready)
             pageIds = Set(try await pages.items)
             spaceIds = Set(try await spaces.items)
         } catch {
@@ -37,7 +37,6 @@ final class FavoritesStore {
 
     func loadList() async {
         guard let ready = session.ready else { return }
-        let client = ready.client
         if listState.value == nil {
             if let cached = await ready.cache.read([Favorite].self, key: CacheKey.favorites) {
                 apply(cached)
@@ -49,7 +48,7 @@ final class FavoritesStore {
         let load = listLoads
         do {
             let favorites = try await Paginated.all { cursor in
-                try await session.perform { try await client.send(Endpoints.Favorites.list(cursor: cursor)) }
+                try await session.load(Endpoints.Favorites.list(cursor: cursor), of: ready)
             }
             guard load == listLoads else { return }
             apply(favorites)

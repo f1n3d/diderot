@@ -104,12 +104,12 @@ struct TemplatePickerView: View {
     }
 
     private func load() async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         state = .loading
         let space = scope == .space ? spaceId : nil
         do {
             let templates = try await Paginated.all { cursor in
-                try await session.perform { try await client.send(Endpoints.Templates.list(spaceId: space, cursor: cursor)) }
+                try await session.load(Endpoints.Templates.list(spaceId: space, cursor: cursor), of: ready)
             }
             state = .loaded(templates)
         } catch is CancellationError {
@@ -221,10 +221,10 @@ private struct TemplatePreviewView: View {
     }
 
     private func load() async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         state = .loading
         do {
-            state = .loaded(try await session.perform { try await client.send(Endpoints.Templates.info(templateId: template.id)) })
+            state = .loaded(try await session.load(Endpoints.Templates.info(templateId: template.id), of: ready))
         } catch is CancellationError {
         } catch {
             state = .failed(error)
