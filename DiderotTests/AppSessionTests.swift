@@ -1589,6 +1589,30 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// The page's edits (`PageEdits`) go to the server the page loaded from and mark its space as changed; once a switch
+    /// has replaced that session, nothing goes out: a write says so, a read ends without a word.
+    @Test func pageEditsStayWithThePagesServer() async throws {
+        let session = try await sessionOnA()
+        let onA = try #require(session.ready)
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+        let changes = ContentChanges()
+        let edits = PageEdits(page: page, owner: onA, session: session, changes: changes)
+        StubURLProtocol.requests.withLock { $0 = [] }
+        StubURLProtocol.body.withLock { $0 = #"{"data": {}}"# }
+        defer { StubURLProtocol.body.withLock { $0 = nil } }
+        try await edits.moveToTrash()
+        #expect(StubURLProtocol.requests.withLock { $0 } == ["a.example.com/api/pages/delete"])
+        #expect(changes.version == 1 && changes.lastChangedSpaceId == "s1")
+
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        StubURLProtocol.requests.withLock { $0 = [] }
+        await #expect(throws: SwitchedServer.self) { try await edits.restore() }
+        await #expect(throws: CancellationError.self) { _ = try await edits.content(as: "markdown") }
+        #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.hasSuffix("/api/pages/restore") || $0.hasSuffix("/api/pages/info") })
+        #expect(changes.version == 1)
+        await removeCaches()
+    }
+
     /// A title typed on a page whose session a switch replaced waits for that server's next sign-in: it doesn't go to
     /// the server now current.
     @Test func aTypedTitleOfAReplacedSessionWaitsForItsServer() async throws {

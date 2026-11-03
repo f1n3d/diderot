@@ -680,6 +680,12 @@ struct PageView: View {
         page.canEdit && !page.isInTrash && !offline.isOffline
     }
 
+    /// What the header and menu change, in the session the page loaded in.
+    private var edits: PageEdits? {
+        guard let page = state.value, let pageSession else { return nil }
+        return PageEdits(page: page, owner: pageSession, session: session, changes: changes)
+    }
+
     private var webURL: URL? {
         guard let server = session.server?.url, let slugId = state.value?.slugId else { return nil }
         return ContentLinkRouter.webPageURL(server: server, slugId: slugId)
@@ -906,10 +912,9 @@ struct PageView: View {
     }
 
     private func loadWebHTML() async {
-        guard session.client != nil else { return }
+        guard let edits else { return }
         do {
-            let page = try await session.send(Endpoints.Pages.info(pageId: selection.pageId, format: "html"))
-            webHTML = page.content?.stringValue ?? ""
+            webHTML = try await edits.content(as: "html")
         } catch is CancellationError {
         } catch {
             toast = error.userMessage
@@ -950,10 +955,9 @@ struct PageView: View {
 
     /// Turns the empty page into a database, as the web's "Get started with" does; the page then shows its rows.
     private func convertToDatabase(template: String?) async {
-        guard let page = state.value else { return }
+        guard let edits else { return }
         do {
-            _ = try await session.send(Endpoints.Bases.convert(pageId: page.id, template: template))
-            changes.pageChanged(in: page.spaceId)
+            try await edits.convertToDatabase(template: template)
             await load(force: true)
         } catch {
             toast = error.userMessage
@@ -981,10 +985,9 @@ struct PageView: View {
     }
 
     private func setIcon(_ emoji: String?) async {
-        guard let page = state.value, session.client != nil else { return }
+        guard let edits else { return }
         do {
-            _ = try await session.send(Endpoints.Pages.update(pageId: page.id, icon: emoji ?? ""))
-            changes.pageChanged(in: page.spaceId)
+            try await edits.setIcon(emoji)
             await load(force: true)
         } catch {
             toast = error.userMessage
@@ -1002,23 +1005,18 @@ struct PageView: View {
     }
 
     private func createSubpage() async {
-        guard session.client != nil, let page = state.value, let spaceId = page.spaceId else { return }
+        guard let edits else { return }
         do {
-            let created = try await session.send(Endpoints.Pages.create(spaceId: spaceId, parentPageId: page.id, title: nil))
-            changes.pageChanged(in: spaceId)
-            var next = PageSelection(page: created)
-            next.focusTitle = true
-            navigation.open(next)
+            if let next = try await edits.createSubpage() { navigation.open(next) }
         } catch {
             toast = error.userMessage
         }
     }
 
     private func copyMarkdown() async {
-        guard session.client != nil else { return }
+        guard let edits else { return }
         do {
-            let page = try await session.send(Endpoints.Pages.info(pageId: selection.pageId, format: "markdown"))
-            UIPasteboard.general.string = page.content?.stringValue ?? ""
+            UIPasteboard.general.string = try await edits.content(as: "markdown")
             toast = String(localized: "Copied as Markdown")
         } catch {
             toast = error.userMessage
@@ -1026,13 +1024,12 @@ struct PageView: View {
     }
 
     private func moveToTrash() async {
-        guard session.client != nil, let page = state.value else { return }
+        guard let edits else { return }
         do {
             // Queued like leaving the page: stopped beside it, an open still running would start the engine again.
             await model?.suspend().value
             model = nil
-            _ = try await session.send(Endpoints.Pages.delete(pageId: page.id))
-            changes.pageChanged(in: page.spaceId)
+            try await edits.moveToTrash()
             toast = String(localized: "Moved to Trash")
             await load(force: true)
         } catch {
@@ -1043,10 +1040,9 @@ struct PageView: View {
     }
 
     private func restore() async {
-        guard session.client != nil, let page = state.value else { return }
+        guard let edits else { return }
         do {
-            _ = try await session.send(Endpoints.Pages.restore(pageId: page.id))
-            changes.pageChanged(in: page.spaceId)
+            try await edits.restore()
             toast = String(localized: "Page restored")
             await load(force: true)
         } catch {
