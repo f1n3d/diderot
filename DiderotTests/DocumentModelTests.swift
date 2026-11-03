@@ -604,6 +604,8 @@ struct DocumentModelTests {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
         engine.sendDocument()
+        let clock = TestClock()
+        model.dependencies.clock = clock
 
         model.performAtEnd(.date)
         while engine.failsNextInsert { try await Task.sleep(for: .milliseconds(10)) }
@@ -613,7 +615,7 @@ struct DocumentModelTests {
         model.activeText.append(AttributedString("\n"))
         model.activeTextChanged()
         while engine.enters.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        try await Task.sleep(for: .milliseconds(600))  // longer than an inline command waits for the editor's focus
+        await clock.advance(by: .milliseconds(400))  // as long as an inline command waits for the editor's focus
 
         #expect(model.active?.ref == NodeRef(path: [1], id: "b"))
         #expect(String(model.activeText.characters).isEmpty)
@@ -973,6 +975,8 @@ struct DocumentModelTests {
         let engine = FakeDocumentEngine(document: doc("Hello"))
         engine.status = status
         let model = try Self.model(engine)
+        let clock = TestClock()
+        model.dependencies.clock = clock
         let line = try #require(model.node(at: [0]))
         model.activate(NodeRef(path: [0], node: line), node: line)
         model.activeText.append(AttributedString("!"))
@@ -981,8 +985,8 @@ struct DocumentModelTests {
         engine.unconfirmedChanges = unconfirmed
         engine.sendDocument(doc("Hello!"))  // the engine's document event for the change
 
-        try await Task.sleep(for: .seconds(3))
-        // A busy main actor (a full parallel run) can hold the save back longer.
+        await clock.advance(by: .seconds(2))
+        // Writing the unsent changes can take longer than the clock's turns of the main actor.
         while unconfirmed > 0, engine.lifecycle.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.lifecycle == (unconfirmed == 0 ? [] : ["save after 1"]))
     }
@@ -1099,6 +1103,23 @@ struct DocumentModelTests {
         while String(model.activeText.characters) != "Hello world!" { try await Task.sleep(for: .milliseconds(10)) }
     }
 
+    /// A save waits for more input on the model's clock: not before the wait has passed, at once after it. Tests of a save,
+    /// or of none, need no real time with it (`TestClock`), and don't pass while the main actor is busy elsewhere.
+    @Test(.timeLimit(.minutes(1))) func aSaveWaitsForMoreInputOnTheModelsClock() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line]))
+        let model = try Self.model(engine)
+        let clock = TestClock()
+        model.dependencies.clock = clock
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        await clock.advance(by: .milliseconds(399))
+        #expect(engine.saved.isEmpty)
+        await clock.advance(by: .milliseconds(1))
+        #expect(engine.saved.map(\.plainText) == ["Eins!"])
+    }
+
     /// Moving the cursor to another block writes nothing back when nothing was typed: the untouched block overwrote
     /// what a collaborator typed there in the next 400 ms.
     @Test(.timeLimit(.minutes(1))) func switchingBlocksWritesNothingBack() async throws {
@@ -1106,12 +1127,14 @@ struct DocumentModelTests {
         let second = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Zwei")])
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
         let model = try Self.model(engine)
+        let clock = TestClock()
+        model.dependencies.clock = clock
 
         model.activate(NodeRef(path: [0], node: first), node: first)
         model.activeTextChanged()  // the editor reporting the text it was given
         model.activate(NodeRef(path: [1], node: second), node: second)
         model.activeTextChanged()
-        try await Task.sleep(for: .milliseconds(600))
+        await clock.advance(by: .milliseconds(400))
 
         #expect(engine.saved.isEmpty)
     }
@@ -1237,13 +1260,15 @@ struct DocumentModelTests {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
         engine.sendDocument()
+        let clock = TestClock()
+        model.dependencies.clock = clock
         model.activate(NodeRef(path: [1], node: code), node: code)
 
         model.activeCode += "2"
         model.activeCodeChanged()
         engine.document = PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"]), divider, code])
         engine.sendDocument()
-        try await Task.sleep(for: .milliseconds(600))  // longer than a save waits for more input
+        await clock.advance(by: .milliseconds(400))  // as long as a save waits for more input
 
         #expect(model.active == nil)
         #expect(engine.saved.isEmpty)
@@ -1278,6 +1303,8 @@ struct DocumentModelTests {
         let second = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Zwei")])
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
         let model = try Self.model(engine)
+        let clock = TestClock()
+        model.dependencies.clock = clock
         engine.plans = BackspacePlans(empty: .join([0]), text: .join([0]))
         model.activate(NodeRef(path: [1], node: second), node: second)
         while model.answers?.backspace == nil { try await Task.sleep(for: .milliseconds(10)) }
@@ -1285,7 +1312,7 @@ struct DocumentModelTests {
 
         #expect(model.backspaceAtStart())
         while engine.backspaces.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        try await Task.sleep(for: .milliseconds(600))  // longer than a save waits for more input
+        await clock.advance(by: .milliseconds(400))  // as long as a save waits for more input
 
         #expect(model.active == nil)
         #expect(engine.saved.isEmpty)
