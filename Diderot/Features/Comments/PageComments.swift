@@ -68,13 +68,13 @@ final class PageComments {
     var canResolve: Bool { session.ready?.entitlements.has("comment:resolution") == true }
 
     func load() async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         if state.value == nil { state = .loading }
         loads += 1
         let load = loads
         do {
             let comments = try await Paginated.all { cursor in
-                try await session.perform { try await client.send(Endpoints.Comments.list(pageId: self.pageId, cursor: cursor)) }
+                try await session.load(Endpoints.Comments.list(pageId: self.pageId, cursor: cursor), of: ready)
             }
             guard load == loads else { return }
             state = .loaded(comments)

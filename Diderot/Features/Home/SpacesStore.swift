@@ -32,9 +32,7 @@ final class SpacesStore {
         }
         do {
             let spaces = try await Paginated.all { cursor in
-                try await session.perform {
-                    try await ready.client.send(Endpoints.Spaces.list(PaginationOptions(limit: 100, cursor: cursor)))
-                }
+                try await session.load(Endpoints.Spaces.list(PaginationOptions(limit: 100, cursor: cursor)), of: ready)
             }
             await ready.cache.write(spaces, key: CacheKey.spaces)
             state = .loaded(spaces)

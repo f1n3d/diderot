@@ -484,14 +484,14 @@ struct BaseFileEditor: View {
 
     /// Downloads through the authenticated session, then shows Quick Look.
     private func open(_ file: FileEntry) async {
-        guard let baseURL = session.server?.url, let client = session.client else { return }
+        guard let baseURL = session.server?.url, let ready = session.ready else { return }
         let path = file.url ?? "/api/files/\(file.id)/\(file.name)"
         guard let url = ImageURL.resolveContentMedia(path, baseURL: baseURL) else { return }
         // Each file keeps its spinner while another one loads too; a second tap doesn't load it again.
         guard downloading.insert(file.id).inserted else { return }
         defer { downloading.remove(file.id) }
         do {
-            let (data, _) = try await client.fetchFile(at: url)
+            let data = try await session.perform(on: ready) { try await $0.fetchFile(at: url).0 }
             previewURL = try TempFile.write(data, server: baseURL, folder: ["attachments", file.id], name: file.name)
         } catch {
             model.toast = error.userMessage

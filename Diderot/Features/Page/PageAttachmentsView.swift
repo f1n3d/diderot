@@ -78,14 +78,12 @@ struct PageAttachmentsView: View {
     }
 
     private func load() async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         if state.value == nil { state = .loading }
         let search = query.trimmingCharacters(in: .whitespaces)
         do {
             let attachments = try await Paginated.all { cursor in
-                try await session.perform {
-                    try await client.send(Endpoints.Attachments.list(pageId: page.id, query: search.isEmpty ? nil : search, cursor: cursor))
-                }
+                try await session.load(Endpoints.Attachments.list(pageId: page.id, query: search.isEmpty ? nil : search, cursor: cursor), of: ready)
             }
             // A slower answer for an earlier query must not replace the current one.
             if search == query.trimmingCharacters(in: .whitespaces) { state = .loaded(attachments) }
@@ -96,13 +94,13 @@ struct PageAttachmentsView: View {
     }
 
     private func open(_ attachment: Attachment) async {
-        guard let client = session.client, let server = session.server?.url,
+        guard let ready = session.ready, let server = session.server?.url,
               let url = RenderContext(session: session, pageId: page.id).mediaURL(attachment.fileURLPath) else { return }
         opening = attachment.id
         errorMessage = nil
         defer { opening = nil }
         do {
-            let (data, _) = try await client.fetchFile(at: url)
+            let data = try await session.perform(on: ready) { try await $0.fetchFile(at: url).0 }
             preview = try TempFile.write(data, server: server, folder: ["attachments", attachment.id], name: attachment.fileName)
         } catch {
             errorMessage = error.userMessage
@@ -110,10 +108,10 @@ struct PageAttachmentsView: View {
     }
 
     private func delete(_ attachment: Attachment) async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         errorMessage = nil
         do {
-            _ = try await session.perform { try await client.send(Endpoints.Attachments.delete(attachmentId: attachment.id)) }
+            _ = try await session.send(Endpoints.Attachments.delete(attachmentId: attachment.id), on: ready)
             if case .loaded(let attachments) = state {
                 state = .loaded(attachments.filter { $0.id != attachment.id })
             }

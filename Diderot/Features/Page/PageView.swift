@@ -697,7 +697,6 @@ struct PageView: View {
     private func load(force: Bool) async {
         guard let ready = session.ready else { return }
         pageSession = ready
-        let client = ready.client
         let cache = ready.cache
         if state.value == nil || force {
             if state.value == nil {
@@ -710,7 +709,7 @@ struct PageView: View {
                 }
             }
             do {
-                let page = try await session.perform { try await client.send(Endpoints.Pages.info(pageId: selection.pageId)) }
+                let page = try await session.load(Endpoints.Pages.info(pageId: selection.pageId), of: ready)
                 apply(page: page)
                 recentlyOpened.record(page)
                 await cache.write(page, key: CacheKey.page(page.id))
@@ -753,13 +752,13 @@ struct PageView: View {
             }
             if showsWebLayout { await loadWebHTML() }
         }
-        if let crumbs = try? await session.perform({ try await client.send(Endpoints.Pages.breadcrumbs(pageId: selection.pageId)) }) {
+        if let crumbs = try? await session.load(Endpoints.Pages.breadcrumbs(pageId: selection.pageId), of: ready) {
             breadcrumbs = crumbs
             if let pageId = state.value?.id {
                 await cache.write(crumbs, key: CacheKey.breadcrumbs(pageId))
             }
         }
-        if let spaceId = state.value?.spaceId, let info = try? await session.perform({ try await client.send(Endpoints.Spaces.info(spaceId: spaceId)) }) {
+        if let spaceId = state.value?.spaceId, let info = try? await session.load(Endpoints.Spaces.info(spaceId: spaceId), of: ready) {
             space = info
             if let page = state.value { model?.canComment = canComment(on: page) }
         }
@@ -828,7 +827,8 @@ struct PageView: View {
         }
     }
 
-    /// What the page's model needs from the session it loaded in (`pageSession`).
+    /// What the page's model needs from the session it loaded in (`pageSession`). Its requests are that session's: once
+    /// a switch (a link to another server) has replaced it, nothing goes out, as another server would get them.
     private func dependencies(of page: Page, owner: LiveDocuments.Owner?) -> DocumentModel.Dependencies {
         let session = session, notices = notices, changes = changes
         var dependencies = DocumentModel.Dependencies(
@@ -836,24 +836,23 @@ struct PageView: View {
             linkPreviews: session.linkPreviews, canCreateBases: session.ready?.entitlements.has("bases") == true,
             hasDocmost097Features: session.ready?.hasDocmost097Features == true
         )
+        dependencies.postAppNotice = { message in notices.post(message) }
+        guard let pageSession else { return dependencies }
         dependencies.suggest = { query in
-            try await session.send(Endpoints.Search.suggest(query: query, users: true, pages: true, spaceId: page.spaceId, limit: 8))
+            try await session.load(Endpoints.Search.suggest(query: query, users: true, pages: true, spaceId: page.spaceId, limit: 8),
+                                   of: pageSession)
         }
-        dependencies.lookUpPage = { slugId in try? await session.send(Endpoints.Pages.info(pageId: slugId)) }
+        dependencies.lookUpPage = { slugId in try? await session.load(Endpoints.Pages.info(pageId: slugId), of: pageSession) }
         dependencies.createBase = { template in
-            let base = try await session.send(Endpoints.Bases.create(parentPageId: page.id, template: template))
+            let base = try await session.send(Endpoints.Bases.create(parentPageId: page.id, template: template), on: pageSession)
             changes.pageChanged(in: page.spaceId)
             return base.id
         }
-        if let pageSession {
-            // To the server the page came from, also after a switch: another server would get the file.
-            dependencies.sendUpload = { file in
-                try await session.perform(on: pageSession) { client in
-                    try await client.uploadAttachment(pageId: page.id, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
-                }
+        dependencies.sendUpload = { file in
+            try await session.perform(on: pageSession) { client in
+                try await client.uploadAttachment(pageId: page.id, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
             }
         }
-        dependencies.postAppNotice = { message in notices.post(message) }
         return dependencies
     }
 

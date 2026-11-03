@@ -275,16 +275,14 @@ struct SpaceView: View {
         if runner == nil {
             runner = PageActionRunner(session: session, changes: changes)
         }
-        guard !store.hasLoader, let client = session.client else { return }
+        guard !store.hasLoader, let ready = session.ready else { return }
         let spaceId = space.id
         let session = session
-        store = PageTreeStore(spaceId: spaceId, cache: session.ready?.cache) { parent, cursor in
-            try await session.perform {
-                if let parent {
-                    return try await client.send(Endpoints.Pages.children(of: parent, cursor: cursor))
-                }
-                return try await client.send(Endpoints.Pages.sidebar(spaceId: spaceId, cursor: cursor))
+        store = PageTreeStore(spaceId: spaceId, cache: ready.cache) { parent, cursor in
+            if let parent {
+                return try await session.load(Endpoints.Pages.children(of: parent, cursor: cursor), of: ready)
             }
+            return try await session.load(Endpoints.Pages.sidebar(spaceId: spaceId, cursor: cursor), of: ready)
         }
     }
 

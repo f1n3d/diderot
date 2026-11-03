@@ -349,10 +349,20 @@ struct AppSessionRaceTests {
     @Test func lateUnauthorizedAnswerKeepsTheSwitch() async throws {
         let session = try await sessionOnA()
         let other = StoredSession(serverURL: b, token: "b")
-        _ = try? await session.perform { () async throws -> Void in
-            await session.switchTo(other)
-            throw APIError.unauthorized(message: nil)
+        StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+        StubURLProtocol.beforeNextAnswer.withLock {
+            $0 = {
+                await session.switchTo(other)
+                StubURLProtocol.status.withLock { $0 = 401 }
+                StubURLProtocol.body.withLock { $0 = #"{"statusCode": 401, "message": "Unauthorized"}"# }
+            }
         }
+        defer {
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+            StubURLProtocol.status.withLock { $0 = 200 }
+            StubURLProtocol.body.withLock { $0 = nil }
+        }
+        _ = try? await session.send(Endpoints.Users.me)
         #expect(session.ready?.server.url == b)
         #expect(try store.loadAccounts().sessions.map(\.serverURL) == [b, a])
         await removeCaches()
@@ -1563,6 +1573,35 @@ struct AppSessionRaceTests {
         #expect(await session.keepUnsentTitle("Neu", pageId: "p2", spaceId: nil) == false)
         #expect(await session.sendUnsentTitles().spaces.isEmpty)
         #expect(await store.read([String: String].self, key: CacheKey.unsentTitles) == ["p1": "not a title"])
+        await removeCaches()
+    }
+
+    /// Block views' requests go through the session the page showed with: its 401 ends that session, as the session's
+    /// own requests' do. They went out with its bare client, and a 401 there ended nothing.
+    @Test func blockViewsRequestThroughTheirSession() async throws {
+        let session = try await sessionOnA()
+        let context = RenderContext(session: session, pageId: "p")
+        StubURLProtocol.status.withLock { $0 = 401 }
+        StubURLProtocol.body.withLock { $0 = #"{"statusCode": 401, "message": "Unauthorized"}"# }
+        await #expect(throws: APIError.self) { _ = try await context.send(Endpoints.Users.me) }
+        StubURLProtocol.status.withLock { $0 = 200 }
+        StubURLProtocol.body.withLock { $0 = nil }
+        #expect(session.ready == nil, "a's 401 ended it")
+        await removeCaches()
+    }
+
+    /// What a screen loads for a session that a switch has replaced doesn't go out, and ends as a closing screen's request
+    /// does, without an error to show; the session now current stays. A list's later pages went out with the old
+    /// client, and their 401 (its server signed out) ended the session now current.
+    @Test func aReplacedSessionsLoadEndsWithoutAWord() async throws {
+        let session = try await sessionOnA()
+        let onA = try #require(session.ready)
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        try #require(session.ready?.server.url == b)
+        StubURLProtocol.requests.withLock { $0 = [] }
+        await #expect(throws: CancellationError.self) { _ = try await session.load(Endpoints.Users.me, of: onA) }
+        #expect(StubURLProtocol.requests.withLock { $0 }.isEmpty)
+        #expect(session.ready?.server.url == b)
         await removeCaches()
     }
 

@@ -222,10 +222,10 @@ struct BaseEmbedCard: View {
     }
 
     private func load() async {
-        guard let client = context.client, let pageId else { return }
+        guard context.canRequest, let pageId else { return }
         if state.value == nil { state = .loading }
         do {
-            state = .loaded(try await client.send(Endpoints.Bases.info(pageId: pageId)))
+            state = .loaded(try await context.send(Endpoints.Bases.info(pageId: pageId)))
         } catch is CancellationError {
         } catch {
             if state.value == nil { state = .failed(error) }

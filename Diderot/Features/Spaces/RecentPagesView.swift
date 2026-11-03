@@ -61,7 +61,7 @@ struct RecentPagesView: View {
         loads += 1
         let load = loads
         do {
-            let page = try await session.perform { try await ready.client.send(Endpoints.Pages.recent(limit: 50)) }
+            let page = try await session.load(Endpoints.Pages.recent(limit: 50), of: ready)
             guard load == loads else { return }
             state = .loaded(page.items)
             await ready.cache.write(page.items, key: CacheKey.recent)

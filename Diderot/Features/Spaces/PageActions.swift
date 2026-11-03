@@ -86,9 +86,9 @@ final class PageActionRunner {
     }
 
     private func run(_ operation: @MainActor (APIClient) async throws -> Void) async {
-        guard let client = session.client else { return }
+        guard let ready = session.ready else { return }
         do {
-            try await session.perform { try await operation(client) }
+            try await session.perform(on: ready) { try await operation($0) }
         } catch {
             toast = error.userMessage
         }
