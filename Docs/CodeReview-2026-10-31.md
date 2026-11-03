@@ -277,11 +277,6 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 - **AppSessionTests:** 1,100 lines of race tests for many features (session, notifications, favorites, search, engine, databases). They share static `StubURLProtocol` hooks, so they must run serially. They touch the real Caches folder, WebKit and temp files, and `restore()` asks the real network monitor. Split the file per feature and inject the transport and the environment.
 - **EditorUITests:** 2,198 lines; 60 tests share one page whose state accumulates. 118 `Thread.sleep` calls add up to about 105 s. Use pages per test and condition-based waits.
-- **Missing tests for risky paths:**
-  - Keychain attributes
-  - concurrent access to the unsent store
-  - the SSO cookie capture
-  - the lossy-content guard
 
 ---
 
