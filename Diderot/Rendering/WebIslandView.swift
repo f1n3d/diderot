@@ -53,16 +53,32 @@ struct WebIslandView: View {
         height = nil
         page.load(html: look.html, baseURL: IslandHTML.baseURL)
         do {
-            // Page-wide events, not the load's: those stop the load on task cancel, then callJavaScript never returns.
-            for try await event in page.navigations {
-                if case .finished = event { break }
-            }
+            try await waitForLoad()
             try await measureHeight(afterFonts: true)
             // A cancelled render may have measured before its page loaded; it renders again on return.
             if !Task.isCancelled { rendered = look }
         } catch {
+            // Cancelled (the island scrolled away), a render fails late: once the one back in view loaded the page
+            // anew. Its minimum height came after the right one then, and stayed while the island was in view (code
+            // review R49).
+            guard !Task.isCancelled else { return }
             AppLog.ui.debug("Island failed: \(error.localizedDescription, privacy: .public)")
             height = minHeight
+        }
+    }
+
+    /// Waits for the page's next `.finished`, or until the render is cancelled. Page-wide events, not the load's: those
+    /// stop the load on task cancel, then callJavaScript never returns. So a load this one replaced (the island
+    /// scrolled away while it loaded, and back) reports its cancellation here too: not this load's failure (R49).
+    private func waitForLoad() async throws {
+        while true {
+            do {
+                for try await event in page.navigations {
+                    if case .finished = event { return }
+                }
+                return
+            } catch WebPage.NavigationError.failedProvisionalNavigation(let error)
+                where (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled {}
         }
     }
 
