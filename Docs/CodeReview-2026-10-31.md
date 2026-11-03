@@ -108,8 +108,6 @@ S1 is done: what fits where, Return, Backspace, conversions, columns and unsync 
 |---|---|---|
 | DocumentModel | 2,432 | its pure parts are out (see below) |
 | PageView | 1,441 | at the type checker's limit |
-| AppSession | 1,015 | about 9 jobs |
-| BaseModel | 708 | its about 20 tests live in AppSessionTests |
 
 #### DocumentModel
 
@@ -125,21 +123,6 @@ Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), th
 | A `PageLoader` with a `Dependencies` struct, replacing nine properties set after init | M |
 | Title handling, page actions, link routing | S each |
 
-#### AppSession
-
-Split out, each S:
-
-- `ServerInfo`, `ReadySession` and `CacheKey` into their own files
-- `PendingLogouts`: the Keychain queue and its sender
-- the kept titles and database fields and their senders
-- `AppSession+Debug`
-
-Then inject a small `SessionEnvironment` (cache and unsent-store factories, local data cleaner, network check) (M). About 350 lines remain: the state machine, switching and the request gateway.
-
-#### BaseModel
-
-Move the write queue and the pending-change overlay into a pure value type, so they're testable without stubbed URLs.
-
 ### S3 Missing shared building blocks
 
 | Topic | Today | Target |
@@ -147,7 +130,7 @@ Move the write queue and the pending-change overlay into a pure value type, so t
 | Loading | About 14 hand-written loaders; the same ~12-line `.loading … CancellationError … .failed` block about 12 times. Only 4 guard against overlapping loads (FavoritesStore, NotificationsStore, RecentPagesView, PageTreeStore). The rest differ in offline cache and refresh-error handling. AsyncContentView is full-screen only, so 5 places hand-roll it (HomeView 108–138, NotificationsPopover 55–99, SpaceView 194–221 and 226–266, BaseScreen 124–133). | An `@Observable RemoteValue<Value>`: state, generation counter, optional cache key, cancellation, refresh error. Plus an inline layout for AsyncContentView. (M) |
 | Session binding | Four call styles: `session.send`, `session.perform { client.send }`, bare `client.send` without 401 handling (BaseScreen.swift:228, BaseFieldEditors.swift:492), and `send(_:on:)`/`perform(on:)`, bound to one `ReadySession` (databases, title, note, collab token). `session.perform` blames a 401 on the session current when it starts, not on the one whose client sent the request. `RenderContext` gives block views the raw `APIClient` and token, so their requests skip the 401 handling. | Every request through the bound calls. Rule: capture the session once, check again between requests. (S–M) |
 | Server identity | Three forms: lowercased `StoredAccounts.key` (Keychain, web editor stores), the raw URL string (offline cache, unsent changes), host plus default port (links). The normaliser keeps host case and an explicit `:443`, so re-adding a server with another spelling strands its unsent changes (○). `UnsentChanges` builds its folder from DiskCache's private layout (`docmost-cache/` + `safeName`), so a cache refactor would orphan every user's unsent changes. | `ServerKey` and `Origin` types in DocmostKit; canonicalise in the normaliser (lowercase host, drop default ports); a fixed path for the unsent store. (S–M) |
-| Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes. Kept titles and database fields use its throwing `readThrowing` and `update`; the rest of its API swallows every error (M55). | A small store of its own that throws and updates atomically. (S–M) |
+| Durable storage | `DiskCache` is both a best-effort cache and the store for unsent changes. Kept titles and database fields use its throwing `readThrowing` and `update`; the rest of its API swallows every error (M55). | A small store of its own that throws and updates atomically, made by `SessionEnvironment` so tests can give their own. (S–M) |
 | Web views | Five hand-built configurations. ZoomableDiagram is a raw WKWebView with the persistent data store and no navigation limit; IntegrationConnectSheet carries the cookie but has no navigation decider (the only signed-in web view without `WebNavigationLimit`). | A factory per role, where JavaScript, data store, CSP and limits are set and tested in one place. (S–M) |
 | Marks | The mark logic lives in four places: `ContentParser.style`, `InlineAttributedText`, `HighlightColors`, the engine schema. Since package C the editor writes marks back as stored while they show the same, line breaks' too with their direction, checked over all fixtures and the dev instances' marks (R3). | One mark codec for the reader and the editor. (M) |
 | Links | The external-link gate is opt-in per sheet: a sheet without `.opensExternalLinks()` inherits a handler that can't present over it, and links silently do nothing. The `Destination` switch exists five times. App actions share the URL namespace with content links, which can't use the app's schemes since R13. | (M) |

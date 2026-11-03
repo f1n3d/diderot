@@ -1,84 +1,7 @@
 import Foundation
-import Network
 import Observation
 import UIKit
 import DocmostKit
-
-/// The server in use, before and after sign-in.
-struct ServerInfo: Hashable, Sendable {
-    var url: URL
-    var workspace: PublicWorkspace?
-
-    var displayName: String { workspace?.name ?? url.host() ?? url.absoluteString }
-}
-
-/// Signed-in session.
-struct ReadySession: Sendable {
-    let server: ServerInfo
-    let client: APIClient
-    let imageLoader: ImageLoader
-    /// Offline cache for this server's lists, pages and images.
-    let cache: DiskCache
-    /// Access token, e.g. for WebViews that need the `authToken` cookie.
-    let token: String
-    var currentUser: CurrentUser
-    var entitlements: Entitlements
-    /// Docmost version, else the last one this server told; nil if never known (Docmost Cloud, the server's GitHub check
-    /// failing or taking too long since the first sign-in).
-    var serverVersion: String?
-    var tokenClaims: JWTClaims? { JWTClaims(token: token) }
-    /// Restored from the cache without reaching the server.
-    var restoredOffline = false
-
-    /// This user's changes the server hasn't confirmed yet.
-    var unsentChanges: DiskCache { UnsentChanges.store(server: server.url, userId: currentUser.user.id) }
-
-    /// The server's version if it is newer than the bundled editor's (Docmost 0.97, `Engine/`), which could damage
-    /// content it doesn't know: pages there open read-only. An unknown version counts as supported.
-    var newerServerVersion: String? { Self.isNewerThanEditor(serverVersion) ? serverVersion : nil }
-
-    /// Docmost 0.97 or newer: tabs, integration links and sorted sub-pages can be added. An unknown version doesn't
-    /// count: on an older server they would get lost.
-    var hasDocmost097Features: Bool { Self.supportsDocmost097(serverVersion) }
-
-    static func supportsDocmost097(_ version: String?) -> Bool {
-        majorMinor(version).map { $0 >= (0, 97) } ?? false
-    }
-
-    static func isNewerThanEditor(_ version: String?) -> Bool {
-        majorMinor(version).map { $0 > (0, 97) } ?? false
-    }
-
-    private static func majorMinor(_ version: String?) -> (Int, Int)? {
-        let parts = version?.trimmingPrefix("v").split(separator: ".").prefix(2).map { Int($0.prefix(while: \.isNumber)) }
-        guard let parts, parts.count == 2, let major = parts[0], let minor = parts[1] else { return nil }
-        return (major, minor)
-    }
-}
-
-enum CacheKey {
-    static let currentUser = "users/me"
-    static let entitlements = "workspace/entitlements"
-    /// The server's last known Docmost version.
-    static let serverVersion = "version"
-    static let spaces = "spaces"
-    static let recent = "pages/recent"
-    static let favorites = "favorites"
-    static let recentlyOpened = "recentlyOpened"
-    static func page(_ id: String) -> String { "page/\(id)" }
-    /// Yjs state with changes the server hadn't confirmed when the page closed (in `UnsentChanges`).
-    static func unsentChanges(_ pageId: String) -> String { "unsent/\(pageId)" }
-    /// The document with them, shown while offline.
-    static func unsentDocument(_ pageId: String) -> String { "unsentDocument/\(pageId)" }
-    /// Page titles the server didn't get, by page id (`UnsentTitle`).
-    static let unsentTitles = "unsentTitles"
-    /// Database fields the server didn't get, by `UnsentCell.key`.
-    static let unsentCells = "unsentCells"
-    static func breadcrumbs(_ pageId: String) -> String { "breadcrumbs/\(pageId)" }
-    static func base(_ pageId: String) -> String { "base/\(pageId)" }
-    static func baseView(_ pageId: String, viewId: String) -> String { "base/\(pageId)/view/\(viewId)" }
-    static func tree(spaceId: String, parentPageId: String?) -> String { "tree/\(spaceId)/\(parentPageId ?? "root")" }
-}
 
 enum AppSessionError: LocalizedError {
     case mfaSetupRequired
@@ -129,12 +52,13 @@ final class AppSession {
     /// Saved sign-ins, one per server, including the current one.
     private(set) var accounts: [StoredSession] = []
     private let sessionStore: SessionStore
-    /// Tests answer the API requests with a `URLProtocol`.
-    private let protocolClasses: [AnyClass]?
+    private let environment: SessionEnvironment
+    private let pendingLogouts: PendingLogouts
 
-    init(sessionStore: SessionStore = SessionStore(), protocolClasses: [AnyClass]? = nil) {
+    init(sessionStore: SessionStore = SessionStore(), environment: SessionEnvironment = SessionEnvironment()) {
         self.sessionStore = sessionStore
-        self.protocolClasses = protocolClasses
+        self.environment = environment
+        pendingLogouts = PendingLogouts(store: sessionStore) { environment.makeClient($0, $1) }
     }
 
     /// How long a start with saved content waits for the server: one that doesn't answer (behind a VPN that is off)
@@ -275,7 +199,7 @@ final class AppSession {
             var answeredLate = false
             do {
                 // Without a network (flight mode) the requests can wait for their timeout: start from the cache at once.
-                if await Self.hasNoNetwork() { throw APIError.network(URLError(.notConnectedToInternet)) }
+                if await environment.hasNoNetwork() { throw APIError.network(URLError(.notConnectedToInternet)) }
                 // With saved content to show, a server that doesn't answer in time doesn't keep the start waiting either.
                 if try await finishSignIn(server: server, client: client, token: stored.token,
                                           within: hasSavedContent ? startDeadline : nil) { return }
@@ -492,177 +416,65 @@ final class AppSession {
 
     // MARK: - Sign-outs the server didn't get
 
-    @ObservationIgnored private var isSendingLogouts = false
-    /// Expired longer than a clock runs ahead, and its server out of reach meanwhile.
-    private static let expiredLongAgo: TimeInterval = 7 * 24 * 3600
-
     /// A sign-out for its server: `sendPendingLogouts` ends the session there, now or once the server answers; out of
     /// reach, it would stay valid there until it expires.
     private func keepPendingLogout(_ session: StoredSession) {
-        keychain("keep the sign-out") {
-            var pending = try sessionStore.pendingLogouts()
-            pending.removeAll { StoredAccounts.key(for: $0.serverURL) == StoredAccounts.key(for: session.serverURL) && $0.token == session.token }
-            pending.append(session)
-            try sessionStore.setPendingLogouts(pending)
-        }
+        keychain("keep the sign-out") { try pendingLogouts.keep(session) }
     }
 
     /// Ends the sessions signed out while their server was out of reach (`signOut`): at launch, back in the app and when
     /// the network returns. A token the server no longer knows (401), or that expired a week ago, is dropped.
     func sendPendingLogouts() async {
-        guard !isSendingLogouts, let pending = try? sessionStore.pendingLogouts(), !pending.isEmpty else { return }
-        isSendingLogouts = true
-        defer { isSendingLogouts = false }
-        var done: [StoredSession] = []
-        for entry in pending {
-            // The server judges a token that just expired: by the device's clock, which can run ahead, sign-outs were
-            // dropped whose sessions the server still took (code review R30).
-            if let expiresAt = entry.claims?.expiresAt, expiresAt < .now - Self.expiredLongAgo {
-                done.append(entry)
-                continue
-            }
-            do {
-                _ = try await makeClient(for: entry.serverURL, token: entry.token).send(Endpoints.Auth.logout)
-                done.append(entry)
-            } catch let error as APIError where error.isSessionExpired {
-                done.append(entry)
-            } catch {
-                AppLog.session.notice("Sign-out still waits for its server: \(error.userMessage, privacy: .public)")
-            }
-        }
-        // Read again: a sign-out meanwhile added its own.
-        keychain("update the waiting sign-outs") {
-            try sessionStore.setPendingLogouts(try sessionStore.pendingLogouts().filter { !done.contains($0) })
+        do { try await pendingLogouts.send() } catch {
+            AppLog.session.error("Keychain update the waiting sign-outs failed: \(String(describing: error), privacy: .public)")
         }
     }
 
-    // MARK: - Unsent page titles
+    // MARK: - Unsent page titles and database fields
 
-    @ObservationIgnored private var isSendingTitles = false
-    @ObservationIgnored private var isSendingCells = false
+    @ObservationIgnored private let unsentEdits = UnsentEdits()
 
     /// Keeps a page title the server didn't get; `sendUnsentTitles` sends it once the server answers. False if it couldn't
-    /// be kept (the kept titles can't be read, or not written): then nothing may promise it a later try.
+    /// be kept: then nothing may promise it a later try (`UnsentEdits.keepTitle`).
     /// `store`: the unsent changes of the session the page was opened in, as the editor engine keeps its own; a 401 or a
     /// switch may have ended that session meanwhile. Without one, the current session's.
     @discardableResult
     func keepUnsentTitle(_ title: String, pageId: String, spaceId: String?, in store: DiskCache? = nil) async -> Bool {
         guard let store = store ?? ready?.unsentChanges else { return false }
-        do {
-            // In one step: a title kept or sent meanwhile (another window) isn't lost.
-            try await store.update([String: UnsentTitle].self, key: CacheKey.unsentTitles, initial: [:]) {
-                $0[pageId] = UnsentTitle(title: title, spaceId: spaceId)
-            }
-            return true
-        } catch {
-            AppLog.session.error("Title not kept: \(error.localizedDescription, privacy: .public)")
-            return false
-        }
+        return await UnsentEdits.keepTitle(title, pageId: pageId, spaceId: spaceId, in: store)
     }
 
     /// The page's kept title, if it still waits for the server.
     func unsentTitle(pageId: String) async -> String? {
-        await ready?.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?[pageId]?.title
+        guard let store = ready?.unsentChanges else { return nil }
+        return await UnsentEdits.title(pageId: pageId, in: store)
     }
 
-    /// Drops the page's kept title: it, or a newer one, reached the server. With `title`, only while it is still that one:
-    /// a newer title kept meanwhile stays.
+    /// Drops the page's kept title: it, or a newer one, reached the server. With `title`, only while it is still that one.
     func forgetUnsentTitle(pageId: String, title: String? = nil) async {
         guard let store = ready?.unsentChanges else { return }
-        do {
-            try await store.update([String: UnsentTitle].self, key: CacheKey.unsentTitles, initial: [:]) { titles in
-                if let kept = titles[pageId], title == nil || kept.title == title { titles[pageId] = nil }
-            }
-        } catch {
-            AppLog.session.error("Kept title not dropped: \(error.localizedDescription, privacy: .public)")
-        }
+        await UnsentEdits.forgetTitle(pageId: pageId, title: title, in: store)
     }
 
-    /// A kept title or field that can never go (`UnsentChanges.isFinal`), dropped by `sendUnsentTitles` or
-    /// `sendUnsentCells`: `name` is what the user typed.
-    struct DroppedChange: Sendable {
-        let name: String
-        let reason: String
-
-        /// The notice for changes dropped: the page or entry was deleted, access to it removed or the input refused, and
-        /// the user expects them saved.
-        static func notice(for dropped: [DroppedChange]) -> String? {
-            guard let first = dropped.first else { return nil }
-            return dropped.count == 1
-                ? String(localized: "“\(first.name)” not saved: \(first.reason)")
-                : String(localized: "\(dropped.count) changes not saved, among them “\(first.name)”: \(first.reason)")
+    /// Sends the kept titles (`UnsentEdits.sendTitles`). Returns the spaces whose pages got theirs, and the titles that
+    /// can never go, which it dropped; after another error the rest waits for the next try (going online, back in the
+    /// app, opening a page).
+    func sendUnsentTitles() async -> (spaces: [String], dropped: [UnsentEdits.DroppedChange]) {
+        guard let session = ready else { return ([], []) }
+        return await unsentEdits.sendTitles(in: session.unsentChanges) { pageId, title in
+            // Another account's pages don't exist on its server: after a switch nothing more goes out.
+            _ = try await send(Endpoints.Pages.update(pageId: pageId, title: title), on: session)
         }
-    }
-
-    /// Sends the kept titles. Returns the spaces whose pages got theirs, and the titles that can never go, which it
-    /// dropped; after another error the rest waits for the next try (going online, back in the app, opening a page).
-    func sendUnsentTitles() async -> (spaces: [String], dropped: [DroppedChange]) {
-        guard !isSendingTitles, let session = ready else { return ([], []) }
-        isSendingTitles = true
-        defer { isSendingTitles = false }
-        let store = session.unsentChanges
-        let titles: [String: UnsentTitle]
-        do {
-            titles = try await store.readThrowing([String: UnsentTitle].self, key: CacheKey.unsentTitles) ?? [:]
-        } catch {
-            AppLog.session.error("Kept titles unreadable: \(error.localizedDescription, privacy: .public)")
-            return ([], [])
-        }
-        var spaces: [String] = [], dropped: [DroppedChange] = []
-        for (pageId, kept) in titles {
-            // A newer title saved meanwhile replaced or dropped this one.
-            guard (try? await store.readThrowing([String: UnsentTitle].self, key: CacheKey.unsentTitles))?[pageId]?.title == kept.title
-            else { continue }
-            do {
-                // Another account's pages don't exist on its server: after a switch nothing more goes out.
-                _ = try await send(Endpoints.Pages.update(pageId: pageId, title: kept.title), on: session)
-                if let spaceId = kept.spaceId { spaces.append(spaceId) }
-            } catch let error where UnsentChanges.isFinal(error) {
-                AppLog.session.error("Kept title dropped: \(error.userMessage, privacy: .public)")
-                dropped.append(DroppedChange(name: kept.title, reason: error.userMessage))
-            } catch {
-                break
-            }
-            // A title kept for the page meanwhile stays.
-            try? await store.update([String: UnsentTitle].self, key: CacheKey.unsentTitles, initial: [:]) { titles in
-                if titles[pageId]?.title == kept.title { titles[pageId] = nil }
-            }
-        }
-        return (spaces, dropped)
     }
 
     /// Sends the kept database fields (`UnsentCell`), as `sendUnsentTitles` does titles. Returns the ones that can never
     /// go (entry deleted, access gone, value refused), which it dropped.
-    func sendUnsentCells() async -> [DroppedChange] {
-        guard !isSendingCells, let session = ready else { return [] }
-        isSendingCells = true
-        defer { isSendingCells = false }
-        let store = session.unsentChanges
-        let cells: [String: UnsentCell]
-        do {
-            cells = try await store.readThrowing([String: UnsentCell].self, key: CacheKey.unsentCells) ?? [:]
-        } catch {
-            AppLog.session.error("Kept fields unreadable: \(error.localizedDescription, privacy: .public)")
-            return []
+    func sendUnsentCells() async -> [UnsentEdits.DroppedChange] {
+        guard let session = ready else { return [] }
+        return await unsentEdits.sendCells(in: session.unsentChanges) { cell in
+            _ = try await send(Endpoints.Bases.updateRow(pageId: cell.basePageId, rowId: cell.rowId, cells: [cell.propertyId: cell.value]),
+                               on: session)
         }
-        var dropped: [DroppedChange] = []
-        for (key, kept) in cells {
-            // A newer input saved or kept meanwhile replaced or dropped this one.
-            guard (try? await store.readThrowing([String: UnsentCell].self, key: CacheKey.unsentCells))?[key] == kept else { continue }
-            do {
-                let endpoint = Endpoints.Bases.updateRow(pageId: kept.basePageId, rowId: kept.rowId, cells: [kept.propertyId: kept.value])
-                _ = try await send(endpoint, on: session)
-            } catch let error where UnsentChanges.isFinal(error) {
-                AppLog.session.error("Kept field dropped: \(error.userMessage, privacy: .public)")
-                dropped.append(DroppedChange(name: kept.typed.isEmpty ? kept.propertyName : kept.typed, reason: error.userMessage))
-            } catch {
-                break
-            }
-            try? await store.update([String: UnsentCell].self, key: CacheKey.unsentCells, initial: [:]) { cells in
-                if cells[key] == kept { cells[key] = nil }
-            }
-        }
-        return dropped
     }
 
     /// Runs an API call and ends its session on 401. All data loaders use it.
@@ -846,14 +658,11 @@ final class AppSession {
     }
 
     private func makeClient(for url: URL, token: String?) -> APIClient {
-        // A fresh configuration per client: clients made from one share its in-memory URL cache.
-        let configuration = URLSessionConfiguration.ephemeral
-        if let protocolClasses { configuration.protocolClasses = protocolClasses }
-        return APIClient(baseURL: url, token: token, userAgent: Self.userAgent, configuration: configuration, logger: AppLog.apiRequestLogger)
+        environment.makeClient(url, token)
     }
 
     private func makeCache(for url: URL) -> DiskCache {
-        DiskCache(scope: url.absoluteString)
+        environment.makeCache(url)
     }
 
     /// Writes the user to the per-server offline cache. If another user (or workspace) was cached, it clears the cache
@@ -869,19 +678,9 @@ final class AppSession {
         return isOtherUser
     }
 
-    /// Removes what the offline cache doesn't cover: downloads, the system URL cache (files of older builds, logos and
-    /// avatars) and the server's web editor data.
+    /// Removes what the offline cache doesn't cover (`SessionEnvironment.removeLocalData`).
     private func removeLocalData(for serverURL: URL, uploads: Bool = true) async {
-        TempFile.removeAll(server: serverURL, uploads: uploads)
-        // Holds only member avatars, of every server: it can't be cleared for one.
-        URLCache.shared.removeAllCachedResponses()
-        await WebEditorStores.remove(for: serverURL)
-    }
-
-    /// The current network path; a monitor reports it right after starting.
-    private static func hasNoNetwork() async -> Bool {
-        for await path in NWPathMonitor() { return path.status != .satisfied }
-        return false
+        await environment.removeLocalData(serverURL, uploads)
     }
 
     /// Checks the saved sign-in the start couldn't check (`uncheckedSignIn`) again. Its result counts only while the
@@ -910,14 +709,9 @@ final class AppSession {
     /// doesn't answer on it would be asked again and again.
     private func retryUncheckedSignInWhenTheNetworkChanges() {
         uncheckedSignInRetry?.cancel()
-        uncheckedSignInRetry = Task { [weak self] in
-            var paths = NWPathMonitor().makeAsyncIterator()
-            _ = await paths.next()
-            while let path = await paths.next(), !Task.isCancelled {
-                guard path.status == .satisfied else { continue }
-                await self?.retryUncheckedSignIn()
-                return
-            }
+        uncheckedSignInRetry = Task { [weak self, environment] in
+            guard await environment.networkReturns() else { return }
+            await self?.retryUncheckedSignIn()
         }
     }
 

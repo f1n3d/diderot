@@ -58,8 +58,7 @@ final class BaseModel {
     /// Writes run one at a time so the server applies them in input order.
     @ObservationIgnored private var writeQueue: Task<Void, Never>?
     /// Pending changes and their rows' last confirmed state, so a response can't overwrite later changes already shown.
-    @ObservationIgnored private var pendingWrites: [PendingWrite] = []
-    @ObservationIgnored private var confirmedRows: [String: BaseRow] = [:]
+    @ObservationIgnored private var pending = PendingRowChanges()
     /// Rows deleted, or whose delete waits in the write queue: an earlier change's response, a load (also one the
     /// server answered before the delete) or a view's offline copy doesn't bring them back.
     @ObservationIgnored private var deletedRowIds: Set<String> = []
@@ -78,13 +77,6 @@ final class BaseModel {
 
     /// The server this database was opened on; its file uploads are staged in that server's folder (`UploadFile`).
     var serverURL: URL? { owner?.server.url }
-
-    private struct PendingWrite {
-        let id = UUID()
-        let rowId: String
-        let cells: [String: JSONValue]
-        let position: String?
-    }
 
     /// A field's typed text in a save (`setCell`'s `typed`).
     private struct TypedInput {
@@ -544,21 +536,18 @@ final class BaseModel {
         // Not `canEdit`: a field that saves as the database turns read-only offline still tries, so its text is kept.
         guard base?.canEdit == true, ownSession?.entitlements.has("bases") == true, let current = row(id: rowId) else { return }
         let view = selectedView
-        if confirmedRows[rowId] == nil { confirmedRows[rowId] = current }
-        let pending = PendingWrite(rowId: rowId, cells: cells, position: position)
-        pendingWrites.append(pending)
-        place(overlay(rowId: rowId))
+        let change = pending.begin(current, cells: cells, position: position)
+        place(pending.overlay(rowId: rowId))
         let pageId = pageId
         do {
             let saved = try await enqueue {
                 try await self.send(Endpoints.Bases.updateRow(pageId: pageId, rowId: rowId, cells: cells, position: position))
             }
-            pendingWrites.removeAll { $0.id == pending.id }
-            confirmedRows[rowId] = saved
+            pending.confirm(change, saved: saved)
             if runningLoads > 0 { savedDuringLoad[rowId] = saved }
             if let input, input.replacesKept { await forgetUnsent(rowId: rowId, propertyId: input.propertyId) }
         } catch {
-            pendingWrites.removeAll { $0.id == pending.id }
+            pending.drop(change)
             toast = failureMessage(error, cells: cells)
             if let input {
                 unsavedDrafts["\(rowId)/\(input.propertyId)"] = input.text
@@ -571,11 +560,8 @@ final class BaseModel {
             }
         }
         // Switched tabs meanwhile: update the row only where the new view shows it, never add it there.
-        if let display = overlay(rowId: rowId), selectedView == view || row(id: rowId) != nil { place(display) }
-        if !pendingWrites.contains(where: { $0.rowId == rowId }) {
-            confirmedRows[rowId] = nil
-            await storeSnapshot()
-        }
+        if let display = pending.overlay(rowId: rowId), selectedView == view || row(id: rowId) != nil { place(display) }
+        if pending.settle(rowId) { await storeSnapshot() }
     }
 
     /// The user's saved and pending changes over a rows answer the server may have given before them; only for rows the
@@ -585,7 +571,7 @@ final class BaseModel {
             table.rows.contains { $0.id == id } || columns.contains { $0.list.rows.contains { $0.id == id } }
         }
         for row in savedDuringLoad.values where shown(row.id) { place(row) }
-        for rowId in Set(pendingWrites.map(\.rowId)) where shown(rowId) { place(overlay(rowId: rowId)) }
+        for rowId in pending.pendingRowIds where shown(rowId) { place(pending.overlay(rowId: rowId)) }
     }
 
     /// Failed-save message; on "Cell validation failed" it says which value is invalid, not the server's English text.
@@ -598,18 +584,6 @@ final class BaseModel {
         case .email: return String(localized: "Not a valid email address")
         default: return String(localized: "Invalid value for “\(property.name)”")
         }
-    }
-
-    /// Confirmed state plus all pending changes in input order.
-    private func overlay(rowId: String) -> BaseRow? {
-        guard var row = confirmedRows[rowId] else { return nil }
-        for pending in pendingWrites where pending.rowId == rowId {
-            for (key, value) in pending.cells {
-                if value.isNull { row.cells.removeValue(forKey: key) } else { row.cells[key] = value }
-            }
-            if let position = pending.position { row.position = position }
-        }
-        return row
     }
 
     /// Applies a row to table and board: in the table it keeps its place; on the board it moves to its grouping value's
