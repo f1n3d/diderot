@@ -184,6 +184,7 @@ struct IntegrationCardView: View {
         }) { request in
             if let server = context.baseURL {
                 IntegrationConnectSheet(server: server, token: context.token, type: request.type)
+                    .opensExternalLinks()
             }
         }
     }
@@ -239,25 +240,26 @@ private struct ConnectRequest: Identifiable {
 
 /// Connects the user's account to a service in the web's own settings page (`connections?connect=<type>`): the server
 /// only completes the service's sign-in in the browser that started it, with the user's session and a one-time cookie,
-/// so the whole flow runs in this web view, signed in like the web editor. The services' sign-in pages load here too;
-/// the bar names the host shown.
+/// so the whole flow runs in this web view, signed in like the web editor. The services' sign-in pages load here too
+/// (`WebViews.integrationConnect`); the bar names the host shown.
 struct IntegrationConnectSheet: View {
     let server: URL
     let token: String?
     let type: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var page: WebPage
     @State private var dataStore: WKWebsiteDataStore
+    @State private var limit: WebNavigationLimit
 
     init(server: URL, token: String?, type: String) {
         self.server = server
         self.token = token
         self.type = type
-        let dataStore = WKWebsiteDataStore.nonPersistent()
-        var configuration = WebPage.Configuration()
-        configuration.websiteDataStore = dataStore
-        _dataStore = State(initialValue: dataStore)
-        _page = State(initialValue: WebPage(configuration: configuration))
+        let connect = WebViews.integrationConnect(server: server)
+        _dataStore = State(initialValue: connect.dataStore)
+        _limit = State(initialValue: connect.limit)
+        _page = State(initialValue: connect.page)
     }
 
     var body: some View {
@@ -273,6 +275,7 @@ struct IntegrationConnectSheet: View {
                 }
         }
         .task {
+            limit.openOutside = { [openURL] in openURL($0) }
             if let cookie = HTTPCookie.docmostAuth(token: token, serverURL: server) {
                 await dataStore.httpCookieStore.setCookie(cookie)
             }

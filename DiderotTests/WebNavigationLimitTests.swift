@@ -11,10 +11,10 @@ struct WebNavigationLimitTests {
     private let server = URL(string: "https://wiki.example.com")!
 
     @Test func decidesWhereAWebViewMayGo() {
-        func decide(_ url: String, acrossOrigin: Bool = false, frames: Bool = false, mainFrame: Bool? = true,
+        func decide(_ url: String, reach: WebNavigationLimit.Reach = .page, frames: Bool = false, mainFrame: Bool? = true,
                     linkTap: Bool = false) -> WebNavigationLimit.Decision {
-            WebNavigationLimit.decision(for: URL(string: url)!, home: server, acrossOrigin: acrossOrigin, frames: frames,
-                                        mainFrame: mainFrame, linkTap: linkTap)
+            WebNavigationLimit.decision(for: URL(string: url)!, home: server, reach: reach, frames: frames, mainFrame: mainFrame,
+                                        linkTap: linkTap)
         }
         // Its own page, also at an anchor; nowhere else, and a tapped link goes outside.
         #expect(decide("https://wiki.example.com/") == .allow)
@@ -23,10 +23,16 @@ struct WebNavigationLimitTests {
         #expect(decide("https://evil.example.com/") == .cancel)
         #expect(decide("https://evil.example.com/", linkTap: true) == .openOutside)
         // The web editor: the server's pages, not another scheme or port.
-        #expect(decide("https://wiki.example.com/p/abc", acrossOrigin: true) == .allow)
-        #expect(decide("https://WIKI.example.com:443/p/abc", acrossOrigin: true) == .allow)
-        #expect(decide("http://wiki.example.com/p/abc", acrossOrigin: true) == .cancel)
-        #expect(decide("https://wiki.example.com:8443/", acrossOrigin: true, linkTap: true) == .openOutside)
+        #expect(decide("https://wiki.example.com/p/abc", reach: .origin) == .allow)
+        #expect(decide("https://WIKI.example.com:443/p/abc", reach: .origin) == .allow)
+        #expect(decide("http://wiki.example.com/p/abc", reach: .origin) == .cancel)
+        #expect(decide("https://wiki.example.com:8443/", reach: .origin, linkTap: true) == .openOutside)
+        // A sign-in: any web page, nothing else; a tapped link to another app goes outside.
+        #expect(decide("https://github.com/login/oauth/authorize?client_id=x", reach: .web) == .allow)
+        #expect(decide("http://gitlab.local/oauth/authorize", reach: .web) == .allow)
+        #expect(decide("about:blank", reach: .web) == .cancel)
+        #expect(decide("data:text/html,<p>x</p>", reach: .web) == .cancel)
+        #expect(decide("mailto:help@example.com", reach: .web, linkTap: true) == .openOutside)
         // Frames only where allowed; a new window goes outside.
         #expect(decide("https://www.youtube-nocookie.com/embed/x", mainFrame: false) == .cancel)
         #expect(decide("https://www.youtube-nocookie.com/embed/x", frames: true, mainFrame: false) == .allow)
@@ -53,7 +59,7 @@ struct WebNavigationLimitTests {
     /// The web client opens links with `window.open`, which WebKit drops in these web views: the limit hands them
     /// outside instead, resolved against the page.
     @Test func windowOpenGoesOutside() async throws {
-        let limit = WebNavigationLimit(home: server, acrossOrigin: true, frames: true)
+        let limit = WebNavigationLimit(home: server, reach: .origin, frames: true)
         var opened: [URL] = []
         limit.openOutside = { opened.append($0) }
         var configuration = WebPage.Configuration()

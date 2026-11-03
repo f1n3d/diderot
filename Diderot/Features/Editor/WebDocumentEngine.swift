@@ -300,14 +300,12 @@ final class WebDocumentEngine: DocumentEngine {
             guard let self, self.page != nil, self.opens == attempt else { return }
             self.handle(message)
         }
-        var configuration = WebPage.Configuration()
-        configuration.websiteDataStore = .nonPersistent()
-        configuration.userContentController.add(handler, name: "engine")
-        configuration.userContentController.addScriptMessageHandler(CollabTokenHandler { [session] in
-            await Self.collabToken(session: session, owner: ready)
-        }, contentWorld: .page, name: "collabToken")
-        // Its own page only: no frames either (TipTap renders YouTube embeds as iframes), so nothing else hears of it.
-        let page = WebPage(configuration: configuration, navigationDecider: WebNavigationLimit(home: ready.server.url))
+        let page = WebViews.engine(server: ready.server.url) { configuration in
+            configuration.userContentController.add(handler, name: "engine")
+            configuration.userContentController.addScriptMessageHandler(CollabTokenHandler { [session] in
+                await Self.collabToken(session: session, owner: ready)
+            }, contentWorld: .page, name: "collabToken")
+        }
         self.page = page
         self.unsentStore = unsentStore
         processWatch = Task { [weak self] in

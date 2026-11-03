@@ -7,7 +7,7 @@ struct WebIslandView: View {
     let html: String
     var minHeight: CGFloat = 44
 
-    @State private var page = WebPage(navigationDecider: WebNavigationLimit(home: IslandHTML.baseURL))
+    @State private var page = WebViews.island()
     @State private var height: CGFloat?
     /// What is shown at the measured height; back in view, it isn't rendered again unless the web process ended (iOS
     /// reclaimed its memory, a crash) and left the page blank, without a URL.

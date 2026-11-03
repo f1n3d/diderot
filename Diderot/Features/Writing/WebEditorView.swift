@@ -34,15 +34,8 @@ struct WebEditorView: View {
 
     private var editor: Parts {
         parts {
-            // A persistent store of this server's own: the web editor needs IndexedDB (Yjs offline cache), which a
-            // non-persistent store lacks. The auth cookie is removed on close.
-            let dataStore = WKWebsiteDataStore(forIdentifier: storeID)
-            var configuration = WebPage.Configuration()
-            configuration.websiteDataStore = dataStore
-            // Frames: embeds and the draw.io editor.
-            let limit = WebNavigationLimit(home: serverURL, acrossOrigin: true, frames: true)
-            limit.catchesWindowOpen(in: &configuration)
-            return Parts(dataStore: dataStore, limit: limit, webPage: WebPage(configuration: configuration, navigationDecider: limit))
+            let editor = WebViews.webEditor(server: serverURL, store: storeID)
+            return Parts(dataStore: editor.dataStore, limit: editor.limit, webPage: editor.page)
         }
     }
 
