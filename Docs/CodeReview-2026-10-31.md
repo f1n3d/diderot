@@ -106,8 +106,8 @@ S1 is done: what fits where, Return, Backspace, conversions, columns and unsync 
 
 | Type | Lines | Notes |
 |---|---|---|
-| DocumentModel | 2,432 | its pure parts are out (see below) |
-| PageView | 1,441 | at the type checker's limit |
+| DocumentModel | 2,416 | its pure parts are out (see below) |
+| PageView | 1,145 | parts split out (see below) |
 
 #### DocumentModel
 
@@ -117,11 +117,12 @@ Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), th
 
 #### PageView
 
+Split out (S2, part 3): centering above the keyboard (`CentersAboveKeyboard`), what the page's model needs from the session (`DocumentModel.Dependencies`, given at init instead of eleven properties set after it) and what a tapped link does (`PageLinkAction`).
+
 | Step | Size |
 |---|---|
-| Keyboard centring (about 230 lines) into a coordinator or view modifier | M |
-| A `PageLoader` with a `Dependencies` struct, replacing nine properties set after init | M |
-| Title handling, page actions, link routing | S each |
+| A `PageLoader`: the saved copy and the server's page, breadcrumbs and space, and the model made with its dependencies | M |
+| Title handling, page actions | S each |
 
 ### S3 Missing shared building blocks
 
@@ -144,9 +145,9 @@ There are 47 `Task.sleep`/`asyncAfter` calls in the app. There is no injectable 
 
 | Place | Waits for | Event-driven alternative |
 |---|---|---|
-| PageView 624 | keyboard appearing (hardware keyboard fallback) | centre in `cursorPlaced` when `GCKeyboard.coalesced != nil` |
-| PageView 636, 648 | the lazy list building and measuring the block | `onChange(of: activeBlockFrame)`; `scrollTo(id:)` with `scrollTargetLayout` |
-| PageView 774, 781 | the match block reporting its frame | `onChange(of: find.currentFrame)` |
+| `CentersAboveKeyboard.activeBlockChanged` | keyboard appearing (hardware keyboard fallback) | centre in `cursorPlaced` when `GCKeyboard.coalesced != nil` |
+| `CentersAboveKeyboard.scrollToUnbuiltActiveBlock` | the lazy list building and measuring the block | `onChange(of: activeBlockFrame)`; `scrollTo(id:)` with `scrollTargetLayout` |
+| `CentersAboveKeyboard.revealFindMatch` | the match block reporting its frame | `onChange(of: find.currentFrame)` |
 | PageView 1058, 1065 | push animation (title focus, comments) | `defaultFocus`; present from `onAppear` |
 | PageView 1151 | comments sheet dismissed | the sheet's `onDismiss` |
 | DocumentModel 562 | a new editor gaining focus | `editorFocusChanged(true)` |
@@ -167,7 +168,7 @@ Scroll-and-highlight exists twice with different delays (`CommentsView.swift:103
 
 - debounces: DocumentModel 530, 834, 2056; EditorToolbar 517; EditorSheets 204; SearchModel 41; BasePickers 239 and 329; PageAttachmentsView 48
 - timeouts and timers: WebDocumentEngine 199; TreeDragDrop 97; BaseKanbanView 179; the "Copied" and highlight fades; Toast 19; OfflineMonitor
-- tolerable debounce of a noisy signal: PageView 665
+- tolerable debounce of a noisy signal: `CentersAboveKeyboard.keyboardChanged`
 - debug or test only: HomeView 56, DocumentModel 2789
 
 Inject a `Clock` into DocumentModel and the stores (S–M), then replace the fragile waits with events.
