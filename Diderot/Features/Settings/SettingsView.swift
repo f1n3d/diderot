@@ -74,7 +74,7 @@ struct SettingsView: View {
                                 do {
                                     logFile = try await LogExporter.export()
                                 } catch {
-                                    logError = error.localizedDescription
+                                    logError = error.userMessage
                                 }
                             }
                         }
