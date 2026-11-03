@@ -1550,6 +1550,149 @@ struct AppSessionRaceTests {
         await removeCaches()
     }
 
+    /// The title field (`PageTitleEdit`): a title the server doesn't get stays on the device and shows as not sent yet;
+    /// one it gets is forgotten, and the page loads again; one for a page gone for good is dropped, saying why.
+    @Test(.timeLimit(.minutes(1))) func aTypedTitleIsKeptUntilTheServerHasIt() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        let onA = try #require(session.ready)
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+        let edit = PageTitleEdit()
+        var reports: [String] = []
+        var loads = 0
+        func commit(_ text: String) async {
+            edit.text = text
+            await edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: { loads += 1 }) { reports.append($0) }?.value
+        }
+
+        StubURLProtocol.offline.withLock { $0 = true }
+        await commit("Neu")
+        StubURLProtocol.offline.withLock { $0 = false }
+        #expect(edit.unsent == "Neu" && reports.count == 1)
+        #expect(await session.unsentTitle(pageId: "p1") == "Neu")
+
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Neuer"}}"# }
+        await commit("Neuer")
+        for _ in 0..<100 where loads == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(edit.unsent == nil && loads == 1 && reports.count == 1)
+        #expect(await session.unsentTitle(pageId: "p1") == nil)
+
+        StubURLProtocol.status.withLock { $0 = 404 }
+        StubURLProtocol.body.withLock { $0 = #"{"statusCode": 404, "message": "Page not found"}"# }
+        defer {
+            StubURLProtocol.status.withLock { $0 = 200 }
+            StubURLProtocol.body.withLock { $0 = nil }
+        }
+        await commit("Weg")
+        #expect(reports.last == "Page not found")
+        #expect(await session.unsentTitle(pageId: "p1") == nil)
+        await removeCaches()
+    }
+
+    /// A page shows its saved copy first, with the document its unsent changes make and its breadcrumbs; the server's
+    /// page is kept under its id and slug id; a page gone for good leaves nothing of itself behind.
+    @Test func aPageComesFromItsSavedCopyThenItsServer() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        let onA = try #require(session.ready)
+        let saved = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "slugId": "Ab12", "title": "Alt", "spaceId": "s1"}"#.utf8))
+        let crumbs = try JSONDecoder().decode([Breadcrumb].self, from: Data(#"[{"id": "p0", "title": "Eltern"}]"#.utf8))
+        await onA.cache.write(saved, key: CacheKey.page("Ab12"))
+        await onA.cache.write(crumbs, key: CacheKey.breadcrumbs("p1"))
+        await onA.cache.write(["Kind"], key: CacheKey.tree(spaceId: "s1", parentPageId: "p1"))
+        let unsent = PMNode(type: "doc", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Ungesendet")])])
+        await onA.unsentChanges.write(unsent, key: CacheKey.unsentDocument("p1"))
+        let loader = PageLoader(pageId: "Ab12", owner: onA, session: session)
+
+        let shown = try #require(await loader.saved())
+        #expect(shown.page.title == "Alt" && shown.unsent == unsent && shown.breadcrumbs == crumbs)
+
+        StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "slugId": "Ab12", "title": "Neu", "spaceId": "s1"}}"# }
+        defer { StubURLProtocol.body.withLock { $0 = nil } }
+        let fetched = try await loader.fetch()
+        await loader.keep(fetched)
+        #expect(await onA.cache.read(Page.self, key: CacheKey.page("p1"))?.title == "Neu")
+        #expect(await onA.cache.read(Page.self, key: CacheKey.page("Ab12"))?.title == "Neu")
+
+        await loader.forget(fetched)
+        #expect(await onA.cache.read(Page.self, key: CacheKey.page("p1")) == nil)
+        #expect(await onA.cache.read(Page.self, key: CacheKey.page("Ab12")) == nil)
+        #expect(await onA.cache.read([Breadcrumb].self, key: CacheKey.breadcrumbs("p1")) == nil)
+        #expect(await onA.cache.read([String].self, key: CacheKey.tree(spaceId: "s1", parentPageId: "p1")) == nil)
+        await removeCaches()
+    }
+
+    /// A page deleted for good or no longer shared says so in the app's language; once a switch has replaced the page's
+    /// session, it doesn't load from the server now current.
+    @Test func aGonePageSaysSo() async throws {
+        let session = try await sessionOnA()
+        let onA = try #require(session.ready)
+        let loader = PageLoader(pageId: "p1", owner: onA, session: session)
+        defer {
+            StubURLProtocol.status.withLock { $0 = 200 }
+            StubURLProtocol.body.withLock { $0 = nil }
+        }
+        for (status, expected) in [(404, String(localized: "This page doesn't exist anymore.")),
+                                   (403, String(localized: "You no longer have access to this page."))] {
+            StubURLProtocol.status.withLock { $0 = status }
+            StubURLProtocol.body.withLock { $0 = #"{"statusCode": \#(status), "message": "Gone"}"# }
+            do {
+                _ = try await loader.fetch()
+                Issue.record("\(status) loaded a page")
+            } catch let error as APIError {
+                #expect(error.isGone && error.userMessage == expected)
+            }
+        }
+        StubURLProtocol.status.withLock { $0 = 200 }
+        StubURLProtocol.body.withLock { $0 = nil }
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        await #expect(throws: CancellationError.self) { _ = try await loader.fetch() }
+        await removeCaches()
+    }
+
+    /// The page's edits (`PageEdits`) go to the server the page loaded from and mark its space as changed; once a switch
+    /// has replaced that session, nothing goes out: a write says so, a read ends without a word.
+    @Test func pageEditsStayWithThePagesServer() async throws {
+        let session = try await sessionOnA()
+        let onA = try #require(session.ready)
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+        let changes = ContentChanges()
+        let edits = PageEdits(page: page, owner: onA, session: session, changes: changes)
+        StubURLProtocol.requests.withLock { $0 = [] }
+        StubURLProtocol.body.withLock { $0 = #"{"data": {}}"# }
+        defer { StubURLProtocol.body.withLock { $0 = nil } }
+        try await edits.moveToTrash()
+        #expect(StubURLProtocol.requests.withLock { $0 } == ["a.example.com/api/pages/delete"])
+        #expect(changes.version == 1 && changes.lastChangedSpaceId == "s1")
+
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        StubURLProtocol.requests.withLock { $0 = [] }
+        await #expect(throws: SwitchedServer.self) { try await edits.restore() }
+        await #expect(throws: CancellationError.self) { _ = try await edits.content(as: "markdown") }
+        #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.hasSuffix("/api/pages/restore") || $0.hasSuffix("/api/pages/info") })
+        #expect(changes.version == 1)
+        await removeCaches()
+    }
+
+    /// A title typed on a page whose session a switch replaced waits for that server's next sign-in: it doesn't go to
+    /// the server now current.
+    @Test func aTypedTitleOfAReplacedSessionWaitsForItsServer() async throws {
+        let session = try await sessionOnA()
+        defer { UnsentChanges.removeAll(server: a) }
+        let onA = try #require(session.ready)
+        await session.switchTo(StoredSession(serverURL: b, token: "b"))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt"}"#.utf8))
+        let edit = PageTitleEdit()
+        edit.text = "Neu"
+        var reports: [String] = []
+        StubURLProtocol.requests.withLock { $0 = [] }
+        await edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: {}) { reports.append($0) }?.value
+        #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.hasSuffix("/api/pages/update") })
+        #expect(reports.isEmpty, "it waits without a word, like the text")
+        #expect(await onA.unsentChanges.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"]?.title == "Neu")
+        await removeCaches()
+    }
+
     /// Titles kept at the same moment (two windows going to the background) all stay: each keep read the list, waited and
     /// wrote it back, so one could drop another's.
     @Test func titlesKeptAtOnceAllStay() async throws {
