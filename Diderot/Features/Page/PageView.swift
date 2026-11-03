@@ -812,38 +812,12 @@ struct PageView: View {
             LiveDocuments.document(for: page.id, owner: owner, newerThan: page.updatedAt, serverClockOffset: session.client?.serverClockOffset ?? 0)
         }
         let engine = reason == nil ? WebDocumentEngine(session: session) : nil
-        let created = DocumentModel(page: page, initialDocument: live ?? (reason == nil || reason == .offline ? unsent : nil), engine: engine, readOnlyReason: reason)
-        created.liveOwner = owner
-        created.currentUserId = session.ready?.currentUser.user.id
+        let created = DocumentModel(page: page, initialDocument: live ?? (reason == nil || reason == .offline ? unsent : nil), engine: engine,
+                                    readOnlyReason: reason, dependencies: dependencies(of: page, owner: owner))
         created.canComment = canComment(on: page)
-        created.canCreateBases = session.ready?.entitlements.has("bases") == true
-        created.hasDocmost097Features = session.ready?.hasDocmost097Features == true
-        created.linkPreviews = session.linkPreviews
-        if created.hasDocmost097Features, let previews = session.linkPreviews {
+        if created.dependencies.hasDocmost097Features, let previews = session.linkPreviews {
             // A pasted link is recognized only with the workspace's integrations known.
             Task { await previews.loadInstalled() }
-        }
-        created.serverURL = session.server?.url
-        if let pageSession {
-            // To the server the page came from, also after a switch: another server would get the file.
-            created.sendUpload = { [session] file in
-                try await session.perform(on: pageSession) { client in
-                    try await client.uploadAttachment(pageId: page.id, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
-                }
-            }
-        }
-        created.postAppNotice = { [notices] message in notices.post(message) }
-        created.lookUpPage = { [session] slugId in try? await session.send(Endpoints.Pages.info(pageId: slugId)) }
-        let changes = changes
-        created.createBase = { [session] template in
-            let base = try await session.send(Endpoints.Bases.create(parentPageId: page.id, template: template))
-            changes.pageChanged(in: page.spaceId)
-            return base.id
-        }
-        let session = session
-        let spaceId = page.spaceId
-        created.suggest = { query in
-            try await session.send(Endpoints.Search.suggest(query: query, users: true, pages: true, spaceId: spaceId, limit: 8))
         }
         model = created
         // A page that loaded after it left the screen (e.g. offline, back online under a pushed page) connects when it
@@ -852,6 +826,35 @@ struct PageView: View {
             registerSelectionCommands()
             created.resume()
         }
+    }
+
+    /// What the page's model needs from the session it loaded in (`pageSession`).
+    private func dependencies(of page: Page, owner: LiveDocuments.Owner?) -> DocumentModel.Dependencies {
+        let session = session, notices = notices, changes = changes
+        var dependencies = DocumentModel.Dependencies(
+            serverURL: session.server?.url, currentUserId: session.ready?.currentUser.user.id, liveOwner: owner,
+            linkPreviews: session.linkPreviews, canCreateBases: session.ready?.entitlements.has("bases") == true,
+            hasDocmost097Features: session.ready?.hasDocmost097Features == true
+        )
+        dependencies.suggest = { query in
+            try await session.send(Endpoints.Search.suggest(query: query, users: true, pages: true, spaceId: page.spaceId, limit: 8))
+        }
+        dependencies.lookUpPage = { slugId in try? await session.send(Endpoints.Pages.info(pageId: slugId)) }
+        dependencies.createBase = { template in
+            let base = try await session.send(Endpoints.Bases.create(parentPageId: page.id, template: template))
+            changes.pageChanged(in: page.spaceId)
+            return base.id
+        }
+        if let pageSession {
+            // To the server the page came from, also after a switch: another server would get the file.
+            dependencies.sendUpload = { file in
+                try await session.perform(on: pageSession) { client in
+                    try await client.uploadAttachment(pageId: page.id, fileName: file.fileName, mimeType: file.mimeType, fileURL: file.fileURL)
+                }
+            }
+        }
+        dependencies.postAppNotice = { message in notices.post(message) }
+        return dependencies
     }
 
     // MARK: - Comments

@@ -499,7 +499,7 @@ struct SubpagesNodeView: View {
         let model = model, ref = ref
         SubpagesBlockView(
             sortBy: node.string("sortBy").flatMap(SubpagesSort.init(rawValue:)) ?? .manual,
-            sort: model.isEditable && model.hasDocmost097Features ? { order in
+            sort: model.isEditable && model.dependencies.hasDocmost097Features ? { order in
                 Task { await model.setAttributes(of: ref, ["sortBy": .string(order.rawValue)]) }
             } : nil
         )

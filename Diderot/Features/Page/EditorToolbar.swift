@@ -504,7 +504,7 @@ struct LinkSheet: View {
             }
             .task(id: pageQuery) {
                 let query = pageQuery.trimmingCharacters(in: .whitespaces)
-                guard !query.isEmpty, let suggest = model.suggest else {
+                guard !query.isEmpty, let suggest = model.dependencies.suggest else {
                     pages = []
                     return
                 }
