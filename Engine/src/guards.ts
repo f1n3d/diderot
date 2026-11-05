@@ -22,6 +22,40 @@ export function checkBlocks(nodes: readonly PMNode[]) {
   }
 }
 
+/** The web's column layouts (Docmost's `ColumnsLayout`) and how many columns each is for: the web counts by the name. */
+const columnLayouts: Record<string, number> = {
+  two_equal: 2, two_left_sidebar: 2, two_right_sidebar: 2,
+  three_equal: 3, three_left_wide: 3, three_right_wide: 3, three_with_sidebars: 3,
+  four_equal: 4, five_equal: 5,
+};
+const oneOf = (...values: string[]) => (value: unknown) => typeof value === "string" && values.includes(value);
+const isBoolean = (value: unknown) => typeof value === "boolean";
+
+/**
+ * The attributes the app sets with `setAttributes`, and the values each takes, as on the web. The schema types none
+ * (validators there would make y-tiptap drop web content that fails them), so a wrong value from the app, such as
+ * `indent: "x"`, was stored as it came and shown wrongly on every client.
+ */
+const settable: Record<string, Record<string, (value: unknown, node: PMNode) => boolean>> = {
+  callout: { type: oneOf("default", "info", "note", "success", "warning", "danger") },
+  codeBlock: { language: (value) => value === null || (typeof value === "string" && value !== "") },
+  columns: { layout: (value, node) => typeof value === "string" && Object.hasOwn(columnLayouts, value) && columnLayouts[value] === node.childCount },
+  details: { open: isBoolean },
+  embed: { src: (value) => typeof value === "string" && /^https?:\/\//i.test(value) },
+  mathBlock: { text: (value) => typeof value === "string" },
+  subpages: { sortBy: oneOf("default", "title-asc", "recent") },
+  taskItem: { checked: isBoolean },
+};
+
+/** Throws for an attribute `setAttributes` doesn't set on the block's type, or a value it doesn't take (`settable`). */
+export function checkAttributes(node: PMNode, attrs: Record<string, unknown>) {
+  const rules = Object.hasOwn(settable, node.type.name) ? settable[node.type.name] : {};
+  for (const [name, value] of Object.entries(attrs)) {
+    // Not the value: a formula's or a link's can quote page content, and engine errors go to the app's log.
+    if (!Object.hasOwn(rules, name) || !rules[name](value, node)) throw new Error(`invalid ${node.type.name}.${name}`);
+  }
+}
+
 /**
  * Whether `current` is still the block the app read as `expected` (from the engine's own document, so a block nobody
  * touched comes back equal). A structural edit replaces the whole block: built from an older state, it would undo what a

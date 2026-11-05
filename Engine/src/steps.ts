@@ -5,7 +5,7 @@ import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 import { endSlot, holds, slotAt } from "./fits";
-import { checkBlocks, unchanged } from "./guards";
+import { checkAttributes, checkBlocks, unchanged } from "./guards";
 import { rebase } from "./rebase";
 
 /** A block by its UniqueID (`attrs.id`) or its path (child indices from the root). */
@@ -27,7 +27,8 @@ export type Step =
 /**
  * Adds the steps to `tr` in order. False as soon as one is refused (the block is gone, has another type, changed since,
  * or the step doesn't fit there: what a replace or an insert brings must fit where it goes, `holds` in src/fits.ts); the
- * caller then drops `tr`, steps before included. Throws for a block the schema can't hold (`checkBlocks`).
+ * caller then drops `tr`, steps before included. Throws for a block the schema can't hold (`checkBlocks`), and for an
+ * attribute value the app doesn't set (`checkAttributes`).
  */
 export function applySteps(tr: Transaction, steps: readonly Step[]): boolean {
   return steps.every((step) => applyStep(tr, step));
@@ -97,6 +98,7 @@ function applyStep(tr: Transaction, step: Step): boolean {
     case "setAttributes": {
       const found = locate(tr.doc, step.target);
       if (!found) return false;
+      checkAttributes(found.node, step.attrs);
       tr.setNodeMarkup(found.pos, undefined, { ...found.node.attrs, ...step.attrs });
       return true;
     }

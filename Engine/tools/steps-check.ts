@@ -106,5 +106,24 @@ expect("a paragraph at the end goes before the footnotes", "One X footnotes(foot
   { op: "insert", target: null, json: [paragraph("x", "X")] },
 ]));
 
+// Setting attributes: a value the app sets lands; one it doesn't throws (src/guards.ts' `settable`), and the engine then
+// drops the whole batch, steps before it included, as it dispatches only a batch that applied.
+const box = page({ type: "taskList", content: [{ type: "taskItem", content: [paragraph("t", "Task")] }] });
+function checkedAfter(steps: Step[]): unknown {
+  const tr = EditorState.create({ schema, doc: box }).tr;
+  try {
+    return applySteps(tr, steps) ? tr.doc.firstChild?.firstChild?.attrs.checked : "refused";
+  } catch (error) {
+    return String((error as Error).message);
+  }
+}
+const taskItem = { path: [0, 0], type: "taskItem" };
+expect("a task checked", true, checkedAfter([{ op: "setAttributes", target: taskItem, attrs: { checked: true } }]));
+expect("a task checked with a number", "invalid taskItem.checked", checkedAfter([{ op: "setAttributes", target: taskItem, attrs: { checked: 1 } }]));
+expect("a batch with a refused attribute", "invalid taskItem.indent", run(box, [
+  { op: "replace", target: { path: [0, 0, 0], type: "paragraph" }, json: [paragraph("t", "Changed")] },
+  { op: "setAttributes", target: taskItem, attrs: { indent: "x" } },
+]));
+
 console.log(differences ? `${differences} step difference(s)` : "The steps apply whole or not at all.");
 process.exitCode = differences ? 1 : 0;
