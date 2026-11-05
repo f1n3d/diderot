@@ -7,7 +7,7 @@
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
-import { backspaceEdit, backspacePlan, enterEdit, liftLineEdit, type Cursor } from "../src/keys";
+import { backspaceEdit, backspacePlan, enterEdit, enterLinesEdit, liftLineEdit, type Cursor } from "../src/keys";
 import { schemaExtensions } from "../src/schema";
 import { applySteps, type Step, type Target } from "../src/steps";
 
@@ -68,6 +68,48 @@ function enter(doc: PMNode, path: number[], before: number): string {
   const head: JSONContent = { ...json, content: text(all.slice(0, before)) };
   if (!head.content?.length) delete head.content;
   return run(doc, enterEdit(schema, doc, target, head, text(all.slice(before)), json));
+}
+
+/** The block at `path`, its target as the app gives it, its JSON and its text. */
+function block(doc: PMNode, path: number[]) {
+  let node: PMNode = doc;
+  for (const index of path) node = node.child(index);
+  const json = node.toJSON() as JSONContent;
+  const all = ((json.content ?? []) as JSONContent[]).map((inline) => inline.text ?? "").join("");
+  const target: Target = node.attrs.id ? { id: node.attrs.id } : { path, type: node.type.name };
+  return { node, json, all, target };
+}
+
+/** `lines` pasted after `before` characters of the text block at `path`, as the app sends them (`enterLinesEdit`): the
+ * block keeps its text up to the first break, the other lines follow, the last with the block's rest. */
+function paste(doc: PMNode, path: number[], before: number, pasted: string): string {
+  const { json, all, target } = block(doc, path);
+  const lines = (all.slice(0, before) + pasted + all.slice(before)).split("\n");
+  const head: JSONContent = { ...json, content: text(lines[0]) };
+  if (!head.content?.length) delete head.content;
+  return run(doc, enterLinesEdit(schema, doc, target, head, lines.slice(1).map(text), json));
+}
+
+/** The same paste key by key, as the app sent it before: Return at each break, the rest of the text going on in the
+ * new line, each from the page the one before left. */
+function keyed(doc: PMNode, path: number[], before: number, pasted: string): string {
+  let { json, all, target } = block(doc, path);
+  let lines = (all.slice(0, before) + pasted + all.slice(before)).split("\n");
+  let page = doc, cursor: Cursor | undefined;
+  while (lines.length > 1) {
+    const head: JSONContent = { ...json, content: text(lines[0]) };
+    if (!head.content?.length) delete head.content;
+    const edit = enterEdit(schema, page, target, head, text(lines.slice(1).join("\n")), json);
+    if (!edit) return "refused";
+    const tr = EditorState.create({ schema, doc: page }).tr;
+    if (!applySteps(tr, edit.steps)) return "refused";
+    page = tr.doc;
+    cursor = edit.cursor;
+    ({ json, target } = block(page, cursor.path));
+    target = { path: cursor.path, type: json.type };
+    lines = lines.slice(1);
+  }
+  return describe(page) + (cursor ? ` @${cursor.path.join(".")}:${cursor.offset}` : "");
 }
 
 function backspace(doc: PMNode, path: number[]): string {
@@ -167,6 +209,43 @@ const items = page(list(item(paragraph("a", "Eins")), item(paragraph("b", "Zwei"
 expect("a heading out of a list", "bulletList(Eins) #Zwei @1:4", run(items, liftLineEdit(schema, items, { id: "b" }, heading("b", "Zwei"))));
 const lines = page(list(item(paragraph("a", "Eins"), paragraph("b", "Zwei"))));
 expect("a heading for an item holding more", "refused", run(lines, liftLineEdit(schema, lines, { id: "b" }, heading("b", "Zwei"))));
+
+// Several lines pasted at once (`enterLinesEdit`): each goes where Return puts it, as key by key before, in one edit.
+// The cursor goes to the last line's start; the app puts it where the paste ends.
+const middle = page(paragraph("a", "xyz"), paragraph("n", "Danach"));
+expect("lines into a paragraph's middle", "xyA B Cz Danach @2:0", paste(middle, [0], 2, "A\nB\nC"));
+expect("lines into an item", "bulletList(Eins, Zwei, Drei) @0.2.0:0", paste(page(list(item(paragraph("a", "Eins")))), [0, 0, 0], 4, "\nZwei\nDrei"));
+expect("lines into a task", "taskList(Eins, Zwei, Drei) @0.2.0:0",
+  paste(page({ type: "taskList", content: [task(paragraph("a", "Eins"))] }), [0, 0, 0], 4, "\nZwei\nDrei"));
+expect("lines into a quote", "blockquote(Eins, Zwei, Drei) @0.2:0", paste(page(quote(paragraph("a", "Eins"))), [0, 0], 4, "\nZwei\nDrei"));
+expect("lines after a heading", "#Eins Zwei Drei @2:0", paste(page(heading("h", "Eins")), [0], 4, "\nZwei\nDrei"));
+// The same pages key by key: every rule of Return holds, also for empty lines, which leave a list as two Returns do.
+const cases: [string, PMNode, number[], number, string][] = [
+  ["a paragraph's middle", middle, [0], 2, "A\nB\nC"],
+  ["an item, with an empty line", page(list(item(paragraph("a", "Eins")))), [0, 0, 0], 4, "\n\nZwei"],
+  ["an item, with two empty lines", page(list(item(paragraph("a", "Eins")), item(paragraph("b", "Zwei")))), [0, 0, 0], 4, "\n\n\nDrei"],
+  ["an item, ending with two empty lines", page(list(item(paragraph("a", "Eins")))), [0, 0, 0], 4, "\n\n"],
+  ["a callout", page(callout(paragraph("a", "Eins"))), [0, 0], 4, "\nZwei\n\nDrei"],
+  ["a table cell", page({ type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", content: [paragraph("a", "AB")] }] }] }),
+    [0, 0, 0, 0], 1, "1\n2\n3"],
+];
+for (const [name, doc, path, before, pasted] of cases) expect(`lines into ${name}, as key by key`, keyed(doc, path, before, pasted), paste(doc, path, before, pasted));
+// A toggle's title keeps its first line (the app puts what was after the cursor there too, as Return keeps the title
+// whole); the others go into its content, open, or after it, closed. Key by key they all ran together in the title.
+expect("lines into an open toggle's title", "details(>Titel, detailsContent(Eins, Zwei, Inhalt)) @0.1.1:0",
+  paste(page(toggle(true, "Titel", paragraph("i", "Inhalt"))), [0, 0], 5, "\nEins\nZwei"));
+expect("one line into an open toggle's title", "details(>Titel, detailsContent(Eins, Inhalt)) @0.1.0:0",
+  paste(page(toggle(true, "Titel", paragraph("i", "Inhalt"))), [0, 0], 5, "\nEins"));
+const titled = page(toggle(true, "Titel", paragraph("i", "Inhalt")));
+expect("lines into a toggle's title, its rest kept in it", "details(>TiAtel, detailsContent(B, Inhalt)) @0.1.0:0",
+  run(titled, enterLinesEdit(schema, titled, { path: [0, 0], type: "detailsSummary" }, { type: "detailsSummary", content: text("TiAtel") },
+    [text("B")], block(titled, [0, 0]).json)));
+expect("lines into a closed toggle's title", "details(>Titel, detailsContent(Inhalt)) Eins Zwei @2:0",
+  paste(page(toggle(false, "Titel", paragraph("i", "Inhalt"))), [0, 0], 5, "\nEins\nZwei"));
+// Many lines: one edit, every line in its place.
+const many = Array.from({ length: 200 }, (_, index) => `Zeile ${index + 1}`);
+const pasted = paste(page(paragraph("a")), [0], 0, many.join("\n"));
+expect("200 lines in one edit", [many.join(" "), "@199:0"], [pasted.slice(0, pasted.lastIndexOf(" @")), pasted.slice(pasted.lastIndexOf(" @") + 1)]);
 
 if (differences) {
   console.log(`${differences} difference(s)`);

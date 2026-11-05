@@ -8,7 +8,8 @@
 // attributes, Backspace after an image or a divider never removes it.
 import type { JSONContent } from "@tiptap/core";
 import { Fragment, Node as PMNode, type Schema } from "@tiptap/pm/model";
-import { locate, type Step, type Target } from "./steps";
+import { EditorState } from "@tiptap/pm/state";
+import { applySteps, locate, type Step, type Target } from "./steps";
 
 /** Where the cursor goes: the text block at `path`, `offset` into its content (ProseMirror's count). */
 export type Cursor = { path: number[]; offset: number };
@@ -36,10 +37,11 @@ const paragraph: JSONContent = { type: "paragraph" };
  * - an empty item that holds only that line leaves the list;
  * - an item's line continues in a new item after it;
  * - any other line in a new paragraph after it.
+ * With `lifts` false, an empty line leaves nothing: a pasted one with more lines after it (`enterLinesEdit`).
  * Undefined when the block is gone or another type.
  */
 export function enterEdit(schema: Schema, doc: PMNode, target: Target, json: JSONContent, after: JSONContent[],
-  base?: JSONContent | null): KeyEdit | undefined {
+  base?: JSONContent | null, lifts = true): KeyEdit | undefined {
   const found = locate(doc, target);
   if (!found || found.node.type.name !== json.type) return undefined;
   const path = pathOf(doc, found.pos);
@@ -65,7 +67,7 @@ export function enterEdit(schema: Schema, doc: PMNode, target: Target, json: JSO
     return { steps, cursor: { path: next(detailsPath), offset: 0 } };
   }
 
-  if (before.content.size === 0 && after.length === 0 && path.length >= 2) {
+  if (lifts && before.content.size === 0 && after.length === 0 && path.length >= 2) {
     const last = index === parent.childCount - 1;
     const container = parent.type.name;
     let lifted: KeyEdit | undefined;
@@ -89,6 +91,48 @@ export function enterEdit(schema: Schema, doc: PMNode, target: Target, json: JSO
     steps: [save, { op: "insert", target: { path, type: found.node.type.name }, json: [line(after)], position: "after" }],
     cursor: { path: next(path), offset: 0 },
   };
+}
+
+/**
+ * Return after each of several lines at once (text with line breaks pasted or dictated): the block at `target` keeps
+ * `json`, its text up to the first break (with `base` as in `enterEdit`), and each of `lines`, a line's inline content
+ * (the last with the text that was after the cursor), goes where Return puts it, as `enterEdit` would key by key. In one
+ * transaction: key by key, 100 lines took seconds and the editor jumped from line to line. A toggle's title keeps its
+ * first line and the others go where Return in the title goes, into its content (open) or after it; key by key they all
+ * ran together in the title. The cursor ends in the last line. Undefined when the block is gone or a line doesn't fit.
+ */
+export function enterLinesEdit(schema: Schema, doc: PMNode, target: Target, json: JSONContent, lines: JSONContent[][],
+  base?: JSONContent | null): KeyEdit | undefined {
+  const tr = EditorState.create({ doc }).tr;
+  const steps: Step[] = [];
+  let cursor: Cursor | undefined;
+  /** Adds an edit's steps, applied to `tr` so the next one is built from the document they leave. */
+  const add = (edit: KeyEdit | undefined) => {
+    if (!edit || !applySteps(tr, edit.steps)) return false;
+    steps.push(...edit.steps);
+    cursor = edit.cursor;
+    return true;
+  };
+  let current = target, keep = json, pending = lines;
+  if (locate(doc, target)?.node.type.name === "detailsSummary") {
+    // Return in the title opens an empty line where its text goes on; the first of the other lines fills it.
+    if (!add(enterEdit(schema, doc, target, json, [], base)) || !cursor || pending.length === 0) return undefined;
+    current = { path: cursor.path, type: "paragraph" };
+    keep = { type: "paragraph", ...(pending[0].length ? { content: pending[0] } : {}) };
+    pending = pending.slice(1);
+    if (pending.length === 0 && !add({ steps: [{ op: "replace", target: current, json: [keep] }], cursor })) return undefined;
+    base = undefined;
+  }
+  for (const [index, after] of pending.entries()) {
+    // Only the last break can leave a list or quote: key by key, the text after an empty line went on in the new line.
+    const last = index === pending.length - 1;
+    if (!add(enterEdit(schema, tr.doc, current, keep, after, index === 0 ? base : undefined, last)) || !cursor) return undefined;
+    const line = locate(tr.doc, { path: cursor.path });
+    if (!line) return undefined;
+    current = { path: cursor.path, type: line.node.type.name };
+    keep = line.node.toJSON();
+  }
+  return cursor ? { steps, cursor } : undefined;
 }
 
 /** What Backspace at the start of the block at `target` does, empty or not (`BackspacePlan`); undefined when it's gone. */

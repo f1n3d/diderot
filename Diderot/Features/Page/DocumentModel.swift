@@ -1313,6 +1313,7 @@ final class DocumentModel {
     /// embed it, on 0.97). The paste always changes the text right away: text changed only after a paste that inserted
     /// nothing left the editor's text view sending typed characters nowhere.
     func pasteLink(_ text: String) -> Bool {
+        if pasteLinesIntoTitle(text) { return true }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let active, active.type != "codeBlock", !trimmed.contains(where: \.isWhitespace),
               let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https"
@@ -2050,9 +2051,17 @@ final class DocumentModel {
         guard let engine else { return }
         let full = activeText
         guard let newline = full.characters.firstIndex(of: "\n") else { return }
-        let before = AttributedString(full[full.startIndex..<newline])
         let afterStart = full.characters.index(after: newline)
+        // Text pasted or dictated with line breaks: a typed Return makes one.
+        if full.characters[afterStart...].contains("\n") {
+            await handleLines(active, text: full, caret: cursorOffset(), tailStaysInTitle: false)
+            return
+        }
+        let before = AttributedString(full[full.startIndex..<newline])
         let after = AttributedString(full[afterStart..<full.endIndex])
+        // Where the cursor goes in the new line: its start after a typed Return, where the text ends after two pasted
+        // lines (the cursor after the paste, past the line break).
+        let caretInAfter = cursorOffset() - full.characters.distance(from: full.startIndex, to: afterStart)
         // A toggle's title stays whole (web parity); any other line keeps the text before the cursor, and the text after
         // it goes to the new line.
         let keepsAll = active.type == "detailsSummary"
@@ -2084,7 +2093,90 @@ final class DocumentModel {
         if overrides[active.ref.identity] == kept { overrides[active.ref.identity] = nil }
         saveRefused = false
         report(.applied)
-        await focusAfterOperation(cursor.path, .start)
+        let pastedInto = !keepsAll && caretInAfter > 0 && caretInAfter <= after.characters.count
+        await focusAfterOperation(cursor.path, pastedInto ? .offset(caretInAfter) : .start)
+    }
+
+    /// Line breaks pasted or dictated into the line, `text` its text with them: each line goes where Return puts it, in one
+    /// step of the engine (`enterLines`), and the cursor to where the pasted text ends (`caret`, its offset in `text`;
+    /// the line's end without it). Key by key, 100 lines took seconds, the editor jumping from line to line, and in a
+    /// toggle's title they ran together. `tailStaysInTitle`: what was after the cursor stays in a toggle's title, as on
+    /// Return there; only with a `caret` known for sure, as a moved one would cut the title elsewhere.
+    private func handleLines(_ active: Active, text: AttributedString, caret: Int?, tailStaysInTitle: Bool) async {
+        guard let engine else { return }
+        let typed = Self.lines(of: text)
+        var lines = typed
+        let lastStart = text.characters.count - lines[lines.count - 1].characters.count
+        var caretInLast = caret.flatMap { $0 >= lastStart ? $0 - lastStart : nil }
+        if active.type == "detailsSummary", tailStaysInTitle, let split = caretInLast {
+            let last = lines[lines.count - 1]
+            let cut = last.characters.index(last.startIndex, offsetBy: split)
+            lines[0] += AttributedString(last[cut...])
+            lines[lines.count - 1] = AttributedString(last[..<cut])
+            caretInLast = nil
+        }
+        activeText = lines[0]
+        commitTask?.cancel()
+
+        let firstInlines = Self.inlines(from: lines[0], base: activeFont)
+        let line = PMNode(type: active.type, attrs: active.attrs, content: firstInlines.isEmpty ? nil : firstInlines)
+        let kept = currentActiveNode() ?? line
+        overrides[active.ref.identity] = kept
+        let base = takeBase(of: active.ref, sending: kept)
+        let rest = lines.dropFirst().map { Self.inlines(from: $0, base: activeFont) }
+        let result = await engine.enterLines(active.ref.target, keeping: line, lines: rest, base: base)
+        guard case .moved(let cursor) = result else {
+            if result == .refused { report(.refused) }
+            guard self.active?.ref == active.ref else { return }
+            // The text stays in the line as typed, without the line breaks, as after a refused Return.
+            if activeBase == kept { activeBase = base }
+            activeText = typed.dropFirst().reduce(typed[0], +)
+            if result == .refused {
+                overrides[active.ref.identity] = currentActiveNode()
+            } else {
+                scheduleCommit(debounce: .zero)
+            }
+            return
+        }
+        if overrides[active.ref.identity] == kept { overrides[active.ref.identity] = nil }
+        saveRefused = false
+        report(.applied)
+        await focusAfterOperation(cursor.path, caretInLast.map { .offset($0) } ?? .end)
+    }
+
+    /// Plain text with line breaks pasted into a toggle's title, at the cursor: what was after the cursor stays in the
+    /// title, as on Return there, and the lines go into its content (`handleLines`). Pasted by the text view, a single
+    /// break looked like a typed Return, and the lines ran into the title. True if it took the paste.
+    private func pasteLinesIntoTitle(_ text: String) -> Bool {
+        let pasted = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        guard let active, active.type == "detailsSummary", pasted.contains("\n"),
+              case .insertionPoint(let cursor) = activeSelection.indices(in: activeText) else { return false }
+        let combined = AttributedString(activeText[..<cursor]) + AttributedString(pasted) + AttributedString(activeText[cursor...])
+        let caret = activeText.characters.distance(from: activeText.startIndex, to: cursor) + pasted.count
+        Task.immediate {
+            typingSwitches += 1
+            defer { typingSwitchEnded() }
+            await handleLines(active, text: combined, caret: caret, tailStaysInTitle: true)
+        }
+        return true
+    }
+
+    /// The lines of `text`, split at its line breaks, with their formatting. Not at a line break within a line (U+2028,
+    /// a hard break).
+    private static func lines(of text: AttributedString) -> [AttributedString] {
+        var lines: [AttributedString] = []
+        var start = text.startIndex
+        var index = text.startIndex
+        while index < text.endIndex {
+            let next = text.characters.index(after: index)
+            if text.characters[index] == "\n" {
+                lines.append(AttributedString(text[start..<index]))
+                start = next
+            }
+            index = next
+        }
+        lines.append(AttributedString(text[start..<text.endIndex]))
+        return lines
     }
 
     /// Backspace at a block's start: joins it with the text block before, removes it (an empty line after an image, a

@@ -9,7 +9,7 @@ import { connection } from "./connection";
 import { fits, type Place } from "./fits";
 import { bindingChanges } from "./guards";
 import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, type Kind } from "./conversions";
-import { backspaceEdit, backspacePlan, enterEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
+import { backspaceEdit, backspacePlan, enterEdit, enterLinesEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
 import { applySteps, locate, type Step, type Target } from "./steps";
@@ -235,6 +235,11 @@ class DocmostEngine {
    * line (`enterEdit`). */
   enter(target: Target, json: JSONContent, after: JSONContent[], base?: JSONContent | null): Cursor | false | null {
     return this.applyEdit((editor) => enterEdit(editor.schema, editor.state.doc, target, json, after, base));
+  }
+
+  /** Return after each of several lines at once, a paste's or dictation's (`enterLinesEdit`); the cursor in the last. */
+  enterLines(target: Target, json: JSONContent, lines: JSONContent[][], base?: JSONContent | null): Cursor | false | null {
+    return this.applyEdit((editor) => enterLinesEdit(editor.schema, editor.state.doc, target, json, lines, base));
   }
 
   /**
