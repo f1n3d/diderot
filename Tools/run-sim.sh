@@ -36,12 +36,9 @@ if [ -n "${RESET_KEYCHAIN:-}" ]; then
   xcrun simctl keychain "$UDID" reset
 fi
 
-DEV_ADMIN_EMAIL=""
-DEV_ADMIN_PASSWORD=""
-if [ -f .env ]; then
-  # shellcheck disable=SC1091
-  source .env
-fi
+# Handed to the app in the environment (SIMCTL_CHILD_*), not on a command line, where ps would show the password.
+DEV_ADMIN_EMAIL=$(Tools/dev_api.py setting DEV_ADMIN_EMAIL)
+DEV_ADMIN_PASSWORD=$(Tools/dev_api.py setting DEV_ADMIN_PASSWORD)
 export SIMCTL_CHILD_DOCMOST_DEBUG_SERVER="${DOCMOST_DEBUG_SERVER-http://localhost:3000}"
 export SIMCTL_CHILD_DOCMOST_DEBUG_EMAIL="${DOCMOST_DEBUG_EMAIL-$DEV_ADMIN_EMAIL}"
 export SIMCTL_CHILD_DOCMOST_DEBUG_PASSWORD="${DOCMOST_DEBUG_PASSWORD-$DEV_ADMIN_PASSWORD}"

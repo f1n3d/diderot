@@ -35,11 +35,12 @@ APP="$DERIVED/Build/Products/Debug-iphoneos/Diderot.app"
 xcrun devicectl device install app --device "$UDID" "$APP" | tail -1
 
 if [ -n "${AUTOLOGIN:-}" ]; then
-  # shellcheck disable=SC1091
-  source .env
-  HOST="$(scutil --get LocalHostName | tr '[:upper:]' '[:lower:]').local"
-  ENV_JSON=$(printf '{"DOCMOST_DEBUG_SERVER":"http://%s:3000","DOCMOST_DEBUG_EMAIL":"%s","DOCMOST_DEBUG_PASSWORD":"%s"}' "$HOST" "$DEV_ADMIN_EMAIL" "$DEV_ADMIN_PASSWORD")
-  xcrun devicectl device process launch --device "$UDID" --terminate-existing --environment-variables "$ENV_JSON" "$BUNDLE_ID" | tail -1
-else
-  xcrun devicectl device process launch --device "$UDID" --terminate-existing "$BUNDLE_ID" | tail -1
+  # devicectl hands DEVICECTL_CHILD_* to the app: the password stays off the command line, where ps would show it.
+  DEVICECTL_CHILD_DOCMOST_DEBUG_SERVER="http://$(scutil --get LocalHostName | tr '[:upper:]' '[:lower:]').local:3000"
+  DEVICECTL_CHILD_DOCMOST_DEBUG_EMAIL=$(Tools/dev_api.py setting DEV_ADMIN_EMAIL)
+  DEVICECTL_CHILD_DOCMOST_DEBUG_PASSWORD=$(Tools/dev_api.py setting DEV_ADMIN_PASSWORD)
+  [ -n "$DEVICECTL_CHILD_DOCMOST_DEBUG_EMAIL" ] && [ -n "$DEVICECTL_CHILD_DOCMOST_DEBUG_PASSWORD" ] \
+    || { echo "AUTOLOGIN needs DEV_ADMIN_EMAIL and DEV_ADMIN_PASSWORD in .env" >&2; exit 1; }
+  export DEVICECTL_CHILD_DOCMOST_DEBUG_SERVER DEVICECTL_CHILD_DOCMOST_DEBUG_EMAIL DEVICECTL_CHILD_DOCMOST_DEBUG_PASSWORD
 fi
+xcrun devicectl device process launch --device "$UDID" --terminate-existing "$BUNDLE_ID" | tail -1

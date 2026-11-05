@@ -60,7 +60,11 @@ actor LiveSession {
         guard case .authenticated(let token) = result else {
             throw APIError.unexpectedPayload
         }
-        try? JSONEncoder().encode(CachedToken(key: key, token: token)).write(to: cacheURL, options: .atomic)
+        guard let data = try? JSONEncoder().encode(CachedToken(key: key, token: token)) else { return token }
+        // Readable by this user only, like the dev tools' cache (Tools/dev_api.py).
+        if (try? data.write(to: cacheURL, options: .atomic)) != nil {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: cacheURL.path)
+        }
         return token
     }
 }

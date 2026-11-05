@@ -17,21 +17,15 @@ IFS=',' read -ra DEVICE_LIST <<< "${DEVICES:-iPhone 18 Pro Max,iPad Pro 13-inch 
 IFS=',' read -ra LANGUAGE_LIST <<< "${LANGUAGES:-en,de}"
 
 for language in "${LANGUAGE_LIST[@]}"; do
-  # The demo pages' slug IDs, looked up as Alex.
-  pages=$(python3 - "$language" "$EMAIL" "$PASSWORD" <<'PY'
-import json, re, sys, urllib.request
-language, email, password = sys.argv[1:]
-def call(path, body, token=None):
-    request = urllib.request.Request("http://localhost:3000/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    if token:
-        request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        cookie = next((m.group(1) for h in (response.headers.get_all("Set-Cookie") or []) for m in [re.match(r"authToken=([^;]+)", h)] if m), None)
-        return json.loads(response.read() or b"{}").get("data"), cookie
-_, token = call("auth/login", {"email": email, "password": password})
-space, _ = call("spaces/info", {"spaceId": "produkt" if language == "de" else "product"}, token)
-items, _ = call("pages/sidebar-pages", {"spaceId": space["id"], "limit": 50}, token)
+  # The demo pages' slug IDs, looked up as Alex (Tools/dev_api.py).
+  pages=$(DOCMOST_SEED_URL="http://localhost:3000" DOCMOST_API_EMAIL="$EMAIL" DOCMOST_API_PASSWORD="$PASSWORD" \
+    PYTHONPATH="$PWD/Tools" python3 - "$language" <<'PY'
+import json, sys
+from dev_api import session
+language = sys.argv[1]
+call = session().call
+space = call("spaces/info", {"spaceId": "produkt" if language == "de" else "product"})
+items = call("pages/sidebar-pages", {"spaceId": space["id"], "limit": 50})
 names = {"👋": "welcome", "🗺️": "roadmap", "📝": "sync", "🛠️": "engineering", "🎨": "brand"}
 pages = {names[p["icon"]]: p["slugId"] for p in items["items"] if p.get("icon") in names}
 pages.update({"tasks": p["slugId"] for p in items["items"] if p["title"] in ("Tasks", "Aufgaben")})

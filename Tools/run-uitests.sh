@@ -33,30 +33,20 @@ else
   UDID=$(Tools/simulator-udid.py "$DEVICE")
 fi
 
-DEV_ADMIN_EMAIL=""
-DEV_ADMIN_PASSWORD=""
-if [ -f .env ]; then
-  # shellcheck disable=SC1091
-  source .env
-fi
-
-TOKEN=$(python3 -c "import json;print(json.load(open('$HOME/Library/Caches/docmost-live-token.json'))['token'])" 2>/dev/null || true)
-# The live tests' cached token may be expired or another user's: reuse it only if the server accepts it for the test user.
-if ! curl -s -X POST "$DOCMOST_SEED_URL/api/users/me" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
-  | python3 -c 'import json,sys; sys.exit(json.load(sys.stdin)["data"]["user"]["email"].lower() != sys.argv[1].lower())' "${DOCMOST_DEBUG_EMAIL-$DEV_ADMIN_EMAIL}" 2>/dev/null; then
-  echo "Signing in …"
-  TOKEN=$(curl -sS -i -X POST "$DOCMOST_SEED_URL/api/auth/login" -H 'Content-Type: application/json' \
-    -d "{\"email\":\"${DOCMOST_DEBUG_EMAIL-$DEV_ADMIN_EMAIL}\",\"password\":\"${DOCMOST_DEBUG_PASSWORD-$DEV_ADMIN_PASSWORD}\"}" \
-    | tr -d '\r' | sed -n 's/^set-cookie: authToken=\([^;]*\).*/\1/Ip' | head -1)
-  [ -n "$TOKEN" ] || { echo "Login failed" >&2; exit 1; }
-fi
+# The user the tests sign in as: the admin from .env, unless DOCMOST_DEBUG_EMAIL and DOCMOST_DEBUG_PASSWORD say
+# otherwise. The API calls below sign in as the same user through Tools/dev_api.py (DOCMOST_API_*), which caches the
+# token; neither the password nor the token goes on a command line, where ps would show it.
+DEV_ADMIN_EMAIL=$(Tools/dev_api.py setting DEV_ADMIN_EMAIL)
+DEV_ADMIN_PASSWORD=$(Tools/dev_api.py setting DEV_ADMIN_PASSWORD)
+export DOCMOST_API_EMAIL="${DOCMOST_DEBUG_EMAIL-$DEV_ADMIN_EMAIL}" DOCMOST_API_PASSWORD="${DOCMOST_DEBUG_PASSWORD-$DEV_ADMIN_PASSWORD}"
+export PYTHONPATH="$PWD/Tools${PYTHONPATH:+:$PYTHONPATH}"
+api() { Tools/dev_api.py call "$@"; } # api <path> [key=value | key:=json … | -] [--field name] → the answer's data
+api users/me > /dev/null || { echo "Signing in failed" >&2; exit 1; }
 
 # The server's version and installed integrations: tests of content Docmost 0.97 introduced skip on older servers,
 # the paste test without a GitHub integration (a stand-in one will do, see README.md).
-SERVER_VERSION=$(curl -s -X POST "$DOCMOST_SEED_URL/api/version" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
-  | python3 -c 'import json, sys; print(json.load(sys.stdin)["data"].get("currentVersion") or "")' 2>/dev/null || true)
-INTEGRATIONS=$(curl -s -X POST "$DOCMOST_SEED_URL/api/integrations" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
-  | python3 -c 'import json, sys; print(",".join(i["type"] for i in json.load(sys.stdin)["data"]))' 2>/dev/null || true)
+SERVER_VERSION=$(api version --field currentVersion 2>/dev/null || true)
+INTEGRATIONS=$(api integrations 2>/dev/null | python3 -c 'import json, sys; print(",".join(i["type"] for i in json.load(sys.stdin)))' 2>/dev/null || true)
 echo "Docmost ${SERVER_VERSION:-(version unknown)} on port $PORT${INTEGRATIONS:+, integrations: $INTEGRATIONS}"
 docmost_097() {
   python3 -c 'import sys; v = sys.argv[1].split("."); sys.exit(0 if len(v) > 1 and (int(v[0]), int(v[1])) >= (0, 97) else 1)' \
@@ -66,15 +56,11 @@ docmost_097() {
 # Two child pages of the test page for the sub-pages sort test (test70; Docmost offers the order from two pages on),
 # created in the order B, A so that sorting by title changes it.
 if docmost_097; then
-  python3 - "$PAGE" "$TOKEN" <<'PY' || echo "Could not create the child pages for the sub-pages test"
-import json, os, sys, urllib.request
-page, token = sys.argv[1], sys.argv[2]
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+  python3 - "$PAGE" <<'PY' || echo "Could not create the child pages for the sub-pages test"
+import sys
+from dev_api import session
+page = sys.argv[1]
+call = session().call
 space = call("pages/info", {"pageId": page})["spaceId"]
 titles = {p.get("title") for p in call("pages/sidebar-pages", {"pageId": page, "limit": 100})["items"]}
 for title in ["Sortiert B", "Sortiert A"]:
@@ -85,15 +71,11 @@ fi
 
 # Pages below the test page for the tree's drop zones (EditorUITests test79): "Baum-Ziel<stamp>" with the subpage
 # "Baum-Kind<stamp>", then "Baum-Quelle<stamp>". Leftovers of earlier runs go first.
-python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || echo "Could not create the pages for the tree drop test"
-import json, os, re, sys, urllib.request
-stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+python3 - "$STAMP" "$PAGE" <<'PY' || echo "Could not create the pages for the tree drop test"
+import re, sys
+from dev_api import session
+stamp, page = sys.argv[1], sys.argv[2]
+call = session().call
 space = call("pages/info", {"pageId": page})["spaceId"]
 for old in call("pages/sidebar-pages", {"pageId": page, "limit": 100})["items"]:
     if re.fullmatch(r"Baum-(Ziel|Quelle)\d+", old.get("title") or ""):
@@ -108,25 +90,21 @@ PY
 echo "Resetting the test page …"
 python3 -c 'import json, sys; print(json.dumps({"pageId": sys.argv[1], "operation": "replace", "format": "json", "content": json.load(open(sys.argv[2]))}))' \
   "$PAGE" Tools/editor-test-page.json \
-  | curl -sSf -o /dev/null -X POST "$DOCMOST_SEED_URL/api/pages/update" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data @- \
+  | api pages/update - > /dev/null \
   || { echo "Could not reset the test page" >&2; exit 1; }
 
 # Remove the admin's comments on the test page from earlier runs (test33 creates some).
-python3 - "$PAGE" "$TOKEN" <<'PY' || echo "Could not remove old comments from the test page"
-import json, os, sys, urllib.request, urllib.error
-page, token = sys.argv[1], sys.argv[2]
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+python3 - "$PAGE" <<'PY' || echo "Could not remove old comments from the test page"
+import sys
+from dev_api import ApiError, session
+page = sys.argv[1]
+call = session().call
 me = call("users/me", {})["user"]["id"]
 for comment in call("comments", {"pageId": page, "limit": 100})["items"]:
     if comment.get("creatorId") == me:
         try:
             call("comments/delete", {"commentId": comment["id"]})
-        except urllib.error.HTTPError:
+        except ApiError:
             pass  # reply already deleted along with its parent comment
 PY
 
@@ -138,8 +116,7 @@ Tools/seed-notifications.py "$PAGE" --count 2 || echo "Could not create notifica
 mkdir -p Tools/.cache
 ATTACHMENT="Tools/.cache/Anhang$STAMP.txt"
 printf 'Anhang für den UI-Test %s\n' "$STAMP" > "$ATTACHMENT"
-curl -sSf -o /dev/null -X POST "$DOCMOST_SEED_URL/api/files/upload" -H "Authorization: Bearer $TOKEN" \
-  -F "pageId=$PAGE" -F "file=@$ATTACHMENT;type=text/plain" || echo "Could not upload the file for the attachments test"
+Tools/dev_api.py upload "$PAGE" "$ATTACHMENT" text/plain || echo "Could not upload the file for the attachments test"
 rm -f "$ATTACHMENT"
 
 # Databases "Kanban-Test", "Datenbank-Test" and "Projekte › Projektplan", and the page "Datenbank-Einbettung", for the BaseUITests.
@@ -149,15 +126,11 @@ done < <(Tools/seed-bases.py "$PAGE" || echo "Could not create database test dat
 
 # Templates for EditorUITests test78 (Enterprise feature `templates`): "Vorlage<stamp> Bereich" of the test page's space
 # and "Vorlage<stamp> Global"; their IDs for the check and clean-up below. Without the license nothing is made.
-TEMPLATES=$(python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || true
-import json, os, sys, urllib.request
-stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+TEMPLATES=$(python3 - "$STAMP" "$PAGE" <<'PY' || true
+import sys
+from dev_api import session
+stamp, page = sys.argv[1], sys.argv[2]
+call = session().call
 space = call("pages/info", {"pageId": page})["spaceId"]
 content = {"type": "doc", "content": [
     {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Agenda" + stamp}]},
@@ -222,13 +195,12 @@ perl -e 'sleep 12'
 CHECKS_FAILED=0
 # Each check names its test; with ONLY (and so with AREA) those of the tests that didn't run are left out
 # (Tools/uitest_checks.py).
-export ONLY="${ONLY:-}" PYTHONPATH="$PWD/Tools${PYTHONPATH:+:$PYTHONPATH}"
-curl -s -X POST "$DOCMOST_SEED_URL/api/pages/info" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"pageId\":\"$PAGE\",\"format\":\"json\"}" | python3 -c '
+export ONLY="${ONLY:-}"
+api pages/info pageId="$PAGE" format=json | python3 -c '
 import json, sys
 from uitest_checks import report
 stamp, page = sys.argv[1], sys.argv[2]
-doc = json.load(sys.stdin)["data"]["content"]
+doc = json.load(sys.stdin)["content"]
 runs = []
 def walk(node):
     if node.get("type") == "text":
@@ -386,16 +358,12 @@ sys.exit(0 if report(checks) else 1)
 
 # Databases (BaseUITests test26–28): created row with its values; card gone after deletion.
 if [ -n "${TEST_RUNNER_DOCMOST_UITEST_BASE_FULL:-}" ]; then
-  python3 - "$STAMP" "$TEST_RUNNER_DOCMOST_UITEST_BASE_FULL" "$TOKEN" "$TEST_RUNNER_DOCMOST_UITEST_BASE_IDS" <<'PY' || CHECKS_FAILED=1
-import json, os, sys, urllib.request
+  python3 - "$STAMP" "$TEST_RUNNER_DOCMOST_UITEST_BASE_FULL" "$TEST_RUNNER_DOCMOST_UITEST_BASE_IDS" <<'PY' || CHECKS_FAILED=1
+import json, sys
+from dev_api import session
 from uitest_checks import report
-stamp, page_id, token, ids = sys.argv[1], sys.argv[2], sys.argv[3], json.loads(sys.argv[4])
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read())["data"]
+stamp, page_id, ids = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+call = session().call
 page = call("bases/rows", {"pageId": page_id, "limit": 100})
 rows, users = page["items"], (page.get("references") or {}).get("users") or {}
 info = call("bases/info", {"pageId": page_id})
@@ -423,16 +391,12 @@ fi
 # Templates (EditorUITests test78): the page from the space's template and the empty page filled from the global one,
 # both with the template's content. Then deletes them and the templates.
 if [ -n "$TEMPLATES" ]; then
-python3 - "$STAMP" "$PAGE" "$TOKEN" "$TEMPLATES" <<'PY' || CHECKS_FAILED=1
-import json, os, sys, urllib.request
+python3 - "$STAMP" "$PAGE" "$TEMPLATES" <<'PY' || CHECKS_FAILED=1
+import sys
+from dev_api import session
 from uitest_checks import report
-stamp, page, token, templates = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split(",")
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+stamp, page, templates = sys.argv[1], sys.argv[2], sys.argv[3].split(",")
+call = session().call
 def plain(node):
     if isinstance(node, dict):
         return (node.get("text") or "") + "".join(plain(child) for child in node.get("content") or [])
@@ -456,16 +420,12 @@ PY
 fi
 
 # Comments (EditorUITests test33): inline comment with its mark in the content; page comment deleted again.
-python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || CHECKS_FAILED=1
-import json, os, sys, urllib.request
+python3 - "$STAMP" "$PAGE" <<'PY' || CHECKS_FAILED=1
+import sys
+from dev_api import session
 from uitest_checks import report
-stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+stamp, page = sys.argv[1], sys.argv[2]
+call = session().call
 def plain(node):
     if isinstance(node, dict):
         return (node.get("text") or "") + "".join(plain(child) for child in node.get("content") or [])
@@ -494,18 +454,14 @@ PY
 # Attachments (EditorUITests test77): from 0.97 on the uploaded Anhang<stamp>.txt deleted from the list, and the files
 # of earlier runs whose test didn't get that far removed; 0.96 can't delete files, so there they stay.
 docmost_097 && DELETES_FILES=1 || DELETES_FILES=0
-python3 - "$STAMP" "$PAGE" "$TOKEN" "$DELETES_FILES" <<'PY' || CHECKS_FAILED=1
-import json, os, re, sys, urllib.request
+python3 - "$STAMP" "$PAGE" "$DELETES_FILES" <<'PY' || CHECKS_FAILED=1
+import re, sys
+from dev_api import session
 from uitest_checks import report
-stamp, page, token, deletes = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
+stamp, page, deletes = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 if not deletes:
     sys.exit(0)
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+call = session().call
 left = call("pages/attachments", {"pageId": page, "query": "Anhang" + stamp, "limit": 10})["items"]
 passed = report([("EditorUITests/test77_PageAttachments", "Attachments: Anhang" + stamp + ".txt deleted from the list", not left)])
 for attachment in call("pages/attachments", {"pageId": page, "query": "Anhang", "limit": 100})["items"]:
@@ -516,16 +472,12 @@ PY
 
 # Inserting via "/" and "+" (EditorUITests test34–39): expects the nodes the web editor creates.
 # Afterwards deletes the databases the tests created.
-python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || CHECKS_FAILED=1
-import json, os, re, sys, urllib.request
+python3 - "$STAMP" "$PAGE" <<'PY' || CHECKS_FAILED=1
+import re, sys
+from dev_api import session
 from uitest_checks import report
-stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+stamp, page = sys.argv[1], sys.argv[2]
+call = session().call
 doc = call("pages/info", {"pageId": page, "format": "json"})["content"]
 blocks = doc.get("content", []) or []
 def text(node):
@@ -607,16 +559,12 @@ PY
 
 # Content Docmost 0.97 introduced (EditorUITests test69, test70, test72, test73), on 0.97 and newer only.
 if docmost_097; then
-  python3 - "$STAMP" "$PAGE" "$TOKEN" "$INTEGRATIONS" <<'PY' || CHECKS_FAILED=1
-import json, os, sys, urllib.request
+  python3 - "$STAMP" "$PAGE" "$INTEGRATIONS" <<'PY' || CHECKS_FAILED=1
+import sys
+from dev_api import session
 from uitest_checks import report
-stamp, page, token, integrations = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split(",")
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+stamp, page, integrations = sys.argv[1], sys.argv[2], sys.argv[3].split(",")
+call = session().call
 doc = call("pages/info", {"pageId": page, "format": "json"})["content"]
 def text(node):
     return (node.get("text") or "") + "".join(text(child) for child in node.get("content") or [])
@@ -675,16 +623,12 @@ fi
 
 # Tree drop zones (EditorUITests test79): "Baum-Quelle<stamp>" ended up in "Baum-Ziel<stamp>", after "Baum-Kind<stamp>".
 # Then deletes both pages with their subpages.
-python3 - "$STAMP" "$PAGE" "$TOKEN" <<'PY' || CHECKS_FAILED=1
-import json, os, sys, urllib.request
+python3 - "$STAMP" "$PAGE" <<'PY' || CHECKS_FAILED=1
+import sys
+from dev_api import session
 from uitest_checks import report
-stamp, page, token = sys.argv[1], sys.argv[2], sys.argv[3]
-def call(path, body):
-    request = urllib.request.Request(os.environ["DOCMOST_SEED_URL"] + "/api/" + path, data=json.dumps(body).encode(), method="POST")
-    request.add_header("Content-Type", "application/json")
-    request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read() or b"{}").get("data")
+stamp, page = sys.argv[1], sys.argv[2]
+call = session().call
 made = [p for p in call("pages/sidebar-pages", {"pageId": page, "limit": 100})["items"]
         if p.get("title") in ("Baum-Ziel" + stamp, "Baum-Quelle" + stamp)]
 target = next((p for p in made if p.get("title") == "Baum-Ziel" + stamp), None)
@@ -698,23 +642,20 @@ sys.exit(0 if passed else 1)
 PY
 
 # Page tree: after the drag test, the test page must be the first root page of its space.
-SPACE_ID=$(curl -s -X POST "$DOCMOST_SEED_URL/api/pages/info" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"pageId\":\"$PAGE\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["spaceId"])')
-curl -s -X POST "$DOCMOST_SEED_URL/api/pages/sidebar-pages" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"spaceId\":\"$SPACE_ID\",\"limit\":5}" | python3 -c '
+SPACE_ID=$(api pages/info pageId="$PAGE" --field spaceId)
+api pages/sidebar-pages spaceId="$SPACE_ID" limit:=5 | python3 -c '
 import json, sys
 from uitest_checks import report
-items = json.load(sys.stdin)["data"]["items"]
+items = json.load(sys.stdin)["items"]
 first = items[0] if items else {}
 sys.exit(0 if report([("EditorUITests/test11_TreeDragToTop", "Tree: test page is the first root page (" + str(first.get("title")) + ")",
                        first.get("id") == sys.argv[1])]) else 1)
 ' "$PAGE" || CHECKS_FAILED=1
 
 # Move the test page back to the end of the root level so the drag test stays repeatable.
-curl -s -X POST "$DOCMOST_SEED_URL/api/pages/sidebar-pages" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"spaceId\":\"$SPACE_ID\",\"limit\":100}" | python3 -c '
+if POSITION=$(api pages/sidebar-pages spaceId="$SPACE_ID" limit:=100 | python3 -c '
 import json, sys, random
-items = [p for p in json.load(sys.stdin)["data"]["items"] if p["id"] != sys.argv[1]]
+items = [p for p in json.load(sys.stdin)["items"] if p["id"] != sys.argv[1]]
 digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 last = items[-1]["position"] if items else None
 def integer_length(head):
@@ -736,7 +677,10 @@ def increment(integer):
 key = "a0" if last is None else increment(last[:integer_length(last[0])])
 key += "".join(random.choice(digits[1:]) for _ in range(max(0, 5 - len(key))))
 print(key)
-' "$PAGE" | xargs -I{} curl -s -o /dev/null -w "Test page moved to the end -> %{http_code}\n" -X POST "$DOCMOST_SEED_URL/api/pages/move" \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "{\"pageId\":\"$PAGE\",\"position\":\"{}\",\"parentPageId\":null}"
+' "$PAGE") && api pages/move pageId="$PAGE" position="$POSITION" parentPageId:=null > /dev/null; then
+  echo "Test page moved to the end"
+else
+  echo "Could not move the test page to the end" >&2
+fi
 
 exit $(( TEST_FAILED || CHECKS_FAILED ))
