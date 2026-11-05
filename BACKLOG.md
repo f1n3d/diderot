@@ -115,7 +115,6 @@ Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the 
   - test35 sometimes took about 60 s longer ("App animations complete notification not received" when handing over the emoji).
 - Postponed in the code review of October 28, 2026:
   - Opening a large attachment or exporting holds the whole file in memory and writes it on the main thread (M9). With the upload rework (M8) in mind: download straight to a file.
-  - A page tree refresh reloads every expanded level one request after the other, and a refresh a newer one replaced still runs to its end (M39).
   - The hidden editor engine's page has no content security policy (M47). It matters only if `engine.js` itself turned malicious; since October 31, 2026 CI checks that `engine.js` is built from its sources, which does almost as much.
 - Postponed in the code review of October 31, 2026:
   - CI checks German translations only for keys in the String Catalog (`Tools/check-project.sh`); a new key gets there through `xcodebuild -exportLocalizations` and `Tools/localize.py --import`. An export in CI would also catch keys never imported, at the cost of a second build.
