@@ -2,9 +2,10 @@
 // operations the app calls on `window.DocmostEngine`. Events go to `webkit.messageHandlers.engine` as JSON strings.
 import { Editor, getSchema, type JSONContent } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
-import { HocuspocusProvider, HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
+import { type HocuspocusProvider, type HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import { Node as PMNode } from "@tiptap/pm/model";
 import * as Y from "yjs";
+import { connection } from "./connection";
 import { fits, type Place } from "./fits";
 import { bindingChanges } from "./guards";
 import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, type Kind } from "./conversions";
@@ -58,13 +59,11 @@ class DocmostEngine {
     this.host.style.display = "none";
     document.body.appendChild(this.host);
 
-    this.socket = new HocuspocusProviderWebsocket({ url: options.wsUrl, autoConnect: false });
     // The provider resends the token on every reconnect and collab tokens expire after 24 h, so from the second
     // connect on the app fetches a fresh one (keeping the last if it can't, e.g. offline).
     let token = options.token;
     let connects = 0;
-    this.provider = new HocuspocusProvider({
-      websocketProvider: this.socket,
+    const { socket, provider } = connection(options.wsUrl, {
       name: `page.${options.pageId}`,
       token: async () => {
         if (connects++ > 0) token = (await window.webkit?.messageHandlers?.collabToken?.postMessage("")) || token;
@@ -91,6 +90,8 @@ class DocmostEngine {
       // per connect: on a connection that died without notice it stays until the provider notices, after 30 s.
       onUnsyncedChanges: ({ number }) => emit("unconfirmed", { count: number }),
     });
+    this.socket = socket;
+    this.provider = provider;
     // With the provider listening, so it counts them as unsent until the server confirms them; the sync sends them.
     if (options.unsent) Y.applyUpdate(this.provider.document, Uint8Array.from(atob(options.unsent), (char) => char.charCodeAt(0)));
     if (options.user) {
