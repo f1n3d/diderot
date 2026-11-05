@@ -1896,6 +1896,18 @@ import XCTest
         app.typeKey(.leftArrow, modifierFlags: [])
         XCTAssertTrue(showsSlide(2), "The left arrow key doesn't go back: \(counter.label)")
 
+        // On an iPad the laser pointer's layer, which hides the system's pointer, takes only the pointer's hovering: the
+        // bar and swiping still work while it is on.
+        let laser = app.descendants(matching: .any)["presentation-laser-pointer"].firstMatch
+        if laser.exists {
+            laser.tap()
+            app.buttons["presentation-next"].tap()
+            XCTAssertTrue(showsSlide(3), "With the laser pointer on, “Next Slide” doesn't move on: \(counter.label)")
+            app.swipeRight()
+            XCTAssertTrue(showsSlide(2), "With the laser pointer on, swiping doesn't go back: \(counter.label)")
+            laser.tap()
+        }
+
         // The table's slide ends with it: the paragraph after it begins the next one, without the table. (test52 types
         // at the paragraph's start.)
         let after = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nach der Tabelle.")).firstMatch
