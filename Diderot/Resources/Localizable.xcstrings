@@ -943,6 +943,46 @@
         }
       }
     },
+    "Changes can't be kept on this device. Until the server has them, they're lost if the app ends.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen können auf diesem Gerät nicht gesichert werden. Bis der Server sie hat, gehen sie verloren, wenn die App beendet wird."
+          }
+        }
+      }
+    },
+    "Changes can't be kept on this device: its storage is full. Until the server has them, they're lost if the app ends.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen können auf diesem Gerät nicht gesichert werden: Der Speicher ist voll. Bis der Server sie hat, gehen sie verloren, wenn die App beendet wird."
+          }
+        }
+      }
+    },
+    "Changes to “%@” may be lost: they couldn't be kept on this device.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen an „%@“ gehen vielleicht verloren: Sie ließen sich auf diesem Gerät nicht sichern."
+          }
+        }
+      }
+    },
+    "Changes to “%@” may be lost: this device's storage is full.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen an „%@“ gehen vielleicht verloren: Der Speicher dieses Geräts ist voll."
+          }
+        }
+      }
+    },
     "Changes you made on this server haven't reached it yet. Removing the server deletes them from this device.": {
       "localizations": {
         "de": {

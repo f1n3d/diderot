@@ -487,7 +487,10 @@ struct PageView: View {
         // Outside `CentersAboveKeyboard`: the banner is part of the scroll view's safe area there, so centering above the
         // keyboard keeps the cursor below it.
         .safeAreaInset(edge: .top, spacing: 0) {
-            if let error = model?.errorMessage { EditorMessageBanner(message: error) }
+            VStack(spacing: 0) {
+                if let error = model?.errorMessage { EditorMessageBanner(message: error) }
+                if let warning = model?.unsentWarning { EditorMessageBanner(message: warning) }
+            }
         }
     }
 

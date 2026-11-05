@@ -1002,6 +1002,65 @@ struct DocumentModelTests {
         #expect(engine.lifecycle == (unconfirmed == 0 ? [] : ["save after 1"]))
     }
 
+    /// Unsent changes the device can't keep (a full disk) put a banner on the page while the server hasn't confirmed
+    /// them: they live only in the engine then, lost if the app ends. Only the log said so. It goes once the server has
+    /// everything, and for good once a save keeps them.
+    @Test(.timeLimit(.minutes(1))) func unsentChangesTheDeviceCantKeepShowABanner() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        engine.unconfirmedChanges = 1
+        engine.unsentChangesError = CocoaError(.fileWriteOutOfSpace)
+        await model.saveUnsentChanges()
+        #expect(model.unsentWarning == String(localized: "Changes can't be kept on this device: its storage is full. Until the server has them, they're lost if the app ends."))
+
+        engine.unconfirmedChanges = 0
+        #expect(model.unsentWarning == nil)
+        engine.unconfirmedChanges = 1
+        #expect(model.unsentWarning != nil)
+        engine.unsentChangesError = nil
+        await model.saveUnsentChanges()
+        #expect(model.unsentWarning == nil)
+    }
+
+    /// Unsent changes not kept as their page closes tell the whole app, naming the page: what the server didn't get
+    /// went with the engine, and the page's banner is gone with it.
+    @Test(.timeLimit(.minutes(1))) func unsentChangesNotKeptOnLeavingTellTheApp() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p","title":"Projektplan"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        var notices: [String] = []
+        model.dependencies.postAppNotice = { notices.append($0) }
+        engine.unconfirmedChanges = 1
+        engine.unsentChangesError = POSIXError(.ENOSPC)
+        await model.saveUnsentChanges()
+        #expect(model.unsentNotKept != nil)
+        model.leave()
+        while engine.lifecycle.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.lifecycle == ["save after 0", "close"])
+        let title = "Projektplan"
+        #expect(notices == [String(localized: "Changes to “\(title)” may be lost: this device's storage is full.")])
+        #expect(model.unsentNotKept == nil)
+    }
+
+    /// A full disk is said in words, also behind another error; other failures get the general sentence. Foundation's
+    /// own message names the store's file.
+    @Test func fullStorageIsSaidInWords() {
+        let underlying = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError,
+                                 userInfo: [NSUnderlyingErrorKey: POSIXError(.ENOSPC) as NSError])
+        for error: any Error in [CocoaError(.fileWriteOutOfSpace), POSIXError(.ENOSPC), POSIXError(.EDQUOT), underlying] {
+            #expect(UnsentChanges.isOutOfSpace(error), "\(error)")
+        }
+        for error: any Error in [CocoaError(.fileWriteNoPermission), POSIXError(.EACCES), URLError(.notConnectedToInternet)] {
+            #expect(!UnsentChanges.isOutOfSpace(error), "\(error)")
+        }
+        #expect(UnsentChanges.notKeptWarning(CocoaError(.fileWriteNoPermission))
+                == String(localized: "Changes can't be kept on this device. Until the server has them, they're lost if the app ends."))
+        let title = "Projektplan"
+        #expect(UnsentChanges.mayBeLostNotice(title: title, CocoaError(.fileWriteNoPermission))
+                == String(localized: "Changes to “\(title)” may be lost: they couldn't be kept on this device."))
+    }
+
     /// Reopening after a refused live connection closes the engine first, as leaving does: its unsent changes (e.g.
     /// made offline) are kept for the reopened engine, where the reopen threw them away.
     @Test(.timeLimit(.minutes(1))) func reopeningAfterARefusedConnectionClosesFirst() async throws {
@@ -1855,6 +1914,9 @@ final class FakeDocumentEngine: DocumentEngine {
     var onDocument: (@MainActor (PMNode) -> Void)?
     var onFailure: (@MainActor (EngineFailure) -> Void)?
     var onTerminated: (@MainActor () -> Void)?
+    var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)?
+    /// Why saving the unsent changes (`saveUnsentChanges`, `close`) fails, like a full disk; nil keeps them.
+    var unsentChangesError: (any Error)?
     private(set) var opened: [String] = []
     /// "open" and "close" in order.
     private(set) var lifecycle: [String] = []
@@ -1960,9 +2022,19 @@ final class FakeDocumentEngine: DocumentEngine {
         lifecycle.append("open")
         whileOpening?()
     }
-    func close() { lifecycle.append("close") }
+    func close() {
+        lifecycle.append("close")
+        reportUnsentChanges()
+    }
     /// With the number of block saves before it.
-    func saveUnsentChanges() async { lifecycle.append("save after \(saved.count)") }
+    func saveUnsentChanges() async {
+        lifecycle.append("save after \(saved.count)")
+        reportUnsentChanges()
+    }
+    /// As the engine reports a save that had something to keep.
+    private func reportUnsentChanges() {
+        if unconfirmedChanges > 0 { onUnsentChangesKept?(unsentChangesError) }
+    }
     func currentDocument() async -> PMNode? { document }
     func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode], expected: PMNode?) async -> EngineResult {
         replaced.append(target)

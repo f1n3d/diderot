@@ -43,6 +43,30 @@ enum UnsentChanges {
         return false
     }
 
+    /// The page's banner while changes its engine couldn't keep (`DocumentEngine.onUnsentChangesKept`) wait for the
+    /// server: they are lost if the app ends meanwhile.
+    static func notKeptWarning(_ error: any Error) -> String {
+        isOutOfSpace(error)
+            ? String(localized: "Changes can't be kept on this device: its storage is full. Until the server has them, they're lost if the app ends.")
+            : String(localized: "Changes can't be kept on this device. Until the server has them, they're lost if the app ends.")
+    }
+
+    /// The app's notice when they couldn't be kept as their page closed: what the server didn't get went with the engine.
+    static func mayBeLostNotice(title: String, _ error: any Error) -> String {
+        isOutOfSpace(error)
+            ? String(localized: "Changes to “\(title)” may be lost: this device's storage is full.")
+            : String(localized: "Changes to “\(title)” may be lost: they couldn't be kept on this device.")
+    }
+
+    /// A full disk (or quota), the likely reason. The messages above say it in words: Foundation's own names the store's
+    /// file ("…-3f2a9c.bin").
+    static func isOutOfSpace(_ error: any Error) -> Bool {
+        let error = error as NSError
+        if error.domain == NSCocoaErrorDomain, error.code == NSFileWriteOutOfSpaceError { return true }
+        if error.domain == NSPOSIXErrorDomain, [Int(ENOSPC), Int(EDQUOT)].contains(error.code) { return true }
+        return (error.userInfo[NSUnderlyingErrorKey] as? NSError).map(isOutOfSpace) ?? false
+    }
+
     /// All users' changes for the server.
     static func removeAll(server: URL) {
         try? FileManager.default.removeItem(at: directory(of: server))

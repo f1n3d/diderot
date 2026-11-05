@@ -103,6 +103,10 @@ final class DocumentModel {
     /// Notice after an action (e.g. "Copied"); the page view shows it briefly.
     var notice: String?
     private(set) var errorMessage: String?
+    /// Why the engine couldn't keep the unsent changes on the device (a full disk), until a later save keeps them.
+    private(set) var unsentNotKept: String?
+    /// The page's banner for it, while the server hasn't confirmed every change: once it has, nothing is at risk.
+    var unsentWarning: String? { hasUnconfirmedChanges ? unsentNotKept : nil }
     /// Block and time of the link just opened in its text, so the tap doesn't also open the editor.
     var linkTapped: (ref: NodeRef, at: Date)?
     /// The link sheet is open: its URL field takes focus, but editing the block doesn't end.
@@ -173,6 +177,7 @@ final class DocumentModel {
             errorMessage = String(localized: "This server runs Docmost \(version). This version of the app can only show its pages; you can edit them in the web editor.")
         }
         engine?.onDocument = { [weak self] document in self?.engineSent(document) }
+        engine?.onUnsentChangesKept = { [weak self] error in self?.unsentChangesKept(error) }
         engine?.onFailure = { [weak self] failure in
             guard let self else { return }
             switch failure {
@@ -303,6 +308,8 @@ final class DocumentModel {
         // Commits pending input in a task queued ahead of the stop below, so the stored document includes it.
         deactivate()
         unsentSave?.cancel()
+        // What the closing engine can't keep goes to the whole app (`unsentChangesKept`); the reopened one starts afresh.
+        unsentNotKept = nil
         lifecycle = .closing
         pendingCloses += 1
         let previous = engineStep
@@ -340,6 +347,25 @@ final class DocumentModel {
                 await engine.saveUnsentChanges()
             }
         }
+    }
+
+    /// A save of the unsent changes ended (`DocumentEngine.onUnsentChangesKept`). The page on screen says so in its
+    /// banner until a save keeps them; one that left (its engine closing) tells the whole app, as it shows nothing more.
+    private func unsentChangesKept(_ error: (any Error)?) {
+        guard let error else {
+            unsentNotKept = nil
+            return
+        }
+        if lifecycle == .closing || lifecycle == .closed {
+            dependencies.postAppNotice?(UnsentChanges.mayBeLostNotice(title: noticeTitle, error))
+        } else {
+            unsentNotKept = UnsentChanges.notKeptWarning(error)
+        }
+    }
+
+    /// The page's title in the app's notices, which outlive it.
+    private var noticeTitle: String {
+        page.title.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Untitled")
     }
 
     /// A document the engine sent (`onDocument`); the first one after opening makes the page live.
@@ -1692,8 +1718,7 @@ final class DocumentModel {
                 }
             }
             guard !attachments.isEmpty, await insertUploads(attachments, to: target) != .applied else { return }
-            let title = page.title.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Untitled")
-            dependencies.postAppNotice?(String(localized: "The upload couldn't be added to “\(title)”."))
+            dependencies.postAppNotice?(String(localized: "The upload couldn't be added to “\(noticeTitle)”."))
         }
     }
 
