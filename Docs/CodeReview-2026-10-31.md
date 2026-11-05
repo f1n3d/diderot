@@ -68,13 +68,13 @@ S1 is done: what fits where, Return, Backspace, conversions, columns and unsync 
 
 | Type | Lines | Notes |
 |---|---|---|
-| DocumentModel | 2,379 | its pure parts and its engine's lifecycle are out (see below) |
+| DocumentModel | 2,280 | its pure parts, its engine's lifecycle and its text session are out (see below) |
 
 #### DocumentModel
 
 Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), the lookups in a document (`DocumentTree.swift`), the nodes the editor makes (`NodeFactory.swift`), "/" and "@" in the text (`TriggerParser.swift`) and the table toolbar's types (`TableEditing.swift`). The insert rules S1 left are the menus' state and stay.
 
-**Then the stateful parts (L).** `EngineConnection` is out (S2, part 2): where the engine is, why the page is read-only, opening and closing one after the other, the save of the unsent changes, the uploads that keep a leaving page open, and what follows when the engine fails or its web process ends. It asks the page back through `EngineConnectionOwner` and is tested on its own (`EngineConnectionTests`). Next: `ActiveTextSession` (text, selection, overrides, base, commit), behind a thin observable model. DocumentModelTests are a good safety net.
+**Then the stateful parts (L).** `EngineConnection` is out (S2, part 2): where the engine is, why the page is read-only, opening and closing one after the other, the save of the unsent changes, the uploads that keep a leaving page open, and what follows when the engine fails or its web process ends. It asks the page back through `EngineConnectionOwner` and is tested on its own (`EngineConnectionTests`). `ActiveTextSession` is out too (S2, part 3): the block being edited, its text and selection, the input not yet saved, the base each save passes, the app's own text that isn't input, and the saves (after a pause, at once, before an edit, once the engine is back); it asks the page back through `ActiveTextSessionOwner` (`ActiveTextSessionTests`). The model forwards the editor's state, so its views bind as before. What remains in it is what the keys and menus do: Return, Backspace, inserting, pasting, the block operations and the engine's answers, which reach the session's input directly where they hand it over (Return keeps a line's input pending while the engine splits it). Moving those into types of their own is the next step, if the model's size still hurts.
 
 ### S3 Missing shared building blocks
 

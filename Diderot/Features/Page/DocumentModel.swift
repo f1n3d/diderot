@@ -30,20 +30,32 @@ final class DocumentModel {
     var lifecycle: EngineConnection.Lifecycle { connection.lifecycle }
     var isLive: Bool { connection.isLive }
     var readOnlyReason: ReadOnlyReason? { connection.readOnlyReason }
+    /// The page's one text editor and its input on the way to the engine: the block being edited, its text and
+    /// selection, the input not yet saved, and the saves.
+    let session: ActiveTextSession
     private(set) var active: Active? {
-        didSet { if (active != nil) != hasActiveBlock { hasActiveBlock = active != nil } }
+        get { session.active }
+        set { session.active = newValue }
     }
     /// A block is being edited. Changes only when editing starts or ends, so every block can watch it (not `active`).
-    private(set) var hasActiveBlock = false
-    var activeText = AttributedString()
-    var activeSelection = AttributedTextSelection()
+    var hasActiveBlock: Bool { session.hasActiveBlock }
+    var activeText: AttributedString {
+        get { session.text }
+        set { session.text = newValue }
+    }
+    var activeSelection: AttributedTextSelection {
+        get { session.selection }
+        set { session.selection = newValue }
+    }
     /// Font the active text block draws with (set by its `TextNodeView`); saving compares system bold against it.
-    @ObservationIgnored var activeFont = Font.body
-    /// The active code block's text. It lives in `activeText` (without formatting), so the page's one editor edits
-    /// code like text and stays the same view from a code block to a text block and back.
+    var activeFont: Font {
+        get { session.font }
+        set { session.font = newValue }
+    }
+    /// The active code block's text, in `activeText` without formatting (`ActiveTextSession.code`).
     var activeCode: String {
-        get { String(activeText.characters) }
-        set { activeText = AttributedString(newValue) }
+        get { session.code }
+        set { session.code = newValue }
     }
     var cursorRequest: CursorRequest?
     /// Coordinate space of the scroll content; the active editor is measured in it.
@@ -123,12 +135,6 @@ final class DocumentModel {
         return ranges.ranges.contains { !$0.isEmpty }
     }
 
-    private var overrides: [String: PMNode] = [:]
-    @ObservationIgnored private var saveRefused = false
-    /// Blocks whose input (still in `overrides`) the engine couldn't take: its web process ended or it stopped after an
-    /// error. Written once it syncs again, with the base the input started from (`commit`).
-    @ObservationIgnored private var unsaved: [String: (ref: NodeRef, base: PMNode?)] = [:]
-    private var commitTask: Task<Void, Never>?
     /// Where the cursor goes once the document holds the block at `path`, read in that block.
     private var pendingFocus: (path: [Int], cursor: (PMNode) -> CursorRequest)?
     /// A table edit is under way. It puts the cursor into a cell itself, so a document event meanwhile neither ends
@@ -144,14 +150,6 @@ final class DocumentModel {
     @ObservationIgnored private var typingSwitches = 0
     /// Return or Backspace is switching blocks; meanwhile the old editor briefly shows the line break as a second line.
     var isSwitchingByTyping: Bool { typingSwitches > 0 }
-    /// Active block state the app set itself (a block's text on activation, undo/redo, a collaborator's change): writing
-    /// it back would save an untouched block, overwrite what others typed meanwhile and, after undo, lose "Redo".
-    @ObservationIgnored private var adoptedText: AttributedString?
-    @ObservationIgnored private var adoptedCode: String?
-    /// The block the active editor's text was made from, or last sent as: a collaborator's change of it shows in the
-    /// editor once nothing is pending (`adoptCollaboratorsChange`), and saves pass it as their base, so the engine keeps a
-    /// change that arrives meanwhile (`rebase`).
-    @ObservationIgnored private var activeBase: PMNode?
     @ObservationIgnored private var adoptsChange = false
 
     /// What the model needs from outside its page; tests change it.
@@ -163,16 +161,12 @@ final class DocumentModel {
         self.dependencies = dependencies
         self.document = initialDocument ?? PMNode(json: page.content ?? .null) ?? PMNode(type: "doc")
         self.connection = EngineConnection(page: page, engine: engine, readOnlyReason: readOnlyReason)
+        self.session = ActiveTextSession(engine: engine)
         if case .newerServer(let version) = readOnlyReason {
             errorMessage = String(localized: "This server runs Docmost \(version). This version of the app can only show its pages; you can edit them in the web editor.")
         }
         connection.owner = self
-    }
-
-    /// The engine ended or stopped: the active block's input it hadn't saved goes in once it is back (`unsaved`).
-    private func keepActiveInput() {
-        guard let active, overrides[active.ref.identity] != nil else { return }
-        unsaved[active.ref.identity] = (active.ref, activeBase)
+        session.owner = self
     }
 
     var isEditable: Bool { engine != nil && isLive && readOnlyReason == nil }
@@ -232,19 +226,10 @@ final class DocumentModel {
     private func adopt(_ incoming: PMNode) {
         show(incoming)
         followMovedBlocks()
-        // Every local change brings a document event, also those that bypass `commit`: unconfirmed, it is kept soon.
+        // Every local change brings a document event, also those that bypass the session's saves (inserts, moves,
+        // undo): unconfirmed, it is kept soon.
         connection.documentShown()
-        if !unsaved.isEmpty {
-            let waiting = Array(unsaved.values)
-            unsaved = [:]
-            Task {
-                // The latest input of each: typed further meanwhile, it is in `overrides`; dropped since (its block went),
-                // nothing goes.
-                for (ref, base) in waiting {
-                    if let node = overrides[ref.identity] { await commit(ref, node: node, base: base) }
-                }
-            }
-        }
+        session.writeUnsaved()
         if let pendingFocus, let node = node(at: pendingFocus.path) {
             self.pendingFocus = nil
             activate(NodeRef(path: pendingFocus.path, node: node), node: node, cursor: pendingFocus.cursor(node))
@@ -271,7 +256,7 @@ final class DocumentModel {
     /// collaborator's change), and nothing of the user's waits for it or would break: no pending save, no Return or
     /// Backspace on its way, no sheet holding ranges of the text, no marked text (dictation, Japanese input).
     private func collaboratorChangedActiveBlock() -> Bool {
-        guard let active, let base = activeBase, overrides[active.ref.identity] == nil, typingSwitches == 0, !editsInSheet,
+        guard let active, let base = session.base, session.overrides[active.ref.identity] == nil, typingSwitches == 0, !editsInSheet,
               editorTextView?.markedTextRange == nil, let (_, node) = document.locate(active.ref)
         else { return false }
         return !looksTheSame(node, base)
@@ -330,11 +315,11 @@ final class DocumentModel {
     /// Shows and returns whether a block operation applied. A refusal carries no reason (e.g. a block a collaborator
     /// just deleted or changed), hence one fixed message; the next applied change clears it, but a refused save's only
     /// the next save (a table edit or a conversion, which sends the input first, must not hide it). No engine to take it
-    /// says nothing: the restart shows in the status, and input waits for it (`commit`).
+    /// says nothing: the restart shows in the status, and input waits for it (`ActiveTextSession`).
     @discardableResult
     private func report(_ result: EngineResult) -> Bool {
         switch result {
-        case .applied: if !saveRefused { errorMessage = nil }
+        case .applied: if !session.saveRefused { errorMessage = nil }
         case .refused: errorMessage = String(localized: "The change could not be applied.")
         case .unavailable: break
         }
@@ -353,16 +338,16 @@ final class DocumentModel {
                 self.active = Active(ref: NodeRef(path: path, id: id), type: active.type, attrs: active.attrs, itemPath: enclosingItemPath(path))
             } else if !editsTable && typingSwitches == 0 {
                 // A collaborator deleted it. Its editor used to vanish with it; the page's one editor stays, so end here.
-                overrides[active.ref.identity] = nil
-                commitTask?.cancel()
+                session.overrides[active.ref.identity] = nil
+                session.cancelCommit()
                 deactivate()
             }
         }
         // Without an id (code block, toggle title), another block type or none at the path means a collaborator
         // added or removed a block before it; its input would replace that block, so editing ends unsaved.
         if let active, active.ref.id == nil, node(at: active.ref.path)?.type != active.type, !editsTable {
-            overrides[active.ref.identity] = nil
-            commitTask?.cancel()
+            session.overrides[active.ref.identity] = nil
+            session.cancelCommit()
             deactivate()
         }
     }
@@ -373,19 +358,12 @@ final class DocumentModel {
         // Only text and code: the editor's text would replace any other block (a list, quote or image) on the next key.
         guard isEditable, PMNode.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
         if active?.ref == ref { return }
-        if active != nil { commitPendingNow() }
+        if active != nil { session.commitPendingNow() }
         let itemPath = enclosingItemPath(ref.path)
         activeBlockFrame = .zero
         activatedByTyping = typingSwitches > 0
         active = Active(ref: ref, type: node.type, attrs: node.attrs, itemPath: itemPath)
-        activeBase = node
-        if node.type == "codeBlock" {
-            activeCode = node.plainText
-            adoptedCode = activeCode
-        } else {
-            activeText = Self.editorText(from: node.children)
-            adoptedText = activeText
-        }
+        session.show(node, as: node.type == "codeBlock" ? AttributedString(node.plainText) : Self.editorText(from: node.children))
         // The page's one editor keeps its selection from block to block; the old indices don't fit this text.
         activeSelection = AttributedTextSelection(insertionPoint: activeText.endIndex)
         slashQuery = nil
@@ -419,9 +397,9 @@ final class DocumentModel {
 
     func deactivate() {
         guard active != nil else { return }
-        commitPendingNow()
+        session.commitPendingNow()
         active = nil
-        activeBase = nil
+        session.base = nil
         editorHeight = nil
         slashQuery = nil
         showsPlusMenu = false
@@ -456,7 +434,7 @@ final class DocumentModel {
             var attrs = active.attrs ?? [:]
             attrs.merge(attributes) { $1 }
             self.active = Active(ref: active.ref, type: active.type, attrs: attrs, itemPath: active.itemPath)
-            if overrides[active.ref.identity] != nil { scheduleCommit() }
+            if session.overrides[active.ref.identity] != nil { session.scheduleCommit() }
         }
         report(await engine.setAttributes(ref.target, attributes: attributes))
     }
@@ -498,11 +476,8 @@ final class DocumentModel {
         showsPlusMenu = false
         updateSlashQuery()
         updateMentionQuery()
-        if let adopted = adoptedText {
-            adoptedText = nil
-            if adopted == activeText { return }
-        }
-        scheduleCommit()
+        guard session.textChangeIsInput() else { return }
+        session.scheduleCommit()
     }
 
     /// Called after every `activeSelection` change. The "/" and "@" lists follow the cursor: moved away from their query
@@ -565,7 +540,7 @@ final class DocumentModel {
         activeSelection = AttributedTextSelection(insertionPoint: newIndex)
         mentionQuery = nil
         mentionSuggestions = []
-        scheduleCommit(debounce: .zero)
+        session.scheduleCommit(debounce: .zero)
     }
 
     // MARK: - What the engine says
@@ -771,7 +746,7 @@ final class DocumentModel {
         activeText.removeSubrange(start..<end)
         activeSelection = AttributedTextSelection(insertionPoint: activeText.characters.index(activeText.startIndex, offsetBy: offset))
         // Saved like typing: typing usually saved the query, which commands that only end editing (media) would keep.
-        scheduleCommit()
+        session.scheduleCommit()
         return offset
     }
 
@@ -919,7 +894,7 @@ final class DocumentModel {
         activeText.insert(run, at: index)
         let end = activeText.characters.index(activeText.startIndex, offsetBy: min(position + run.characters.count, activeText.characters.count))
         activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: plainAfter ? AttributeContainer() : nil)
-        scheduleCommit(debounce: .zero)
+        session.scheduleCommit(debounce: .zero)
     }
 
     /// Inserts an inline atom (status, math, footnote reference) into the active text.
@@ -1095,7 +1070,7 @@ final class DocumentModel {
             }
         }
         // The new blocks hold the active text: its pending input isn't written on its own.
-        dropActive()
+        session.dropActive()
         slashQuery = nil
         showsPlusMenu = false
         let target = NodeRef(path: path, node: paragraph).target
@@ -1265,7 +1240,7 @@ final class DocumentModel {
             let end = activeText.characters.index(activeText.startIndex, offsetBy: min(start + run.characters.count, activeText.characters.count))
             activeSelection = AttributedTextSelection(insertionPoint: end, typingAttributes: AttributeContainer())
         }
-        scheduleCommit(debounce: .zero)
+        session.scheduleCommit(debounce: .zero)
     }
 
     /// A link pasted over selected text links that text, as on the web.
@@ -1274,7 +1249,7 @@ final class DocumentModel {
         let selected = ranges.ranges.filter { !$0.isEmpty }
         guard !selected.isEmpty else { return false }
         for range in selected { activeText[range].link = url }
-        scheduleCommit(debounce: .zero)
+        session.scheduleCommit(debounce: .zero)
         return true
     }
 
@@ -1421,7 +1396,7 @@ final class DocumentModel {
         if let active {
             if replace, active.ref.identity == anchor?.identity {
                 // The block goes away: stop writing its input.
-                dropActive()
+                session.dropActive()
                 slashQuery = nil
                 showsPlusMenu = false
             } else if focusTarget == nil {
@@ -1750,12 +1725,8 @@ final class DocumentModel {
     // MARK: Active text
 
     func activeCodeChanged() {
-        guard let active, active.type == "codeBlock" else { return }
-        if let adopted = adoptedCode {
-            adoptedCode = nil
-            if adopted == activeCode { return }
-        }
-        scheduleCommit()
+        guard let active, active.type == "codeBlock", session.codeChangeIsInput() else { return }
+        session.scheduleCommit()
     }
 
     /// Inserts a soft line break at the cursor.
@@ -1768,7 +1739,7 @@ final class DocumentModel {
         if let after = activeText.characters.index(index, offsetBy: 1, limitedBy: activeText.endIndex) {
             activeSelection = AttributedTextSelection(insertionPoint: after)
         }
-        scheduleCommit()
+        session.scheduleCommit()
     }
 
     /// Cursor at the end of the active text block (the usual case while writing); false for code blocks.
@@ -1786,86 +1757,9 @@ final class DocumentModel {
 
     // MARK: - Commit
 
-    private func currentActiveNode() -> PMNode? {
-        guard let active else { return nil }
-        if active.type == "codeBlock" {
-            return PMNode(type: "codeBlock", attrs: active.attrs, content: activeCode.isEmpty ? nil : [PMNode(type: "text", text: activeCode)])
-        }
-        let inlines = Self.inlines(from: activeText, base: activeFont)
-        return PMNode(type: active.type, attrs: active.attrs, content: inlines.isEmpty ? nil : inlines)
-    }
-
-    private func scheduleCommit(debounce: Duration = .milliseconds(400)) {
-        guard let active, let node = currentActiveNode() else { return }
-        overrides[active.ref.identity] = node
-        commitTask?.cancel()
-        commitTask = Task { [weak self, clock = dependencies.clock] in
-            try? await clock.sleep(for: debounce)
-            guard !Task.isCancelled, let self else { return }
-            await self.commit(active.ref, node: node, base: self.takeBase(of: active.ref, sending: node))
-        }
-    }
-
-    /// Ends editing without writing the active block's pending input (the block is being replaced or removed).
-    private func dropActive() {
-        guard let active else { return }
-        commitTask?.cancel()
-        overrides[active.ref.identity] = nil
-        self.active = nil
-        activeBase = nil
-    }
-
-    private func commitPendingNow() {
-        guard let active, overrides[active.ref.identity] != nil, let node = currentActiveNode() else { return }
-        commitTask?.cancel()
-        commitTask = nil
-        let ref = active.ref
-        // Taken now: the block activated next brings its own.
-        let base = takeBase(of: ref, sending: node)
-        Task { await commit(ref, node: node, base: base) }
-    }
-
+    /// Saves the active block's pending input and waits for it (`ActiveTextSession.flush`).
     func flush() async {
-        commitTask?.cancel()
-        commitTask = nil
-        if let active, let node = currentActiveNode(), overrides[active.ref.identity] != nil {
-            await commit(active.ref, node: node, base: takeBase(of: active.ref, sending: node))
-        }
-    }
-
-    /// The base for a save of the active block (`activeBase`); the saved node becomes the next one, as the engine applies
-    /// saves in order. Nil for another block.
-    private func takeBase(of ref: NodeRef, sending node: PMNode) -> PMNode? {
-        guard active?.ref.identity == ref.identity else { return nil }
-        defer { activeBase = node }
-        return activeBase
-    }
-
-    private func commit(_ ref: NodeRef, node: PMNode, base: PMNode?) async {
-        guard let engine else { return }
-        let pending = overrides[ref.identity]
-        let result = await engine.replaceBlock(ref.target, with: node, base: base)
-        // Not applied: the block keeps what it had.
-        if !result.isApplied, active?.ref.identity == ref.identity, activeBase == node { activeBase = base }
-        if result == .unavailable {
-            // No engine to take it (its web process ended, it stopped after an error): the input stays, also for a block
-            // no longer edited, and goes in once the engine is back. It used to be dropped as refused.
-            if overrides[ref.identity] == pending { overrides[ref.identity] = node }
-            unsaved[ref.identity] = (ref, base)
-            // A block no longer edited shows it meanwhile, not what it had.
-            document = withOverrides(document)
-            return
-        }
-        saveRefused = result == .refused
-        if report(result) {
-            // Input typed during the save stored a newer override; it stays pending so its commit or `flush` writes it.
-            if overrides[ref.identity] == pending { overrides[ref.identity] = nil }
-        } else if active?.ref != ref {
-            // Refused for a block no longer edited: its text must not stay over the saved one, nor be written later
-            // into another block that takes its place.
-            overrides[ref.identity] = nil
-            if let engineDocument { adopt(engineDocument) }
-        }
+        await session.flush()
     }
 
     // MARK: - Return and Backspace
@@ -1893,32 +1787,32 @@ final class DocumentModel {
         // it goes to the new line.
         let keepsAll = active.type == "detailsSummary"
         activeText = keepsAll ? before + after : before
-        commitTask?.cancel()
+        session.cancelCommit()
 
         let beforeInlines = Self.inlines(from: before, base: activeFont)
         let line = PMNode(type: active.type, attrs: active.attrs, content: beforeInlines.isEmpty ? nil : beforeInlines)
-        let kept = currentActiveNode() ?? line
-        overrides[active.ref.identity] = kept
-        let base = takeBase(of: active.ref, sending: kept)
+        let kept = session.currentNode() ?? line
+        session.overrides[active.ref.identity] = kept
+        let base = session.takeBase(of: active.ref, sending: kept)
         let result = await engine.enter(active.ref.target, keeping: line, after: Self.inlines(from: after, base: activeFont), base: base)
         guard case .moved(let cursor) = result else {
             if result == .refused { report(.refused) }
             guard self.active?.ref == active.ref else { return }
             // The line stays as typed, without the line break.
-            if activeBase == kept { activeBase = base }
+            if session.base == kept { session.base = base }
             if !keepsAll { activeText += after }
             if result == .refused {
                 // Saved with the next input or when editing ends: an applied save now would hide the message at once.
-                overrides[active.ref.identity] = currentActiveNode()
+                session.overrides[active.ref.identity] = session.currentNode()
             } else {
-                // Kept for the engine's return, as any input (`commit`).
-                scheduleCommit(debounce: .zero)
+                // Kept for the engine's return, as any input (`ActiveTextSession`).
+                session.scheduleCommit(debounce: .zero)
             }
             return
         }
         // Input typed meanwhile stored a newer override; it stays pending so its commit writes it.
-        if overrides[active.ref.identity] == kept { overrides[active.ref.identity] = nil }
-        saveRefused = false
+        if session.overrides[active.ref.identity] == kept { session.overrides[active.ref.identity] = nil }
+        session.saveRefused = false
         report(.applied)
         let pastedInto = !keepsAll && caretInAfter > 0 && caretInAfter <= after.characters.count
         await focusAfterOperation(cursor.path, pastedInto ? .offset(caretInAfter) : .start)
@@ -1943,30 +1837,30 @@ final class DocumentModel {
             caretInLast = nil
         }
         activeText = lines[0]
-        commitTask?.cancel()
+        session.cancelCommit()
 
         let firstInlines = Self.inlines(from: lines[0], base: activeFont)
         let line = PMNode(type: active.type, attrs: active.attrs, content: firstInlines.isEmpty ? nil : firstInlines)
-        let kept = currentActiveNode() ?? line
-        overrides[active.ref.identity] = kept
-        let base = takeBase(of: active.ref, sending: kept)
+        let kept = session.currentNode() ?? line
+        session.overrides[active.ref.identity] = kept
+        let base = session.takeBase(of: active.ref, sending: kept)
         let rest = lines.dropFirst().map { Self.inlines(from: $0, base: activeFont) }
         let result = await engine.enterLines(active.ref.target, keeping: line, lines: rest, base: base)
         guard case .moved(let cursor) = result else {
             if result == .refused { report(.refused) }
             guard self.active?.ref == active.ref else { return }
             // The text stays in the line as typed, without the line breaks, as after a refused Return.
-            if activeBase == kept { activeBase = base }
+            if session.base == kept { session.base = base }
             activeText = typed.dropFirst().reduce(typed[0], +)
             if result == .refused {
-                overrides[active.ref.identity] = currentActiveNode()
+                session.overrides[active.ref.identity] = session.currentNode()
             } else {
-                scheduleCommit(debounce: .zero)
+                session.scheduleCommit(debounce: .zero)
             }
             return
         }
-        if overrides[active.ref.identity] == kept { overrides[active.ref.identity] = nil }
-        saveRefused = false
+        if session.overrides[active.ref.identity] == kept { session.overrides[active.ref.identity] = nil }
+        session.saveRefused = false
         report(.applied)
         await focusAfterOperation(cursor.path, caretInLast.map { .offset($0) } ?? .end)
     }
@@ -2015,8 +1909,8 @@ final class DocumentModel {
         let plan = activeAnswers?.backspace.map { typed.isEmpty ? $0.empty : $0.text }
         if plan == .nothing { return }
         // Its input goes with it: into the text before, or away with the line.
-        commitTask?.cancel()
-        overrides[active.ref.identity] = nil
+        session.cancelCommit()
+        session.overrides[active.ref.identity] = nil
         let shown = plan.map { show($0, leaving: active, typed: typed) } ?? false
         let result = await engine.backspace(active.ref.target, holding: PMNode(type: active.type, attrs: active.attrs, content: typed.isEmpty ? nil : typed))
         switch result {
@@ -2032,7 +1926,7 @@ final class DocumentModel {
             case .leave:
                 if let cursor { await focusAfterOperation(cursor) }
             case .nothing:
-                scheduleCommit()
+                session.scheduleCommit()
             }
         case .refused, .unavailable:
             if result == .refused { report(.refused) }
@@ -2041,7 +1935,7 @@ final class DocumentModel {
             } else if !shown, self.active?.ref == active.ref {
                 // Its input stays: saved with the next input or when editing ends (an applied save now would hide the
                 // message at once), or once the engine is back.
-                if result == .refused { overrides[active.ref.identity] = currentActiveNode() } else { scheduleCommit(debounce: .zero) }
+                if result == .refused { session.overrides[active.ref.identity] = session.currentNode() } else { session.scheduleCommit(debounce: .zero) }
             }
         }
     }
@@ -2077,8 +1971,8 @@ final class DocumentModel {
     /// Ends editing a join shown before the engine refused it or did otherwise, without saving the shown text: it would
     /// put the line's text into the block before a second time.
     private func endEditingShownJoin() {
-        if let active { overrides[active.ref.identity] = nil }
-        commitTask?.cancel()
+        if let active { session.overrides[active.ref.identity] = nil }
+        session.cancelCommit()
         deactivate()
     }
 
@@ -2098,7 +1992,7 @@ final class DocumentModel {
         guard let engine else { return }
         // Its input goes first: the engine turns the block it has.
         await flush()
-        if active?.ref.identity == ref.identity { dropActive() }
+        if active?.ref.identity == ref.identity { session.dropActive() }
         switch await engine.convert(ref.target, to: kind) {
         case .moved(let cursor):
             report(.applied)
@@ -2116,8 +2010,8 @@ final class DocumentModel {
     func delete(_ ref: NodeRef) async {
         guard let engine else { return }
         // Otherwise a pending commit would write into the deleted block and show an error.
-        if active?.ref == ref { dropActive() }
-        overrides[ref.identity] = nil
+        if active?.ref == ref { session.dropActive() }
+        session.overrides[ref.identity] = nil
         report(await engine.deleteBlock(ref.target))
     }
 
@@ -2186,7 +2080,7 @@ final class DocumentModel {
         if !edit.movesCursor, let active, active.ref.id != nil, document.locate(active.ref) != nil {
             // The block stays edited with its cursor, in its new place and with what changed (its alignment). Input
             // typed meanwhile stays: its save keeps the engine's changes (`rebase`).
-            if overrides[active.ref.identity] == nil { adoptActiveBlock() } else { followMovedBlocks() }
+            if session.overrides[active.ref.identity] == nil { adoptActiveBlock() } else { followMovedBlocks() }
             return
         }
         // To the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
@@ -2228,16 +2122,9 @@ final class DocumentModel {
         }
         var offset = activeText.characters.distance(from: activeText.startIndex, to: insertionIndex())
         active = Active(ref: NodeRef(path: path, node: node), type: node.type, attrs: node.attrs, itemPath: enclosingItemPath(path))
-        activeBase = node
         let text = node.type == "codeBlock" ? AttributedString(node.plainText) : Self.editorText(from: node.children)
         if followingChange { offset = Self.offset(offset, movedFrom: Array(activeText.characters), to: Array(text.characters)) }
-        if node.type == "codeBlock" {
-            activeCode = node.plainText
-            adoptedCode = activeCode
-        } else {
-            activeText = text
-            adoptedText = activeText
-        }
+        session.show(node, as: text)
         if followingChange {
             // Right away, in the same update as the text: a cursor request would hide the caret meanwhile, on every change
             // while a collaborator types.
@@ -2263,7 +2150,7 @@ final class DocumentModel {
 
     /// A block's current state, including unsaved input.
     private func latestNode(at path: [Int]) -> PMNode? {
-        if let active, active.ref.path == path, let node = currentActiveNode() { return node }
+        if let active, active.ref.path == path, let node = session.currentNode() { return node }
         return node(at: path, in: withOverrides(document))
     }
 
@@ -2301,7 +2188,7 @@ final class DocumentModel {
 
     /// A document with the local, unconfirmed changes applied.
     private func withOverrides(_ root: PMNode) -> PMNode {
-        root.applyingOverrides(overrides)
+        session.withOverrides(root)
     }
 
     /// Inline nodes from the editor text (with the formatting that arrives only as SwiftUI attributes while typing).
@@ -2370,10 +2257,24 @@ extension DocumentModel: EngineConnectionOwner {
     }
 
     func connectionKeepsInput() {
-        keepActiveInput()
+        session.keepInput()
     }
 
     func connectionSays(_ message: String?) {
         errorMessage = message
+    }
+}
+
+extension DocumentModel: ActiveTextSessionOwner {
+    func sessionReports(_ result: EngineResult) -> Bool {
+        report(result)
+    }
+
+    func sessionShowsInput() {
+        document = withOverrides(document)
+    }
+
+    func sessionShowsEngineDocument() {
+        if let engineDocument { adopt(engineDocument) }
     }
 }
