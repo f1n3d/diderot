@@ -3,6 +3,7 @@
 #   - every key in the String Catalog has German or is marked "Don't Translate"
 #   - Diderot.xcodeproj is what xcodegen makes of project.yml
 #   - sheets, full-screen covers and popovers open links as the page does (`linkSheet` and its siblings)
+#   - the dev tools keep passwords and tokens off command lines (Tools/dev_api.py)
 #   - the shell scripts pass shellcheck
 # Needs xcodegen and shellcheck (Homebrew); CI pins the versions this was last run with.
 set -euo pipefail
@@ -23,6 +24,13 @@ fi
 if grep -rnE '\.(sheet|fullScreenCover|popover)\(' Diderot --include='*.swift' \
   | grep -v '^Diderot/Rendering/ExternalLinks\.swift:' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//'; then
   echo "Present these with linkSheet, linkFullScreenCover or linkPopover (Diderot/Rendering/ExternalLinks.swift)." >&2
+  exit 1
+fi
+
+# On a command line, ps shows a password or token to every user of the Mac: a token in a header, .env read by the
+# shell (which also expands $ in it), or the app's sign-in as devicectl's JSON. (The brackets keep this line out.)
+if grep -nE 'Bear[e]r|(sourc[e]|^[[:space:]]*\.) \.env|--environment-variable[s]' Tools/*.sh; then
+  echo "Read .env with Tools/dev_api.py setting, call the API with Tools/dev_api.py call or upload, and hand the app its sign-in in the environment (SIMCTL_CHILD_*, DEVICECTL_CHILD_*, TEST_RUNNER_*)." >&2
   exit 1
 fi
 

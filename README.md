@@ -114,7 +114,9 @@ You need:
 - **A local Docmost 0.96 instance** at `http://localhost:3000` for debug builds, UI tests and seed scripts:
   1. Run it with Docker as described in [Docmost's installation guide](https://docmost.com/docs/installation), using the image `docmost/docmost:0.96.0`.
   2. Create the workspace and its admin.
-  3. Copy `.env.example` to `.env` and enter that admin's email and password.
+  3. Copy `.env.example` to `.env`, enter that admin's email and password, and make it readable only by you (`chmod 600 .env`).
+
+  The scripts read `.env` and talk to the instance through `Tools/dev_api.py`, which keeps the password and the sign-in token off command lines (where `ps` shows them to every user of the Mac) and caches the token in `Tools/.cache`, readable only by you.
 
   For tests on an iPhone, the instance must be reachable on the network: set its `APP_URL` to `http://<your-mac>.local:3000`. The database tests need a Docmost license with databases.
 - **A second instance with Docmost 0.97** (the image `docmost/docmost:0.97.0`, e.g. a copy of the first one's database with the workspace renamed: the server menu tells the two apart by name) at `http://localhost:3001` for the tests of content 0.97 introduced (`PORT=3001 Tools/run-uitests.sh`); on 0.96 they are skipped. Block GitHub in its container (Compose: `extra_hosts: ['api.github.com:127.0.0.1']`): Docmost tells its version only when its check of GitHub's latest release succeeds or can't connect at all, and GitHub refuses after 60 requests an hour from one address, fewer than the app starts of a test run; without the version the 0.97 tests skip or fail.
@@ -161,6 +163,10 @@ Tools/check-project.sh
 
 # Install on the connected iPhone (developer mode, Apple ID in Xcode)
 AUTOLOGIN=1 Tools/run-device.sh
+
+# Call the dev instance's API as the admin from .env (key=value sends a string, key:=value JSON)
+Tools/dev_api.py call pages/info pageId=<pageId> --field title
+Tools/dev_api.py call pages/sidebar-pages spaceId=<spaceId> limit:=5
 
 # Create demo content in the dev instance
 Tools/seed-dev.sh                 # the space "Demo" with nested pages (--reset recreates it)

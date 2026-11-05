@@ -26,18 +26,11 @@ import uuid
 import zlib
 from pathlib import Path
 
+import dev_api
+
 ROOT = Path(__file__).resolve().parent.parent
 # The dev instance's UI tests have a colleague of their own (Tools/seed-notifications.py).
 DEV_TEST_USERS = {"kollegin@docmost.local"}
-
-
-def read_env(path):
-    env = {}
-    for line in path.read_text().splitlines():
-        if "=" in line and not line.lstrip().startswith("#"):
-            key, value = line.split("=", 1)
-            env[key.strip()] = value.strip().strip('"').strip("'")
-    return env
 
 
 def check(config):
@@ -53,17 +46,16 @@ def check(config):
 def settings(env_file):
     """Server, admin and the two demo people: from .env.demo for the demo instance, else the dev instance."""
     if env_file:
-        env = read_env(ROOT / env_file)
+        env = dev_api.read_env(ROOT / env_file)
         return {
             "url": env["DEMO_URL"].rstrip("/"),
             "admin": (env["DEMO_ADMIN_EMAIL"], env["DEMO_ADMIN_PASSWORD"]),
             "member": (env["DEMO_MEMBER_EMAIL"], env["DEMO_MEMBER_PASSWORD"]),
             "colleague": (env["DEMO_COLLEAGUE_EMAIL"], env["DEMO_COLLEAGUE_PASSWORD"]),
         }
-    env = read_env(ROOT / ".env")
     return {
         "url": "http://localhost:3000",
-        "admin": (env["DEV_ADMIN_EMAIL"], env["DEV_ADMIN_PASSWORD"]),
+        "admin": dev_api.admin(),
         "member": ("alex@docmost.local", "alex-dev-123"),
         "colleague": ("sam@docmost.local", "sam-dev-123"),
     }

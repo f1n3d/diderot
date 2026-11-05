@@ -135,7 +135,7 @@ Resolve the superclass implementation at call time, skip classes whose ancestor 
 
 **Where:** `Tools/run-uitests.sh`.
 
-**Problem:** The script has 742 lines, about 600 of them inline Python, with 11 copies of `call()` and its own fractional indexing next to DocmostKit's tested one. The checks name their test and report through `Tools/uitest_checks.py`, which leaves out those of tests that didn't run.
+**Problem:** The script has about 690 lines, most of them inline Python, with its own fractional indexing next to DocmostKit's tested one. Its API calls go through `Tools/dev_api.py` since November 5, 2026. The checks name their test and report through `Tools/uitest_checks.py`, which leaves out those of tests that didn't run.
 
 **Fix:** Move the checks into that module or into the UI tests.
 

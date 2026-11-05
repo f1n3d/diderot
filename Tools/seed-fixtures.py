@@ -12,85 +12,20 @@ left out on older servers, which would drop it; they get three child pages (Bana
 
 Placeholders in the JSON files: {{USER_ID}}, {{USER_NAME}}, {{PAGE_ID}}, {{PAGE_SLUGID}}, {{PAGE_SLUG}},
 {{PAGE_TITLE}} (page "Handbuch"), {{SELF_ID}} (the fixture page itself), {{IMAGE_*}} and {{FILE_*}}
-(uploaded files). The login token is cached in Tools/.cache (server limit: 10 logins/min).
+(uploaded files). Signs in as the admin from .env through Tools/dev_api.py, which caches the token (server limit:
+10 sign-ins/min).
 """
 import json
-import mimetypes
-import os
 import struct
 import sys
-import urllib.request
-import uuid
 import zlib
 from pathlib import Path
 
+import dev_api
+
 ROOT = Path(__file__).resolve().parent.parent
-BASE = os.environ.get("DOCMOST_SEED_URL", "http://localhost:3000")
-CACHE = ROOT / "Tools/.cache/seed-token.txt"
 FIXTURES = ROOT / "Packages/DocmostKit/Tests/DocmostKitTests/Fixtures"
 ROOT_TITLE = "Fixtures"
-
-
-def env_credentials():
-    env = {}
-    for line in (ROOT / ".env").read_text().splitlines():
-        if "=" in line and not line.startswith("#"):
-            key, value = line.split("=", 1)
-            env[key.strip()] = value.strip()
-    return env["DEV_ADMIN_EMAIL"], env["DEV_ADMIN_PASSWORD"]
-
-
-class Api:
-    def __init__(self):
-        self.token = None
-
-    def request(self, path, body=None, raw=None, headers=None, auth=True):
-        data = raw if raw is not None else json.dumps(body if body is not None else {}).encode()
-        req = urllib.request.Request(f"{BASE}/api/{path}", data=data, method="POST")
-        req.add_header("Content-Type", "application/json" if raw is None else headers["Content-Type"])
-        if auth and self.token:
-            req.add_header("Authorization", f"Bearer {self.token}")
-        try:
-            with urllib.request.urlopen(req) as resp:
-                return json.loads(resp.read() or b"{}"), resp
-        except urllib.error.HTTPError as error:
-            payload = error.read().decode(errors="replace")
-            raise SystemExit(f"{path} → HTTP {error.code}: {payload}")
-
-    def post(self, path, body=None):
-        return self.request(path, body)[0].get("data")
-
-    def login(self):
-        CACHE.parent.mkdir(parents=True, exist_ok=True)
-        if CACHE.exists():
-            self.token = CACHE.read_text().strip()
-            try:
-                self.post("users/me")
-                return
-            except SystemExit:
-                self.token = None
-        email, password = env_credentials()
-        req = urllib.request.Request(f"{BASE}/api/auth/login", data=json.dumps({"email": email, "password": password}).encode(), method="POST")
-        req.add_header("Content-Type", "application/json")
-        with urllib.request.urlopen(req) as resp:
-            cookies = resp.headers.get_all("Set-Cookie") or []
-        for cookie in cookies:
-            if cookie.startswith("authToken="):
-                self.token = cookie.split(";", 1)[0].split("=", 1)[1]
-        if not self.token:
-            raise SystemExit("Login failed")
-        CACHE.write_text(self.token)
-
-    def upload(self, page_id, filename, data, mime):
-        boundary = f"----docmost{uuid.uuid4().hex}"
-        parts = [
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"pageId\"\r\n\r\n{page_id}\r\n".encode(),
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: {mime}\r\n\r\n".encode(),
-            data,
-            f"\r\n--{boundary}--\r\n".encode(),
-        ]
-        payload, _ = self.request("files/upload", raw=b"".join(parts), headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
-        return payload
 
 
 def gradient_png(width=600, height=400):
@@ -109,31 +44,30 @@ def gradient_png(width=600, height=400):
 
 def main():
     reset = "--reset" in sys.argv
-    api = Api()
-    api.login()
-    me = api.post("users/me")["user"]
+    api = dev_api.session(*dev_api.admin())
+    me = api.call("users/me")["user"]
 
     try:
-        space = api.post("spaces/info", {"spaceId": "demo"})
-    except SystemExit:
-        raise SystemExit("Space \"Demo\" missing; run Tools/seed-dev.sh first.")
+        space = api.call("spaces/info", {"spaceId": "demo"})
+    except dev_api.ApiError:
+        sys.exit("Space \"Demo\" missing; run Tools/seed-dev.sh first.")
 
-    root_pages = api.post("pages/sidebar-pages", {"spaceId": space["id"], "limit": 100})["items"]
+    root_pages = api.call("pages/sidebar-pages", {"spaceId": space["id"], "limit": 100})["items"]
     existing = next((p for p in root_pages if p["title"] == ROOT_TITLE), None)
     if existing and reset:
-        api.post("pages/delete", {"pageId": existing["id"], "permanentlyDelete": True})
+        api.call("pages/delete", {"pageId": existing["id"], "permanentlyDelete": True})
         print("Old fixtures deleted.")
         existing = None
     if existing:
         print("Fixtures already exist. Use --reset to recreate them.")
         return
 
-    version = api.post("version").get("currentVersion") or "0.0"
+    version = api.call("version").get("currentVersion") or "0.0"
     docmost_097 = tuple(int(part) for part in version.lstrip("v").split(".")[:2]) >= (0, 97)
 
     target = next((p for p in root_pages if p["title"] == "Handbuch"), root_pages[0])
-    target_page = api.post("pages/info", {"pageId": target["id"]})
-    root = api.post("pages/create", {"spaceId": space["id"], "title": ROOT_TITLE, "icon": "🧪",
+    target_page = api.call("pages/info", {"pageId": target["id"]})
+    root = api.call("pages/create", {"spaceId": space["id"], "title": ROOT_TITLE, "icon": "🧪",
                                      "content": "Seiten mit allen Node-Typen für die iOS-App. Angelegt von Tools/seed-fixtures.py.",
                                      "format": "markdown"})
     print(f"Root page \"{ROOT_TITLE}\" created ({root['id']}).")
@@ -144,7 +78,7 @@ def main():
             continue
         text = path.read_text()
         spec = json.loads(text)
-        page = api.post("pages/create", {"spaceId": space["id"], "parentPageId": root["id"], "title": spec["title"], "icon": spec.get("icon")})
+        page = api.call("pages/create", {"spaceId": space["id"], "parentPageId": root["id"], "title": spec["title"], "icon": spec.get("icon")})
         values = {
             "USER_ID": me["id"], "USER_NAME": me["name"] or me["email"],
             "PAGE_ID": target_page["id"], "PAGE_SLUGID": target_page["slugId"], "PAGE_TITLE": target_page["title"],
@@ -165,12 +99,12 @@ def main():
             else:
                 text = text.replace("{{" + key + "}}", json.dumps(value)[1:-1])
         content = json.loads(text)["content"]
-        api.post("pages/update", {"pageId": page["id"], "content": content, "operation": "replace", "format": "json"})
+        api.call("pages/update", {"pageId": page["id"], "content": content, "operation": "replace", "format": "json"})
         print(f"  {spec['title']} → {page['slugId']}")
         if path.name.startswith("fixture-docmost-097"):
             # Out of alphabetical order, so the sub-pages block's A–Z shows: apple, Banana, Cherry.
             for title in ("Banana", "apple", "Cherry"):
-                api.post("pages/create", {"spaceId": space["id"], "parentPageId": page["id"], "title": title})
+                api.call("pages/create", {"spaceId": space["id"], "parentPageId": page["id"], "title": title})
 
     # Long page for performance tests.
     blocks = []
@@ -179,11 +113,11 @@ def main():
                                                           {"type": "text", "text": "Bold tail.", "marks": [{"type": "bold"}]}]})
         if index % 50 == 49:
             blocks.append({"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": f"Section {index // 50 + 1}"}]})
-    api.post("pages/create", {"spaceId": space["id"], "parentPageId": root["id"], "title": "Fixture: Long page", "icon": "📜",
+    api.call("pages/create", {"spaceId": space["id"], "parentPageId": root["id"], "title": "Fixture: Long page", "icon": "📜",
                               "content": {"type": "doc", "content": blocks}, "format": "json"})
     print("  Fixture: Long page (1000+ blocks)")
     print("Done.")
 
 
 if __name__ == "__main__":
-    main()
+    dev_api.run(main)
