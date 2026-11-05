@@ -1,10 +1,11 @@
 // Checks the guards that keep a page's content intact (src/guards.ts): blocks from the app that the schema can't hold
-// are refused, and pages that binding an editor would change are found, on a copy. Exits with 1 on any difference.
+// and attribute values it doesn't set are refused, and pages that binding an editor would change are found, on a copy.
+// Exits with 1 on any difference.
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { prosemirrorJSONToYDoc } from "@tiptap/y-tiptap";
 import * as Y from "yjs";
-import { bindingChanges, checkBlocks, unchanged } from "../src/guards";
+import { bindingChanges, checkAttributes, checkBlocks, unchanged } from "../src/guards";
 import { schemaExtensions } from "../src/schema";
 
 const schema = getSchema(schemaExtensions);
@@ -45,6 +46,48 @@ expect("empty callout in a list", "invalid bulletList (callout)",
   verdict({ type: "bulletList", content: [{ type: "listItem", content: [paragraph(), { type: "callout" }] }] }));
 expect("bold in a code block", "invalid codeBlock", verdict({ type: "codeBlock", content: [text("let a", [{ type: "bold" }])] }));
 expect("the same mark twice", "invalid paragraph (text)", verdict(paragraph(text("Hello", [{ type: "bold" }, { type: "bold" }]))));
+
+// MARK: Attributes from the app
+
+/** "accepted", or the error the engine logs, for `setAttributes` on the block. */
+function attributes(json: JSONContent, attrs: Record<string, unknown>): string {
+  try {
+    checkAttributes(PMNode.fromJSON(schema, json), attrs);
+    return "accepted";
+  } catch (error) {
+    return String((error as Error).message);
+  }
+}
+
+const callout: JSONContent = { type: "callout", content: [paragraph(text("Note"))] };
+const columns = (count: number): JSONContent => ({ type: "columns", content: Array.from({ length: count }, () => ({ type: "column", content: [paragraph()] })) });
+const code: JSONContent = { type: "codeBlock", content: [text("let a = 1")] };
+const task: JSONContent = { type: "taskItem", content: [paragraph(text("Task"))] };
+// Every value the app sets (BlockBars, AdvancedBlocks, the editor sheets, a task's box, a toggle's arrow).
+for (const type of ["default", "info", "note", "success", "warning", "danger"]) expect(`callout ${type}`, "accepted", attributes(callout, { type }));
+const layouts: [number, string[]][] = [[2, ["two_equal", "two_left_sidebar", "two_right_sidebar"]],
+  [3, ["three_equal", "three_with_sidebars", "three_left_wide", "three_right_wide"]], [4, ["four_equal"]], [5, ["five_equal"]]];
+for (const [count, names] of layouts) for (const layout of names) expect(`${layout} on ${count} columns`, "accepted", attributes(columns(count), { layout }));
+expect("code language", "accepted", attributes(code, { language: "swift" }));
+expect("plain code", "accepted", attributes(code, { language: null }));
+expect("toggle opened", "accepted", attributes({ type: "details", content: [{ type: "detailsSummary" }, { type: "detailsContent", content: [paragraph()] }] }, { open: true }));
+expect("embed link", "accepted", attributes({ type: "embed" }, { src: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }));
+expect("formula", "accepted", attributes({ type: "mathBlock" }, { text: "a^2+b^2=c^2" }));
+for (const sortBy of ["default", "title-asc", "recent"]) expect(`sub-pages ${sortBy}`, "accepted", attributes({ type: "subpages" }, { sortBy }));
+expect("task checked", "accepted", attributes(task, { checked: true }));
+// What the app never sends: a wrong type, a value the web doesn't know, an attribute it doesn't set this way.
+expect("indent as text", "invalid paragraph.indent", attributes(paragraph(text("Hello")), { indent: "x" }));
+expect("unknown callout type", "invalid callout.type", attributes(callout, { type: "error" }));
+expect("three columns' layout on two", "invalid columns.layout", attributes(columns(2), { layout: "three_equal" }));
+expect("an unknown layout", "invalid columns.layout", attributes(columns(2), { layout: "constructor" }));
+expect("empty code language", "invalid codeBlock.language", attributes(code, { language: "" }));
+expect("toggle opened as text", "invalid details.open", attributes({ type: "details", content: [{ type: "detailsSummary" }, { type: "detailsContent", content: [paragraph()] }] }, { open: "true" }));
+expect("a script as embed link", "invalid embed.src", attributes({ type: "embed" }, { src: "javascript:alert(1)" }));
+expect("formula as a number", "invalid mathBlock.text", attributes({ type: "mathBlock" }, { text: 2 }));
+expect("unknown sub-page order", "invalid subpages.sortBy", attributes({ type: "subpages" }, { sortBy: "title-desc" }));
+expect("task checked as a number", "invalid taskItem.checked", attributes(task, { checked: 1 }));
+expect("an attribute the app doesn't set", "invalid callout.icon", attributes(callout, { icon: "🔥" }));
+expect("a name from Object's prototype", "invalid callout.constructor", attributes(callout, { constructor: "x" }));
 
 // MARK: Structural edits
 
