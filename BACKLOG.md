@@ -73,7 +73,6 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 ## Presentation mode
 
 - A presenter view for an external display: the slides on the TV, controls and the next slide on the iPhone (decided on October 26, 2026, for later). Today iOS mirrors the screen.
-- On an iPad the system's own pointer stays visible under the laser pointer's dot; the web hides the cursor. SwiftUI can't hide it on iOS (`pointerVisibility` is macOS only), UIKit could with a `UIPointerInteraction`.
 - Opening it builds every block of the page at once to measure the slides, so all formulas, diagrams, PDFs and images load, also for slides never shown (code review M13, October 28, 2026). The measuring copy should reserve their sizes without loading; the slides must still break as today.
 
 ## Databases

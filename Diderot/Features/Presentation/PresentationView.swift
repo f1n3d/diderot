@@ -112,7 +112,14 @@ struct PresentationView: View {
             controls
         }
         .background(Color(.systemBackground))
+        .overlay {
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                LaserPointerLayer(isOn: showsLaserPointer) { pointer = $0 }
+                    .accessibilityHidden(true)
+            }
+        }
         .overlay { laserPointer }
+        // Also below the layer: should UIKit not hand the pointer's hovering to it, the dot still follows.
         .onContinuousHover { phase in
             switch phase {
             case .active(let location): pointer = location
@@ -281,6 +288,60 @@ struct PresentationView: View {
                 .position(pointer)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
+        }
+    }
+}
+
+/// The laser pointer's part on an iPad that SwiftUI can't play (its `pointerVisibility` is macOS only): the system's
+/// pointer hides under the dot, as the web hides its cursor, and the pointer's position goes to the dot. Only the
+/// pointer's hovering stops at this layer, and only while the laser pointer is on: taps, clicks and scrolls go through.
+private struct LaserPointerLayer: UIViewRepresentable {
+    let isOn: Bool
+    let moved: (CGPoint?) -> Void
+
+    func makeUIView(context: Context) -> LayerView {
+        let view = LayerView()
+        view.moved = moved
+        view.isOn = isOn
+        return view
+    }
+
+    func updateUIView(_ view: LayerView, context: Context) {
+        view.moved = moved
+        view.isOn = isOn
+    }
+
+    final class LayerView: UIView, UIPointerInteractionDelegate {
+        var moved: (CGPoint?) -> Void = { _ in }
+        var isOn = false {
+            didSet { if isOn != oldValue { pointerInteraction?.invalidate() } }
+        }
+        private var pointerInteraction: UIPointerInteraction?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            backgroundColor = .clear
+            let interaction = UIPointerInteraction(delegate: self)
+            addInteraction(interaction)
+            pointerInteraction = interaction
+            addGestureRecognizer(UIHoverGestureRecognizer(target: self, action: #selector(hovered)))
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            isOn && event?.type == .hover ? super.hitTest(point, with: event) : nil
+        }
+
+        @objc private func hovered(_ recognizer: UIHoverGestureRecognizer) {
+            switch recognizer.state {
+            case .began, .changed: moved(recognizer.location(in: self))
+            default: moved(nil)
+            }
+        }
+
+        func pointerInteraction(_ interaction: UIPointerInteraction, styleFor region: UIPointerRegion) -> UIPointerStyle? {
+            isOn ? .hidden() : nil
         }
     }
 }
