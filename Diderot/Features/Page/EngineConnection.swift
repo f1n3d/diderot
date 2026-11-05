@@ -82,7 +82,8 @@ final class EngineConnection {
 
     /// Opens the engine unless it is open: when the page appears, after `suspend`, and to retry a failed start.
     func resume() {
-        // Each step keeps its page until it is done (`stop` writes its input and stores its document).
+        // Opening and closing keep their page until done, as the page's own tasks did (`stop` writes its input and stores
+        // its document); the unsent changes' save needs only the engine.
         let owner = self.owner
         suspendsAfterUploads = false
         let previous = engineStep
