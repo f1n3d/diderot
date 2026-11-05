@@ -246,7 +246,7 @@ struct PageTreeStoreTests {
         let levels = ["root": [page("A", children: true), page("B", children: true)], "A": [page("A1", parent: "A")], "B": [page("B1", parent: "B")]]
         let box = StoreBox()
         let store = PageTreeStore(spaceId: "s") { parent, _ in
-            // The refresh reloads A's level after passing B, and B is expanded right then.
+            // The refresh reloads A's level, and B is expanded right then.
             if parent == "A", let store = box.store {
                 box.store = nil
                 await store.toggle("B")
@@ -266,7 +266,7 @@ struct PageTreeStoreTests {
         let levels = ["root": [page("A", children: true), page("K", children: true), page("Z")], "A": [page("A1", parent: "A")], "K": [page("K2", parent: "K")]]
         let box = StoreBox()
         let store = PageTreeStore(spaceId: "s") { parent, _ in
-            // The walk goes last page first: it reloads A's level after passing K, and K is tapped right then.
+            // The refresh reloads A's level, and K is tapped right then.
             if parent == "A", let store = box.store {
                 box.store = nil
                 await store.toggle("K")
@@ -302,7 +302,54 @@ struct PageTreeStoreTests {
         #expect(store.visibleRows.map(\.id) == ["new"])
     }
 
+    /// A refresh loads the open levels of a depth side by side: one after another, ten open pages took ten round trips.
+    @Test func reloadLoadsOpenLevelsSideBySide() async {
+        let levels = ["root": [page("A", children: true), page("B", children: true), page("C", children: true)],
+                      "A": [page("A1", parent: "A")], "B": [page("B1", parent: "B")], "C": [page("C1", parent: "C")]]
+        let log = EventLog()
+        let store = PageTreeStore(spaceId: "s") { parent, _ in
+            if let parent {
+                log.events.append("start \(parent)")
+                try await Task.sleep(for: .milliseconds(50))
+                log.events.append("end \(parent)")
+            }
+            return Paginated(items: levels[parent ?? "root"] ?? [], meta: PaginationMeta(hasNextPage: false, nextCursor: nil))
+        }
+
+        await store.loadRootIfNeeded()
+        for id in ["A", "B", "C"] { await store.toggle(id) }
+        log.events = []
+        await store.reload()
+        #expect(log.events.prefix(3).allSatisfy { $0.hasPrefix("start") }, "\(log.events)")
+        #expect(store.visibleRows.map(\.id) == ["A", "A1", "B", "B1", "C", "C1"])
+    }
+
+    /// A refresh a newer one replaced sends nothing more: it went on reloading every open level, then dropped them.
+    @Test func replacedReloadSendsNothingMore() async {
+        let levels = ["root": [page("A", children: true)], "A": [page("A1", parent: "A")]]
+        let box = StoreBox()
+        let log = EventLog()
+        let store = PageTreeStore(spaceId: "s") { parent, _ in
+            log.events.append(parent ?? "root")
+            // The first refresh's root call runs the second refresh before it returns.
+            if parent == nil, let store = box.store {
+                box.store = nil
+                await store.reload()
+            }
+            return Paginated(items: levels[parent ?? "root"] ?? [], meta: PaginationMeta(hasNextPage: false, nextCursor: nil))
+        }
+
+        await store.loadRootIfNeeded()
+        await store.toggle("A")
+        log.events = []
+        box.store = store
+        await store.reload()
+        #expect(log.events == ["root", "root", "A"])
+        #expect(store.visibleRows.map(\.id) == ["A", "A1"])
+    }
+
     private final class StoreBox { var store: PageTreeStore? }
+    private final class EventLog { var events: [String] = [] }
     private final class FailureBox { var error: APIError? }
 
     private actor Calls {

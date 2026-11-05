@@ -151,20 +151,28 @@ final class PageTreeStore {
             if rootState.value == nil { rootState = .failed(error) }
             return
         }
+        // A refresh started meanwhile shows the newer tree; this one sends nothing more. It used to walk on to its end.
+        guard generation == reloads else { return }
         // Drop collapsed levels so a tap during the walk loads them fresh.
         children = children.filter { $0.key == Self.rootKey || expanded.contains($0.key) }
-        // Reload each expanded level still in the tree, top-down, and show the result in one step.
+        // Reload each expanded level still in the tree, a depth at a time with its levels side by side, and show the result
+        // in one step. One after another, ten open pages took ten round trips in a row.
         var levels = [Self.rootKey: root]
-        var pending = root
-        while let page = pending.popLast() {
-            guard expanded.contains(page.id), levels[page.id] == nil,
-                  let level = try? await loadAll(parent: page.id)
-            else { continue }
-            levels[page.id] = level
-            pending += level
+        var depth = root
+        while !depth.isEmpty {
+            var open: [String] = []
+            for page in depth where expanded.contains(page.id) && levels[page.id] == nil && !open.contains(page.id) {
+                open.append(page.id)
+            }
+            let loaded = await loadLevels(below: open, generation: generation)
+            guard generation == reloads else { return }
+            depth = []
+            for parent in open {
+                guard let level = loaded[parent] else { continue }
+                levels[parent] = level
+                depth += level
+            }
         }
-        // A refresh started meanwhile shows the newer tree.
-        guard generation == reloads else { return }
         // Pages the walk didn't reach (gone, or under a collapsed page) or that failed to load collapse, so the next
         // tap loads them again. A page expanded meanwhile keeps the level its tap loaded.
         expanded.subtract(wasExpanded.subtracting(levels.keys))
@@ -192,6 +200,25 @@ final class PageTreeStore {
         } catch {
             // Expanded with nothing below, it would look like a page without subpages; the next tap loads it again.
             expanded.remove(pageId)
+        }
+    }
+
+    /// The levels below `parents`, up to four loading side by side; one that fails to load is left out. Starts no more
+    /// once a newer refresh than `generation` runs.
+    private func loadLevels(below parents: [String], generation: Int) async -> [String: [SidebarPage]] {
+        await withTaskGroup(of: (String, [SidebarPage]?).self) { group in
+            var pending = parents[...]
+            func next() {
+                guard let parent = pending.popFirst() else { return }
+                group.addTask { (parent, try? await self.loadAll(parent: parent)) }
+            }
+            for _ in 0..<4 { next() }
+            var levels: [String: [SidebarPage]] = [:]
+            for await (parent, level) in group {
+                if let level { levels[parent] = level }
+                if generation == reloads { next() }
+            }
+            return levels
         }
     }
 
