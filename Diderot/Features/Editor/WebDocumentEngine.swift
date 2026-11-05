@@ -20,6 +20,9 @@ protocol DocumentEngine: AnyObject, Observable {
     var onFailure: (@MainActor (EngineFailure) -> Void)? { get set }
     /// The engine ended on its own (iOS ended its web process, e.g. for memory) and is closed; `open` restarts it.
     var onTerminated: (@MainActor () -> Void)? { get set }
+    /// After each save of changes the server hasn't confirmed (`saveUnsentChanges`, `close`, a failed engine): nil once
+    /// the device keeps them, else why it can't (a full disk). They then live only in the engine, lost if the app ends.
+    var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)? { get set }
 
     func open(pageId: String) async throws
     /// Keeps changes the server hasn't confirmed (e.g. made offline); the page's next `open` sends them.
@@ -250,6 +253,7 @@ final class WebDocumentEngine: DocumentEngine {
     @ObservationIgnored var onDocument: (@MainActor (PMNode) -> Void)?
     @ObservationIgnored var onFailure: (@MainActor (EngineFailure) -> Void)?
     @ObservationIgnored var onTerminated: (@MainActor () -> Void)?
+    @ObservationIgnored var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)?
 
     private let session: AppSession
     private var page: WebPage?
@@ -376,24 +380,39 @@ final class WebDocumentEngine: DocumentEngine {
     }
 
     /// Kept until the server confirms them; no answer (engine closed itself or failed) keeps what's stored. The
-    /// document only after the first sync (`currentDocument`): until then the stored one still fits.
+    /// document only after the first sync (`currentDocument`): until then the stored one still fits. Whether the changes
+    /// were kept goes to `onUnsentChangesKept`: a failed write left them only in the engine, and said so only in the log.
     func saveUnsentChanges() async {
         guard let page, let unsentStore,
               let unsent = try? await page.callJavaScript("return window.DocmostEngine.unsentChanges();") as? String
         else { return }
         let (store, pageId) = unsentStore
-        do {
-            if unsent.isEmpty {
+        // All confirmed: what is stored is in the server's document already, and sent again it changes nothing (Yjs).
+        guard !unsent.isEmpty else {
+            do {
                 try await store.remove(key: CacheKey.unsentChanges(pageId))
                 try await store.remove(key: CacheKey.unsentDocument(pageId))
-            } else if let data = Data(base64Encoded: unsent) {
-                try await store.writeData(data, key: CacheKey.unsentChanges(pageId))
-                if let current = await currentDocument() {
-                    try await store.write(current, key: CacheKey.unsentDocument(pageId))
-                }
+            } catch {
+                AppLog.ui.error("Confirmed changes not dropped: \(error.localizedDescription, privacy: .public)")
             }
+            return
+        }
+        guard let data = Data(base64Encoded: unsent) else { return }
+        do {
+            try await store.writeData(data, key: CacheKey.unsentChanges(pageId))
         } catch {
             AppLog.ui.error("Unsent changes not kept: \(error.localizedDescription, privacy: .public)")
+            onUnsentChangesKept?(error)
+            return
+        }
+        onUnsentChangesKept?(nil)
+        // Only what the page shows offline until it connects again; the changes themselves are kept above.
+        if let current = await currentDocument() {
+            do {
+                try await store.write(current, key: CacheKey.unsentDocument(pageId))
+            } catch {
+                AppLog.ui.error("Document of unsent changes not kept: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
