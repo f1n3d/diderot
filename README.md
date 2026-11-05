@@ -160,6 +160,8 @@ Tools/build-engine.sh
 
 # The project checks CI runs besides the tests: translations, project.yml against the Xcode project, shellcheck
 Tools/check-project.sh
+# Keys in the code that never got into the String Catalog, from a build's extracted strings (CI runs it after its tests)
+python3 Tools/localize.py --unimported Tools/.cache/DerivedData
 
 # Install on the connected iPhone (developer mode, Apple ID in Xcode)
 AUTOLOGIN=1 Tools/run-device.sh

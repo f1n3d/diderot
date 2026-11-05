@@ -39,11 +39,16 @@ struct ServerSetupView: View {
                 }
 
                 #if DEBUG
-                Section("Development") {
-                    Button("Use local dev server (localhost:3000)") {
+                // For developers only, so not translated: in the String Catalog these would wait for German forever.
+                Section {
+                    Button {
                         address = "http://localhost:3000"
                         performConnect()
+                    } label: {
+                        Text(verbatim: "Use local dev server (localhost:3000)")
                     }
+                } header: {
+                    Text(verbatim: "Development")
                 }
                 #endif
             }

@@ -6,6 +6,8 @@
     Tools/localize.py --missing                                                    # list keys without a German translation
                                                                                    # (exits 1 if any; mark keys that need none, such as
                                                                                    # numbers or URLs, "Don't Translate" in Xcode)
+    Tools/localize.py --unimported <DerivedData>                                   # list keys in the code that aren't in the catalog
+                                                                                   # (exits 1 if any; from a build, see `extracted`)
 
 Create an export: xcodebuild -exportLocalizations -project Diderot.xcodeproj -localizationPath <dir> -exportLanguage de
 """
@@ -69,13 +71,44 @@ def missing(catalog):
     return sorted(k for k, v in catalog["strings"].items() if not german(v) and not v.get("shouldTranslate") is False)
 
 
+def extracted(build):
+    """The keys the compiler took from the app's code for this catalog: the `*.stringsdata` files every build writes
+    (SWIFT_EMIT_LOC_STRINGS in project.yml), the app's own, not its tests'. A key there that isn't in the catalog never got
+    imported, so the German interface shows it in English. From a clean build, as in CI: an old DerivedData can still
+    hold the strings of a file that is gone."""
+    keys = {}
+    for path in Path(build).rglob("*.stringsdata"):
+        if "/Diderot.build/Objects-normal/" not in path.as_posix():
+            continue
+        for entry in json.loads(path.read_text()).get("tables", {}).get(CATALOG.stem, []):
+            keys.setdefault(entry["key"], path.stem)
+    return keys
+
+
+def unimported(catalog, build):
+    """The keys in the code, with a file using each, that aren't in the catalog."""
+    keys = extracted(build)
+    if not keys:
+        sys.exit(f"No strings extracted under {build}: build the app there first.")
+    return sorted((key, source) for key, source in keys.items() if key not in catalog["strings"])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--import", dest="xliff")
     parser.add_argument("--apply")
     parser.add_argument("--missing", action="store_true")
+    parser.add_argument("--unimported", metavar="DERIVED_DATA")
     args = parser.parse_args()
     catalog = load()
+    if args.unimported:
+        keys = unimported(catalog, args.unimported)
+        print(f"{len(keys)} keys in the code that aren't in the String Catalog")
+        for key, source in keys:
+            print(f"  {key!r} ({source}.swift)")
+        if keys:
+            print("Import them: xcodebuild -exportLocalizations, then Tools/localize.py --import and --apply.")
+        return 1 if keys else 0
     if args.xliff:
         print(f"{import_keys(catalog, args.xliff)} new keys added")
         save(catalog)

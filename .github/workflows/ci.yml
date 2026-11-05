@@ -88,8 +88,15 @@ jobs:
           -destination "platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0"
           -only-testing:DiderotTests
           -parallel-testing-enabled NO
+          -derivedDataPath "$RUNNER_TEMP/DerivedData"
           -resultBundlePath TestResults.xcresult
           CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
+
+      - name: Strings in the catalog
+        # Every key the app's code uses is in the String Catalog: Tools/check-project.sh checks those for German, but one
+        # never imported (xcodebuild -exportLocalizations, Tools/localize.py --import) shows in English in the German
+        # interface. From the strings the test build extracted (SWIFT_EMIT_LOC_STRINGS), so no second build.
+        run: python3 Tools/localize.py --unimported "$RUNNER_TEMP/DerivedData"
 
       - name: Keep the test results
         if: failure()
