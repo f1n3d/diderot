@@ -192,6 +192,20 @@ struct APIClientTests {
         #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
     }
 
+    /// A file from another host answers as that host does, whatever its body says: a 401 in Docmost's shape, as any
+    /// NestJS API sends it, signed the reader out (review V20). From the own server, the same answer still does.
+    @Test func foreignFileErrorIsNoSignOut() async throws {
+        let body = Data(#"{"statusCode":401,"message":"Unauthorized"}"#.utf8)
+        MockURLProtocol.respond(with: .init(status: 401, body: body))
+        await #expect(throws: APIError.server(status: 401, message: nil)) {
+            _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "https://elsewhere.example/a.pdf")!)
+        }
+        MockURLProtocol.respond(with: .init(status: 401, body: body))
+        await #expect(throws: APIError.unauthorized(message: "Unauthorized")) {
+            _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "http://localhost:3000/api/files/abc/a.pdf")!)
+        }
+    }
+
     @Test func fetchFileSendsTokenToOwnServer() async throws {
         MockURLProtocol.respond(with: .init())
         _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "http://localhost:3000/api/files/abc/cat.png")!)

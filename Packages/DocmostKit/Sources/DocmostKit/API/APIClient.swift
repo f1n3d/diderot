@@ -176,7 +176,8 @@ public actor APIClient {
         // Requests to the server don't follow redirects: Docmost sends none, and URLSession would send a request's body
         // and cookie (a password, the MFA cookie, page content) on to wherever one points, another host or plain HTTP
         // included, and drop its token, so the server's 401 would sign out. Files on other hosts follow them.
-        let delegate = request.url.map { Origin($0) == Origin(baseURL) } == true ? RedirectRefusal() : nil
+        let toServer = request.url.map { Origin($0) == Origin(baseURL) } == true
+        let delegate = toServer ? RedirectRefusal() : nil
         do {
             let (data, response): (Data, URLResponse)
             if let send {
@@ -195,7 +196,9 @@ public actor APIClient {
                 throw APIError.server(status: http.statusCode, message: String(localized: "The server redirects to \(location).", bundle: .main))
             }
             guard (200..<300).contains(http.statusCode) else {
-                throw APIError.from(status: http.statusCode, data: data)
+                // Docmost's rules only for the server's answers: a file a page links from another host answered a 401 in
+                // its shape (any NestJS API's), and the reader was signed out. Its message isn't the server's to show.
+                throw toServer ? APIError.from(status: http.statusCode, data: data) : APIError.server(status: http.statusCode, message: nil)
             }
             return (data, http)
         } catch let error as APIError {

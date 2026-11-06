@@ -52,7 +52,6 @@ What's left to fix now:
 
 **C. Between users.**
 
-- A file link on a page can sign the reader out (V20).
 - Card and embed URLs reach the app's internal links (V30).
 - A database file loads from any host (V31).
 
@@ -62,7 +61,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **C** Between users | V20, V30, V31 | unit tests | low |
+| **C** Between users | V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
 Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and so is B (working together: V2, V6, V8, V10, V15, V16, V18, V43). B's fixes have engine checks and unit tests that act out the collaborator; V43's UI test has a second client, the test script, add a block above.
@@ -70,16 +69,6 @@ Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32
 ---
 
 ## C. Between users
-
-### V20 [medium] ✔ A 401 from another host signs the user out
-
-**Where:** `Packages/DocmostKit/Sources/DocmostKit/API/APIClient.swift:77–83, 197–199`, `API/APIError.swift:61–62`, `Diderot/App/AppSession.swift:500–508, 526–532`; callers `Diderot/Rendering/MediaBlockViews.swift:278`, `Diderot/Features/Bases/BaseFieldEditors.swift:494`.
-
-**Problem:** `fetchFile` loads any URL from content, without the token for other origins, but maps their errors with Docmost's rules: a body `{"statusCode":401}` becomes `.unauthorized`. Attachment cards and database file fields run through `perform(on:)`, which signs out on it, without keeping a pending logout.
-
-**Scenario:** An attachment card's URL points to another Docmost or any NestJS API (its default 401 body is exactly that). One tap sends the reader back to sign-in, and the forgotten session stays valid on the server for up to 90 days. Any page editor can do this to every reader.
-
-**Fix:** Map with Docmost's rules only when the answer came from the own origin with the token; anything else is `.server(status:)`.
 
 ### V30 [low] ○ Content can still reach the app's internal links
 
@@ -134,7 +123,7 @@ Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32
 - ○ **Decoding:**
   - Unknown enum values are optional, content and attributes stay `JSONValue`, and unknown marks and inline atoms round-trip.
   - Pagination stops on a repeated cursor, with the server's limits.
-  - Errors count as Docmost's only with Docmost's body; V20 is the exception for other hosts.
+  - Errors count as Docmost's only with Docmost's body, and only from the own server (V20).
 - ○ **Local data:**
   - The offline cache is per server, cleared when another user or workspace signs in.
   - Unsent changes are per server and user, kept out of backups.
