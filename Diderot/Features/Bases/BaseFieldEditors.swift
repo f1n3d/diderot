@@ -366,6 +366,7 @@ struct BaseDateEditor: View {
 /// Cell files: tap previews, minus removes; add from photos, camera or files.
 struct BaseFileEditor: View {
     @Environment(AppSession.self) private var session
+    @Environment(\.openURL) private var openURL
     let model: BaseModel
     let rowId: String
     let property: BaseProperty
@@ -481,11 +482,20 @@ struct BaseFileEditor: View {
         Task { await model.setCell(rowId: rowId, propertyId: property.id, to: remaining.isEmpty ? nil : .array(remaining)) }
     }
 
-    /// Downloads through the authenticated session, then shows Quick Look.
+    /// Downloads a file of the server through the authenticated session, then shows Quick Look; another host's opens as
+    /// an outside link (`BaseValue.fileOpening`).
     private func open(_ file: FileEntry) async {
         guard let baseURL = session.server?.url, let ready = session.ready else { return }
-        let path = file.url ?? "/api/files/\(file.id)/\(file.name)"
-        guard let url = ImageURL.resolveContentMedia(path, baseURL: baseURL) else { return }
+        let url: URL
+        switch BaseValue.fileOpening(file.url ?? "/api/files/\(file.id)/\(file.name)", server: baseURL) {
+        case .download(let own)?:
+            url = own
+        case .outside(let other)?:
+            openURL(other)
+            return
+        case nil:
+            return
+        }
         // Each file keeps its spinner while another one loads too; a second tap doesn't load it again.
         guard downloading.insert(file.id).inserted else { return }
         defer { downloading.remove(file.id) }

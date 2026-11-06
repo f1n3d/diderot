@@ -24,6 +24,20 @@ enum BaseValue {
         return trimmed.isEmpty ? nil : .string(trimmed)
     }
 
+    /// How a file field's entry opens: a file of the own server downloads, signed in, for Quick Look; another host's file
+    /// opens as an outside link. Downloaded in the app, that host learned the reader's address and the time, past the
+    /// setting for content from other servers (review V31).
+    enum FileOpening: Equatable {
+        case download(URL)
+        case outside(URL)
+    }
+
+    /// The entry's `path`, from the server's files (`/api/files/<id>/<name>`) or a full URL; nil if it isn't one.
+    static func fileOpening(_ path: String, server: URL) -> FileOpening? {
+        guard let url = ImageURL.resolveContentMedia(path, baseURL: server) else { return nil }
+        return Origin(url) == Origin(server) ? .download(url) : .outside(url)
+    }
+
     /// URL to open a stored link; older values without a scheme get `https://`.
     static func openURL(_ link: String) -> URL? {
         URL(string: hasScheme(link) ? link : "https://" + link)

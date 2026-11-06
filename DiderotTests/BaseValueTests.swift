@@ -33,6 +33,21 @@ struct BaseValueTests {
         #expect(BaseValue.openURL("example.com/?next=https://x")?.absoluteString == "https://example.com/?next=https://x")
     }
 
+    /// A file field's entry downloads only from the server; another host's file opens as an outside link. Downloaded in
+    /// the app, any editor's URL told that host the reader's address and time (review V31).
+    @Test func filesDownloadOnlyFromTheServer() throws {
+        let server = try #require(URL(string: "https://wiki.example.com"))
+        #expect(BaseValue.fileOpening("/api/files/f1/plan.pdf", server: server)
+            == .download(try #require(URL(string: "https://wiki.example.com/api/files/f1/plan.pdf"))))
+        #expect(BaseValue.fileOpening("https://WIKI.example.com:443/api/files/f1/plan.pdf", server: server)
+            == .download(try #require(URL(string: "https://WIKI.example.com:443/api/files/f1/plan.pdf"))))
+        #expect(BaseValue.fileOpening("https://tracker.example.net/plan.pdf", server: server)
+            == .outside(try #require(URL(string: "https://tracker.example.net/plan.pdf"))))
+        #expect(BaseValue.fileOpening("http://wiki.example.com/api/files/f1/plan.pdf", server: server)
+            == .outside(try #require(URL(string: "http://wiki.example.com/api/files/f1/plan.pdf"))))
+        #expect(BaseValue.fileOpening("", server: server) == nil)
+    }
+
     @Test func storedLinksOpenWithScheme() {
         #expect(BaseValue.openURL("docmost.com")?.absoluteString == "https://docmost.com")
         #expect(BaseValue.openURL("mailto:team@example.com")?.absoluteString == "mailto:team@example.com")

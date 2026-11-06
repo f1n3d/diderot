@@ -50,32 +50,15 @@ The October work holds up. The session's state machine stays right through start
 
 What's left to fix now:
 
-**C. Between users.**
-
-- A database file loads from any host (V31).
-
 **D. The developer's Mac.** The UI tests' results hold the dev admin password, and the dev tools have fixed passwords and send their token along redirects (V50, V51).
 
 ## Order of work
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **C** Between users | V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
-Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and so is B (working together: V2, V6, V8, V10, V15, V16, V18, V43). B's fixes have engine checks and unit tests that act out the collaborator; V43's UI test has a second client, the test script, add a block above.
-
----
-
-## C. Between users
-
-### V31 [low] ○ Tapping a database file loads it from any host
-
-**Where:** `Diderot/Features/Bases/BaseFieldEditors.swift:488–495`, `ImageURL.swift:23–24`.
-
-**Problem:** Absolute URLs pass through unchanged. Any editor can set a file entry's URL; a tap downloads from that host, which learns the reader's address and time, and opens it in Quick Look. The setting for content from other servers doesn't apply.
-
-**Fix:** Download only from the own server; hand any other URL to the link handling for outside links.
+Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and so are B (working together: V2, V6, V8, V10, V15, V16, V18, V43) and C (between users: V20, V30, V31). B's fixes have engine checks and unit tests that act out the collaborator; V43's UI test has a second client, the test script, add a block above.
 
 ---
 
