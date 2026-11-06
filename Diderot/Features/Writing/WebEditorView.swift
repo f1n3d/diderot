@@ -213,6 +213,17 @@ enum WebEditorStores {
         }
     }
 
+    /// Removes the server's web editor cache, not its own storage: the web client keeps the edits the server doesn't
+    /// have yet there ("Clear Saved Content").
+    static func removeCache(for server: URL, defaults: UserDefaults = .standard) async {
+        let stores = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
+        guard let identifier = stores[StoredAccounts.key(for: server)].flatMap(UUID.init(uuidString:)) else { return }
+        // As in `remove`: WebKit set up first.
+        _ = WKWebsiteDataStore.default()
+        let caches: Set<String> = [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache]
+        await WKWebsiteDataStore(forIdentifier: identifier).removeData(ofTypes: caches, modifiedSince: .distantPast)
+    }
+
     /// Auth cookies an editor left when the app ended while it was open (they're removed on close otherwise).
     static func removeLeftoverAuthCookies(defaults: UserDefaults = .standard) async {
         let stores = defaults.dictionary(forKey: key) as? [String: String] ?? [:]

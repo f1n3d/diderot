@@ -52,7 +52,6 @@ What's left to fix now:
 
 **A. Content that goes missing without a sign.**
 
-- One tap on "Clear Saved Content" removes the web editor's unsynced edits (V5).
 - An old title can come back over a newer one (V9).
 - Undo after adding a tab removes the change before it (V7).
 - A deleted inline comment's mark stays on the page (V32).
@@ -74,7 +73,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing | V5, V7, V9, V32 | engine checks, unit tests, UI tests | low |
+| **A** Content that goes missing | V7, V9, V32 | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
@@ -84,16 +83,6 @@ A first: small fixes for silent losses. B is the larger part: V2 needs the engin
 ---
 
 ## A. Content that goes missing
-
-### V5 [medium] ✔ "Clear Saved Content" removes the web editor's unsynced edits
-
-**Where:** `Diderot/App/AppSession.swift:560–569` (`clearCache`) and `:579–583` (`clearSavedContent`), `Diderot/App/SessionEnvironment.swift:35–40`, `Diderot/Features/Writing/WebEditorView.swift` (`WebEditorStores.remove`), `Diderot/Features/Settings/SettingsView.swift:64–69`.
-
-**Problem:** Both remove the server's whole web editor store (`WKWebsiteDataStore.remove(forIdentifier:)`). It holds the web client's Yjs offline copy in IndexedDB, which keeps edits until the server has them (`AppSession.swift:681` relies on that). In Settings the button acts on one tap, without asking, and the store isn't counted in "Saved content". `clearSavedContent` promises to keep "changes the server doesn't have yet", and does for the native editor only. On iPad, an editor open in another window loses its cookie and storage mid-edit. Sign-out removes the store too (R24); that was decided.
-
-**Scenario:** The user edits a drawing in the web editor, the connection drops, and they close it. Later they tap "Clear Saved Content". The edit would have synced the next time the web editor opened that page; now it's gone.
-
-**Fix:** Leave the web editor's storage alone there and clear only its HTTP cache; or ask first and say what goes.
 
 ### V7 [medium] ○ Adding or duplicating a tab bypasses undo, and Undo reverts the change before it
 

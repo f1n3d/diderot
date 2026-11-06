@@ -18,7 +18,7 @@ Diderot is an app for [Docmost](https://github.com/docmost/docmost) servers that
 - **Copies of pages and images** for reading offline are in the app's cache. They can be read only while the device is unlocked and aren't part of backups. They stay when you sign out, so the same person finds them again, and are removed when someone else signs in to the same server, when you remove the server from the app, or with "Clear Saved Content" in the settings or, once you signed out, on the sign-in screen.
 - **Changes the server doesn't have yet** (for example while offline) are kept until the server has them. They aren't part of backups, and they are removed with the server.
 - **Downloaded attachments and exports** are kept only temporarily and removed when you sign out.
-- **The web editor's data** (its copies of pages) is removed when you sign out.
+- **The web editor's data** (its copies of pages, with changes the server doesn't have yet) is removed when you sign out. "Clear Saved Content" removes only its cache, so changes it hasn't sent yet aren't lost.
 - **Settings** such as the appearance stay in the app.
 
 ## Crash reports
