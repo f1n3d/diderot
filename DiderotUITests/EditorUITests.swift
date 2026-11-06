@@ -1155,6 +1155,38 @@ import XCTest
         let shown = expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: marked)
         XCTAssertEqual(XCTWaiter().wait(for: [shown], timeout: 5), .completed, "“Show on Page” doesn't scroll to the passage")
         snapshot(app, "33-shown-on-page")
+
+        // A deleted inline comment's passage loses its mark, as on the web: it used to stay marked for everyone.
+        let last = edit(app, blockContaining: "Letzter Absatz")
+        last.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 14, dy: 12)).doubleTap()
+        XCTAssertTrue(commentItem.waitForExistence(timeout: 5), "“Comment” missing from the selection menu")
+        commentItem.tap()
+        XCTAssertTrue(inlineText.waitForExistence(timeout: 5), "Sheet for the second inline comment doesn't open")
+        let secondQuote = app.staticTexts["inline-comment-quote"].label
+        inlineText.typeText("Weg\(stamp)")
+        app.buttons["inline-comment-send"].tap()
+        XCTAssertTrue(inlineText.waitForNonExistence(timeout: 10), "Sheet doesn't close after sending")
+        finishEditing(app)
+        let secondMarked = app.links.matching(NSPredicate(format: "label == %@", secondQuote)).firstMatch
+        XCTAssertTrue(secondMarked.waitForExistence(timeout: 10), "The second passage isn't marked")
+        commentsButton.tap()
+        let secondRow = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'comment-'"))
+            .containing(NSPredicate(format: "label == %@", "Weg\(stamp)")).firstMatch
+        XCTAssertTrue(secondRow.waitForExistence(timeout: 10), "The second inline comment is missing from the comments")
+        let secondMenu = app.buttons["comment-menu-\(secondRow.identifier.dropFirst("comment-".count))"]
+        XCTAssertTrue(secondMenu.waitForExistence(timeout: 5), "The second inline comment has no menu")
+        secondMenu.tap()
+        let deleteItem = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(deleteItem.waitForExistence(timeout: 5), "“Delete” missing from the comment menu")
+        deleteItem.tap()
+        let confirmDelete = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: 5), "Delete confirmation missing")
+        confirmDelete.tap()
+        XCTAssertTrue(secondRow.waitForNonExistence(timeout: 10), "The deleted inline comment remains")
+        tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
+        // The first comment's mark stays: the server check reads it in the page content.
+        XCTAssertTrue(secondMarked.waitForNonExistence(timeout: 10), "The deleted comment's passage is still marked")
+        snapshot(app, "33-deleted-inline-comment")
     }
 
     /// Links leave the app as from the web client in a browser (the last paragraph of Tools/editor-test-page.json): a

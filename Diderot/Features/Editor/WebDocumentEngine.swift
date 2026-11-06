@@ -91,6 +91,8 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Replaces the embed of a synced block (its source page and id) with its content as the server returned it: the
     /// embed at `path`, else the first on the page, as it has no id.
     func replaceReference(at path: [Int], sourcePageId: String, transclusionId: String, with nodes: [PMNode]) async -> EngineResult
+    /// Removes the marks of the deleted comment `commentId` from the whole page (`unsetComment` in Engine/src/steps.ts).
+    func unsetComment(_ commentId: String) async -> EngineResult
 }
 
 extension DocumentEngine {
@@ -577,6 +579,10 @@ final class WebDocumentEngine: DocumentEngine {
 
     func unsync(_ target: BlockTarget) async -> EngineResult {
         await call("return window.DocmostEngine.unsync(target);", ["target": target.jsObject])
+    }
+
+    func unsetComment(_ commentId: String) async -> EngineResult {
+        await call("return window.DocmostEngine.unsetComment(commentId);", ["commentId": commentId])
     }
 
     func replaceReference(at path: [Int], sourcePageId: String, transclusionId: String, with nodes: [PMNode]) async -> EngineResult {

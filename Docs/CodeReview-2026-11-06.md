@@ -52,7 +52,6 @@ What's left to fix now:
 
 **A. Content that goes missing without a sign.**
 
-- A deleted inline comment's mark stays on the page (V32).
 
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
 
@@ -71,7 +70,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing | V32 | engine checks, unit tests, UI tests | low |
+| **A** Content that goes missing |  | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
@@ -81,16 +80,6 @@ A first: small fixes for silent losses. B is the larger part: V2 needs the engin
 ---
 
 ## A. Content that goes missing
-
-### V32 [medium] ✔ Deleting an inline comment leaves its mark in the page
-
-**Where:** `Diderot/Features/Comments/PageComments.swift:95–98`; the action at `CommentsView.swift:182–185`.
-
-**Problem:** The app deletes the comment on the server and in its list. The web also removes the mark from the document (`editor.commands.unsetComment(comment.id)` in `comment-list-item.tsx:81`); the server's `comments/delete` doesn't touch the page.
-
-**Scenario:** An author or space admin deletes an inline comment in the app. The passage stays highlighted for everyone, and tapping it opens nothing.
-
-**Fix:** After a delete, remove the `comment` marks with that id through the page's engine, as the web does.
 
 ---
 

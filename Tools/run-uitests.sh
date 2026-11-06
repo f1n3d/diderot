@@ -438,6 +438,7 @@ def plain(node):
     return ""
 comments = call("comments", {"pageId": page, "limit": 100})["items"]
 inline = next((c for c in comments if plain(c.get("content")) == "Inline" + stamp), None)
+deleted_inline = next((c for c in comments if plain(c.get("content")) == "Weg" + stamp), None)
 mark_ids = set()
 def walk(node):
     for mark in node.get("marks") or []:
@@ -451,6 +452,8 @@ checks = [
     (E + "test33_Comments", "Comment: text \"" + str((inline or {}).get("selection")) + "\" as inline comment Inline" + stamp,
      inline is not None and inline.get("type") == "inline" and bool(inline.get("selection"))),
     (E + "test33_Comments", "Comment: mark on the commented text in the page content", inline is not None and inline["id"] in mark_ids),
+    (E + "test33_Comments", "Comment: Weg" + stamp + " deleted, and its passage's mark with it (only Inline" + stamp + "'s left)",
+     deleted_inline is None and inline is not None and mark_ids == {inline["id"]}),
     (E + "test33_Comments", "Comment: Seitenkommentar" + stamp + " edited and deleted again",
      not any(plain(c.get("content")).startswith("Seitenkommentar" + stamp) for c in comments)),
 ]

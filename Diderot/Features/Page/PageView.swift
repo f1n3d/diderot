@@ -207,9 +207,11 @@ struct PageView: View {
             if let page = state.value, let comments {
                 CommentsView(page: page, comments: comments, canComment: canComment(on: page),
                              isSpaceAdmin: spaces.state.value?.first { $0.id == page.spaceId }?.role == .admin,
-                             focusId: commentsFocusId) { comment in
-                    showInPage(comment)
-                }
+                             focusId: commentsFocusId, onShowInPage: { showInPage($0) },
+                             onDeleted: { comment in
+                                 // Only an inline comment marks a passage.
+                                 if comment.isInline { await model?.removeMarks(ofComment: comment.id) }
+                             })
                 .handlesLinks { url, outside in
                     // Pages and anchors open on the page, so the comments make way; web links open over them.
                     switch LinkTarget.of(url, serverURL: session.server?.url) {

@@ -138,6 +138,25 @@ final class DocumentModel {
         return ranges.ranges.contains { !$0.isEmpty }
     }
 
+    /// The comment `commentId` was deleted: its passage loses its mark, as on the web (`unsetComment`). The server's
+    /// `comments/delete` leaves the page alone, so the passage stayed marked for everyone, and a tap on it opened nothing.
+    /// From the text being edited too, saved first: its input would bring the mark back with its next save.
+    func removeMarks(ofComment commentId: String) async {
+        if active != nil {
+            let marked = activeText.runs[DocmostAttributes.CommentAttribute.self].filter { $0.0 == commentId }.map(\.1)
+            for range in marked {
+                activeText[range].docmost.comment = nil
+                activeText[range].docmost.commentResolved = nil
+            }
+            if !marked.isEmpty {
+                activeTextChanged()
+                await flush()
+            }
+        }
+        guard let engine else { return }
+        report(await engine.unsetComment(commentId))
+    }
+
     /// Where the cursor goes once the document holds the block at `path`, read in that block.
     private var pendingFocus: (path: [Int], cursor: (PMNode) -> CursorRequest)?
     /// A table edit is under way. It puts the cursor into a cell itself, so a document event meanwhile neither ends

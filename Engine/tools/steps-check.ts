@@ -6,7 +6,7 @@
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
-import { applySteps, locate, type Step } from "../src/steps";
+import { applySteps, locate, unsetComment, type Step } from "../src/steps";
 import { schemaExtensions } from "../src/schema";
 import { tabIds, withUniqueTabIds } from "../src/extensions";
 
@@ -163,6 +163,22 @@ expect("a new tab gets an id as it's inserted", [true, true], [addedIds[0] === "
 expect("…so the tab-id rule appends nothing", null, added ? withUniqueTabIds(EditorState.create({ schema, doc: added })) : "not inserted");
 const renamed = applied(tabs, [{ op: "replace", target: { path: [0], type: "tabs" }, json: [{ type: "tabs", content: [tab("eins", "Erste")] }] }]);
 expect("a replaced tab keeps its id", ["eins"], renamed ? [...tabIds(renamed)] : []);
+
+// A deleted comment's marks go from the whole page, those of other comments stay (the web's `unsetComment`).
+const comment = (id: string, value: string): JSONContent => ({ type: "text", text: value, marks: [{ type: "comment", attrs: { commentId: id } }] });
+const commented = page(
+  { type: "paragraph", attrs: { id: "x" }, content: [{ type: "text", text: "Vor " }, comment("c1", "markiert"), comment("c2", " andere")] },
+  list(item({ type: "paragraph", attrs: { id: "y" }, content: [comment("c1", "auch hier")] })),
+);
+function commentIds(doc: PMNode): string[] {
+  const ids: string[] = [];
+  doc.descendants((node) => { for (const mark of node.marks) if (mark.type.name === "comment") ids.push(mark.attrs.commentId); });
+  return ids;
+}
+const unmarked = EditorState.create({ schema, doc: commented }).tr;
+expect("a deleted comment's marks go, at any depth, others stay", [true, ["c2"], "Vor markiert andereauch hier"],
+  [unsetComment(unmarked, "c1"), commentIds(unmarked.doc), unmarked.doc.textContent]);
+expect("…none there: nothing", false, unsetComment(EditorState.create({ schema, doc: commented }).tr, "c3"));
 
 console.log(differences ? `${differences} step difference(s)` : "The steps apply whole or not at all.");
 process.exitCode = differences ? 1 : 0;

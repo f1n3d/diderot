@@ -1142,6 +1142,32 @@ struct DocumentModelTests {
         #expect(engine.lifecycle == (unconfirmed == 0 ? [] : ["save after 1"]))
     }
 
+    /// A deleted inline comment's passage loses its mark on the whole page (the engine's `unsetComment`), and first in
+    /// the text being edited, saved: its input would bring the mark back with its next save.
+    @Test(.timeLimit(.minutes(1))) func deletedCommentLosesItsMark() async throws {
+        let marked = PMNode(type: "paragraph", attrs: ["id": "a"], content: [
+            PMNode(type: "text", text: "Vor "),
+            PMNode(type: "text", marks: [PMMark(type: "comment", attrs: ["commentId": "c1"])], text: "markiert"),
+        ])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [marked]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: marked), node: marked)
+        #expect(model.activeText.runs[DocmostAttributes.CommentAttribute.self].contains { $0.0 == "c1" })
+
+        await model.removeMarks(ofComment: "c1")
+        #expect(!model.activeText.runs[DocmostAttributes.CommentAttribute.self].contains { $0.0 != nil })
+        #expect(engine.saved.last?.plainText == "Vor markiert")
+        #expect(engine.saved.last?.children.allSatisfy { $0.marks?.contains { $0.type == "comment" } != true } == true)
+        #expect(engine.unsetComments == ["c1"])
+
+        // Not editing: only the engine's.
+        model.deactivate()
+        let saves = engine.saved.count
+        await model.removeMarks(ofComment: "c2")
+        #expect(engine.saved.count == saves)
+        #expect(engine.unsetComments == ["c1", "c2"])
+    }
+
     /// Typing on doesn't push the save of unconfirmed changes back: it comes 2 s after the first change not kept, with
     /// the later ones. Pushed back by each document event, typing with pauses under 2 s kept nothing until a longer pause,
     /// and an ended web process or app lost all of it.
@@ -2321,6 +2347,12 @@ final class FakeDocumentEngine: DocumentEngine {
     func replaceReference(at path: [Int], sourcePageId: String, transclusionId: String, with nodes: [PMNode]) async -> EngineResult {
         replacedReferences.append((path, sourcePageId, transclusionId, nodes))
         whileInserting?()
+        return .applied
+    }
+    /// Comments whose marks `unsetComment` removed.
+    private(set) var unsetComments: [String] = []
+    func unsetComment(_ commentId: String) async -> EngineResult {
+        unsetComments.append(commentId)
         return .applied
     }
     /// What Backspace does, as the engine would tell the model in advance; nothing said by default.

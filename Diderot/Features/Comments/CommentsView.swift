@@ -17,6 +17,8 @@ struct CommentsView: View {
     var focusId: String?
     /// Shows a comment's passage on the page.
     var onShowInPage: ((PageComment) -> Void)?
+    /// A comment was deleted: the page removes its passage's mark.
+    var onDeleted: ((PageComment) async -> Void)?
 
     private enum Tab: Hashable { case open, resolved }
     private typealias Composing = PageComments.Composing
@@ -132,7 +134,12 @@ struct CommentsView: View {
                    showsMenu: (canComment && !comment.isReply) || comment.creatorId == currentUserId || isSpaceAdmin
                        || session.ready?.hasDocmost097Features == true,
                    confirmsDelete: Binding { confirmsDelete?.id == comment.id } set: { if !$0 { confirmsDelete = nil } },
-                   onDelete: { run { try await comments.delete(comment) } }) {
+                   onDelete: {
+                       run {
+                           try await comments.delete(comment)
+                           await onDeleted?(comment)
+                       }
+                   }) {
             if comment.isInline, onShowInPage != nil {
                 Button {
                     dismiss()

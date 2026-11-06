@@ -2,7 +2,7 @@
 // edit (leaving a list: split, insert, delete; joining a block with the one before: replace, delete) applies whole or
 // not at all. As separate calls, a refused last step left the text twice or the list split, without a word.
 import type { JSONContent } from "@tiptap/core";
-import { Node as PMNode } from "@tiptap/pm/model";
+import { Node as PMNode, type Mark } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 import { tabIds, withTabIds } from "./extensions";
 import { endSlot, holds, slotAt } from "./fits";
@@ -160,4 +160,22 @@ function atPath(doc: PMNode, path: number[]): { node: PMNode; pos: number } | un
     first = false;
   }
   return { node, pos };
+}
+
+/**
+ * Removes the `comment` marks of the comment `commentId` everywhere in the document, as the web's `unsetComment` does
+ * when a comment is deleted: the server's `comments/delete` leaves the page alone, so its passage stayed marked for
+ * everyone, and a tap on it opened nothing. False when there are none.
+ */
+export function unsetComment(tr: Transaction, commentId: string): boolean {
+  const type = tr.doc.type.schema.marks.comment;
+  if (!type) return false;
+  const marked: { from: number; to: number; mark: Mark }[] = [];
+  tr.doc.descendants((node, pos) => {
+    for (const mark of node.marks) {
+      if (mark.type === type && mark.attrs.commentId === commentId) marked.push({ from: pos, to: pos + node.nodeSize, mark });
+    }
+  });
+  for (const { from, to, mark } of marked) tr.removeMark(from, to, mark);
+  return marked.length > 0;
 }
