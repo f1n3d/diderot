@@ -151,7 +151,7 @@ struct IntegrationCardView: View {
         // "Connect" lies outside the card's button, so it can be tapped (and found by VoiceOver) on its own.
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                if let url = URL(string: link.url) { openURL(url) }
+                if let url = ContentLinkRouter.contentURL(link.url) { openURL(url) }
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     header

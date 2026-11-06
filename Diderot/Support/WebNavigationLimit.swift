@@ -65,11 +65,17 @@ final class WebNavigationLimit: NSObject, WebPage.NavigationDeciding, WKNavigati
                 return null;
             };
             """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        configuration.userContentController.add(WindowOpenHandler { [weak self] url in self?.openOutside?(url) }, name: "windowOpen")
+        // Not the app's own links either (`decision`), which never meets a window opened this way.
+        configuration.userContentController.add(WindowOpenHandler { [weak self] url in
+            if !ContentLinkRouter.isAppLink(url) { self?.openOutside?(url) }
+        }, name: "windowOpen")
     }
 
     /// `mainFrame` is nil for a new window.
     nonisolated static func decision(for url: URL, home: URL, reach: Reach, frames: Bool, mainFrame: Bool?, linkTap: Bool) -> Decision {
+        // Not the app's own links: Docmost's pages never link to them, and handed outside, a link in the web layout opened
+        // a comment or another block's atom sheet (review V30).
+        if ContentLinkRouter.isAppLink(url) { return .cancel }
         guard let mainFrame else { return .openOutside }
         if !mainFrame { return frames ? .allow : .cancel }
         let within = switch reach {

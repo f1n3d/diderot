@@ -10,7 +10,7 @@ Diderot is an app for [Docmost](https://github.com/docmost/docmost) servers that
 - Photos and videos you upload from your library leave their location behind.
 - Web links open in the in-app browser. A link to another app (such as a phone number or another app's link) opens only after the app asks you.
 - Embedded content (such as YouTube) shows as a card in the page and loads only when you open it. The web layout and the web editor show embeds as the web does.
-- Images, videos and PDFs that a page or comment takes from another website load only when you tap them, unless you turn on "Load Content from Other Servers" in the settings. Logos and profile pictures from another website, and such content in the web layout, load only with that setting on. The web editor loads them as the web does. Loading them tells that website your IP address and when you read the page.
+- Images, videos and PDFs that a page or comment takes from another website load only when you tap them, unless you turn on "Load Content from Other Servers" in the settings. Attachments and database files from another website name it before you tap them, with that setting off. Logos and profile pictures from another website, and such content in the web layout, load only with that setting on. The web editor loads them as the web does. Loading them tells that website your IP address and when you read the page.
 
 ## What stays on your device
 

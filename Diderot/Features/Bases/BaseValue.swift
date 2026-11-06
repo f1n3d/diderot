@@ -24,6 +24,13 @@ enum BaseValue {
         return trimmed.isEmpty ? nil : .string(trimmed)
     }
 
+    /// Where a file field's entry loads from: its URL, else the server's file, its id and name encoded as path
+    /// components (a "#" or "?" in the name cut the path short).
+    static func fileURL(url: String?, id: String, name: String, server: URL) -> URL? {
+        if let url { return ImageURL.resolveContentMedia(url, baseURL: server) }
+        return server.appending(path: "api/files").appending(component: id).appending(component: name)
+    }
+
     /// URL to open a stored link; older values without a scheme get `https://`.
     static func openURL(_ link: String) -> URL? {
         URL(string: hasScheme(link) ? link : "https://" + link)

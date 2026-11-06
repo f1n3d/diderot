@@ -64,6 +64,18 @@ struct RenderContext: Sendable {
 
     nonisolated static let loadsOtherServersKey = "loadsContentFromOtherServers"
 
+    /// The other server a file comes from, named before the tap that downloads it (`OtherServerCard`'s words): a page's
+    /// attachment or a database file from another host downloaded on a tap that looked like one of the server's, and
+    /// told that host the reader's address and the time, past the setting for content from other servers (review V31).
+    /// Nil for the server's own files, and with that setting on.
+    func otherServer(of url: URL) -> String? {
+        Self.otherServer(of: url, server: baseURL)
+    }
+
+    nonisolated static func otherServer(of url: URL, server: URL?) -> String? {
+        loadsByItself(url, server: server) ? nil : url.host() ?? url.absoluteString
+    }
+
     nonisolated static func loadsByItself(_ url: URL, server: URL?) -> Bool {
         // A file on the device tells nobody anything.
         if url.isFileURL { return true }

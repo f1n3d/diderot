@@ -21,6 +21,18 @@ nonisolated enum ContentLinkRouter {
         case external(URL)
     }
 
+    /// Whether `url` uses one of the app's own schemes (`appSchemes`), which page content never links to.
+    static func isAppLink(_ url: URL) -> Bool {
+        url.scheme.map { appSchemes.contains($0.lowercased()) } ?? false
+    }
+
+    /// A URL that page content gives as it is (a card's, an embed's, an integration mention's), unless it uses one of the
+    /// app's own schemes: those went to `openURL` unfiltered, and tapped, a card opened another block's mention menu with
+    /// "Remove" (review V30).
+    static func contentURL(_ string: String) -> URL? {
+        URL(string: string).flatMap { isAppLink($0) ? nil : $0 }
+    }
+
     /// Turns an `href` from the document into a URL that `OpenURLAction` understands.
     static func url(for href: String, baseURL: URL?) -> URL? {
         let trimmed = href.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -31,8 +43,8 @@ nonisolated enum ContentLinkRouter {
         if trimmed.hasPrefix("/"), let baseURL {
             return URL(string: trimmed, relativeTo: baseURL)?.absoluteURL
         }
-        if let url = URL(string: trimmed), let scheme = url.scheme {
-            return appSchemes.contains(scheme.lowercased()) ? nil : url
+        if let url = URL(string: trimmed), url.scheme != nil {
+            return isAppLink(url) ? nil : url
         }
         // No scheme, e.g. `example.com/path`.
         return URL(string: "https://" + trimmed)

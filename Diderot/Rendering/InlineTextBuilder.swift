@@ -54,7 +54,7 @@ struct InlineTextBuilder {
             run.font = font.weight(.medium)
             run.foregroundColor = .accentColor
             run.backgroundColor = Color.accentColor.opacity(0.12)
-            if let url = URL(string: link.url) { run.link = url }
+            if let url = ContentLinkRouter.contentURL(link.url) { run.link = url }
             return run
         case .footnoteReference(let number, let dataId):
             var run = AttributedString("[\(number ?? "?")]")
