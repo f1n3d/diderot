@@ -52,7 +52,6 @@ What's left to fix now:
 
 **A. Content that goes missing without a sign.**
 
-- A database entry removes the line breaks from its text fields as soon as it opens, and saves that (V3).
 - The save of unsent changes keeps moving while the user types (V4), and one tap on "Clear Saved Content" removes the web editor's unsynced edits (V5).
 - An old title can come back over a newer one (V9).
 - Undo after adding a tab removes the change before it (V7).
@@ -75,7 +74,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing | V3, V4, V5, V7, V9, V32 | engine checks, unit tests, UI tests | low |
+| **A** Content that goes missing | V4, V5, V7, V9, V32 | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
@@ -85,21 +84,6 @@ A first: small fixes for silent losses. B is the larger part: V2 needs the engin
 ---
 
 ## A. Content that goes missing
-
-### V3 [high] ✔ Opening a database entry removes the line breaks from its title and text fields, and saves that
-
-**Where:** `Diderot/Features/Bases/BaseFieldEditors.swift:265–272` (with `:177` and `:190–204`), `Diderot/Features/Bases/BaseRowDetailSheet.swift:230–237`.
-
-**Problem:** The fields remove line breaks whenever their text changes, also when the change is the stored value being shown (`showStored` on appear). The field then differs from its original and saves when it disappears:
-
-```swift
-if kind == .text, text.contains("\n") { draft.text = text.replacingOccurrences(of: "\n", with: "") … }
-.onDisappear(perform: commit)   // commit: guard draft.text != draft.original
-```
-
-**Scenario:** A cell holds "Line one\nLine two", written through the API, an import or a property turned into text. Someone who may edit opens the entry and closes it, or scrolls the field away. The app saves "Line oneLine two" without anyone typing. Offline, the value is kept and sent later.
-
-**Fix:** Remove line breaks only from typed or pasted input (while the field has focus), never from the stored value. Compare a commit against the text as shown.
 
 ### V4 [medium] ✔ Typing keeps pushing back the save of unsent changes
 
