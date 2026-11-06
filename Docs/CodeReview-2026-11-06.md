@@ -53,7 +53,6 @@ What's left to fix now:
 **A. Content that goes missing without a sign.**
 
 - An old title can come back over a newer one (V9).
-- Undo after adding a tab removes the change before it (V7).
 - A deleted inline comment's mark stays on the page (V32).
 
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
@@ -73,7 +72,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing | V7, V9, V32 | engine checks, unit tests, UI tests | low |
+| **A** Content that goes missing | V9, V32 | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
@@ -83,16 +82,6 @@ A first: small fixes for silent losses. B is the larger part: V2 needs the engin
 ---
 
 ## A. Content that goes missing
-
-### V7 [medium] ○ Adding or duplicating a tab bypasses undo, and Undo reverts the change before it
-
-**Where:** `Engine/src/extensions.ts:127–147`, `Diderot/Features/Page/NodeFactory.swift:62–68`, `DocumentModel.swift:1648, 1667`.
-
-**Problem:** The app inserts tabs without an id, and Duplicate strips it. The tab-id rule then appends a transaction marked `addToHistory: false`. y-tiptap takes the flag from the last transaction of the chain, so the whole write, the insert included, bypasses the undo manager. The web gives new tabs an id itself (Docmost `tabs.ts:109, 219`), so the rule never runs there.
-
-**Scenario:** The user types a word, adds a tab and taps Undo: the tab stays and the word disappears. Measured in the engine: the chain's flags were `[undefined, undefined, false]`.
-
-**Fix:** Give inserted tabs a fresh id, in the engine's insert and replace steps (`newBlockId()`) or in NodeFactory and Duplicate.
 
 ### V9 [medium] ○ A sent title is forgotten in the current session's store, not the page's
 

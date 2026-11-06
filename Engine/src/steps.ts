@@ -4,6 +4,7 @@
 import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
+import { tabIds, withTabIds } from "./extensions";
 import { endSlot, holds, slotAt } from "./fits";
 import { checkAttributes, checkBlocks, unchanged } from "./guards";
 import { rebase } from "./rebase";
@@ -41,7 +42,8 @@ function applyStep(tr: Transaction, step: Step): boolean {
       // With `base`, the text block the app's edit started from: a collaborator's edit since then stays (`rebase`).
       const found = find(tr.doc, step.target, step.expected);
       if (!found) return false;
-      let nodes = step.json.map((item) => PMNode.fromJSON(schema, item));
+      const taken = tabIds(tr.doc);
+      let nodes = step.json.map((item) => PMNode.fromJSON(schema, withTabIds(item, taken)));
       if (step.base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(schema, step.base), nodes[0]) ?? nodes[0]];
       checkBlocks(nodes);
       if (!holds(slotAt(tr.doc, found.pos, "replace"), nodes)) return false;
@@ -49,7 +51,8 @@ function applyStep(tr: Transaction, step: Step): boolean {
       return true;
     }
     case "insert": {
-      const nodes = step.json.map((item) => PMNode.fromJSON(schema, item));
+      const taken = tabIds(tr.doc);
+      const nodes = step.json.map((item) => PMNode.fromJSON(schema, withTabIds(item, taken)));
       checkBlocks(nodes);
       let pos: number;
       if (!step.target) {

@@ -2147,8 +2147,19 @@ import XCTest
         delete.tap()
         XCTAssertTrue(fourth.waitForNonExistence(timeout: 8), "The deleted tab remains")
 
+        // Undo takes back an added tab. The ids for the new tab came in a transaction kept from the history, which took
+        // the insert with it: Undo reverted the change before, here the deletion, and the tab stayed.
+        add.tap()
+        XCTAssertTrue(cancel.waitForExistence(timeout: 8), "Adding a tab doesn't ask for its name")
+        cancel.tap()
+        XCTAssertTrue(fourth.waitForExistence(timeout: 8), "The added tab “Tab 4” doesn't show")
         first.tap()
         XCTAssertTrue(text.waitForExistence(timeout: 5), "The first tab doesn't show its text again")
+        _ = edit(app, blockContaining: "Reiter\(stamp)")
+        tapToolbarButton(app, "editor-undo")
+        XCTAssertTrue(fourth.waitForNonExistence(timeout: 8), "Undo doesn't take back the added tab")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'tab-'")).count, 3, "Undo brought a tab back")
+        finishEditing(app)
         snapshot(app, "69-tabs")
     }
 

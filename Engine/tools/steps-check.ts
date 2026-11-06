@@ -8,6 +8,7 @@ import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 import { applySteps, locate, type Step } from "../src/steps";
 import { schemaExtensions } from "../src/schema";
+import { tabIds, withUniqueTabIds } from "../src/extensions";
 
 const schema = getSchema(schemaExtensions);
 let differences = 0;
@@ -144,6 +145,24 @@ expect("…and without a path it's refused", "transclusionSource(Quelle) Kopie",
 const once = page(paragraph("z", "Neu"), paragraph("b", "B"));
 expect("an id found once, moved from the app's path", "B", locate(once, { id: "b", path: [0] }) && describe(locate(once, { id: "b", path: [0] })!.node));
 expect("an id that is gone, not what sits at its path now", undefined, locate(once, { id: "x", path: [0] }));
+
+// A new tab gets its id from the step that inserts it, so the tab-id rule appends nothing: its transaction, kept from the
+// history, took the insert with it, and Undo reverted the change before instead.
+const tab = (id: string | undefined, label: string): JSONContent => ({
+  type: "tab", ...(id ? { attrs: { id } } : {}),
+  content: [{ type: "tabLabel", content: [{ type: "text", text: label }] }, { type: "tabPanel", content: [paragraph("p" + label, label)] }],
+});
+const tabs = page({ type: "tabs", content: [tab("eins", "Eins")] });
+function applied(before: PMNode, steps: Step[]): PMNode | undefined {
+  const tr = EditorState.create({ schema, doc: before }).tr;
+  return applySteps(tr, steps) ? tr.doc : undefined;
+}
+const added = applied(tabs, [{ op: "insert", target: { path: [0, 0], type: "tab" }, json: [tab(undefined, "Zwei")], position: "after" }]);
+const addedIds = added ? [...tabIds(added)] : [];
+expect("a new tab gets an id as it's inserted", [true, true], [addedIds[0] === "eins", /^[a-z]{12}$/.test(String(addedIds[1]))]);
+expect("…so the tab-id rule appends nothing", null, added ? withUniqueTabIds(EditorState.create({ schema, doc: added })) : "not inserted");
+const renamed = applied(tabs, [{ op: "replace", target: { path: [0], type: "tabs" }, json: [{ type: "tabs", content: [tab("eins", "Erste")] }] }]);
+expect("a replaced tab keeps its id", ["eins"], renamed ? [...tabIds(renamed)] : []);
 
 console.log(differences ? `${differences} step difference(s)` : "The steps apply whole or not at all.");
 process.exitCode = differences ? 1 : 0;
