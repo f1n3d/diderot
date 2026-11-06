@@ -50,9 +50,6 @@ The October work holds up. The session's state machine stays right through start
 
 What's left to fix now:
 
-**A. Content that goes missing without a sign.**
-
-
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
 
 - Backspace (V2), a drag (V8), the focus after an insert (V10), a status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
@@ -70,16 +67,11 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing |  | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
-A first: small fixes for silent losses. B is the larger part: V2 needs the engine to rebase a line before it plans the key, and its fixes are tried with two clients on one page.
-
----
-
-## A. Content that goes missing
+Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done. B is the larger part: V2 needs the engine to rebase a line before it plans the key, and its fixes are tried with two clients on one page.
 
 ---
 
