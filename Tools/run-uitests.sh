@@ -143,6 +143,78 @@ PY
 [ -n "$TEMPLATES" ] || echo "No templates for the template test (license?)"
 export TEST_RUNNER_DOCMOST_UITEST_TEMPLATES="$TEMPLATES"
 
+# The page of the two-client test (EditorUITests test84), "Fixture: Zwei Clients" under "Fixtures"
+# (Tools/seed-fixtures.py): a PDF of two pages between two paragraphs, its content made anew each run.
+TWO_CLIENTS_PAGE=$(python3 - "$PAGE" <<'PY' || true
+import sys
+from dev_api import session
+api = session()
+call = api.call
+space = call("pages/info", {"pageId": sys.argv[1]})["spaceId"]
+def child(title, parent=None):
+    pages = call("pages/sidebar-pages", {"spaceId": space, **({"pageId": parent} if parent else {}), "limit": 100})["items"]
+    return next((page for page in pages if page["title"] == title), None)
+root = child("Fixtures")
+if root is None:
+    sys.exit("No page \"Fixtures\" (Tools/seed-fixtures.py)")
+page = child("Fixture: Zwei Clients", root["id"]) or call("pages/create", {"spaceId": space, "parentPageId": root["id"], "title": "Fixture: Zwei Clients"})
+content = call("pages/info", {"pageId": page["id"], "format": "json"}).get("content") or {}
+pdf = next((node for node in content.get("content", []) if node.get("type") == "pdf"), None)
+if pdf is None:
+    def pdf_of(texts):
+        objects = ["<< /Type /Catalog /Pages 2 0 R >>",
+                   f"<< /Type /Pages /Kids [{' '.join(f'{3 + 2 * i} 0 R' for i in range(len(texts)))}] /Count {len(texts)} >>"]
+        font = 3 + 2 * len(texts)
+        for i, text in enumerate(texts):
+            stream = f"BT /F1 36 Tf 72 700 Td ({text}) Tj ET"
+            objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {4 + 2 * i} 0 R "
+                           f"/Resources << /Font << /F1 {font} 0 R >> >> >>")
+            objects.append(f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream")
+        objects.append("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+        out, offsets = "%PDF-1.4\n", []
+        for number, body in enumerate(objects, 1):
+            offsets.append(len(out))
+            out += f"{number} 0 obj\n{body}\nendobj\n"
+        start = len(out)
+        out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n" + "".join(f"{o:010d} 00000 n \n" for o in offsets)
+        return (out + f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{start}\n%%EOF\n").encode()
+    file = api.upload(page["id"], "Zwei-Seiten.pdf", pdf_of(["Seite 1 von 2", "Seite 2 von 2"]), "application/pdf")
+    pdf = {"type": "pdf", "attrs": {"src": f"/api/files/{file['id']}/{file['fileName']}", "attachmentId": file["id"],
+                                    "name": file["fileName"], "size": file["fileSize"]}}
+paragraph = lambda text: {"type": "paragraph", "content": [{"type": "text", "text": text}]}
+call("pages/update", {"pageId": page["id"], "content": {"type": "doc", "content": [paragraph("Oben"), pdf, paragraph("Unten")]},
+                      "operation": "replace", "format": "json"})
+print(page["id"])
+PY
+)
+[ -n "$TWO_CLIENTS_PAGE" ] || echo "No page for the two-client test"
+export TEST_RUNNER_DOCMOST_UITEST_TWO_CLIENTS_PAGE="$TWO_CLIENTS_PAGE"
+
+# The colleague of two-client tests: a test that writes <name>.json into this folder, the body of a page update, gets
+# it sent as another client's change (the server applies it through Yjs, as it does the web editor's), then
+# <name>.done. It ends with its folder, which goes when the script ends.
+COLLEAGUE="$PWD/Tools/.cache/uitest-colleague-$STAMP"
+mkdir -p "$COLLEAGUE"
+python3 - "$COLLEAGUE" <<'PY' &
+import json, os, sys, time
+from dev_api import session
+folder, sent = sys.argv[1], set()
+call = session().call
+while os.path.isdir(folder):
+    for name in sorted(os.listdir(folder)):
+        if name.endswith(".json") and name not in sent:
+            sent.add(name)
+            try:
+                with open(os.path.join(folder, name)) as request:
+                    call("pages/update", json.load(request))
+            except Exception as error:
+                print(f"The colleague's change {name} failed: {error}", file=sys.stderr)
+            open(os.path.join(folder, name[:-5] + ".done"), "w").close()
+    time.sleep(0.2)
+PY
+trap 'rm -rf "$COLLEAGUE"' EXIT
+export TEST_RUNNER_DOCMOST_UITEST_COLLEAGUE="$COLLEAGUE"
+
 export TEST_RUNNER_DOCMOST_DEBUG_SERVER="${DOCMOST_DEBUG_SERVER-$DEFAULT_SERVER}"
 export TEST_RUNNER_DOCMOST_DEBUG_EMAIL="${DOCMOST_DEBUG_EMAIL-$DEV_ADMIN_EMAIL}"
 export TEST_RUNNER_DOCMOST_DEBUG_PASSWORD="${DOCMOST_DEBUG_PASSWORD-$DEV_ADMIN_PASSWORD}"
@@ -165,7 +237,7 @@ case "${AREA:-}" in
   "") ;;
   schnell) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test5_ReturnAndBackspace,$E/test6_CreatePageFromSpace,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test42_EditAfterReturningToPage,HomeUITests/test19_SearchTabShowsHomeThenResults,HomeUITests/test50_TrashConfirmationAtRow,BaseUITests/test22_BasePageFromTree,BaseUITests/test25_BaseKanbanColumnsAndCard" ;;
   editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly" ;;
-  bloecke) ONLY="$E/test7_DragBlock,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink" ;;
+  bloecke) ONLY="$E/test7_DragBlock,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink,$E/test84_PreviewStaysOpenWhenABlockComesInAbove" ;;
   seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test33_Comments,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
   server) ONLY="ServerUITests" ;;

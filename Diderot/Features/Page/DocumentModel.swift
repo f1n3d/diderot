@@ -261,10 +261,7 @@ final class DocumentModel {
                 commandAfterFocus = (command, ref)
             }
         }
-        if !adoptsChange, !editsTable, collaboratorChangedActiveBlock() {
-            adoptsChange = true
-            Task { await adoptCollaboratorsChange() }
-        }
+        adoptCollaboratorsChangeIfAny()
         // What fits around the block, and what its table allows, may have changed.
         if active != nil { refreshAnswers() }
     }
@@ -345,7 +342,19 @@ final class DocumentModel {
 
     private func typingSwitchEnded() {
         typingSwitches -= 1
-        if typingSwitches == 0 { followMovedBlocks() }
+        guard typingSwitches == 0 else { return }
+        followMovedBlocks()
+        // A collaborator's change a document event brought meanwhile shows now: it waited for the key, and without another
+        // event it stayed hidden. Backspace in a line the page had empty can join their words into the block before.
+        adoptCollaboratorsChangeIfAny()
+    }
+
+    /// Shows a collaborator's change of the block being edited, if there is one that nothing of the user's waits for
+    /// (`collaboratorChangedActiveBlock`).
+    private func adoptCollaboratorsChangeIfAny() {
+        guard !adoptsChange, !editsTable, collaboratorChangedActiveBlock() else { return }
+        adoptsChange = true
+        Task { await adoptCollaboratorsChange() }
     }
 
     /// The active block follows by its UniqueID when its path shifts; otherwise the editor would edit another block.
@@ -647,7 +656,7 @@ final class DocumentModel {
                     answers.inLine = Set(zip(lines, fits).filter(\.1).map(\.0))
                 }
             }
-            if let table, let apply = await engine.tableCommandsThatApply(.path(table.tablePath, type: "table"), cell: [table.row, table.column],
+            if let table, let apply = await engine.tableCommandsThatApply(ref.target, cell: [table.row, table.column],
                                                                          commands: Self.tableQuestions.map(\.engineCommand)) {
                 answers.tableCommands = Set(zip(Self.tableQuestions, apply).filter(\.1).compactMap { $0.0.engineCommand["name"]?.stringValue })
             }
@@ -938,6 +947,8 @@ final class DocumentModel {
         /// As the engine said when the mention was tapped (`canShowAsCard`).
         var canShowAsCard = false
         var id: String { "\(ref.identity)/\(index)" }
+        /// Whether `node`, the mention at its index by now, is this one: one put before it since links elsewhere.
+        func isMeant(_ node: PMNode) -> Bool { node.string("url") == url }
         /// What "Open Link" opens in the in-app browser: web addresses only, as the web treats a mention with another
         /// address as one without a link (Safari's view throws, ending the app, on any other).
         var webURL: URL? {
@@ -965,27 +976,31 @@ final class DocumentModel {
         case .mention:
             return
         case .link:
-            await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index,
+            await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index, if: target.isMeant,
                               with: NodeFactory.integrationLinkText(url: target.url, provider: target.provider))
         case .card:
-            guard let nodes = cardReplacement(for: target) else { return }
-            await replace(target.ref, withNodes: nodes)
+            // From the paragraph as the engine holds it: made from this copy, the card's paragraphs dropped what a
+            // collaborator typed in it within the copy's lag.
+            await replace(target.ref) { cardReplacement(for: target, in: $0) }
         }
     }
 
     /// Whether the mention can become a card where it is, as the engine says (`fits`); its paragraph needn't be the one
     /// being edited.
     func canShowAsCard(_ target: MentionTarget) async -> Bool {
-        guard let engine, let nodes = cardReplacement(for: target) else { return false }
+        guard let engine, let (_, paragraph) = document.locate(target.ref), let nodes = cardReplacement(for: target, in: paragraph)
+        else { return false }
         return await engine.fits(BlockPlace(target: target.ref.target, position: .replace), candidates: [nodes])?.first ?? false
     }
 
-    private func cardReplacement(for target: MentionTarget) -> [PMNode]? {
-        guard let (_, block) = document.locate(target.ref),
-              let position = block.childPosition(ofType: "integrationMention", index: target.index)
+    /// The blocks that take the place of `paragraph` when its mention shows as a card (`blockReplacement`). Nil when the
+    /// mention at the target's index links elsewhere: one went in before it since.
+    private func cardReplacement(for target: MentionTarget, in paragraph: PMNode) -> [PMNode]? {
+        guard let position = paragraph.childPosition(ofType: "integrationMention", index: target.index),
+              target.isMeant(paragraph.children[position])
         else { return nil }
-        return blockReplacement(NodeFactory.integrationCard(url: target.url, provider: target.provider), paragraph: target.ref,
-                                before: Array(block.children[..<position]), after: Array(block.children[(position + 1)...]))
+        return blockReplacement(NodeFactory.integrationCard(url: target.url, provider: target.provider), paragraph: paragraph,
+                                before: Array(paragraph.children[..<position]), after: Array(paragraph.children[(position + 1)...]))
     }
 
     /// The service of the link at `range` of the active text that the workspace can show as a card or mention: the
@@ -1026,8 +1041,8 @@ final class DocumentModel {
     /// before (without its trailing spaces), the block, the text after (without its leading spaces), each part only if
     /// it isn't empty. Nil outside a paragraph. Whether they fit there is the engine's to say, as the web asks its schema
     /// (`getBlockPlacement`): not in table cells, synced blocks and footnotes, nor in place of a list item's first line.
-    private func blockReplacement(_ block: PMNode, paragraph ref: NodeRef, before: [PMNode], after: [PMNode]) -> [PMNode]? {
-        guard ref.type == "paragraph", let (_, paragraph) = document.locate(ref) else { return nil }
+    private func blockReplacement(_ block: PMNode, paragraph: PMNode, before: [PMNode], after: [PMNode]) -> [PMNode]? {
+        guard paragraph.type == "paragraph" else { return nil }
         let before = Self.trimmingSpaces(before, atEnd: true), after = Self.trimmingSpaces(after, atEnd: false)
         return (before.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: before)]) + [block]
             + (after.isEmpty ? [] : [PMNode(type: "paragraph", attrs: paragraph.attrs, content: after)])
@@ -1076,16 +1091,17 @@ final class DocumentModel {
     /// next text block, else a new paragraph if nothing follows (as after inserting other blocks).
     @discardableResult
     private func placeBlockInActiveText(_ block: PMNode, replacing range: Range<AttributedString.Index>) -> Bool {
-        guard let engine, let active, let (path, paragraph) = document.locate(active.ref) else { return false }
+        guard let engine, let active, let line = session.currentNode(), let (path, paragraph) = document.locate(active.ref)
+        else { return false }
         let (before, after) = activeInlines(around: range)
         // Asked before the active line's input goes into the new blocks: refused there, it would be lost.
         guard blockFitsInActiveLine(block.type, around: range),
-              var nodes = blockReplacement(block, paragraph: active.ref, before: before, after: after),
+              var nodes = blockReplacement(block, paragraph: line, before: before, after: after),
               let blockOffset = nodes.firstIndex(of: block)
         else { return false }
         let parentPath = Array(path.dropLast()), index = path[path.count - 1]
-        let afterPath = parentPath + [index + blockOffset + 1]
-        var focus: [Int]? = afterPath
+        // The cursor's block, counted from the first new one where the engine put it (`placeBlocks`).
+        var focus: Int? = blockOffset + 1
         if nodes.last == block {
             let siblings = parentPath.isEmpty ? document.children : node(at: parentPath)?.children ?? []
             if siblings.indices.contains(index + 1), siblings[index + 1].type != "footnotes" {
@@ -1094,14 +1110,22 @@ final class DocumentModel {
                 nodes.append(PMNode(type: "paragraph"))
             }
         }
-        // The new blocks hold the active text: its pending input isn't written on its own.
-        session.dropActive()
         slashQuery = nil
         showsPlusMenu = false
-        let target = NodeRef(path: path, node: paragraph).target
+        let ref = active.ref, target = NodeRef(path: path, node: paragraph).target
         Task {
-            if report(await engine.replaceBlock(target, withNodes: nodes)), let focus {
-                await focusAfterOperation(focus, .start)
+            // The line's input goes in first, with its base, so the engine keeps a collaborator's words in it. The new
+            // blocks then take the line's place only while it is what they were made from (`expected`): written over it
+            // unchecked, they dropped what a collaborator typed there within this copy's lag. Refused, the line stays as
+            // the engine holds it, the input in it.
+            await flush()
+            guard self.active?.ref.identity == ref.identity, session.overrides[ref.identity] == nil else { return }
+            let expected = session.base ?? line
+            // The new blocks hold the active text.
+            session.dropActive()
+            let (applied, placed) = await engine.placeBlocks(nodes, at: target, position: .replace, expected: expected)
+            if report(applied), let focus, let placed {
+                await focusAfterOperation(Self.sibling(of: placed, offset: focus), .start)
             }
         }
         return true
@@ -1308,8 +1332,8 @@ final class DocumentModel {
         switch target {
         case .insert(let offset):
             if let node { insertAtom(node, offset: offset) }
-        case .edit(let ref, let index):
-            await replaceAtom(ofType: type, in: ref, index: index, with: node)
+        case .edit(let ref, let index, let atom):
+            await replaceAtom(ofType: type, in: ref, index: index, if: { $0 == atom }, with: node)
         }
     }
 
@@ -1318,11 +1342,22 @@ final class DocumentModel {
         return node.children[position]
     }
 
-    /// Replaces or removes the `index`-th atom of type `type` in a (non-active) block.
-    func replaceAtom(ofType type: String, in ref: NodeRef, index: Int, with replacement: PMNode?) async {
+    /// Removes a mention (its menu's "Remove").
+    func removeMention(_ target: MentionTarget) async {
+        await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index, if: target.isMeant, with: nil)
+    }
+
+    /// Replaces or removes the `index`-th atom of type `type` in a (non-active) block as the engine holds it, while it is
+    /// the one meant (`isMeant`). Taken by its index alone, it could be a collaborator's atom put before it while a sheet
+    /// was open, and the edit overwrote theirs.
+    private func replaceAtom(ofType type: String, in ref: NodeRef, index: Int, if isMeant: (PMNode) -> Bool,
+                             with replacement: PMNode?) async {
         guard let engine, let block = await currentBlock(ref) else { return }
         let node = block.latest
-        guard let position = node.childPosition(ofType: type, index: index) else { return }
+        guard let position = node.childPosition(ofType: type, index: index), isMeant(node.children[position]) else {
+            report(.refused)
+            return
+        }
         var children = node.children
         if let replacement { children[position] = replacement } else { children.remove(at: position) }
         let updated = PMNode(type: node.type, attrs: node.attrs, content: children.isEmpty ? nil : children)
@@ -1371,9 +1406,14 @@ final class DocumentModel {
             anchor = contentBlocks.last.flatMap { last in
                 last.node.type == "paragraph" && last.node.children.isEmpty && active?.ref != last.ref ? last.ref : nil
             }
-            if let anchor, nodes == [PMNode(type: "paragraph")] {
-                await focusAfterOperation(anchor.path, .end)
-                return .applied
+            if let last = anchor, nodes == [PMNode(type: "paragraph")] {
+                // Where the engine has it: a collaborator's blocks above move it. Removed by one meanwhile, a new paragraph
+                // goes in at the end; focusing nothing, an inline command waiting for it went nowhere.
+                if let (path, _) = await engine.currentDocument()?.locate(last) {
+                    await focusAfterOperation(path, .end)
+                    return .applied
+                }
+                anchor = nil
             }
         }
         let before = placement == .end
@@ -1388,32 +1428,30 @@ final class DocumentModel {
                 anchor = block.ref
             }
         }
-        let newPath: [Int]
         let next: PMNode?
         if let anchor {
             let index = anchor.path[anchor.path.count - 1]
             let parentPath = Array(anchor.path.dropLast())
             let siblings = parentPath.isEmpty ? document.children : node(at: parentPath)?.children ?? []
             let nextIndex = before ? index : index + 1
-            newPath = parentPath + [replace ? index : nextIndex]
             next = siblings.indices.contains(nextIndex) ? siblings[nextIndex] : nil
         } else {
-            newPath = [contentBlocks.count]
             next = nil
         }
         var blocks = nodes
-        var focusTarget: (path: [Int], cursor: CursorRequest)?
-        var afterPath = newPath
-        afterPath[afterPath.count - 1] += nodes.count
+        // Where the cursor goes, from the first new block where the engine put it (`placeBlocks`): into it, or into the
+        // block after the new ones.
+        var focusTarget: (path: ([Int]) -> [Int], cursor: CursorRequest)?
+        let afterThem = { (first: [Int]) in Self.sibling(of: first, offset: nodes.count) }
         switch focus {
         case .inside(let relative):
-            focusTarget = (newPath + relative, .end)
+            focusTarget = ({ $0 + relative }, .end)
         case .after:
             if let next, next.type != "footnotes" {
-                if PMNode.editableTextTypes.contains(next.type) { focusTarget = (afterPath, .start) }
+                if PMNode.editableTextTypes.contains(next.type) { focusTarget = (afterThem, .start) }
             } else {
                 blocks.append(PMNode(type: "paragraph"))
-                focusTarget = (afterPath, .start)
+                focusTarget = (afterThem, .start)
             }
         case nil:
             break
@@ -1429,18 +1467,19 @@ final class DocumentModel {
             }
             // Otherwise it stays active until the new block takes focus (the keyboard stays up).
         }
-        let applied: EngineResult
-        if replace, let anchor {
-            applied = await engine.replaceBlock(anchor.target, withNodes: blocks, expected: replacedBlock)
-        } else if let anchor {
-            applied = await engine.insertBlocks(blocks, relativeTo: anchor.target, position: before ? .before : .after)
-        } else {
-            applied = await engine.insertBlocks(blocks, relativeTo: nil, position: .after)
-        }
-        if report(applied), let focusTarget {
-            await focusAfterOperation(focusTarget.path, focusTarget.cursor)
+        let position: BlockPlace.Position = replace ? .replace : before && anchor != nil ? .before : .after
+        let (applied, placed) = await engine.placeBlocks(blocks, at: anchor?.target, position: position, expected: replacedBlock)
+        if report(applied), let focusTarget, let placed {
+            await focusAfterOperation(focusTarget.path(placed), focusTarget.cursor)
         }
         return applied
+    }
+
+    /// The path `offset` siblings after `path`.
+    private static func sibling(of path: [Int], offset: Int) -> [Int] {
+        var path = path
+        path[path.count - 1] += offset
+        return path
     }
 
     /// Whether `nodes` fit where `insertBlocks` puts them (in place of an empty line, or after a block), as the engine
@@ -1635,7 +1674,17 @@ final class DocumentModel {
 
     /// Replaces a block with others (unsyncing: the content instead of the wrapper or the reference).
     func replace(_ ref: NodeRef, withNodes nodes: [PMNode]) async {
+        await replace(ref) { _ in nodes }
+    }
+
+    /// Replaces a block with others made from it as the engine holds it now (`currentBlock`), so they keep what a
+    /// collaborator typed in it since; refused when `build` makes nothing of it.
+    private func replace(_ ref: NodeRef, building build: (PMNode) -> [PMNode]?) async {
         guard let engine, let block = await currentBlock(ref) else { return }
+        guard let nodes = build(block.latest) else {
+            report(.refused)
+            return
+        }
         if active != nil { deactivate() }
         report(await engine.replaceBlock(block.ref.target, withNodes: nodes, expected: block.source))
     }
@@ -1670,7 +1719,9 @@ final class DocumentModel {
         if active != nil { deactivate() }
         let lastRef = NodeRef(path: path + [tabs.children.count - 1], node: last)
         let tab = NodeFactory.tab(label: "Tab \(tabs.children.count + 1)")
-        return report(await engine.insertBlock(tab, relativeTo: lastRef.target, position: .after)) ? path + [tabs.children.count] : nil
+        // Where the engine put it: counted in this copy, a tab a collaborator just added would be shown instead.
+        let (applied, placed) = await engine.placeBlocks([tab], at: lastRef.target, position: .after, expected: nil)
+        return report(applied) ? placed : nil
     }
 
     /// Sets a tab's label; empty or unchanged labels are left alone, as on the web.
@@ -1724,9 +1775,9 @@ final class DocumentModel {
         guard isEditable, let ref = ref(forIdentity: blockIdentity), let node = atom(ofType: type, in: ref, index: index) else { return }
         switch type {
         case "status":
-            editorSheet = .status(.edit(ref: ref, index: index), text: node.string("text") ?? "", color: node.string("color") ?? "gray")
+            editorSheet = .status(.edit(ref: ref, index: index, atom: node), text: node.string("text") ?? "", color: node.string("color") ?? "gray")
         case "mathInline":
-            editorSheet = .mathInline(.edit(ref: ref, index: index), latex: node.string("text") ?? "")
+            editorSheet = .mathInline(.edit(ref: ref, index: index, atom: node), latex: node.string("text") ?? "")
         case "integrationMention":
             var target = MentionTarget(ref: ref, index: index, url: node.string("url") ?? "", provider: node.string("provider") ?? "")
             Task {
@@ -1933,11 +1984,15 @@ final class DocumentModel {
         let typed = Self.inlines(from: activeText, base: activeFont)
         let plan = activeAnswers?.backspace.map { typed.isEmpty ? $0.empty : $0.text }
         if plan == .nothing { return }
-        // Its input goes with it: into the text before, or away with the line.
+        // Its input goes with it: into the text before, or away with the line. With the base it began from, so the engine
+        // decides with the line as it holds it: a collaborator's words in it since go along instead of away. Read before
+        // the join shows, which makes the block before the active one.
+        let base = session.base
         session.cancelCommit()
         session.overrides[active.ref.identity] = nil
         let shown = plan.map { show($0, leaving: active, typed: typed) } ?? false
-        let result = await engine.backspace(active.ref.target, holding: PMNode(type: active.type, attrs: active.attrs, content: typed.isEmpty ? nil : typed))
+        let result = await engine.backspace(active.ref.target, holding: PMNode(type: active.type, attrs: active.attrs, content: typed.isEmpty ? nil : typed),
+                                            base: base)
         switch result {
         case .done(let done, let cursor):
             if shown {
@@ -2092,10 +2147,11 @@ final class DocumentModel {
         defer { editsTable = false }
         // The cell's typed text goes first: the edit can move its block or remove it.
         await flush()
-        guard let position = activeTablePosition else { return }
-        let focus = await engine.tableCommand(.path(position.tablePath, type: "table"), cell: [position.row, position.column],
-                                              command: edit.engineCommand)
-        guard report(focus != nil ? .applied : .refused), let focus, let latest = await engine.currentDocument() else { return }
+        guard let cellBlock = active?.ref, let position = activeTablePosition else { return }
+        // Through the cell's block, by its id: the table's path in this copy, which lags behind a collaborator's blocks
+        // above, could reach the table beside it, and a deletion took that.
+        let (result, focus) = await engine.tableCommand(cellBlock.target, cell: [position.row, position.column], command: edit.engineCommand)
+        guard report(result), let focus, let latest = await engine.currentDocument() else { return }
         show(latest)
         // The table is gone: deleted, or its only row or column.
         guard !focus.isEmpty else {
@@ -2109,7 +2165,7 @@ final class DocumentModel {
             return
         }
         // To the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
-        let path = document.textPath(from: position.tablePath + focus)
+        let path = document.textPath(from: focus)
         pendingFocus = (path, { _ in .end })
         adopt(latest)
         pendingFocus = nil
@@ -2145,30 +2201,46 @@ final class DocumentModel {
             deactivate()
             return
         }
-        var offset = activeText.characters.distance(from: activeText.startIndex, to: insertionIndex())
+        var (start, end) = selectedOffsets()
         active = Active(ref: NodeRef(path: path, node: node), type: node.type, attrs: node.attrs, itemPath: enclosingItemPath(path))
         let text = node.type == "codeBlock" ? AttributedString(node.plainText) : Self.editorText(from: node.children)
-        if followingChange { offset = Self.offset(offset, movedFrom: Array(activeText.characters), to: Array(text.characters)) }
+        if followingChange {
+            // Both ends of a selection move with the text around them: with its end alone, as a cursor, a word selected
+            // while a collaborator typed in the line was no longer selected. A start where their text goes in moves past it.
+            let old = Array(activeText.characters), new = Array(text.characters)
+            start = Self.offset(start, movedFrom: old, to: new, after: start < end)
+            end = Self.offset(end, movedFrom: old, to: new)
+        }
         session.show(node, as: text)
         if followingChange {
             // Right away, in the same update as the text: a cursor request would hide the caret meanwhile, on every change
             // while a collaborator types.
-            let index = activeText.characters.index(activeText.startIndex, offsetBy: min(offset, activeText.characters.count))
-            activeSelection = AttributedTextSelection(insertionPoint: index)
+            let count = activeText.characters.count
+            let index = { self.activeText.characters.index(self.activeText.startIndex, offsetBy: min($0, count)) }
+            activeSelection = start < end ? AttributedTextSelection(range: index(start)..<index(end)) : AttributedTextSelection(insertionPoint: index(end))
         } else if node.type != "codeBlock" {
-            cursorRequest = .offset(offset)
+            cursorRequest = .offset(end)
         }
     }
 
+    /// The selection's start and end as character offsets into the active text; both the cursor's without a selection.
+    private func selectedOffsets() -> (start: Int, end: Int) {
+        let offset = { self.activeText.characters.distance(from: self.activeText.startIndex, to: $0) }
+        let end = offset(insertionIndex())
+        guard case .ranges(let ranges) = activeSelection.indices(in: activeText), let first = ranges.ranges.first else { return (end, end) }
+        return (offset(first.lowerBound), end)
+    }
+
     /// Where an offset in `old` lies in `new`, `new` being `old` with one stretch changed (a collaborator's edit): before
-    /// the change it stays, after it it moves by the change in length, inside it goes to the change's end.
-    static func offset(_ offset: Int, movedFrom old: [Character], to new: [Character]) -> Int {
+    /// the change it stays, after it it moves by the change in length, inside it goes to the change's end. Right at the
+    /// change's start it stays before it, or goes past it `after`.
+    static func offset(_ offset: Int, movedFrom old: [Character], to new: [Character], after: Bool = false) -> Int {
         let shorter = min(old.count, new.count)
         var prefix = 0
         while prefix < shorter, old[prefix] == new[prefix] { prefix += 1 }
         var suffix = 0
         while suffix < shorter - prefix, old[old.count - 1 - suffix] == new[new.count - 1 - suffix] { suffix += 1 }
-        if offset <= prefix { return offset }
+        if offset < prefix || offset == prefix && !after { return offset }
         if offset >= old.count - suffix { return offset + new.count - old.count }
         return new.count - suffix
     }

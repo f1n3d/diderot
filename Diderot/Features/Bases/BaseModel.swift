@@ -71,6 +71,9 @@ final class BaseModel {
     /// Unless the server refused it for good, it is also kept for the server (`UnsentCell`), which this restores at the
     /// first load.
     private(set) var unsavedDrafts: [String: String] = [:]
+    /// The drafts the device keeps for the server (`UnsentCell`). One it no longer keeps went to the server meanwhile, or
+    /// was dropped for good (`UnsentEdits.sendCells`): it stops showing at the next load, and doesn't go out again.
+    @ObservationIgnored private var keptDraftKeys: Set<String> = []
     /// The sign-in this database was opened with. Its requests and cache stay with it: after a switch or sign-out a
     /// queued write doesn't reach the new server, and a late answer doesn't go into its cache.
     @ObservationIgnored private let owner: ReadySession?
@@ -119,8 +122,8 @@ final class BaseModel {
         guard owner != nil else { return }
         // Opening offline, the page itself says it shows the saved version.
         let isOpening = state.value == nil
+        await restoreUnsent(opening: isOpening)
         if state.value == nil {
-            await restoreUnsent()
             if let cached = await ownSession?.cache.read(Base.self, key: CacheKey.base(pageId)) {
                 state = .loaded(cached)
                 await restoreSnapshot()
@@ -350,8 +353,17 @@ final class BaseModel {
     /// `typed`: the field's text, kept if the save fails (see `unsavedDrafts`).
     func setCell(rowId: String, propertyId: String, to value: JSONValue?, typed draft: String? = nil) async {
         guard let current = row(id: rowId) else { return }
+        let key = "\(rowId)/\(propertyId)"
+        // A kept input, shown again and closed unchanged, that the device no longer keeps went to the server meanwhile, or
+        // was dropped for good. Sent again, it overwrote what others changed since.
+        if let draft, keptDraftKeys.contains(key), unsavedDrafts[key] == draft, await !keeps(draft, key: key) {
+            unsavedDrafts[key] = nil
+            keptDraftKeys.remove(key)
+            return
+        }
         // The newest input replaces one a failed save kept, for the server too.
-        let replacesKept = unsavedDrafts.removeValue(forKey: "\(rowId)/\(propertyId)") != nil
+        let replacesKept = unsavedDrafts.removeValue(forKey: key) != nil
+        keptDraftKeys.remove(key)
         let value = value.flatMap { $0.isNull ? nil : $0 }
         guard current.cells[propertyId] != value else {
             if replacesKept { await forgetUnsent(rowId: rowId, propertyId: propertyId) }
@@ -555,6 +567,7 @@ final class BaseModel {
                 if UnsentChanges.isFinal(error) {
                     if input.replacesKept { await forgetUnsent(rowId: rowId, propertyId: input.propertyId) }
                 } else if await keepUnsent(rowId: rowId, propertyId: input.propertyId, value: cells[input.propertyId] ?? .null, typed: input.text) {
+                    keptDraftKeys.insert("\(rowId)/\(input.propertyId)")
                     toast = String(localized: "The change goes to the server once it can be reached.")
                 }
             }
@@ -642,15 +655,44 @@ final class BaseModel {
     }
 
     private func forgetUnsent(rowId: String, propertyId: String) async {
+        keptDraftKeys.remove("\(rowId)/\(propertyId)")
         let key = UnsentCell.key(basePageId: pageId, rowId: rowId, propertyId: propertyId)
         try? await owner?.unsentChanges.update([String: UnsentCell].self, key: CacheKey.unsentCells, initial: [:]) { $0[key] = nil }
     }
 
-    /// The inputs kept for this database's fields (`keepUnsent`): their fields show them until they reach the server.
-    private func restoreUnsent() async {
-        guard let cells = try? await owner?.unsentChanges.read([String: UnsentCell].self, key: CacheKey.unsentCells) else { return }
-        for cell in cells.values where cell.basePageId == pageId {
-            unsavedDrafts["\(cell.rowId)/\(cell.propertyId)"] = cell.typed
+    /// The inputs kept for this database's fields (`keepUnsent`), opening: their fields show them until they reach the
+    /// server. At a later load, one shown that went meanwhile, or was dropped, shows no longer, and its field the stored
+    /// value; none comes back then, nor one a newer input is replacing while its save is out.
+    private func restoreUnsent(opening: Bool) async {
+        guard let cells = await keptCells() else { return }
+        var kept: [String: String] = [:]
+        for cell in cells.values where cell.basePageId == pageId { kept["\(cell.rowId)/\(cell.propertyId)"] = cell.typed }
+        if opening {
+            unsavedDrafts.merge(kept) { _, kept in kept }
+            keptDraftKeys = Set(kept.keys)
+            return
+        }
+        for key in keptDraftKeys where kept[key] != unsavedDrafts[key] {
+            unsavedDrafts[key] = nil
+            keptDraftKeys.remove(key)
+        }
+    }
+
+    /// Whether the device still keeps `typed` for the field at `key` ("rowId/propertyId"); yes when that can't be read,
+    /// so that an input isn't lost for it.
+    private func keeps(_ typed: String, key: String) async -> Bool {
+        guard let cells = await keptCells() else { return true }
+        return cells.values.contains { $0.basePageId == pageId && "\($0.rowId)/\($0.propertyId)" == key && $0.typed == typed }
+    }
+
+    /// The fields the device keeps for the server, of every database; nil when they can't be read.
+    private func keptCells() async -> [String: UnsentCell]? {
+        guard let store = owner?.unsentChanges else { return nil }
+        do {
+            return try await store.read([String: UnsentCell].self, key: CacheKey.unsentCells) ?? [:]
+        } catch {
+            AppLog.ui.error("Kept fields unreadable: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 

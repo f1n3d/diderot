@@ -149,7 +149,9 @@ DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_EDIT="Neuer Absatz" Tools/run-sim.sh
 # checked through the API afterwards; screenshots go to Tools/.cache/uitests-attachments/. The server switch test signs
 # in to the dev instance under a second address (127.0.0.1, or the Mac's LAN address: DOCMOST_UITEST_ALT_SERVER).
 # For the bell tests the script first creates two mentions of the admin (Tools/seed-notifications.py), for the database
-# tests the test database and a page embedding it (Tools/seed-bases.py).
+# tests the test database and a page embedding it (Tools/seed-bases.py), for the two-client test the page "Fixture:
+# Zwei Clients" (a PDF between two paragraphs). It also stands in for a colleague: a test writes a page update into the
+# folder DOCMOST_UITEST_COLLEAGUE, and the script sends it as another client.
 Tools/run-uitests.sh <pageId>
 ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests and their API checks
 AREA=schnell Tools/run-uitests.sh <pageId>   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server

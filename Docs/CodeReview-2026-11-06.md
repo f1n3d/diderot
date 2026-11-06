@@ -50,11 +50,6 @@ The October work holds up. The session's state machine stays right through start
 
 What's left to fix now:
 
-**B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
-
-- Backspace (V2), a drag (V8), the focus after an insert (V10), a status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
-- A selection collapses (V15), and an open preview closes (V43), when the other person types.
-
 **C. Between users.**
 
 - A file link on a page can sign the reader out (V20).
@@ -67,95 +62,10 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
-Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done. B is the larger part: V2 needs the engine to rebase a line before it plans the key, and its fixes are tried with two clients on one page.
-
----
-
-## B. Working together
-
-### V2 [high] ✔ Backspace at a line's start sends the app's copy of the line: what a collaborator just typed there is gone
-
-**Where:** `Diderot/Features/Page/DocumentModel.swift:1913–1920` (`joinBackward`), `Diderot/Features/Editor/WebDocumentEngine.swift:509`, `Engine/src/keys.ts:168–191` (`backspaceEdit`); Return's lift at `keys.ts:70–79`.
-
-**Problem:** Backspace passes the line's text without a base: `engine.backspace(active.ref.target, holding: …typed…)`. The engine decides from it whether the line is empty, appends it to the line before (`into.content.append(typed.content)`) and deletes the engine's line, whatever that holds by now. Return saves with a base, but its lift decides "empty" from the app's copy (`before.content.size === 0`) and replaces the line. The app's copy lags behind a collaborator by about 0.6 s while they type, longer while the user's own input is pending.
-
-**Scenario:** B types at the end of a paragraph. Within that lag, A presses Backspace at the paragraph's start. The paragraph joins the one before with A's copy of it, and B's words are gone for everyone. The same happens to a list line B just typed into: Return lifts it out, Backspace removes it.
-
-**Same problem elsewhere:** `placeBlockInActiveText` (`DocumentModel.swift:1083`) replaces the paragraph without `expected`. `showMention(.card)` (`:963–969`) builds its nodes from `document` and passes a block it has just read as `expected`, so it can't catch the lag. The October review's S1 ("decided … from its document") overstated what S1 covered.
-
-**Fix:** Send `session.base` with `backspace`, as `enter` does. In the engine, rebase the app's line onto the engine's block before it plans, joins, lifts or splits, and refuse when the block changed in a way the rebase can't take. Build card replacements from `currentBlock().latest`.
-
-### V8 [medium] ○ A dragged block can split or drop the container it lands in
-
-**Where:** `Engine/src/steps.ts:75–86` (`move`).
-
-**Problem:** Insert and replace check that the block fits where it goes (`holds`, lines 47, 56, 63); `move` inserts unchecked, and ProseMirror then splits the parent or drops the block. Drag targets are found by id, so the destination follows a collaborator's move.
-
-**Scenario:** Reproduced in the engine: a page break moved next to a paragraph that now sits in a synced block splits it in two. A table moved next to a paragraph now in a table cell splits that table in three. A database embed moved before a paragraph now in a footnote is gone. The trigger is a web user moving that paragraph into a container within the app's lag. It's rare.
-
-**Fix:** After the delete, check `holds(slotAt(tr.doc, dest, position), [source.node])` and refuse otherwise.
-
-### V10 [medium] ○ Inserted blocks are focused by a path from the app's lagging copy
-
-**Where:** `Diderot/Features/Page/DocumentModel.swift:1371–1400, 1420–1421` (`insertBlocks`), `:1066–1068` (`placeBlockInActiveText`), `:1653` (`addTab`).
-
-**Problem:** Return, Backspace and conversions focus where the engine says. Inserts compute the path to focus from `document`, and `focusAfterOperation` activates whatever sits there in the engine's document. The backlog's F45 note names toggles, callout types and code languages; it reaches inserts too.
-
-**Scenario:** A collaborator adds or removes blocks above while the user inserts a divider through "/". The caret lands in another block, and the next words go there.
-
-**Fix:** Let the engine return where the new blocks are, or give the paragraph to focus an id the app chose and focus it by that.
-
-### V16 [low] ○ A status or formula edit finds its atom by index when it's applied
-
-**Where:** `Diderot/Features/Page/DocumentModel.swift:1302–1310` (`replaceAtom`).
-
-**Problem:** The edit takes the index-th atom of the block as read when the sheet closes, and passes that same block as `expected`.
-
-**Scenario:** While the sheet is open, a collaborator inserts a status earlier in the paragraph. The user's edit overwrites theirs.
-
-**Fix:** Pass the block as it was when the sheet opened as `expected`.
-
-### V18 [low] ○ Table commands: no engine reads as a refusal, and the table is found by the copy's path
-
-**Where:** `Diderot/Features/Editor/WebDocumentEngine.swift:472–481`, `Diderot/Features/Page/DocumentModel.swift:2076–2078`.
-
-**Problem:** `tableCommand` returns nil both without an engine and when the command didn't apply, so a restart shows "could not be applied". It targets the table by its path in the lagging copy; deleting a table can hit the one beside it.
-
-**Fix:** Three results, as `call` has; find the table through the active cell's id.
-
-### V6 [medium] ○ An old kept database input can overwrite a newer value
-
-**Where:** `Diderot/Features/Bases/BaseFieldEditors.swift:187`, `Diderot/Features/Bases/BaseModel.swift:122–123, 553`, `Diderot/App/UnsentEdits.swift:97–125`.
-
-**Problem:** When a kept input is delivered later (`sendUnsentCells`) or dropped, an open database still holds it in `unsavedDrafts`, which is only built on the first load. A field shows `unsavedDraft ?? stored`.
-
-**Scenario:** A save of "foo" fails and is kept; the network returns and "foo" is delivered; a colleague changes the field to "bar". The user refreshes the still open database and opens the entry: it shows "foo", and closing it writes "foo" over "bar".
-
-**Fix:** Clear the key in any open `BaseModel` when a kept cell is sent or dropped, and don't commit a kept draft the store no longer holds.
-
-### V15 [low] ○ A selection collapses when a collaborator's change is adopted
-
-**Where:** `Diderot/Features/Page/DocumentModel.swift:2128–2137`.
-
-**Problem:** `adoptActiveBlock(followingChange:)` maps only the selection's end and sets an insertion point.
-
-**Scenario:** The user selects a word to bold it while someone types in the same paragraph, and the selection is gone.
-
-**Fix:** Map both ends, or wait with the adoption while a range is selected.
-
-### V43 [medium] ? Previews opened from a media block or card close when a collaborator adds a block above
-
-**Where:** `Diderot/Rendering/MediaBlockViews.swift:94/104, 152/178, 243/260`, `Diderot/Rendering/IntegrationViews.swift:142/182`, `Diderot/Features/Page/BlockCards.swift:10`, `DocumentTypes.swift:31`.
-
-**Problem:** Media and cards have no id, so the editor keys their rows by path. An edit above gives the row another node; the view is built anew, and SwiftUI dismisses what its state presented. The backlog's F164 names the math flash, the PDF back on page 1 and the video starting over, not this.
-
-**Scenario:** The user reads a PDF full screen, previews an attachment, or is halfway through OAuth in "Connect to …", and a web user presses Return above: it closes, and the sign-in is lost.
-
-**Fix:** Present these from a page-level host keyed by the source, as the media viewer does.
+Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and so is B (working together: V2, V6, V8, V10, V15, V16, V18, V43). B's fixes have engine checks and unit tests that act out the collaborator; V43's UI test has a second client, the test script, add a block above.
 
 ---
 

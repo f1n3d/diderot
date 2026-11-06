@@ -5,9 +5,10 @@
 // "#A" a header cell; " →2" makes it two columns wide, " ↓2" two rows tall, another word is its color's name. Results
 // add, in brackets, the alignment of the cell's paragraphs.
 import { getSchema } from "@tiptap/core";
-import type { Node as PMNode } from "@tiptap/pm/model";
+import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
-import { runTableCommand, type TableCommand } from "../src/tables";
+import { runTableCommand, tableAround, type TableCommand } from "../src/tables";
+import type { Target } from "../src/steps";
 import { schemaExtensions } from "../src/schema";
 
 const schema = getSchema(schemaExtensions);
@@ -152,6 +153,23 @@ check("clear a row keeps the colors", [["A Blue", "B"], ["C", "D"]], [0, 1], { n
 check("clear a column", plain, [1, 1], { name: "clear", scope: "column" }, [["A", ""], ["C", ""]], [1, 1]);
 
 check("a cell that isn't there", plain, [0, 5], { name: "addRowAfter" }, null);
+
+// The table a command runs on, found through the block in the cell being edited (`tableAround`): by its id, as the path
+// the app saw goes stale once a collaborator adds a block above, and then pointed at the table beside it.
+const tableOf = (cells: [string, string][]) => ({ type: "table", content: [{ type: "tableRow", content: cells.map(([id, text]) =>
+  ({ type: "tableCell", content: [{ type: "paragraph", attrs: { id }, content: [{ type: "text", text }] }] })) }] });
+const twoTables = PMNode.fromJSON(schema, { type: "doc", content: [{ type: "paragraph", attrs: { id: "x" } },
+  tableOf([["a1", "A1"], ["a2", "A2"]]), tableOf([["b1", "B1"], ["b2", "B2"]])] });
+function around(name: string, target: Target, want: { table: string; cell: [number, number] } | undefined) {
+  const found = tableAround(twoTables, target, [0, 0]);
+  const have = found && { table: twoTables.nodeAt(found.pos)!.textContent, cell: found.cell };
+  if (JSON.stringify(have) === JSON.stringify(want)) return;
+  differences++;
+  console.log(`✗ ${name}\n  want: ${JSON.stringify(want)}\n  have: ${JSON.stringify(have)}`);
+}
+around("the table around a cell's block", { id: "b2", path: [1, 0, 1, 0] }, { table: "B1B2", cell: [0, 1] });
+around("a table by its path, with the cell given", { path: [1], type: "table" }, { table: "A1A2", cell: [0, 0] });
+around("a block outside a table", { id: "x" }, undefined);
 
 console.log(differences ? `${differences} table difference(s)` : "The table commands do what the web's menus do.");
 process.exitCode = differences ? 1 : 0;

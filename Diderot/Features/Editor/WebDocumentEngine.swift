@@ -41,15 +41,20 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Without a target: at the end of the document, before the footnotes.
     func insertBlock(_ node: PMNode, relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult
     func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult
+    /// Inserts blocks before or after `target` (without one, at the end of the page), or puts them in its place
+    /// (`expected` as above), and says where the first of them is (`placeBlocks` in Engine/src/engine.ts): the cursor goes
+    /// from there. Counted in the page's copy, which lags behind a collaborator's blocks above, it went into another block.
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+        -> (result: EngineResult, path: [Int]?)
     func deleteBlock(_ target: BlockTarget) async -> EngineResult
     func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult
     /// Splits a list, quote or callout after `child`: the children below go into a new one of the same kind right after.
     func splitContainer(after child: BlockTarget) async -> EngineResult
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult
-    /// Runs a table command (`TableCommand` in Engine/src/tables.ts) on a cell of the table at `target`, given by its
-    /// row and its index in the row. Returns the cell for the cursor afterwards the same way, empty when the table is
-    /// gone, nil when the command didn't apply.
-    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]?
+    /// Runs a table command (`TableCommand` in Engine/src/tables.ts) on a cell: `cell` (its row and its index in the row)
+    /// of the table at `target`, or the cell of the block at `target` (`tableAround`). With the path of the cell for the
+    /// cursor afterwards, empty when the table is gone.
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> (result: EngineResult, focus: [Int]?)
     /// Refused with nothing to undo or redo.
     func undo() async -> EngineResult
     func redo() async -> EngineResult
@@ -72,8 +77,9 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Engine/src/keys.ts): the block keeps `node`, and each of `lines` goes where Return puts it, in one transaction.
     /// Returns the last line, with the cursor at its start.
     func enterLines(_ target: BlockTarget, keeping node: PMNode, lines: [[PMNode]], base: PMNode?) async -> KeyResult
-    /// Backspace at the start of a text block that holds `node` by now, its input (`backspace` in Engine/src/keys.ts).
-    func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult
+    /// Backspace at the start of a text block that holds `node` by now, its input made from `base` (`backspace` in
+    /// Engine/src/keys.ts): the engine decides and joins with the line as it holds it, a collaborator's words included.
+    func backspace(_ target: BlockTarget, holding node: PMNode, base: PMNode?) async -> BackspaceResult
     /// What Backspace at the start of the block does, empty and with text; nil without an engine or the block.
     func backspacePlans(_ target: BlockTarget) async -> BackspacePlans?
     /// Turns the line at `target` into `kind` (a `BlockTemplate`'s raw value, or "syncedBlock") where it is, from the
@@ -477,6 +483,22 @@ final class WebDocumentEngine: DocumentEngine {
                    ["target": target?.jsObject ?? NSNull(), "json": nodes.map(Self.jsObject), "position": position.rawValue])
     }
 
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+        -> (result: EngineResult, path: [Int]?) {
+        guard let page else { return (.unavailable, nil) }
+        do {
+            let answer = try await page.callJavaScript("return window.DocmostEngine.placeBlocks(target, json, position, expected);", arguments: [
+                "target": target?.jsObject ?? NSNull(), "json": nodes.map(Self.jsObject), "position": position.rawValue,
+                "expected": expected.map { Self.jsObject($0) } ?? NSNull(),
+            ])
+            if let path = answer as? [Int] { return (.applied, path) }
+            return (answer as? Bool == false ? .refused : .unavailable, nil)
+        } catch {
+            AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
+            return (.unavailable, nil)
+        }
+    }
+
     func deleteBlock(_ target: BlockTarget) async -> EngineResult {
         await call("return window.DocmostEngine.deleteBlock(target);", ["target": target.jsObject])
     }
@@ -495,15 +517,17 @@ final class WebDocumentEngine: DocumentEngine {
                    ["target": target.jsObject, "attrs": Self.jsObject(attributes)])
     }
 
-    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]? {
-        guard let page else { return nil }
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> (result: EngineResult, focus: [Int]?) {
+        guard let page else { return (.unavailable, nil) }
         do {
-            let result = try await page.callJavaScript("return window.DocmostEngine.tableCommand(target, cell, command) ?? null;",
+            let answer = try await page.callJavaScript("return window.DocmostEngine.tableCommand(target, cell, command);",
                                                        arguments: ["target": target.jsObject, "cell": cell, "command": Self.jsObject(command)])
-            return (result as? [NSNumber])?.map(\.intValue)
+            if let focus = answer as? [Int] { return (.applied, focus) }
+            // Without an engine to take it, not refused: a restart said "could not be applied".
+            return (answer as? Bool == false ? .refused : .unavailable, nil)
         } catch {
             AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
-            return nil
+            return (.unavailable, nil)
         }
     }
 
@@ -532,13 +556,14 @@ final class WebDocumentEngine: DocumentEngine {
         return Self.moved(result)
     }
 
-    func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult {
+    func backspace(_ target: BlockTarget, holding node: PMNode, base: PMNode?) async -> BackspaceResult {
         struct Outcome: Decodable {
             var kind: String
             var cursor: EngineCursor?
         }
-        let result: KeyAnswer<Outcome> = await key("return JSON.stringify(window.DocmostEngine.backspace(target, json));",
-                                                   ["target": target.jsObject, "json": Self.jsObject(node)])
+        let result: KeyAnswer<Outcome> = await key("return JSON.stringify(window.DocmostEngine.backspace(target, json, base));",
+                                                   ["target": target.jsObject, "json": Self.jsObject(node),
+                                                    "base": base.map { Self.jsObject($0) } ?? NSNull()])
         switch result {
         case .value(let outcome):
             let plan: BackspacePlan = switch outcome.kind {

@@ -8,6 +8,7 @@ import {
   CellSelection, TableMap, addColumnAfter, addColumnBefore, addRowAfter, addRowBefore, deleteColumn, deleteRow,
   mergeCells, moveTableColumn, moveTableRow, splitCell, toggleHeader, toggleHeaderCell,
 } from "@tiptap/pm/tables";
+import { locate, type Target } from "./steps";
 
 /** The cells a format command changes: the cell, its row or its column (the web's cell menu and row/column handles). */
 export type TableScope = "cell" | "row" | "column";
@@ -28,6 +29,23 @@ export type TableCommand =
 export type TableResult = { tr?: Transaction; focus: [number, number] | null };
 
 type Rect = { left: number; top: number; right: number; bottom: number };
+
+/**
+ * The table a command runs on and its cell (row, index in the row): the table at `target` with `cell`, or the table and
+ * cell around the block at `target`. Found through the active cell's block, by its id, the command meets the table the
+ * user is in; the table's path in the app's copy of the page lags behind a collaborator's blocks above, and could reach
+ * the table beside it.
+ */
+export function tableAround(doc: PMNode, target: Target, cell: [number, number]): { pos: number; cell: [number, number] } | undefined {
+  const found = locate(doc, target);
+  if (!found) return undefined;
+  if (found.node.type.spec.tableRole === "table") return { pos: found.pos, cell };
+  const $pos = doc.resolve(found.pos);
+  for (let depth = $pos.depth - 2; depth > 0; depth--) {
+    if ($pos.node(depth).type.spec.tableRole === "table") return { pos: $pos.before(depth), cell: [$pos.index(depth), $pos.index(depth + 1)] };
+  }
+  return undefined;
+}
 
 /** Runs `command` on a cell (row, index in the row) of the table at `tablePos`; null when it doesn't apply. */
 export function runTableCommand(state: EditorState, tablePos: number, cell: [number, number], command: TableCommand): TableResult | null {

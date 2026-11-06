@@ -21,6 +21,7 @@ struct DocumentBody: View {
             }
         }
         .mediaViewer { ContentParser.parse(model.document) }
+        .blockPresentations()
     }
 }
 

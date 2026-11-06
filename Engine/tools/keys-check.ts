@@ -197,6 +197,39 @@ expect("an empty item after a nested list", "bulletList(Eins/bulletList(y))",
   backspace(page(list(item(paragraph("a", "Eins"), list(item(paragraph("y", "y")))), item(paragraph("b")))), [0, 1, 0]));
 expect("a block that's gone", "refused", run(page(paragraph("a", "Eins")), backspaceEdit(schema, page(paragraph("a", "Eins")), { id: "x" }, paragraph("x"))?.edit));
 
+// A collaborator's words in the line since the app's input began (`base`): Backspace and Return decide with them, as the
+// engine holds the line, not with the app's copy, which lags behind their typing.
+const backspaced = (doc: PMNode, json: JSONContent, base: JSONContent) => {
+  const result = backspaceEdit(schema, doc, { id: json.attrs!.id as string }, json, base);
+  return run(doc, result === null ? null : result?.edit);
+};
+expect("Backspace joins a collaborator's words too", "EinsZwei und mehr @0:4",
+  backspaced(page(paragraph("a", "Eins"), paragraph("b", "Zwei und mehr")), paragraph("b", "Zwei"), paragraph("b", "Zwei")));
+expect("…with the app's own input", "EinsZwei! und mehr @0:4",
+  backspaced(page(paragraph("a", "Eins"), paragraph("b", "Zwei und mehr")), paragraph("b", "Zwei!"), paragraph("b", "Zwei")));
+expect("a line a collaborator typed into joins, not as empty", "Einsneu @0:4",
+  backspaced(page(paragraph("a", "Eins"), paragraph("b", "neu")), paragraph("b"), paragraph("b")));
+expect("…and isn't removed after an image", "nothing", backspaced(page(image, paragraph("b", "neu")), paragraph("b"), paragraph("b")));
+expect("…nor leaves the list as an empty first item", "nothing",
+  backspaced(page(list(item(paragraph("b", "neu")), item(paragraph("c", "Zwei")))), paragraph("b"), paragraph("b")));
+expect("both typed at the same place: both stay", "EinsZwei?! @0:4",
+  backspaced(page(paragraph("a", "Eins"), paragraph("b", "Zwei!")), paragraph("b", "Zwei?"), paragraph("b", "Zwei")));
+expect("both changed the same letter: refused", "refused",
+  backspaced(page(paragraph("a", "Eins"), paragraph("b", "Zwex")), paragraph("b", "Zwea"), paragraph("b", "Zwei")));
+expect("Return on an empty item a collaborator typed into: refused, their words stay (it didn't leave the list)", "refused",
+  run(page(list(item(paragraph("a", "Eins")), item(paragraph("b", "neu")))),
+    enterEdit(schema, page(list(item(paragraph("a", "Eins")), item(paragraph("b", "neu")))), { id: "b" }, paragraph("b"), [], paragraph("b"))));
+expect("Return with a collaborator's change after the cursor: refused, the new line would go on without it", "refused",
+  run(page(paragraph("a", "EinsZwei und mehr")),
+    enterEdit(schema, page(paragraph("a", "EinsZwei und mehr")), { id: "a" }, paragraph("a", "Eins"), text("Zwei"), paragraph("a", "EinsZwei"))));
+expect("Return in a toggle's title with their change after the cursor: it stays in the title, which keeps its text",
+  "details(>TiTel und mehr, detailsContent(∅, Inhalt)) @0.1.0:0",
+  run(page(toggle(true, "TiTel und mehr", paragraph("i", "Inhalt"))), enterEdit(schema, page(toggle(true, "TiTel und mehr", paragraph("i", "Inhalt"))),
+    { path: [0, 0], type: "detailsSummary" }, { type: "detailsSummary", content: text("Ti") }, text("Tel"), { type: "detailsSummary", content: text("TiTel") })));
+expect("…before the cursor: their change stays in the line", "Vorher Eins Zwei @1:0",
+  run(page(paragraph("a", "Vorher EinsZwei")),
+    enterEdit(schema, page(paragraph("a", "Vorher EinsZwei")), { id: "a" }, paragraph("a", "Eins"), text("Zwei"), paragraph("a", "EinsZwei"))));
+
 // What the app shows at once, before the engine has done it.
 const plans = page(paragraph("a", "Eins"), paragraph("e", "Zwei"), list(item(paragraph("b")), item(paragraph("c", "Drei"))), image, paragraph("d"));
 expect("plans", [["join", [0]], ["leave", "none"], ["join", [2, 0, 0]], ["remove", "none"]], [[1], [2, 0, 0], [2, 1, 0], [4]].map((path) => {

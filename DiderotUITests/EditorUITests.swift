@@ -2122,6 +2122,41 @@ import XCTest
         XCTAssertTrue(file.waitForNonExistence(timeout: 10), "The deleted file stays in the list")
     }
 
+    /// Two clients: the PDF read full screen stays open while a collaborator adds a block above it. The editor keys the
+    /// rows of blocks without an id by their path; the new block made the PDF's row anew, and the full screen closed
+    /// (review V43). The colleague is the script, which sends the change as another client (`DOCMOST_UITEST_COLLEAGUE`).
+    func test84_PreviewStaysOpenWhenABlockComesInAbove() throws {
+        let page = environment["DOCMOST_UITEST_TWO_CLIENTS_PAGE"] ?? "", colleague = environment["DOCMOST_UITEST_COLLEAGUE"] ?? ""
+        try XCTSkipIf(page.isEmpty || colleague.isEmpty, "No page or colleague for two-client tests (Tools/run-uitests.sh)")
+        let app = launchApp(extraEnvironment: ["DOCMOST_DEBUG_PAGE": page])
+        waitForSync(app)
+        let open = app.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "Öffnen"])).firstMatch
+        XCTAssertTrue(scrollTo(open, in: app), "No Open button at the PDF")
+        open.tap()
+        let fullScreen = app.navigationBars["Zwei-Seiten.pdf"]
+        XCTAssertTrue(fullScreen.waitForExistence(timeout: 10), "The PDF doesn't open full screen")
+
+        let text = "Kollegin\(stamp)", folder = URL(fileURLWithPath: colleague)
+        try JSONSerialization.data(withJSONObject: ["pageId": page, "content": text, "operation": "prepend", "format": "markdown"])
+            .write(to: folder.appendingPathComponent("test84.json"), options: .atomic)
+        let done = folder.appendingPathComponent("test84.done").path
+        let deadline = Date().addingTimeInterval(30)
+        while !FileManager.default.fileExists(atPath: done), Date() < deadline { Thread.sleep(forTimeInterval: 0.2) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: done), "The colleague's block didn't go out")
+        // The server's sync, then the page's copy in the app.
+        Thread.sleep(forTimeInterval: 5)
+        snapshot(app, "84-after-their-block")
+        XCTAssertTrue(fullScreen.exists, "The PDF full screen closed when a block came in above")
+
+        // Their block reached the page meanwhile. Pulled down from its title, the full screen closes.
+        let title = fullScreen.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        title.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)), withVelocity: .fast,
+                    thenHoldForDuration: 0)
+        XCTAssertTrue(fullScreen.waitForNonExistence(timeout: 5), "The PDF full screen doesn't close")
+        let theirs = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+        XCTAssertTrue(theirs.waitForExistence(timeout: 10), "The colleague's block isn't on the page")
+    }
+
     // MARK: - Docmost 0.97 (`PORT=3001 Tools/run-uitests.sh`; skipped on older servers)
 
     /// Tabs: "/reiter" inserts "Tab 1" and "Tab 2" with the cursor in the first; "+" adds a tab and asks for its name;

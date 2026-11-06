@@ -386,6 +386,110 @@ struct DocumentModelTests {
         ])
     }
 
+    /// A mention shown as a card is made from its paragraph as the engine holds it, which a collaborator typed into while
+    /// the page's copy lagged behind: their words stay. A mention that went in before it since isn't the one shown.
+    @Test func mentionAsCardKeepsACollaboratorsWords() async throws {
+        let url = "https://github.com/o/r/issues/1"
+        let mention = PMNode(type: "integrationMention", attrs: ["url": .string(url), "provider": "github"])
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Siehe "), mention])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        let target = DocumentModel.MentionTarget(ref: NodeRef(path: [0], node: paragraph), index: 0, url: url, provider: "github")
+
+        let typed = PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Siehe auch "), mention])
+        engine.document = PMNode(type: "doc", content: [typed])
+        await model.showMention(target, as: .card)
+        #expect(engine.replacedWith.last == [
+            PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Siehe auch")]),
+            PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": "github"]),
+        ])
+        #expect(engine.expectations.last == typed)
+
+        let other = PMNode(type: "integrationMention", attrs: ["url": "https://github.com/o/r/issues/2", "provider": "github"])
+        engine.document = PMNode(type: "doc", content: [
+            PMNode(type: "paragraph", attrs: ["id": "p1"], content: [other, PMNode(type: "text", text: " "), mention]),
+        ])
+        await model.showMention(target, as: .card)
+        #expect(engine.replacedWith.count == 1)
+        #expect(model.errorMessage != nil)
+    }
+
+    /// A status edited in its sheet goes into the paragraph as the engine holds it, a collaborator's words in it included,
+    /// while the status at its index is the one the sheet opened with. Their status put before it meanwhile makes the
+    /// edit refused: taken by its index alone, theirs was overwritten.
+    @Test func atomEditKeepsACollaboratorsAtom() async throws {
+        let mine = PMNode(type: "status", attrs: ["text": "Offen", "color": "gray"])
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Stand "), mine])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        model.editAtom(blockIdentity: "p1", type: "status", index: 0)
+        guard case .status(let target, _, _) = model.editorSheet else {
+            Issue.record("No status sheet")
+            return
+        }
+        let done = PMNode(type: "status", attrs: ["text": "Fertig", "color": "green"])
+        func page(_ inlines: PMNode...) -> PMNode {
+            PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "p1"], content: inlines)])
+        }
+
+        engine.document = page(PMNode(type: "text", text: "Stand heute "), mine)
+        await model.applyAtom(done, type: "status", target: target)
+        #expect(engine.saved.last == page(PMNode(type: "text", text: "Stand heute "), done).children[0])
+        #expect(model.errorMessage == nil)
+
+        let theirs = PMNode(type: "status", attrs: ["text": "Blockiert", "color": "red"])
+        engine.document = page(theirs, PMNode(type: "text", text: " Stand "), mine)
+        await model.applyAtom(done, type: "status", target: target)
+        #expect(engine.saved.count == 1)
+        #expect(model.errorMessage != nil)
+    }
+
+    /// A link shown as a card in the line being edited: the line's input goes in first, with its base, and the card's
+    /// blocks take the line's place only while it is what they were made from. A collaborator's words in it since make
+    /// the engine refuse them; written over the line unchecked, they were gone.
+    @Test(.timeLimit(.minutes(1))) func cardInTheActiveLineKeepsACollaboratorsWords() async throws {
+        let url = "https://github.com/o/r/issues/1"
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p1"], content: [
+            PMNode(type: "text", text: "Siehe "), PMNode(type: "text", marks: [PMMark(type: "link", attrs: ["href": .string(url)])], text: url),
+        ])
+        func editing() async throws -> (FakeDocumentEngine, DocumentModel) {
+            let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+            let model = try Self.model(engine)
+            model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+            while model.answers == nil { try await Task.sleep(for: .milliseconds(10)) }
+            return (engine, model)
+        }
+        func showCard(_ engine: FakeDocumentEngine, _ model: DocumentModel) async throws {
+            let link = try #require(model.activeText.runs.first { $0.link != nil }?.range)
+            model.showLink(in: link, provider: "github", as: .card)
+            while engine.replacedWith.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        }
+
+        // Nobody else in the line: the card goes in, against the line as the editor showed it.
+        var (engine, model) = try await editing()
+        try await showCard(engine, model)
+        #expect(engine.replacedWith.last == [
+            PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Siehe")]),
+            PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": "github"]),
+            PMNode(type: "paragraph"),
+        ])
+        #expect(engine.expectations.last == paragraph)
+
+        // Typed on while a collaborator typed in the line: the input is saved, and the card refused.
+        (engine, model) = try await editing()
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        engine.collaboratorEdit = {
+            engine.document = PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "p1"], content: [
+                PMNode(type: "text", text: "Siehe auch "), PMNode(type: "text", marks: [PMMark(type: "link", attrs: ["href": .string(url)])], text: url),
+            ])])
+        }
+        try await showCard(engine, model)
+        #expect(engine.saved.last?.plainText == "Siehe \(url)!")
+        #expect(engine.expectations.last == engine.saved.last)
+        #expect(model.errorMessage != nil)
+    }
+
     /// A pasted link to a page of this server becomes a mention of it, with the anchor, as on the web; a query such as
     /// `?commentId=` doesn't count, and a page that can't be found stays a link.
     @Test(.timeLimit(.minutes(1))) func pastedPageLinkBecomesAMention() async throws {
@@ -597,6 +701,24 @@ struct DocumentModelTests {
         }
     }
 
+    /// Floating "+" at the page end after a collaborator removed the empty last line, which this copy still shows: a new
+    /// paragraph goes in at the end and gets the cursor. Focusing nothing, the "+" did nothing.
+    @Test func endInsertAfterTheLastLineWentAddsOne() async throws {
+        func paragraph(_ id: String, _ text: String?) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.map { [PMNode(type: "text", text: $0)] })
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", nil)]))
+        let model = try Self.model(engine)
+        engine.document = PMNode(type: "doc", content: [paragraph("a", "Eins")])
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("c", nil)]) }
+
+        await model.insertTemplate(.paragraph, placement: .end)
+
+        let insert = try #require(engine.inserted.first)
+        #expect(insert.node.type == "paragraph" && insert.target == nil && insert.position == .after)
+        #expect(model.active?.ref.id == "c")
+    }
+
     /// "Text ▾" → synced block: an older document event arrives mid-wrap, with the block's text still where the wrapped
     /// block will be. The wrapped block still gets the cursor.
     @Test func syncedBlockWrapFocusesWrappedBlockDespiteOlderEvent() async throws {
@@ -663,7 +785,7 @@ struct DocumentModelTests {
         engine.sendDocument()
         let cell = try #require(model.node(at: [0, 0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0, 0], node: cell), node: cell)
-        engine.tableFocus = [1, 0]
+        engine.tableFocus = [0, 1, 0]
         engine.whileInserting = {
             engine.sendDocument()  // an event from before the new row
             engine.document = table([("a", "Eins"), ("c", nil), ("b", "Zwei")])
@@ -673,7 +795,7 @@ struct DocumentModelTests {
         engine.sendDocument()  // the new row's own document event
 
         let command = try #require(engine.tableCommands.first)
-        #expect(command.target == .path([0], type: "table") && command.cell == [0, 0] && command.command == ["name": "addRowAfter"])
+        #expect(command.target == .id("a", path: [0, 0, 0, 0]) && command.cell == [0, 0] && command.command == ["name": "addRowAfter"])
         #expect(model.active?.ref == NodeRef(path: [0, 1, 0, 0], id: "c"))
     }
 
@@ -775,6 +897,23 @@ struct DocumentModelTests {
         #expect(model.errorMessage == String(localized: "The change could not be applied."))
         await model.insertBlocks([PMNode(type: "horizontalRule")], placement: .end, focus: nil)
         #expect(model.errorMessage == nil)
+    }
+
+    /// The cursor after an insert goes where the engine put the new blocks. The page's copy lags behind a collaborator who
+    /// removed a block above meanwhile: counted there, the cursor went into the paragraph after the new one, and the next
+    /// words with it.
+    @Test func insertFocusesWhereTheEnginePutTheBlocks() async throws {
+        func paragraph(_ id: String, _ text: String = "") -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.isEmpty ? nil : [PMNode(type: "text", text: text)])
+        }
+        let line = paragraph("a", "Zeile")
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("z", "Weg"), line]))
+        let model = try Self.model(engine)
+        // The engine's page once the divider is in: the block above gone, a paragraph a collaborator added below.
+        engine.document = PMNode(type: "doc", content: [line, PMNode(type: "horizontalRule"), paragraph("new"), paragraph("y", "Danach")])
+        await model.insertBlocks([PMNode(type: "horizontalRule")], placement: .replaceOrAfter(NodeRef(path: [1], node: line)), focus: .after)
+        #expect(engine.inserted.map(\.node.type) == ["horizontalRule", "paragraph"])
+        #expect(model.active?.ref.id == "new")
     }
 
     /// The engine goes while a block just left is saved (its web process ended): the block keeps its input, which goes
@@ -1346,6 +1485,28 @@ struct DocumentModelTests {
         #expect(engine.saved.map(\.plainText) == ["Hello world!"])
     }
 
+    /// A word selected while a collaborator types in the same line stays selected, moved with the text around it. Only
+    /// the selection's end was moved, as a cursor, and the selection was gone.
+    @Test(.timeLimit(.minutes(1))) func selectionStaysThroughACollaboratorsChange() async throws {
+        func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: text)]) }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("Hallo Welt")]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        let start = model.activeText.characters.index(model.activeText.startIndex, offsetBy: 6)
+        model.activeSelection = AttributedTextSelection(range: start..<model.activeText.endIndex)
+
+        // Their words go in right before the selected one.
+        engine.document = PMNode(type: "doc", content: [paragraph("Hallo schöne Welt")])
+        engine.sendDocument()
+        while String(model.activeText.characters) != "Hallo schöne Welt" { try await Task.sleep(for: .milliseconds(10)) }
+        guard case .ranges(let ranges) = model.activeSelection.indices(in: model.activeText), let range = ranges.ranges.first else {
+            Issue.record("no selection")
+            return
+        }
+        #expect(String(model.activeText[range].characters) == "Welt")
+    }
+
     /// Input still pending when a collaborator's change arrives goes out with the block it was typed on as its base, so
     /// the engine keeps their change (`rebase`); once the engine has both, the editor shows them.
     @Test(.timeLimit(.minutes(1))) func inputPendingDuringACollaboratorsChangeIsSavedOnItsBase() async throws {
@@ -1639,6 +1800,39 @@ struct DocumentModelTests {
         #expect(model.active?.ref.id == "b")
         #expect(String(model.activeText.characters) == "ZweiDrei")
         #expect(model.cursorRequest == .offset(4))
+    }
+
+    /// Backspace in a line the page has empty, which a collaborator typed into meanwhile: the app shows the removal at
+    /// once, the engine joins their words into the line before, and the editor there shows them once Backspace is done,
+    /// the cursor where the texts meet. The document event came while the key was on its way, and waited for it.
+    @Test(.timeLimit(.minutes(1))) func backspaceShowsTheCollaboratorsWordsItJoined() async throws {
+        func paragraph(_ id: String, _ text: String?) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.map { [PMNode(type: "text", text: $0)] })
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", nil)]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [1]))
+        engine.plans = BackspacePlans(empty: .remove, text: .join([0]))
+        model.activate(NodeRef(path: [1], node: line), node: line)
+        while model.answers?.backspace == nil { try await Task.sleep(for: .milliseconds(10)) }
+        engine.backspaceResult = .done(.join([0]), cursor: EngineCursor(path: [0], offset: 4))
+        engine.whileInserting = {
+            // Where the editor puts the cursor the removal asks for (`.end`).
+            model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+            engine.document = PMNode(type: "doc", content: [paragraph("a", "EinsNeu")])
+            engine.sendDocument()
+        }
+
+        #expect(model.backspaceAtStart())
+        while engine.backspaces.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<50 where String(model.activeText.characters) != "EinsNeu" { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(model.active?.ref.id == "a")
+        #expect(String(model.activeText.characters) == "EinsNeu")
+        guard case .insertionPoint(let cursor) = model.activeSelection.indices(in: model.activeText) else {
+            Issue.record("no insertion point")
+            return
+        }
+        #expect(model.activeText.characters.distance(from: model.activeText.startIndex, to: cursor) == 4)
     }
 
     /// Code turned into text keeps its lines as line breaks (Engine/tools/conversions-check.ts), and the text doesn't
@@ -2157,8 +2351,10 @@ final class FakeDocumentEngine: DocumentEngine {
     var attributesResult = EngineResult.applied
     /// Table commands, with the table and the cell they ran on.
     private(set) var tableCommands: [(target: BlockTarget, cell: [Int], command: [String: JSONValue])] = []
-    /// What `tableCommand` returns: the cell for the cursor afterwards; nil refuses the command.
-    var tableFocus: [Int]? = [0, 0]
+    /// What `tableCommand` returns: the path of the cell for the cursor afterwards; nil refuses the command.
+    var tableFocus: [Int]? = [0, 0, 0]
+    /// `tableCommand` finds no engine to take it.
+    var tableCommandsUnavailable = false
 
     init(document: PMNode) {
         self.document = document
@@ -2190,6 +2386,22 @@ final class FakeDocumentEngine: DocumentEngine {
         collaboratorEdit = nil
         guard let expected else { return nil }
         return block(at: target) == expected ? nil : .refused
+    }
+
+    /// The path of the block at `target` in this document.
+    private func path(of target: BlockTarget) -> [Int]? {
+        func find(_ node: PMNode, _ id: String, _ path: [Int]) -> [Int]? {
+            for (index, child) in node.children.enumerated() {
+                if child.string("id") == id { return path + [index] }
+                if let found = find(child, id, path + [index]) { return found }
+            }
+            return nil
+        }
+        guard let document else { return nil }
+        switch target {
+        case .id(let id, _): return find(document, id, [])
+        case .path(let path, _): return block(at: target) == nil ? nil : path
+        }
     }
 
     private func block(at target: BlockTarget) -> PMNode? {
@@ -2253,6 +2465,25 @@ final class FakeDocumentEngine: DocumentEngine {
         whileInserting?()
         return .applied
     }
+    /// As `insertBlocks` or `replaceBlock(_:withNodes:expected:)`, with the first block's path where this document puts
+    /// it, as the engine finds its target before it inserts (before `whileInserting`).
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+        -> (result: EngineResult, path: [Int]?) {
+        var placed: [Int]?
+        if let target {
+            placed = path(of: target)
+            if position == .after, let path = placed { placed = Array(path.dropLast()) + [path[path.count - 1] + 1] }
+        } else if let document {
+            placed = [document.children.last?.type == "footnotes" ? document.children.count - 1 : document.children.count]
+        }
+        let result = switch (position, target) {
+        case (.replace, let target?): await replaceBlock(target, withNodes: nodes, expected: expected)
+        case (.replace, nil): EngineResult.refused
+        case (.before, _): await insertBlocks(nodes, relativeTo: target, position: .before)
+        case (.after, _): await insertBlocks(nodes, relativeTo: target, position: .after)
+        }
+        return (result, result.isApplied ? placed : nil)
+    }
     func deleteBlock(_ target: BlockTarget) async -> EngineResult {
         deleted.append(target)
         return .applied
@@ -2266,10 +2497,11 @@ final class FakeDocumentEngine: DocumentEngine {
         attributeTargets.append(target)
         return attributesResult
     }
-    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]? {
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> (result: EngineResult, focus: [Int]?) {
+        if tableCommandsUnavailable { return (.unavailable, nil) }
         tableCommands.append((target, cell, command))
         whileInserting?()
-        return tableFocus
+        return (tableFocus == nil ? .refused : .applied, tableFocus)
     }
     func undo() async -> EngineResult { historyResult }
     func redo() async -> EngineResult { historyResult }
@@ -2317,8 +2549,11 @@ final class FakeDocumentEngine: DocumentEngine {
     }
     private(set) var backspaces: [(target: BlockTarget, node: PMNode)] = []
     var backspaceResult = BackspaceResult.done(.nothing, cursor: nil)
-    func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult {
+    /// The base each Backspace passed.
+    private(set) var backspaceBases: [PMNode?] = []
+    func backspace(_ target: BlockTarget, holding node: PMNode, base: PMNode?) async -> BackspaceResult {
         backspaces.append((target, node))
+        backspaceBases.append(base)
         whileInserting?()
         return backspaceResult
     }

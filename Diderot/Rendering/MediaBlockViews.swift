@@ -146,6 +146,7 @@ extension AVAudioSession {
 struct PDFBlockView: View {
     let media: MediaBlock
     @Environment(\.renderContext) private var context
+    @Environment(\.presentFromPage) private var presentFromPage
     @State private var document: PDFDocument?
     @State private var loadedSrc: String?
     @State private var failed = false
@@ -160,11 +161,11 @@ struct PDFBlockView: View {
                     .frame(height: 360)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(.separator)))
-                    .onTapGesture { showsFullScreen = true }
+                    .onTapGesture { openFullScreen() }
                 HStack {
                     Label(media.name ?? "PDF", systemImage: "doc.richtext").font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Open") { showsFullScreen = true }.font(.caption)
+                    Button("Open") { openFullScreen() }.font(.caption)
                 }
             } else if let url = context.mediaURL(media.src), !context.loadsByItself(url), !loadsFromOtherServer {
                 OtherServerCard(icon: "doc.richtext", title: media.name ?? "PDF", url: url) { loadsFromOtherServer = true }
@@ -176,14 +177,19 @@ struct PDFBlockView: View {
         }
         .task(id: "\(media.src ?? "")|\(loadsFromOtherServer)") { await load() }
         .linkSheet(isPresented: $showsFullScreen) {
-            if let document {
-                NavigationStack {
-                    PDFKitView(document: document)
-                        .ignoresSafeArea(edges: .bottom)
-                        .navigationTitle(media.name ?? "PDF")
-                        .navigationBarTitleDisplayMode(.inline)
-                }
-            }
+            if let document { PDFFullScreen(document: document, name: media.name ?? "PDF") }
+        }
+    }
+
+    /// From the page where it can (`blockPresentations`): a block above, from a collaborator, makes this view anew, and
+    /// the full screen closed.
+    private func openFullScreen() {
+        guard let document else { return }
+        let name = media.name ?? "PDF"
+        if let presentFromPage {
+            presentFromPage(.modal(BlockSheet(id: "pdf:\(media.src ?? "")") { AnyView(PDFFullScreen(document: document, name: name)) }))
+        } else {
+            showsFullScreen = true
         }
     }
 
@@ -201,6 +207,21 @@ struct PDFBlockView: View {
         } catch {
             // Scrolling past or opening another page cancels the download; it starts again on return.
             if !Task.isCancelled { fail() }
+        }
+    }
+}
+
+/// A PDF full screen, its name as the title.
+private struct PDFFullScreen: View {
+    let document: PDFDocument
+    let name: String
+
+    var body: some View {
+        NavigationStack {
+            PDFKitView(document: document)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(name)
+                .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
@@ -240,6 +261,7 @@ struct PDFKitView: UIViewRepresentable {
 struct AttachmentBlockView: View {
     let media: MediaBlock
     @Environment(\.renderContext) private var context
+    @Environment(\.presentFromPage) private var presentFromPage
     @State private var localURL: URL?
     @State private var isDownloading = false
     @State private var errorMessage: String?
@@ -276,9 +298,12 @@ struct AttachmentBlockView: View {
         defer { isDownloading = false }
         do {
             let data = try await context.perform { try await $0.fetchFile(at: url).0 }
-            localURL = try TempFile.write(
+            let file = try TempFile.write(
                 data, server: server, folder: ["attachments", media.attachmentId ?? UUID().uuidString], name: media.name ?? url.lastPathComponent
             )
+            // From the page where it can (`blockPresentations`): a block above, from a collaborator, makes this view anew,
+            // and the preview closed.
+            if let presentFromPage { presentFromPage(.quickLook(file)) } else { localURL = file }
         } catch {
             errorMessage = error.userMessage
         }
