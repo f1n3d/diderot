@@ -67,6 +67,16 @@ struct ContentLinkRouterTests {
         #expect(ContentLinkRouter.url(for: "diderot-uitest://open", baseURL: server)?.absoluteString == "diderot-uitest://open")
     }
 
+    /// Neither do the URLs content gives as they are: a card's, an embed's, an integration mention's. Unfiltered, a card
+    /// made through the API with an atom link opened another block's mention menu (review V30).
+    @Test func contentURLsNeverUseTheAppsSchemes() {
+        for string in ["docmost-atom://edit?block=path:0&type=integrationMention&index=0", "docmost-comment://c1", "docmost-internal://page/x",
+                       "diderot://open?url=https%3A%2F%2Fother.example.com", "DOCMOST-ATOM://edit?block=b1", "Diderot:open"] {
+            #expect(ContentLinkRouter.contentURL(string) == nil, "\(string)")
+        }
+        #expect(ContentLinkRouter.contentURL("https://github.com/o/r/issues/1")?.absoluteString == "https://github.com/o/r/issues/1")
+    }
+
     @Test func buildsURLsFromDocumentHrefs() {
         #expect(ContentLinkRouter.url(for: "#heading1", baseURL: server)?.absoluteString == "docmost-internal://anchor/heading1")
         #expect(ContentLinkRouter.url(for: "/s/demo/p/x-Ab12Cd34Ef", baseURL: server)?.absoluteString == "https://wiki.example.com/s/demo/p/x-Ab12Cd34Ef")

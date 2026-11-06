@@ -52,7 +52,6 @@ What's left to fix now:
 
 **C. Between users.**
 
-- Card and embed URLs reach the app's internal links (V30).
 - A database file loads from any host (V31).
 
 **D. The developer's Mac.** The UI tests' results hold the dev admin password, and the dev tools have fixed passwords and send their token along redirects (V50, V51).
@@ -61,7 +60,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **C** Between users | V30, V31 | unit tests | low |
+| **C** Between users | V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
 Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and so is B (working together: V2, V6, V8, V10, V15, V16, V18, V43). B's fixes have engine checks and unit tests that act out the collaborator; V43's UI test has a second client, the test script, add a block above.
@@ -69,16 +68,6 @@ Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32
 ---
 
 ## C. Between users
-
-### V30 [low] ○ Content can still reach the app's internal links
-
-**Where:** `Diderot/Rendering/IntegrationViews.swift:153`, `Diderot/Rendering/MediaBlockViews.swift:294, 310`, `Diderot/Rendering/InlineTextBuilder.swift:57`, `WebLayoutView.swift:35`; then `Diderot/Features/Page/PageLinkAction.swift:45–46`, `DocumentModel.swift:1722–1727`.
-
-**Problem:** R13's filter lives in `url(for:)`, which covers hrefs only. Integration card URLs, embed sources and integration-mention URLs go to `openURL` unfiltered. The page's handler takes comment and atom links first, and `ref(forIdentity:)` accepts `path:`, so no block id is needed. This contradicts `ContentLinkRouter.swift:9–10` ("Page content never links to them").
-
-**Scenario:** An integration card made through the API with the URL `docmost-atom://edit?block=path:0&type=integrationMention&index=0`. An editor taps it: block 0's mention menu opens, with Remove.
-
-**Fix:** Drop the app's schemes before `openURL` in these views.
 
 ### V31 [low] ○ Tapping a database file loads it from any host
 

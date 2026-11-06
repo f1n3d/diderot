@@ -37,6 +37,11 @@ struct WebNavigationLimitTests {
         #expect(decide("https://www.youtube-nocookie.com/embed/x", mainFrame: false) == .cancel)
         #expect(decide("https://www.youtube-nocookie.com/embed/x", frames: true, mainFrame: false) == .allow)
         #expect(decide("https://example.com/", mainFrame: nil) == .openOutside)
+        // The app's own links go nowhere, tapped or as a new window: handed outside, the web layout's opened a comment or
+        // another block's atom sheet (review V30).
+        #expect(decide("docmost-atom://edit?block=path:0&type=integrationMention&index=0", linkTap: true) == .cancel)
+        #expect(decide("docmost-comment://c1", mainFrame: nil) == .cancel)
+        #expect(decide("diderot://open?url=https%3A%2F%2Fother.example.com", reach: .web, linkTap: true) == .cancel)
     }
 
     /// WebKit asks before it loads: a frame, or a script leaving the page, never sends a request.

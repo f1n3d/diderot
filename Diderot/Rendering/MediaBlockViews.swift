@@ -316,7 +316,7 @@ struct EmbedBlockView: View {
     let media: MediaBlock
     @Environment(\.openURL) private var openURL
 
-    private var url: URL? { media.src.flatMap(URL.init(string:)) }
+    private var url: URL? { media.src.flatMap(ContentLinkRouter.contentURL) }
 
     /// `nil` for an iframe without a host: then it is just "Embed".
     private var providerName: String? {
