@@ -88,7 +88,11 @@ function applyStep(tr: Transaction, step: Step): boolean {
       tr.delete(source.pos, source.pos + source.node.nodeSize);
       const raw = step.position === "before" ? dest.pos : dest.pos + dest.node.nodeSize;
       // Through the deletion only: `raw` is a position in the document the steps before left.
-      tr.insert(tr.mapping.slice(start).map(raw, step.position === "before" ? -1 : 1), source.node);
+      const pos = tr.mapping.slice(start).map(raw, step.position === "before" ? -1 : 1);
+      // Only where the block fits, as an insert. ProseMirror fitted it in otherwise: a destination a collaborator moved
+      // into a synced block, a table cell or a footnote since got its container split around the block, or lost it.
+      if (!holds(slotAt(tr.doc, pos, "before"), [source.node])) return false;
+      tr.insert(pos, source.node);
       return true;
     }
     case "split": {

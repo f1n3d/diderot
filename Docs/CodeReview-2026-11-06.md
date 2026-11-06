@@ -52,7 +52,7 @@ What's left to fix now:
 
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
 
-- A drag (V8), the focus after an insert (V10), a status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
+- The focus after an insert (V10), a status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
 - A selection collapses (V15), and an open preview closes (V43), when the other person types.
 
 **C. Between users.**
@@ -67,25 +67,15 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Working together | V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
+| **B** Working together | V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
-Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and V2 from B: Backspace, Return and cards in a line keep what a collaborator typed in it. B is the larger part, and its fixes are tried with two clients on one page.
+Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and V2 and V8 from B: Backspace, Return and cards in a line keep what a collaborator typed in it, and a dragged block goes only where it fits. B is the larger part, and its fixes are tried with two clients on one page.
 
 ---
 
 ## B. Working together
-
-### V8 [medium] ○ A dragged block can split or drop the container it lands in
-
-**Where:** `Engine/src/steps.ts:75–86` (`move`).
-
-**Problem:** Insert and replace check that the block fits where it goes (`holds`, lines 47, 56, 63); `move` inserts unchecked, and ProseMirror then splits the parent or drops the block. Drag targets are found by id, so the destination follows a collaborator's move.
-
-**Scenario:** Reproduced in the engine: a page break moved next to a paragraph that now sits in a synced block splits it in two. A table moved next to a paragraph now in a table cell splits that table in three. A database embed moved before a paragraph now in a footnote is gone. The trigger is a web user moving that paragraph into a container within the app's lag. It's rare.
-
-**Fix:** After the delete, check `holds(slotAt(tr.doc, dest, position), [source.node])` and refuse otherwise.
 
 ### V10 [medium] ○ Inserted blocks are focused by a path from the app's lagging copy
 

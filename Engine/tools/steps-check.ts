@@ -107,6 +107,30 @@ expect("a paragraph at the end goes before the footnotes", "One X footnotes(foot
   { op: "insert", target: null, json: [paragraph("x", "X")] },
 ]));
 
+// A move as well: dragged next to a paragraph a collaborator moved into a container since, a block that doesn't fit
+// there split the container around it, or was gone.
+const cell = (id: string, text: string): JSONContent =>
+  ({ type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", content: [paragraph(id, text)] }] }] });
+const footnotes: JSONContent = { type: "footnotes", content: [{ type: "footnote", attrs: { id: "f", "data-id": "f" }, content: [paragraph("n", "Note")] }] };
+expect("a page break moved into a synced block", "pageBreak() transclusionSource(Synced, Too)", run(page({ type: "pageBreak" },
+  { type: "transclusionSource", content: [paragraph("s", "Synced"), paragraph("t", "Too")] }), [
+  { op: "move", target: { path: [0] }, destination: { id: "s" }, position: "after" },
+]));
+expect("a table moved into a table cell", "table(tableRow(tableCell(A))) table(tableRow(tableCell(B)))", run(page(cell("a", "A"), cell("b", "B")), [
+  { op: "move", target: { path: [0] }, destination: { id: "b" }, position: "after" },
+]));
+expect("a database moved into a footnote", "base() One footnotes(footnote(Note))", run(page({ type: "base", attrs: { pageId: "x" } },
+  paragraph("1", "One"), footnotes), [
+  { op: "move", target: { path: [0] }, destination: { id: "n" }, position: "before" },
+]));
+expect("a paragraph moved into a synced block", "transclusionSource(Synced, One)", run(page(paragraph("1", "One"),
+  { type: "transclusionSource", content: [paragraph("s", "Synced")] }), [
+  { op: "move", target: { path: [0] }, destination: { id: "s" }, position: "after" },
+]));
+expect("a paragraph moved into a footnote", "Two footnotes(footnote(One, Note))", run(page(paragraph("1", "One"), paragraph("2", "Two"), footnotes), [
+  { op: "move", target: { path: [0] }, destination: { id: "n" }, position: "before" },
+]));
+
 // Setting attributes: a value the app sets lands; one it doesn't throws (src/guards.ts' `settable`), and the engine then
 // drops the whole batch, steps before it included, as it dispatches only a batch that applied.
 const box = page({ type: "taskList", content: [{ type: "taskItem", content: [paragraph("t", "Task")] }] });
