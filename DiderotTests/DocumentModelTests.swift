@@ -1467,6 +1467,28 @@ struct DocumentModelTests {
         #expect(engine.saved.map(\.plainText) == ["Hello world!"])
     }
 
+    /// A word selected while a collaborator types in the same line stays selected, moved with the text around it. Only
+    /// the selection's end was moved, as a cursor, and the selection was gone.
+    @Test(.timeLimit(.minutes(1))) func selectionStaysThroughACollaboratorsChange() async throws {
+        func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: text)]) }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("Hallo Welt")]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        let start = model.activeText.characters.index(model.activeText.startIndex, offsetBy: 6)
+        model.activeSelection = AttributedTextSelection(range: start..<model.activeText.endIndex)
+
+        // Their words go in right before the selected one.
+        engine.document = PMNode(type: "doc", content: [paragraph("Hallo schöne Welt")])
+        engine.sendDocument()
+        while String(model.activeText.characters) != "Hallo schöne Welt" { try await Task.sleep(for: .milliseconds(10)) }
+        guard case .ranges(let ranges) = model.activeSelection.indices(in: model.activeText), let range = ranges.ranges.first else {
+            Issue.record("no selection")
+            return
+        }
+        #expect(String(model.activeText[range].characters) == "Welt")
+    }
+
     /// Input still pending when a collaborator's change arrives goes out with the block it was typed on as its base, so
     /// the engine keeps their change (`rebase`); once the engine has both, the editor shows them.
     @Test(.timeLimit(.minutes(1))) func inputPendingDuringACollaboratorsChangeIsSavedOnItsBase() async throws {

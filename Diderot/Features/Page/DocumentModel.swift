@@ -2188,30 +2188,50 @@ final class DocumentModel {
             deactivate()
             return
         }
-        var offset = activeText.characters.distance(from: activeText.startIndex, to: insertionIndex())
+        var (start, end) = selectedOffsets()
         active = Active(ref: NodeRef(path: path, node: node), type: node.type, attrs: node.attrs, itemPath: enclosingItemPath(path))
         let text = node.type == "codeBlock" ? AttributedString(node.plainText) : Self.editorText(from: node.children)
-        if followingChange { offset = Self.offset(offset, movedFrom: Array(activeText.characters), to: Array(text.characters)) }
+        if followingChange {
+            // Both ends of a selection move with the text around them: with its end alone, as a cursor, a word selected
+            // while a collaborator typed in the line was no longer selected. A start where their text goes in moves past it.
+            let old = Array(activeText.characters), new = Array(text.characters)
+            start = Self.offset(start, movedFrom: old, to: new, after: start < end)
+            end = Self.offset(end, movedFrom: old, to: new)
+        }
         session.show(node, as: text)
         if followingChange {
             // Right away, in the same update as the text: a cursor request would hide the caret meanwhile, on every change
             // while a collaborator types.
-            let index = activeText.characters.index(activeText.startIndex, offsetBy: min(offset, activeText.characters.count))
-            activeSelection = AttributedTextSelection(insertionPoint: index)
+            let count = activeText.characters.count
+            let index = { self.activeText.characters.index(self.activeText.startIndex, offsetBy: min($0, count)) }
+            activeSelection = start < end ? AttributedTextSelection(range: index(start)..<index(end)) : AttributedTextSelection(insertionPoint: index(end))
         } else if node.type != "codeBlock" {
-            cursorRequest = .offset(offset)
+            cursorRequest = .offset(end)
+        }
+    }
+
+    /// The selection's start and end as character offsets into the active text; both the cursor's without a selection.
+    private func selectedOffsets() -> (start: Int, end: Int) {
+        let offset = { self.activeText.characters.distance(from: self.activeText.startIndex, to: $0) }
+        switch activeSelection.indices(in: activeText) {
+        case .insertionPoint(let index):
+            return (offset(index), offset(index))
+        case .ranges(let ranges):
+            guard let first = ranges.ranges.first, let last = ranges.ranges.last else { return (activeText.characters.count, activeText.characters.count) }
+            return (offset(first.lowerBound), offset(last.upperBound))
         }
     }
 
     /// Where an offset in `old` lies in `new`, `new` being `old` with one stretch changed (a collaborator's edit): before
-    /// the change it stays, after it it moves by the change in length, inside it goes to the change's end.
-    static func offset(_ offset: Int, movedFrom old: [Character], to new: [Character]) -> Int {
+    /// the change it stays, after it it moves by the change in length, inside it goes to the change's end. Right at the
+    /// change's start it stays before it, or goes past it `after`.
+    static func offset(_ offset: Int, movedFrom old: [Character], to new: [Character], after: Bool = false) -> Int {
         let shorter = min(old.count, new.count)
         var prefix = 0
         while prefix < shorter, old[prefix] == new[prefix] { prefix += 1 }
         var suffix = 0
         while suffix < shorter - prefix, old[old.count - 1 - suffix] == new[new.count - 1 - suffix] { suffix += 1 }
-        if offset <= prefix { return offset }
+        if offset < prefix || offset == prefix && !after { return offset }
         if offset >= old.count - suffix { return offset + new.count - old.count }
         return new.count - suffix
     }
