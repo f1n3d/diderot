@@ -81,39 +81,88 @@ struct WebEditorView: View {
             await dataStore.httpCookieStore.setCookie(cookie)
         }
         // The web client's page view crashes while its user cache `localStorage.currentUser` is empty (first load);
-        // the home page fills it.
+        // the home page fills it, once it has asked the server who's signed in.
         webPage.load(URLRequest(url: serverURL))
-        for _ in 0..<30 {
-            try await Task.sleep(for: .milliseconds(500))
-            if !webPage.isLoading, (try? await webPage.callJavaScript("return localStorage.getItem('currentUser') !== null;")) as? Bool == true {
-                break
-            }
+        if try await loaded() {
+            _ = try? await webPage.callJavaScript(Self.userCachedScript)
         }
-        // Closing the editor cancels this task, also mid-check; don't open the page then.
+        // Closing the editor cancels this task, also mid-wait; don't open the page then.
         try Task.checkCancellation()
         webPage.load(URLRequest(url: ContentLinkRouter.webPageURL(server: serverURL, slugId: page.slugId ?? page.id)))
-        // Hide the shell once the app has rendered (best effort; the classes come from Mantine AppShell).
-        for _ in 0..<20 {
-            try await Task.sleep(for: .milliseconds(500))
-            if !webPage.isLoading, (try? await webPage.callJavaScript(Self.trimShellScript)) as? Bool == true {
-                break
-            }
+        // Hide the shell once the app has rendered it (best effort; the classes come from Mantine AppShell).
+        if try await loaded() {
+            _ = try? await webPage.callJavaScript(Self.trimShellScript)
         }
         isReady = true
     }
 
-    private static let trimShellScript = """
-    if (!document.querySelector(".mantine-AppShell-main")) { return false; }
-    if (!document.getElementById("docmost-ios-style")) {
-        const style = document.createElement("style");
-        style.id = "docmost-ios-style";
-        style.textContent = `
-            .mantine-AppShell-navbar, .mantine-AppShell-aside { display: none !important; }
-            .mantine-AppShell-main { padding-left: 0 !important; padding-right: 0 !important; }
-        `;
-        document.head.appendChild(style);
+    /// Waits for the page's load to end: `false` if it failed (the web view shows why). Page-wide events, not the
+    /// load's: those stop the load when this task is cancelled, and then callJavaScript never returns (`WebIslandView`).
+    private func loaded() async throws -> Bool {
+        while true {
+            do {
+                for try await event in webPage.navigations {
+                    if case .finished = event { return true }
+                }
+                try Task.checkCancellation()
+                return false
+            } catch WebPage.NavigationError.failedProvisionalNavigation(let error)
+                        where (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled {
+                // Replaced by the next load (a redirect): that one's end counts.
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                return false
+            }
+        }
     }
-    return true;
+
+    /// Answers once the web client has cached the signed-in user (`true`), or after 15 s (`false`). The client writes
+    /// the cache with `localStorage.setItem`, which reports it while this waits; no event says so otherwise.
+    private static let userCachedScript = """
+    if (localStorage.getItem("currentUser") !== null) { return true; }
+    return await new Promise((resolve) => {
+        const storage = Storage.prototype;
+        const setItem = storage.setItem;
+        const finish = (cached) => {
+            storage.setItem = setItem;
+            clearTimeout(timer);
+            resolve(cached);
+        };
+        const timer = setTimeout(() => finish(false), 15000);
+        storage.setItem = function (key, value) {
+            setItem.call(this, key, value);
+            if (this === localStorage && key === "currentUser") { finish(true); }
+        };
+    });
+    """
+
+    /// Hides the shell's sidebars once the client has rendered the shell (`true`), or answers `false` after 10 s.
+    private static let trimShellScript = """
+    const trim = () => {
+        if (!document.querySelector(".mantine-AppShell-main")) { return false; }
+        if (!document.getElementById("docmost-ios-style")) {
+            const style = document.createElement("style");
+            style.id = "docmost-ios-style";
+            style.textContent = `
+                .mantine-AppShell-navbar, .mantine-AppShell-aside { display: none !important; }
+                .mantine-AppShell-main { padding-left: 0 !important; padding-right: 0 !important; }
+            `;
+            document.head.appendChild(style);
+        }
+        return true;
+    };
+    if (trim()) { return true; }
+    return await new Promise((resolve) => {
+        const finish = (trimmed) => {
+            observer.disconnect();
+            clearTimeout(timer);
+            resolve(trimmed);
+        };
+        const observer = new MutationObserver(() => { if (trim()) { finish(true); } });
+        const timer = setTimeout(() => finish(false), 10000);
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+    });
     """
 }
 

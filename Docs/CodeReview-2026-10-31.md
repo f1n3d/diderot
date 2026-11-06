@@ -80,7 +80,7 @@ Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), th
 
 There are 47 `Task.sleep`/`asyncAfter` calls in the app. DocumentModel's run on a clock in its dependencies (`DocumentModel.Dependencies.clock`), which tests move by hand (`TestClock`): its tests of a save's wait for more input, the unsent save and an inline command's wait for focus no longer sleep, so their checks that nothing happened no longer pass while the main actor is busy elsewhere. The other waits still sleep in real time: mostly the views' (the fragile ones below), and a few debounces and timeouts (pickers, the engine's). The search's runs on a clock of its own too (`SearchModel`).
 
-**Fragile:** these wait for keyboard, focus, layout or animation, and fail on slow devices. What waited for a push or a sheet to finish (a new page's title, a comment link, "Show on Page", the comments' and a database entry's scroll and focus) waits for its end since S4 (`AfterTransition`, the comments sheet's `onDismiss`).
+**Fragile:** these wait for keyboard, focus, layout or animation, and fail on slow devices. What waited for a push or a sheet to finish (a new page's title, a comment link, "Show on Page", the comments' and a database entry's scroll and focus) waits for its end since S4 (`AfterTransition`, the comments sheet's `onDismiss`); the web editor waits for its page's load and the web client's answer instead of asking every 500 ms.
 
 | Place | Waits for | Event-driven alternative |
 |---|---|---|
@@ -95,7 +95,6 @@ There are 47 `Task.sleep`/`asyncAfter` calls in the app. DocumentModel's run on 
 | BlockCards 375 | next view update (`.zero`) | `onChange` of `activeText` for that ref |
 | BlockCards 411 | the text view showing the block | hit-test a TextKit layout of the block's string |
 | BlockCards 444 | focus accepted after a sheet | retry on failure, or `onDismiss` |
-| WebEditorView 82, 92 | web client ready (polling) | `navigations` plus a MutationObserver message |
 
 **Legitimate:**
 
