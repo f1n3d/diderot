@@ -31,9 +31,9 @@ struct CentersAboveKeyboard: ViewModifier {
                 centering.insetTop = metrics.insetTop
             }
             .onScrollPhaseChange { _, phase in
-                // Never scroll against the user (this also cancels pending centering).
+                // Never scroll against the user, also not later for find's match.
                 centering.userScrolling = phase == .interacting || phase == .decelerating
-                if centering.userScrolling { centering.task?.cancel() }
+                if centering.userScrolling { centering.findTarget = nil }
                 if phase != .animating { centering.target = nil }
             }
             .onChange(of: model?.active?.ref) { _, _ in
@@ -46,6 +46,7 @@ struct CentersAboveKeyboard: ViewModifier {
                 if placed { cursorPlaced() }
             }
             .onChange(of: find.revealRequest) { _, _ in revealFindMatch() }
+            .onChange(of: find.currentFrame.map { FindFrame(ref: $0.ref, frame: $0.frame) }) { _, _ in findFrameChanged() }
             .onAppear {
                 keyboard.start { top, duration in keyboardChanged(top: top, duration: duration) }
             }
@@ -71,8 +72,9 @@ struct CentersAboveKeyboard: ViewModifier {
         /// Target of the running scroll animation.
         var target: CGFloat?
         var targetUntil = Date.distantPast
-        var task: Task<Void, Never>?
         var hideTask: Task<Void, Never>?
+        /// Find's match to center once its block reports its frame (built after the scroll there).
+        var findTarget: FindMatch?
 
         var isCentering: Bool { centerUntil > .now }
         var current: CGFloat { offset + insetTop }
@@ -110,14 +112,18 @@ struct CentersAboveKeyboard: ViewModifier {
         let insetTop: CGFloat
     }
 
+    private struct FindFrame: Equatable {
+        let ref: NodeRef
+        let frame: CGRect
+    }
+
     // MARK: - The active block
 
     /// A block became active: center it above the keyboard in one motion as the keyboard slides in (its notification
-    /// triggers that in `keyboardChanged`). With the keyboard already up, the placed caret does it (`cursorPlaced`):
-    /// started right away, the motion ran while the editor was built, dropped frames, and restarted when the editor
-    /// settled. After Return or Backspace the page keeps its place instead, as in other editors.
+    /// triggers that in `keyboardChanged`). With the keyboard already up, or none docking, the placed caret does it
+    /// (`cursorPlaced`): started right away, the motion ran while the editor was built, dropped frames, and restarted
+    /// when the editor settled. After Return or Backspace the page keeps its place instead, as in other editors.
     private func activeBlockChanged() {
-        centering.task?.cancel()
         guard let model, model.active != nil else {
             centering.centerUntil = .distantPast
             return
@@ -130,13 +136,6 @@ struct CentersAboveKeyboard: ViewModifier {
         }
         // Right after the tap the editor still changes (its height); keep re-centering it for that long.
         centering.centerUntil = .now + 0.8
-        guard centering.keyboardTop == nil else { return }
-        centering.task = Task { @MainActor in
-            // Without a keyboard this is only the fallback in case none appears (hardware keyboard without toolbar).
-            try? await Task.sleep(for: .milliseconds(600))
-            guard !Task.isCancelled else { return }
-            center(duration: 0.3)
-        }
     }
 
     private func scrollToUnbuiltActiveBlock() {
@@ -185,7 +184,6 @@ struct CentersAboveKeyboard: ViewModifier {
         centering.keyboardTop = top
         guard changed, model?.active != nil else { return }
         if centering.isCentering {
-            centering.task?.cancel()
             center(duration: duration)
         } else {
             reveal(duration: duration)
@@ -196,22 +194,23 @@ struct CentersAboveKeyboard: ViewModifier {
     private func activeFrameChanged() {
         guard let model, model.active != nil, model.activeBlockFrame.height > 0 else { return }
         if centering.isCentering {
-            // While the keyboard is still coming, its notification does the centering; with it up, the placed caret
-            // starts it (`cursorPlaced`).
-            if centering.keyboardTop != nil, model.cursorRequest == nil { center(duration: 0.35) }
+            // While the keyboard is still coming, its notification does the centering; the placed caret starts it
+            // (`cursorPlaced`), with the keyboard up or none docking.
+            if model.cursorRequest == nil { center(duration: 0.35) }
         } else if !model.isSwitchingByTyping {
             reveal(duration: 0.2)
         }
     }
 
     /// The new editor has focus and its caret: the work of the switch is done, so the centering runs without dropping
-    /// frames (started with the editor's first frame, it stuttered for about 150 ms). Without centering (Return,
-    /// Backspace) the caret only stays visible.
+    /// frames (started with the editor's first frame, it stuttered for about 150 ms). A keyboard docking at the bottom
+    /// reported itself with the focus; without one docked by now none comes (a hardware keyboard, a floating one), and
+    /// the editor is centered in the whole height. Without centering (Return, Backspace) the caret only stays visible.
     private func cursorPlaced() {
-        if !centering.isCentering {
-            reveal(duration: 0.2)
-        } else if centering.keyboardTop != nil {
+        if centering.isCentering {
             center(duration: 0.35)
+        } else {
+            reveal(duration: 0.2)
         }
     }
 
@@ -266,22 +265,31 @@ struct CentersAboveKeyboard: ViewModifier {
 
     // MARK: - Find's current match
 
-    /// Goes to the current match: if its block is known (it reports its frame once it holds the match), center it
-    /// above the find bar; otherwise first scroll to the enclosing top-level block, which then loads it.
+    /// Goes to the current match: if its block is built, it reports its frame once it holds the match, and the match is
+    /// centered above the find bar; otherwise the page first scrolls to the enclosing top-level block, which builds it
+    /// and so reports it (`findFrameChanged`).
     private func revealFindMatch() {
         guard let match = find.currentMatch else { return }
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(50))
-            guard find.currentMatch == match else { return }
+        centering.findTarget = match
+        // Next run loop: by then this update has laid out the blocks, and a built one holding the match has reported.
+        DispatchQueue.main.async {
+            guard centering.findTarget == match, find.currentMatch == match else { return }
             if let current = find.currentFrame, current.ref == match.ref {
+                centering.findTarget = nil
                 centerFindMatch(current.frame)
-                return
+            } else {
+                position.scrollTo(id: match.topLevel.anchorId, anchor: .center)
             }
-            position.scrollTo(id: match.topLevel.anchorId, anchor: .center)
-            try? await Task.sleep(for: .milliseconds(150))
-            guard find.currentMatch == match, let current = find.currentFrame, current.ref == match.ref else { return }
-            centerFindMatch(current.frame)
         }
+    }
+
+    /// The block holding find's match reported its frame: centers it if the page is on its way there.
+    private func findFrameChanged() {
+        guard let match = centering.findTarget, find.currentMatch == match,
+              let current = find.currentFrame, current.ref == match.ref
+        else { return }
+        centering.findTarget = nil
+        centerFindMatch(current.frame)
     }
 
     private func centerFindMatch(_ frame: CGRect) {

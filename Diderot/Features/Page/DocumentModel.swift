@@ -104,8 +104,11 @@ final class DocumentModel {
     /// The page should open in the app's web editor (Draw.io and Excalidraw drawings are made there).
     var requestsWebEditor = false
     private(set) var isCreatingBase = false
-    /// Inline command from the floating "+": runs once the paragraph created for it at the end is active.
+    /// Inline command from the floating "+": waits for the paragraph created for it at the end to be active.
     @ObservationIgnored private var pendingInlineCommand: InsertCommand?
+    /// That command, run once its paragraph's editor has focus (`editorFocusChanged`): an emoji keyboard or sheet
+    /// appearing sooner would take that focus away.
+    @ObservationIgnored private var commandAfterFocus: (command: InsertCommand, ref: NodeRef)?
     /// Notice after an action (e.g. "Copied"); the page view shows it briefly.
     var notice: String?
     private(set) var errorMessage: String?
@@ -233,15 +236,10 @@ final class DocumentModel {
         if let pendingFocus, let node = node(at: pendingFocus.path) {
             self.pendingFocus = nil
             activate(NodeRef(path: pendingFocus.path, node: node), node: node, cursor: pendingFocus.cursor(node))
-            // Floating "+" inline command: runs shortly after the new paragraph's editor has focus; an emoji
-            // keyboard or sheet appearing sooner would take that focus away.
+            // Floating "+" inline command: runs once the new paragraph's editor has focus.
             if let command = pendingInlineCommand, let ref = active?.ref {
                 pendingInlineCommand = nil
-                Task { @MainActor [weak self, clock = dependencies.clock] in
-                    try? await clock.sleep(for: .milliseconds(400))
-                    guard let self, self.active?.ref == ref else { return }
-                    self.insertInline(command, at: self.activeText.characters.count)
-                }
+                commandAfterFocus = (command, ref)
             }
         }
         if !adoptsChange, !editsTable, collaboratorChangedActiveBlock() {
@@ -359,6 +357,8 @@ final class DocumentModel {
         guard isEditable, PMNode.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return }
         if active?.ref == ref { return }
         if active != nil { session.commitPendingNow() }
+        // Another block before the command's had focus: it goes nowhere.
+        if commandAfterFocus?.ref != ref { commandAfterFocus = nil }
         let itemPath = enclosingItemPath(ref.path)
         activeBlockFrame = .zero
         activatedByTyping = typingSwitches > 0
@@ -382,6 +382,10 @@ final class DocumentModel {
     func editorFocusChanged(_ focused: Bool, instance: UUID, ref: NodeRef) {
         if focused {
             focusedEditor = instance
+            if let pending = commandAfterFocus, pending.ref == ref, active?.ref == ref {
+                commandAfterFocus = nil
+                insertInline(pending.command, at: activeText.characters.count)
+            }
             return
         }
         if focusedEditor == instance { focusedEditor = nil }
@@ -398,6 +402,7 @@ final class DocumentModel {
     func deactivate() {
         guard active != nil else { return }
         session.commitPendingNow()
+        commandAfterFocus = nil
         active = nil
         session.base = nil
         editorHeight = nil
