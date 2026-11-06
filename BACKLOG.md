@@ -2,7 +2,7 @@
 
 Open points that deliberately come later. Done ones leave (the commits record them).
 
-The findings of the code review of October 31, 2026 that are still open, and the order to fix them: [Docs/CodeReview-2026-10-31.md](Docs/CodeReview-2026-10-31.md).
+The findings of the code review of November 6, 2026 that are still open, with those left from October 31, and the order to fix them: [Docs/CodeReview-2026-11-06.md](Docs/CodeReview-2026-11-06.md).
 
 ## Sign-in
 
