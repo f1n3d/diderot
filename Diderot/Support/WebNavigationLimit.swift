@@ -65,7 +65,10 @@ final class WebNavigationLimit: NSObject, WebPage.NavigationDeciding, WKNavigati
                 return null;
             };
             """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        configuration.userContentController.add(WindowOpenHandler { [weak self] url in self?.openOutside?(url) }, name: "windowOpen")
+        // Not the app's own links either (`decision`), which never meets a window opened this way.
+        configuration.userContentController.add(WindowOpenHandler { [weak self] url in
+            if !ContentLinkRouter.isAppLink(url) { self?.openOutside?(url) }
+        }, name: "windowOpen")
     }
 
     /// `mainFrame` is nil for a new window.

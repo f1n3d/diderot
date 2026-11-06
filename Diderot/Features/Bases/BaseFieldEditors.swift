@@ -366,7 +366,6 @@ struct BaseDateEditor: View {
 /// Cell files: tap previews, minus removes; add from photos, camera or files.
 struct BaseFileEditor: View {
     @Environment(AppSession.self) private var session
-    @Environment(\.openURL) private var openURL
     let model: BaseModel
     let rowId: String
     let property: BaseProperty
@@ -405,7 +404,11 @@ struct BaseFileEditor: View {
                             Image(systemName: "paperclip").foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(file.name).lineLimit(2)
-                                if let size = file.size {
+                                if let host = otherServer(of: file) {
+                                    Text("From \(host). Tap to load.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                } else if let size = file.size {
                                     Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -482,20 +485,19 @@ struct BaseFileEditor: View {
         Task { await model.setCell(rowId: rowId, propertyId: property.id, to: remaining.isEmpty ? nil : .array(remaining)) }
     }
 
-    /// Downloads a file of the server through the authenticated session, then shows Quick Look; another host's opens as
-    /// an outside link (`BaseValue.fileOpening`).
+    /// The other server the file comes from, named before the tap (`RenderContext.otherServer`).
+    private func otherServer(of file: FileEntry) -> String? {
+        guard let server = session.server?.url, let url = BaseValue.fileURL(url: file.url, id: file.id, name: file.name, server: server)
+        else { return nil }
+        return RenderContext.otherServer(of: url, server: server)
+    }
+
+    /// Downloads through the authenticated session, then shows Quick Look; from another server after the entry named it
+    /// (`otherServer`), without the token.
     private func open(_ file: FileEntry) async {
-        guard let baseURL = session.server?.url, let ready = session.ready else { return }
-        let url: URL
-        switch BaseValue.fileOpening(file.url ?? "/api/files/\(file.id)/\(file.name)", server: baseURL) {
-        case .download(let own)?:
-            url = own
-        case .outside(let other)?:
-            openURL(other)
-            return
-        case nil:
-            return
-        }
+        guard let baseURL = session.server?.url, let ready = session.ready,
+              let url = BaseValue.fileURL(url: file.url, id: file.id, name: file.name, server: baseURL)
+        else { return }
         // Each file keeps its spinner while another one loads too; a second tap doesn't load it again.
         guard downloading.insert(file.id).inserted else { return }
         defer { downloading.remove(file.id) }

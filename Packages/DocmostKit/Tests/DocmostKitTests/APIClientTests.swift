@@ -204,6 +204,11 @@ struct APIClientTests {
         await #expect(throws: APIError.unauthorized(message: "Unauthorized")) {
             _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "http://localhost:3000/api/files/abc/a.pdf")!)
         }
+        // Too many requests stays that, from anywhere.
+        MockURLProtocol.respond(with: .init(status: 429))
+        await #expect(throws: APIError.throttled) {
+            _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "https://elsewhere.example/a.pdf")!)
+        }
     }
 
     @Test func fetchFileSendsTokenToOwnServer() async throws {

@@ -198,7 +198,8 @@ public actor APIClient {
             guard (200..<300).contains(http.statusCode) else {
                 // Docmost's rules only for the server's answers: a file a page links from another host answered a 401 in
                 // its shape (any NestJS API's), and the reader was signed out. Its message isn't the server's to show.
-                throw toServer ? APIError.from(status: http.statusCode, data: data) : APIError.server(status: http.statusCode, message: nil)
+                guard toServer else { throw http.statusCode == 429 ? APIError.throttled : APIError.server(status: http.statusCode, message: nil) }
+                throw APIError.from(status: http.statusCode, data: data)
             }
             return (data, http)
         } catch let error as APIError {

@@ -283,6 +283,10 @@ struct AttachmentBlockView: View {
     }
 
     private var detail: String {
+        // From another server, named before the tap downloads it (`RenderContext.otherServer`).
+        if let url = context.mediaURL(media.src), let host = context.otherServer(of: url) {
+            return [String(localized: "From \(host). Tap to load."), errorMessage].compactMap(\.self).joined(separator: " · ")
+        }
         var parts: [String] = []
         if let size = media.size {
             parts.append(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file))

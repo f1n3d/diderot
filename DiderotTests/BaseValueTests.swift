@@ -33,19 +33,23 @@ struct BaseValueTests {
         #expect(BaseValue.openURL("example.com/?next=https://x")?.absoluteString == "https://example.com/?next=https://x")
     }
 
-    /// A file field's entry downloads only from the server; another host's file opens as an outside link. Downloaded in
-    /// the app, any editor's URL told that host the reader's address and time (review V31).
-    @Test func filesDownloadOnlyFromTheServer() throws {
+    /// A file field's entry loads from its URL, else from the server's files, its name a path component: a "#" or "?" in
+    /// it cut the path short. One from another host names that host before the tap that downloads it, unless Settings
+    /// lets other servers load: any editor can set the URL, and the tap told that host the reader's address (review V31).
+    @Test func filesNameTheirOtherServer() throws {
         let server = try #require(URL(string: "https://wiki.example.com"))
-        #expect(BaseValue.fileOpening("/api/files/f1/plan.pdf", server: server)
-            == .download(try #require(URL(string: "https://wiki.example.com/api/files/f1/plan.pdf"))))
-        #expect(BaseValue.fileOpening("https://WIKI.example.com:443/api/files/f1/plan.pdf", server: server)
-            == .download(try #require(URL(string: "https://WIKI.example.com:443/api/files/f1/plan.pdf"))))
-        #expect(BaseValue.fileOpening("https://tracker.example.net/plan.pdf", server: server)
-            == .outside(try #require(URL(string: "https://tracker.example.net/plan.pdf"))))
-        #expect(BaseValue.fileOpening("http://wiki.example.com/api/files/f1/plan.pdf", server: server)
-            == .outside(try #require(URL(string: "http://wiki.example.com/api/files/f1/plan.pdf"))))
-        #expect(BaseValue.fileOpening("", server: server) == nil)
+        let key = RenderContext.loadsOtherServersKey
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+        UserDefaults.standard.set(false, forKey: key)
+        let own = try #require(BaseValue.fileURL(url: nil, id: "f1", name: "Q1 #2?.pdf", server: server))
+        #expect(own.absoluteString == "https://wiki.example.com/api/files/f1/Q1%20%232%3F.pdf")
+        #expect(RenderContext.otherServer(of: own, server: server) == nil)
+        let stored = try #require(BaseValue.fileURL(url: "/api/files/f1/plan.pdf", id: "f1", name: "plan.pdf", server: server))
+        #expect(stored.absoluteString == "https://wiki.example.com/api/files/f1/plan.pdf")
+        let other = try #require(BaseValue.fileURL(url: "https://tracker.example.net/plan.pdf", id: "f1", name: "plan.pdf", server: server))
+        #expect(RenderContext.otherServer(of: other, server: server) == "tracker.example.net")
+        UserDefaults.standard.set(true, forKey: key)
+        #expect(RenderContext.otherServer(of: other, server: server) == nil)
     }
 
     @Test func storedLinksOpenWithScheme() {
