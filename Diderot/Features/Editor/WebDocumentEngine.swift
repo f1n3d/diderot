@@ -158,15 +158,39 @@ struct EngineParticipant: Identifiable, Hashable, Decodable {
 
 /// A block by UniqueID or by path (child indices from the root).
 enum BlockTarget: Hashable, Sendable {
-    case id(String)
+    /// `path`: where the app saw the block. Blocks that share an id (a synced block unsynced on the web keeps its
+    /// source's) are told apart by it; the engine refuses one it can't tell (`locate` in Engine/src/steps.ts). Not part
+    /// of the target's identity.
+    case id(String, path: [Int]? = nil)
     /// `type`: the expected block type; another kind there by now (moved in by a collaborator) fails the operation.
     case path([Int], type: String? = nil)
 
     var jsObject: [String: Any] {
         switch self {
-        case .id(let id): ["id": id]
+        case .id(let id, nil): ["id": id]
+        case .id(let id, let path?): ["id": id, "path": path]
         case .path(let path, nil): ["path": path]
         case .path(let path, let type?): ["path": path, "type": type]
+        }
+    }
+
+    static func == (lhs: BlockTarget, rhs: BlockTarget) -> Bool {
+        switch (lhs, rhs) {
+        case (.id(let left, _), .id(let right, _)): left == right
+        case (.path(let left, let leftType), .path(let right, let rightType)): left == right && leftType == rightType
+        default: false
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        switch self {
+        case .id(let id, _):
+            hasher.combine(0)
+            hasher.combine(id)
+        case .path(let path, let type):
+            hasher.combine(1)
+            hasher.combine(path)
+            hasher.combine(type)
         }
     }
 }

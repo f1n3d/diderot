@@ -523,6 +523,9 @@ sync = next((b for b in sources if ("Sync" + stamp) in text(b)), {})
 references = [b for b in blocks if b.get("type") == "transclusionReference"
               and attrs(b).get("transclusionId") == attrs(sync).get("id") and attrs(b).get("sourcePageId") == page]
 wrapped = next((b for b in sources if ("Wrap" + stamp + " weiter") in text(b)), {})
+# The second embed, unsynced and edited: a paragraph of the page's own, with an id of its own.
+copy = next((b for b in blocks if b.get("type") == "paragraph" and text(b) == "Sync" + stamp + " Kopie"), {})
+copied_ids = [attrs(n).get("id") for n in nodes(sync, "paragraph")]
 # test39: "+" insert menus and database.
 plus_next = after(lambda b: b.get("type") == "paragraph" and text(b) == "Plus" + stamp)
 fab_date = next((b for b in blocks if b.get("type") == "paragraph" and ("FabDatum" + stamp) in text(b)), {})
@@ -544,7 +547,9 @@ checks = [
     (E + "test36_BlockCommands", "Slash: Mermaid code block with example", "A --> B" in text(mermaid)),
     (E + "test37_Columns", "Columns: three (three_equal), Links" + stamp + " in the first, Mitte" + stamp + " in the second",
      len(cols) == 3 and attrs(columns).get("layout") == "three_equal" and ("Links" + stamp) in text(cols[0]) and ("Mitte" + stamp) in text(cols[1])),
-    (E + "test38_SyncedBlocks", "Synced: original with Sync" + stamp + " and two embeds (Paste, /)", bool(attrs(sync).get("id")) and len(references) >= 2),
+    (E + "test38_SyncedBlocks", "Synced: original with Sync" + stamp + ", an embed (Paste) and an unsynced one (/)", bool(attrs(sync).get("id")) and len(references) >= 1),
+    (E + "test38_SyncedBlocks", "Synced: the unsynced copy has Sync" + stamp + " Kopie with an id of its own, the original Sync" + stamp,
+     bool(copy) and text(sync) == "Sync" + stamp and attrs(copy).get("id") not in copied_ids),
     (E + "test38_SyncedBlocks", "Synced: \"Text ▾\" turns Wrap" + stamp + " into a synced block", bool(wrapped)),
     (E + "test39_PlusMenusAndDatabase", "Plus: heading 2 PlusH2" + stamp + " right after Plus" + stamp,
      plus_next.get("type") == "heading" and attrs(plus_next).get("level") == 2 and text(plus_next) == "PlusH2" + stamp),

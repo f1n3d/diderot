@@ -111,35 +111,50 @@ function find(doc: PMNode, target: Target, expected?: JSONContent | null) {
   return found && (!expected || unchanged(found.node, expected)) ? found : undefined;
 }
 
-/** Finds a block by its UniqueID (`attrs.id`) or its path (child indices from the root). */
+/**
+ * Finds a block by its UniqueID (`attrs.id`) or its path (child indices from the root). An id found more than once (a
+ * synced block unsynced on the web keeps its source's ids) finds the block at the target's path, where the app saw it,
+ * or none: the first could be the source, and an edit there shows on every page that embeds it. An id that is gone finds
+ * nothing, also with a path: whatever sits there by now is another block.
+ */
 export function locate(doc: PMNode, target: Target): { node: PMNode; pos: number } | undefined {
   if (target.id) {
-    let result: { node: PMNode; pos: number } | undefined;
+    const seen = target.path ? atPath(doc, target.path) : undefined;
+    if (seen && seen.node.attrs?.id === target.id) return seen;
+    let found: { node: PMNode; pos: number } | undefined;
+    let count = 0;
     doc.descendants((node, pos) => {
-      if (result) return false;
+      if (count > 1) return false;
       if (node.attrs?.id === target.id) {
-        result = { node, pos };
-        return false;
+        found = { node, pos };
+        count += 1;
       }
       return true;
     });
-    if (result) return result;
+    return count === 1 ? found : undefined;
   }
   if (target.path && target.path.length > 0) {
-    let node: PMNode = doc;
-    let pos = 0; // Position before the node; for the root, 0 = start of its content
-    let first = true;
-    for (const index of target.path) {
-      if (index < 0 || index >= node.childCount) return undefined;
-      let offset = first ? 0 : pos + 1;
-      for (let i = 0; i < index; i++) offset += node.child(i).nodeSize;
-      node = node.child(index);
-      pos = offset;
-      first = false;
-    }
+    const found = atPath(doc, target.path);
     // A path finds whatever sits there by now: after a collaborator's edit above, another block.
-    if (target.type && node.type.name !== target.type) return undefined;
-    return { node, pos };
+    if (!found || (target.type && found.node.type.name !== target.type)) return undefined;
+    return found;
   }
   return undefined;
+}
+
+/** The block at `path` and the position before it. */
+function atPath(doc: PMNode, path: number[]): { node: PMNode; pos: number } | undefined {
+  if (path.length === 0) return undefined;
+  let node: PMNode = doc;
+  let pos = 0; // Position before the node; for the root, 0 = start of its content
+  let first = true;
+  for (const index of path) {
+    if (index < 0 || index >= node.childCount) return undefined;
+    let offset = first ? 0 : pos + 1;
+    for (let i = 0; i < index; i++) offset += node.child(i).nodeSize;
+    node = node.child(index);
+    pos = offset;
+    first = false;
+  }
+  return { node, pos };
 }

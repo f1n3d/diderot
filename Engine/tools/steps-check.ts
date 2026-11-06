@@ -6,7 +6,7 @@
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
-import { applySteps, type Step } from "../src/steps";
+import { applySteps, locate, type Step } from "../src/steps";
 import { schemaExtensions } from "../src/schema";
 
 const schema = getSchema(schemaExtensions);
@@ -124,6 +124,26 @@ expect("a batch with a refused attribute", "invalid taskItem.indent", run(box, [
   { op: "replace", target: { path: [0, 0, 0], type: "paragraph" }, json: [paragraph("t", "Changed")] },
   { op: "setAttributes", target: taskItem, attrs: { indent: "x" } },
 ]));
+
+// An id found twice: a synced block unsynced on the web keeps its source's ids. The block at the app's path, or none.
+const shared = page({ type: "transclusionSource", attrs: { id: "s" }, content: [paragraph("a", "Quelle")] }, paragraph("a", "Kopie"));
+const found = (target: { id?: string; path?: number[] }) => {
+  const at = locate(shared, target);
+  return at ? describe(at.node) : "none";
+};
+expect("an id found twice, at the app's path", "Kopie", found({ id: "a", path: [1] }));
+expect("…the other one", "Quelle", found({ id: "a", path: [0, 0] }));
+expect("…without a path", "none", found({ id: "a" }));
+expect("…at a path where neither is", "none", found({ id: "a", path: [2] }));
+expect("an edit of the copy stays in the copy", "transclusionSource(Quelle) Kopie, bearbeitet", run(shared, [
+  { op: "replace", target: { id: "a", path: [1] }, json: [paragraph("a", "Kopie, bearbeitet")] },
+]));
+expect("…and without a path it's refused", "transclusionSource(Quelle) Kopie", run(shared, [
+  { op: "replace", target: { id: "a" }, json: [paragraph("a", "Kopie, bearbeitet")] },
+]));
+const once = page(paragraph("z", "Neu"), paragraph("b", "B"));
+expect("an id found once, moved from the app's path", "B", locate(once, { id: "b", path: [0] }) && describe(locate(once, { id: "b", path: [0] })!.node));
+expect("an id that is gone, not what sits at its path now", undefined, locate(once, { id: "x", path: [0] }));
 
 console.log(differences ? `${differences} step difference(s)` : "The steps apply whole or not at all.");
 process.exitCode = differences ? 1 : 0;

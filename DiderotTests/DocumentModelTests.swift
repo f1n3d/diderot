@@ -2146,7 +2146,7 @@ final class FakeDocumentEngine: DocumentEngine {
         }
         guard let document else { return nil }
         switch target {
-        case .id(let id): return find(document, id)
+        case .id(let id, _): return find(document, id)
         case .path(let path, let type):
             var node = document
             for index in path {

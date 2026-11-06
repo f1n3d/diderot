@@ -14,6 +14,9 @@ import { customAlphabet } from "nanoid";
 /** New block ids: 12 random lowercase letters. */
 export const newBlockId = customAlphabet("abcdefghijklmnopqrstuvwxyz", 12);
 
+/** The blocks UniqueID gives an id (`attrs.id`), as Docmost's editor does. */
+export const uniqueIdTypes = ["heading", "paragraph", "transclusionSource"];
+
 const required: Partial<Attribute> = { isRequired: true };
 
 /**

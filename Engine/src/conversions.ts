@@ -5,6 +5,7 @@
 // R1), and it kept its own rules for what a line can turn into.
 import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode, type Schema } from "@tiptap/pm/model";
+import { uniqueIdTypes } from "./extensions";
 import { holds, slotAt } from "./fits";
 import { liftLineEdit, pathOf, type KeyEdit } from "./keys";
 import { locate, type Step, type Target } from "./steps";
@@ -158,7 +159,9 @@ export function unsyncEdit(doc: PMNode, target: Target): Step[] | undefined {
 /**
  * An embedded synced block replaced by its content (`json`, which the server returns when it's unsynced): the embed of
  * that source (`sourcePageId`, `transclusionId`) at `path`, else the first on the page, as it has no id and a
- * collaborator may have moved it meanwhile. Undefined when there is none.
+ * collaborator may have moved it meanwhile. The content comes without its blocks' ids, which UniqueID then gives anew:
+ * kept, the copy shared them with its source (UniqueID renames only ids that repeat among the new blocks), and an edit
+ * of the copy found by id landed in the source, on every page that embeds it. Undefined when there is none.
  */
 export function referenceEdit(doc: PMNode, path: number[], source: { sourcePageId: string; transclusionId: string },
   json: JSONContent[]): Step[] | undefined {
@@ -172,7 +175,15 @@ export function referenceEdit(doc: PMNode, path: number[], source: { sourcePageI
       return !at;
     });
   }
-  return at && [{ op: "replace", target: { path: pathOf(doc, at.pos), type: "transclusionReference" }, json }];
+  return at && [{ op: "replace", target: { path: pathOf(doc, at.pos), type: "transclusionReference" }, json: json.map(withoutIds) }];
+}
+
+/** `json` without the ids UniqueID gives (`uniqueIdTypes`), at any depth. */
+function withoutIds(json: JSONContent): JSONContent {
+  const attrs = json.attrs && uniqueIdTypes.includes(json.type ?? "")
+    ? Object.fromEntries(Object.entries(json.attrs).filter(([name]) => name !== "id"))
+    : json.attrs;
+  return { ...json, ...(attrs ? { attrs } : {}), ...(json.content ? { content: json.content.map(withoutIds) } : {}) };
 }
 
 /** A line's inline content; a code block's lines become line breaks, as on the web (a raw "\n" would count as Return). */

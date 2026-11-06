@@ -52,7 +52,6 @@ What's left to fix now:
 
 **A. Content that goes missing without a sign.**
 
-- An unsynced synced block keeps its source's block ids, so edits to the copy land in the source (V1).
 - A database entry removes the line breaks from its text fields as soon as it opens, and saves that (V3).
 - The save of unsent changes keeps moving while the user types (V4), and one tap on "Clear Saved Content" removes the web editor's unsynced edits (V5).
 - An old title can come back over a newer one (V9).
@@ -76,7 +75,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing | V1, V3, V4, V5, V7, V9, V32 | engine checks, unit tests, UI tests | low |
+| **A** Content that goes missing | V3, V4, V5, V7, V9, V32 | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
@@ -86,16 +85,6 @@ A first: small fixes for silent losses. B is the larger part: V2 needs the engin
 ---
 
 ## A. Content that goes missing
-
-### V1 [high] ✔ An unsynced copy keeps its source's block ids, and edits to it land in the source
-
-**Where:** `Engine/src/conversions.ts:163–176` (`referenceEdit`), `Engine/src/steps.ts:115–127` (`locate`).
-
-**Problem:** `referenceEdit` replaces the embed with the content the server returns, ids and all. UniqueID only renames duplicates among the new nodes, so the copy and the source share their ids. `locate` takes the first block with an id and ignores the path; the app targets paragraphs and headings by id alone. The web's `insertContentAt` keeps the ids too, so a copy unsynced on the web has the same problem in the app.
-
-**Scenario:** A synced block is embedded on its own page (test38 makes exactly this), and the embed is unsynced. Both paragraphs carry the same id. A save in the copy changes the source, which shows it on every page that embeds it, and the copy stays as it was. Return, Backspace and conversions hit the source the same way. Reproduced with the engine's own code: the source read "Shared text, edited in the copy", the copy "Shared text".
-
-**Fix:** Strip the ids from the blocks `referenceEdit` inserts, as Duplicate does (`strippingIds`). Let `locate` refuse an id that occurs more than once, or check it against the path the app sends along.
 
 ### V3 [high] ✔ Opening a database entry removes the line breaks from its title and text fields, and saves that
 

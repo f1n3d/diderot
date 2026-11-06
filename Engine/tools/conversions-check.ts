@@ -176,6 +176,13 @@ expect("an embed replaced by its content", "Eins Inhalt transclusionReference", 
 const moved = page(paragraph("z", "Neu"), paragraph("a", "Eins"), reference("u"), reference("t"));
 expect("an embed found where it is now", "Neu Eins transclusionReference Inhalt", run(moved, referenceEdit(moved, [1], { sourcePageId: "p", transclusionId: "t" }, content)));
 expect("an embed that is gone", "refused", run(line, referenceEdit(line, [1], { sourcePageId: "p", transclusionId: "t" }, content)));
+// The content's blocks come without their source's ids (UniqueID gives them new ones), at any depth; other attributes stay.
+const withIds: JSONContent[] = [paragraph("x", "Inhalt", { textAlign: "center" }), quote(paragraph("y", "Zitat"))];
+expect("an embed's content without its source's ids", [null, "center", null], [
+  blockAfter(embeds, referenceEdit(embeds, [1], { sourcePageId: "p", transclusionId: "t" }, withIds), [1])?.attrs?.id,
+  blockAfter(embeds, referenceEdit(embeds, [1], { sourcePageId: "p", transclusionId: "t" }, withIds), [1])?.attrs?.textAlign,
+  blockAfter(embeds, referenceEdit(embeds, [1], { sourcePageId: "p", transclusionId: "t" }, withIds), [2, 0])?.attrs?.id,
+]);
 
 if (differences) {
   console.log(`${differences} difference(s).`);

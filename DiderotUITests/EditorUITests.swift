@@ -1638,6 +1638,28 @@ import XCTest
         wait(for: [two], timeout: 10)
         if app.textViews["active-editor"].exists { finishEditing(app) }
 
+        // Unsynced, the embed is the page's own copy: an edit of it stays there, and the original keeps its text. The copy
+        // used to keep the original's block ids, and the edit landed in the original.
+        let second = references.element(boundBy: references.count - 1)
+        XCTAssertTrue(scrollTo(second, in: app), "The second embed's menu is missing")
+        second.tap()
+        let unsync = button(app, labels: ["Unsync", "Synchronisierung aufheben"])
+        XCTAssertTrue(unsync.waitForExistence(timeout: 5), "“Unsync” missing from the embed's menu")
+        unsync.tap()
+        let one = expectation(for: NSPredicate(format: "count == 1"), evaluatedWith: references)
+        wait(for: [one], timeout: 15)
+        // The copy is the last text with the original's words: the original and the first embed come before it.
+        let copies = app.staticTexts.matching(NSPredicate(format: "label == %@", "Sync\(stamp)"))
+        let unsynced = copies.element(boundBy: copies.count - 1)
+        let end = CGVector(dx: 1, dy: 0.85)
+        XCTAssertTrue(scrollTo(unsynced, in: app, anchor: end), "The unsynced copy doesn't show")
+        unsynced.coordinate(withNormalizedOffset: end).withOffset(CGVector(dx: -2, dy: 0)).tap()
+        editor = activeEditor(app, "The unsynced copy doesn't open in the editor")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText(" Kopie")
+        snapshot(app, "38-unsynced-copy")
+        finishEditing(app)
+
         editor = appendParagraph(app)
         editor.typeText("Wrap\(stamp)")
         app.buttons["editor-block-type"].tap()
