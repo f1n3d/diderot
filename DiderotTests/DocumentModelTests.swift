@@ -1142,6 +1142,36 @@ struct DocumentModelTests {
         #expect(engine.lifecycle == (unconfirmed == 0 ? [] : ["save after 1"]))
     }
 
+    /// Typing on doesn't push the save of unconfirmed changes back: it comes 2 s after the first change not kept, with
+    /// the later ones. Pushed back by each document event, typing with pauses under 2 s kept nothing until a longer pause,
+    /// and an ended web process or app lost all of it.
+    @Test(.timeLimit(.minutes(1))) func typingOnDoesntPushTheUnsentSaveBack() async throws {
+        func doc(_ text: String) -> PMNode {
+            PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: text)])])
+        }
+        let engine = FakeDocumentEngine(document: doc("Hello"))
+        engine.status = .disconnected
+        let model = try Self.model(engine)
+        let clock = TestClock()
+        model.dependencies.clock = clock
+        engine.unconfirmedChanges = 1
+        engine.sendDocument(doc("Hello!"))
+        await clock.advance(by: .milliseconds(1500))
+        engine.unconfirmedChanges = 2
+        engine.sendDocument(doc("Hello!!"))
+        #expect(engine.lifecycle.isEmpty)
+
+        await clock.advance(by: .milliseconds(500))
+        for _ in 0..<100 where engine.lifecycle.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.lifecycle == ["save after 0"])
+        // The next change schedules the next save.
+        engine.unconfirmedChanges = 3
+        engine.sendDocument(doc("Hello!!!"))
+        await clock.advance(by: .seconds(2))
+        for _ in 0..<100 where engine.lifecycle.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.lifecycle == ["save after 0", "save after 0"])
+    }
+
     /// Unsent changes the device can't keep (a full disk) put a banner on the page while the server hasn't confirmed
     /// them: they live only in the engine then, lost if the app ends. Only the log said so. It goes once the server has
     /// everything, and for good once a save keeps them.

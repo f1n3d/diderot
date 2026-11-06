@@ -128,6 +128,7 @@ final class EngineConnection {
         // Commits pending input in a task queued ahead of the stop below, so the stored document includes it.
         owner?.connectionEndsEditing()
         unsentSave?.cancel()
+        unsentSave = nil
         // What the closing engine can't keep goes to the whole app (`unsentChangesKept`); the reopened one starts afresh.
         unsentNotKept = nil
         lifecycle = .closing
@@ -170,16 +171,19 @@ final class EngineConnection {
         }
     }
 
-    /// Keeps changes the server hasn't confirmed as leaving the page does, 2 s after the last change while one is
-    /// unconfirmed: until then they lived only in the engine's web process, gone if the app crashed or was swiped away.
-    /// Keyed to the engine's status before, it missed a connection that died without notice: until the engine noticed
-    /// (after 30 s), the page said "Saved" and kept nothing.
+    /// Keeps changes the server hasn't confirmed as leaving the page does, 2 s after the first one not kept yet: until
+    /// then they lived only in the engine's web process, gone if the app crashed or was swiped away. Later changes don't
+    /// push it back, the save takes them along: pushed back by each, typing on with pauses under 2 s kept nothing until a
+    /// longer pause. Keyed to the engine's status before, it missed a connection that died without notice: until the
+    /// engine noticed (after 30 s), the page said "Saved" and kept nothing.
     private func scheduleUnsentSave() {
-        unsentSave?.cancel()
-        guard let clock = owner?.dependencies.clock else { return }
+        guard unsentSave == nil, let clock = owner?.dependencies.clock else { return }
         unsentSave = Task { [weak self] in
             try? await clock.sleep(for: .seconds(2))
-            guard !Task.isCancelled, let self, serves else { return }
+            guard !Task.isCancelled, let self else { return }
+            // A change from here on schedules the next save.
+            unsentSave = nil
+            guard serves else { return }
             // Queued like opening and closing: beside a close, an older state could be kept after it.
             let previous = engineStep
             engineStep = Task {

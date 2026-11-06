@@ -52,7 +52,7 @@ What's left to fix now:
 
 **A. Content that goes missing without a sign.**
 
-- The save of unsent changes keeps moving while the user types (V4), and one tap on "Clear Saved Content" removes the web editor's unsynced edits (V5).
+- One tap on "Clear Saved Content" removes the web editor's unsynced edits (V5).
 - An old title can come back over a newer one (V9).
 - Undo after adding a tab removes the change before it (V7).
 - A deleted inline comment's mark stays on the page (V32).
@@ -74,7 +74,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing | V4, V5, V7, V9, V32 | engine checks, unit tests, UI tests | low |
+| **A** Content that goes missing | V5, V7, V9, V32 | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
@@ -84,16 +84,6 @@ A first: small fixes for silent losses. B is the larger part: V2 needs the engin
 ---
 
 ## A. Content that goes missing
-
-### V4 [medium] ✔ Typing keeps pushing back the save of unsent changes
-
-**Where:** `Diderot/Features/Page/EngineConnection.swift:155–157` (`documentShown`), `:177–191` (`scheduleUnsentSave`).
-
-**Problem:** Every document event cancels the 2 s wait and starts it again. Offline, or on a connection that died without notice, each save brings a document event, so while the user writes with pauses under 2 s, nothing reaches the device's store.
-
-**Scenario:** The user writes offline for some minutes without a longer pause. Then iOS ends the engine's web process (memory) or the app (swiped away, a crash). Everything since the last pause of 2 s is gone, without a word: the reopened engine loads the older stored state.
-
-**Fix:** Save no later than 2 s after the first unconfirmed change, as the document events have a maximum wait (`documentMaxWait`).
 
 ### V5 [medium] ✔ "Clear Saved Content" removes the web editor's unsynced edits
 
