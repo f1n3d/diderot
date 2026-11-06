@@ -79,14 +79,16 @@ export function enterEdit(schema: Schema, doc: PMNode, target: Target, json: JSO
   const now = lineNow(schema, found.node, json, base);
   if (!now) return undefined;
   const before = PMNode.fromJSON(schema, json);
-  if (base && changedAfterCursor(schema, found.node, PMNode.fromJSON(schema, base), before, after)) return undefined;
   const path = pathOf(doc, found.pos);
   const $pos = doc.resolve(found.pos);
   const parent = $pos.parent, index = $pos.index();
+  // A toggle's title keeps all its text, saved on its base as typing is: a change after the cursor stays there.
+  const inTitle = found.node.type.name === "detailsSummary" && parent.type.name === "details";
+  if (base && !inTitle && changedAfterCursor(schema, found.node, PMNode.fromJSON(schema, base), before, after)) return undefined;
   const save: Step = { op: "replace", target, json: [json], base };
   const line = (content: JSONContent[]): JSONContent => (content.length ? { type: "paragraph", content } : paragraph);
 
-  if (found.node.type.name === "detailsSummary" && parent.type.name === "details") {
+  if (inTitle) {
     const detailsPath = path.slice(0, -1);
     const title = before.type.create(before.attrs, before.content.append(Fragment.fromArray(after.map((node) => PMNode.fromJSON(schema, node)))), before.marks);
     const steps: Step[] = [{ ...save, json: [title.toJSON()] }];

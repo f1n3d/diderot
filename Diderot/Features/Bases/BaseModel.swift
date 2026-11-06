@@ -122,7 +122,7 @@ final class BaseModel {
         guard owner != nil else { return }
         // Opening offline, the page itself says it shows the saved version.
         let isOpening = state.value == nil
-        await restoreUnsent()
+        await restoreUnsent(opening: isOpening)
         if state.value == nil {
             if let cached = await ownSession?.cache.read(Base.self, key: CacheKey.base(pageId)) {
                 state = .loaded(cached)
@@ -363,6 +363,7 @@ final class BaseModel {
         }
         // The newest input replaces one a failed save kept, for the server too.
         let replacesKept = unsavedDrafts.removeValue(forKey: key) != nil
+        keptDraftKeys.remove(key)
         let value = value.flatMap { $0.isNull ? nil : $0 }
         guard current.cells[propertyId] != value else {
             if replacesKept { await forgetUnsent(rowId: rowId, propertyId: propertyId) }
@@ -659,15 +660,22 @@ final class BaseModel {
         try? await owner?.unsentChanges.update([String: UnsentCell].self, key: CacheKey.unsentCells, initial: [:]) { $0[key] = nil }
     }
 
-    /// The inputs kept for this database's fields (`keepUnsent`): their fields show them until they reach the server.
-    /// Read at every load: one that went meanwhile, or was dropped, shows no longer, and its field the stored value.
-    private func restoreUnsent() async {
+    /// The inputs kept for this database's fields (`keepUnsent`), opening: their fields show them until they reach the
+    /// server. At a later load, one shown that went meanwhile, or was dropped, shows no longer, and its field the stored
+    /// value; none comes back then, nor one a newer input is replacing while its save is out.
+    private func restoreUnsent(opening: Bool) async {
         guard let cells = await keptCells() else { return }
         var kept: [String: String] = [:]
         for cell in cells.values where cell.basePageId == pageId { kept["\(cell.rowId)/\(cell.propertyId)"] = cell.typed }
-        for key in keptDraftKeys where kept[key] == nil { unsavedDrafts[key] = nil }
-        unsavedDrafts.merge(kept) { _, kept in kept }
-        keptDraftKeys = Set(kept.keys)
+        if opening {
+            unsavedDrafts.merge(kept) { _, kept in kept }
+            keptDraftKeys = Set(kept.keys)
+            return
+        }
+        for key in keptDraftKeys where kept[key] != unsavedDrafts[key] {
+            unsavedDrafts[key] = nil
+            keptDraftKeys.remove(key)
+        }
     }
 
     /// Whether the device still keeps `typed` for the field at `key` ("rowId/propertyId"); yes when that can't be read,

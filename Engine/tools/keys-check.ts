@@ -222,6 +222,10 @@ expect("Return on an empty item a collaborator typed into: refused, their words 
 expect("Return with a collaborator's change after the cursor: refused, the new line would go on without it", "refused",
   run(page(paragraph("a", "EinsZwei und mehr")),
     enterEdit(schema, page(paragraph("a", "EinsZwei und mehr")), { id: "a" }, paragraph("a", "Eins"), text("Zwei"), paragraph("a", "EinsZwei"))));
+expect("Return in a toggle's title with their change after the cursor: it stays in the title, which keeps its text",
+  "details(>TiTel und mehr, detailsContent(∅, Inhalt)) @0.1.0:0",
+  run(page(toggle(true, "TiTel und mehr", paragraph("i", "Inhalt"))), enterEdit(schema, page(toggle(true, "TiTel und mehr", paragraph("i", "Inhalt"))),
+    { path: [0, 0], type: "detailsSummary" }, { type: "detailsSummary", content: text("Ti") }, text("Tel"), { type: "detailsSummary", content: text("TiTel") })));
 expect("…before the cursor: their change stays in the line", "Vorher Eins Zwei @1:0",
   run(page(paragraph("a", "Vorher EinsZwei")),
     enterEdit(schema, page(paragraph("a", "Vorher EinsZwei")), { id: "a" }, paragraph("a", "Eins"), text("Zwei"), paragraph("a", "EinsZwei"))));

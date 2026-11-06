@@ -701,6 +701,24 @@ struct DocumentModelTests {
         }
     }
 
+    /// Floating "+" at the page end after a collaborator removed the empty last line, which this copy still shows: a new
+    /// paragraph goes in at the end and gets the cursor. Focusing nothing, the "+" did nothing.
+    @Test func endInsertAfterTheLastLineWentAddsOne() async throws {
+        func paragraph(_ id: String, _ text: String?) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.map { [PMNode(type: "text", text: $0)] })
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", nil)]))
+        let model = try Self.model(engine)
+        engine.document = PMNode(type: "doc", content: [paragraph("a", "Eins")])
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("c", nil)]) }
+
+        await model.insertTemplate(.paragraph, placement: .end)
+
+        let insert = try #require(engine.inserted.first)
+        #expect(insert.node.type == "paragraph" && insert.target == nil && insert.position == .after)
+        #expect(model.active?.ref.id == "c")
+    }
+
     /// "Text ▾" → synced block: an older document event arrives mid-wrap, with the block's text still where the wrapped
     /// block will be. The wrapped block still gets the cursor.
     @Test func syncedBlockWrapFocusesWrappedBlockDespiteOlderEvent() async throws {
@@ -1782,6 +1800,39 @@ struct DocumentModelTests {
         #expect(model.active?.ref.id == "b")
         #expect(String(model.activeText.characters) == "ZweiDrei")
         #expect(model.cursorRequest == .offset(4))
+    }
+
+    /// Backspace in a line the page has empty, which a collaborator typed into meanwhile: the app shows the removal at
+    /// once, the engine joins their words into the line before, and the editor there shows them once Backspace is done,
+    /// the cursor where the texts meet. The document event came while the key was on its way, and waited for it.
+    @Test(.timeLimit(.minutes(1))) func backspaceShowsTheCollaboratorsWordsItJoined() async throws {
+        func paragraph(_ id: String, _ text: String?) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.map { [PMNode(type: "text", text: $0)] })
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", nil)]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [1]))
+        engine.plans = BackspacePlans(empty: .remove, text: .join([0]))
+        model.activate(NodeRef(path: [1], node: line), node: line)
+        while model.answers?.backspace == nil { try await Task.sleep(for: .milliseconds(10)) }
+        engine.backspaceResult = .done(.join([0]), cursor: EngineCursor(path: [0], offset: 4))
+        engine.whileInserting = {
+            // Where the editor puts the cursor the removal asks for (`.end`).
+            model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+            engine.document = PMNode(type: "doc", content: [paragraph("a", "EinsNeu")])
+            engine.sendDocument()
+        }
+
+        #expect(model.backspaceAtStart())
+        while engine.backspaces.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<50 where String(model.activeText.characters) != "EinsNeu" { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(model.active?.ref.id == "a")
+        #expect(String(model.activeText.characters) == "EinsNeu")
+        guard case .insertionPoint(let cursor) = model.activeSelection.indices(in: model.activeText) else {
+            Issue.record("no insertion point")
+            return
+        }
+        #expect(model.activeText.characters.distance(from: model.activeText.startIndex, to: cursor) == 4)
     }
 
     /// Code turned into text keeps its lines as line breaks (Engine/tools/conversions-check.ts), and the text doesn't

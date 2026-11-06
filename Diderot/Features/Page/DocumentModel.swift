@@ -261,10 +261,7 @@ final class DocumentModel {
                 commandAfterFocus = (command, ref)
             }
         }
-        if !adoptsChange, !editsTable, collaboratorChangedActiveBlock() {
-            adoptsChange = true
-            Task { await adoptCollaboratorsChange() }
-        }
+        adoptCollaboratorsChangeIfAny()
         // What fits around the block, and what its table allows, may have changed.
         if active != nil { refreshAnswers() }
     }
@@ -345,7 +342,19 @@ final class DocumentModel {
 
     private func typingSwitchEnded() {
         typingSwitches -= 1
-        if typingSwitches == 0 { followMovedBlocks() }
+        guard typingSwitches == 0 else { return }
+        followMovedBlocks()
+        // A collaborator's change a document event brought meanwhile shows now: it waited for the key, and without another
+        // event it stayed hidden. Backspace in a line the page had empty can join their words into the block before.
+        adoptCollaboratorsChangeIfAny()
+    }
+
+    /// Shows a collaborator's change of the block being edited, if there is one that nothing of the user's waits for
+    /// (`collaboratorChangedActiveBlock`).
+    private func adoptCollaboratorsChangeIfAny() {
+        guard !adoptsChange, !editsTable, collaboratorChangedActiveBlock() else { return }
+        adoptsChange = true
+        Task { await adoptCollaboratorsChange() }
     }
 
     /// The active block follows by its UniqueID when its path shifts; otherwise the editor would edit another block.
@@ -1397,10 +1406,14 @@ final class DocumentModel {
             anchor = contentBlocks.last.flatMap { last in
                 last.node.type == "paragraph" && last.node.children.isEmpty && active?.ref != last.ref ? last.ref : nil
             }
-            if let anchor, nodes == [PMNode(type: "paragraph")] {
-                // Where the engine has it: a collaborator's blocks above move it.
-                if let (path, _) = await engine.currentDocument()?.locate(anchor) { await focusAfterOperation(path, .end) }
-                return .applied
+            if let last = anchor, nodes == [PMNode(type: "paragraph")] {
+                // Where the engine has it: a collaborator's blocks above move it. Removed by one meanwhile, a new paragraph
+                // goes in at the end; focusing nothing, an inline command waiting for it went nowhere.
+                if let (path, _) = await engine.currentDocument()?.locate(last) {
+                    await focusAfterOperation(path, .end)
+                    return .applied
+                }
+                anchor = nil
             }
         }
         let before = placement == .end
@@ -2213,13 +2226,9 @@ final class DocumentModel {
     /// The selection's start and end as character offsets into the active text; both the cursor's without a selection.
     private func selectedOffsets() -> (start: Int, end: Int) {
         let offset = { self.activeText.characters.distance(from: self.activeText.startIndex, to: $0) }
-        switch activeSelection.indices(in: activeText) {
-        case .insertionPoint(let index):
-            return (offset(index), offset(index))
-        case .ranges(let ranges):
-            guard let first = ranges.ranges.first, let last = ranges.ranges.last else { return (activeText.characters.count, activeText.characters.count) }
-            return (offset(first.lowerBound), offset(last.upperBound))
-        }
+        let end = offset(insertionIndex())
+        guard case .ranges(let ranges) = activeSelection.indices(in: activeText), let first = ranges.ranges.first else { return (end, end) }
+        return (offset(first.lowerBound), end)
     }
 
     /// Where an offset in `old` lies in `new`, `new` being `old` with one stretch changed (a collaborator's edit): before

@@ -96,6 +96,24 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// A load while a newer input's save is out doesn't bring back the kept input that one replaces: shown again, it
+        /// stayed over the newer value, and went out over it when its field closed.
+        @Test func loadDuringASaveKeepsTheReplacedInputAway() async throws {
+            let (model, session) = try await editableBase()
+            defer { UnsentChanges.removeAll(server: a) }
+            StubURLProtocol.status.withLock { $0 = 500 }
+            await model.setCell(rowId: "r1", propertyId: "p1", to: .string("alt"), typed: "alt")
+            StubURLProtocol.status.withLock { $0 = 200 }
+
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in await model.load() } }
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "neu"}}}"# }
+            await model.setCell(rowId: "r1", propertyId: "p1", to: .string("neu"), typed: "neu")
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(model.unsavedDraft(rowId: "r1", propertyId: "p1") == nil)
+            #expect(try await keptCells(session).isEmpty)
+            await removeCaches()
+        }
+
         /// A kept input for an entry deleted meanwhile can never go: it is dropped, and named for the notice.
         @Test func keptInputOfAGoneEntryIsDropped() async throws {
             let (model, session) = try await editableBase()
