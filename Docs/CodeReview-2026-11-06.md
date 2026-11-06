@@ -52,7 +52,6 @@ What's left to fix now:
 
 **A. Content that goes missing without a sign.**
 
-- An old title can come back over a newer one (V9).
 - A deleted inline comment's mark stays on the page (V32).
 
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
@@ -72,7 +71,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing | V9, V32 | engine checks, unit tests, UI tests | low |
+| **A** Content that goes missing | V32 | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
@@ -82,16 +81,6 @@ A first: small fixes for silent losses. B is the larger part: V2 needs the engin
 ---
 
 ## A. Content that goes missing
-
-### V9 [medium] ○ A sent title is forgotten in the current session's store, not the page's
-
-**Where:** `Diderot/Features/Page/PageTitleEdit.swift:48–49, 56`, `Diderot/App/AppSession.swift:452–455`.
-
-**Problem:** The title is kept in the page session's store (`pageSession.unsentChanges`) but forgotten through `ready`'s store (`forgetUnsentTitle` reads `ready?.unsentChanges`).
-
-**Scenario:** The user renames a page on server A and signs out, or a link switches servers, while `pages/update` is on its way. It succeeds, but `ready` is nil or B by then, so A's store keeps the title. At the next sign-in to A, the old title goes out again and overwrites a rename made on the web meanwhile. A final error (line 56) leaves its title behind the same way.
-
-**Fix:** Forget the title in the store it was kept in (`pageSession.unsentChanges`), in both branches.
 
 ### V32 [medium] ✔ Deleting an inline comment leaves its mark in the page
 

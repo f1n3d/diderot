@@ -449,8 +449,9 @@ final class AppSession {
     }
 
     /// Drops the page's kept title: it, or a newer one, reached the server. With `title`, only while it is still that one.
-    func forgetUnsentTitle(pageId: String, title: String? = nil) async {
-        guard let store = ready?.unsentChanges else { return }
+    /// `store`: the one it was kept in (the page's session's); the current session's may be another server's by now.
+    func forgetUnsentTitle(pageId: String, title: String? = nil, in store: UnsentStore? = nil) async {
+        guard let store = store ?? ready?.unsentChanges else { return }
         await UnsentEdits.forgetTitle(pageId: pageId, title: title, in: store)
     }
 

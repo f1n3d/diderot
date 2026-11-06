@@ -46,14 +46,16 @@ final class PageTitleEdit {
             do {
                 // With the page's session: a switch while the title was kept would take it to the other server.
                 _ = try await session.send(Endpoints.Pages.update(pageId: page.id, title: trimmed), on: pageSession)
-                await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
+                // From the store it was kept in: a sign-out or switch meanwhile left it there, to go out again later
+                // over a newer rename.
+                await session.forgetUnsentTitle(pageId: page.id, title: trimmed, in: pageSession.unsentChanges)
                 unsent = nil
                 changes.pageChanged(in: page.spaceId)
                 // The response lacks permissions and space info, so the page loads again instead of taking it; on its
                 // own, so a background task doesn't wait for it.
                 Task { await sent() }
             } catch where UnsentChanges.isFinal(error) {
-                await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
+                await session.forgetUnsentTitle(pageId: page.id, title: trimmed, in: pageSession.unsentChanges)
                 report(error.userMessage)
             } catch where kept {
                 unsent = trimmed

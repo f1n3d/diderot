@@ -20,6 +20,9 @@ extension AppSessionRaceTests {
             await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: nil, in: aStore)
             #expect(try await aStore.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"]?.title == "Neu")
             #expect(await session.unsentTitle(pageId: "p1") == nil, "not in b's store")
+            // Sent while b is the session: forgotten in a's store, where it was kept, or it went out again later.
+            await session.forgetUnsentTitle(pageId: "p1", title: "Neu", in: aStore)
+            #expect(try await aStore.read([String: UnsentTitle].self, key: CacheKey.unsentTitles)?["p1"] == nil)
 
             await session.keepUnsentTitle("Zwei", pageId: "p2", spaceId: nil)
             await session.forgetUnsentTitle(pageId: "p2", title: "Eins")
