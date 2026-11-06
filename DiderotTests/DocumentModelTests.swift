@@ -114,6 +114,119 @@ struct DocumentModelTests {
         #expect(enter.node.plainText == "Ti" && enter.after.map(\.plainText) == ["Tel"])
     }
 
+    /// Text pasted with line breaks goes in one step of the engine, each line where Return puts it (Engine/tools/
+    /// keys-check.ts), and the cursor goes where the paste ends: one Return per line took seconds for 100 lines, the
+    /// editor jumping from line to line, and left the cursor at the last line's start.
+    @Test(.timeLimit(.minutes(1))) func pastedLinesGoInOneStep() async throws {
+        func line(_ id: String, _ text: String) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)])
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line("a", "xyz")]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: line("a", "xyz")), node: line("a", "xyz"))
+        engine.enterResult = .moved(EngineCursor(path: [2], offset: 0))
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [line("a", "xyA"), line("b", "B"), line("c", "Cz")]) }
+
+        // Pasted after "xy", the cursor after the paste, as the text view leaves them.
+        let text = model.activeText.characters
+        model.activeText.insert(AttributedString("A\nB\nC"), at: text.index(text.startIndex, offsetBy: 2))
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 7))
+        model.activeTextChanged()
+        while model.active?.ref.id != "c" { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.enters.isEmpty)
+        let paste = try #require(engine.enteredLines.first)
+        #expect(engine.enteredLines.count == 1)
+        #expect(paste.node.plainText == "xyA")
+        #expect(paste.lines.map { $0.map(\.plainText).joined() } == ["B", "Cz"])
+        #expect(model.cursorRequest == .offset(1))
+    }
+
+    /// Two pasted lines are one Return, and the cursor goes where the paste ends too, not to the new line's start.
+    @Test(.timeLimit(.minutes(1))) func twoPastedLinesPutTheCursorAtTheirEnd() async throws {
+        func line(_ id: String, _ text: String) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)])
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line("a", "xyz")]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: line("a", "xyz")), node: line("a", "xyz"))
+        engine.enterResult = .moved(EngineCursor(path: [1], offset: 0))
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [line("a", "xyA"), line("b", "Bz")]) }
+
+        let text = model.activeText.characters
+        model.activeText.insert(AttributedString("A\nB"), at: text.index(text.startIndex, offsetBy: 2))
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 5))
+        model.activeTextChanged()
+        while model.active?.ref.id != "b" { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.enteredLines.isEmpty)
+        #expect(engine.enters.first?.node.plainText == "xyA" && engine.enters.first?.after.map(\.plainText) == ["Bz"])
+        #expect(model.cursorRequest == .offset(1))
+    }
+
+    /// A toggle's title stays whole as on Return there: pasted lines keep what was after the cursor in the title and go
+    /// into its content, also two lines (the paste proxy hands plain text to `pasteLink`). Pasted by the text view, they
+    /// all ran together in the title.
+    @Test(.timeLimit(.minutes(1))) func pastedLinesKeepAToggleTitleWhole() async throws {
+        let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "TiTel")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])]),
+        ]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0, 0], node: title), node: title)
+        engine.enterResult = .moved(EngineCursor(path: [0, 1, 0], offset: 0))
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 2))
+
+        #expect(model.pasteLink("A\r\nB"))
+        while engine.enteredLines.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.enters.isEmpty)
+        let paste = try #require(engine.enteredLines.first)
+        #expect(paste.node.plainText == "TiATel")
+        #expect(paste.lines.map { $0.map(\.plainText).joined() } == ["B"])
+    }
+
+    /// Lines dictated into a toggle's title (no paste to say where the cursor was) don't cut the title at a cursor the text
+    /// view may not have moved yet: the title keeps the first line, the others go into its content.
+    @Test(.timeLimit(.minutes(1))) func dictatedLinesDontCutATitle() async throws {
+        let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "TiTel")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])]),
+        ]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0, 0], node: title), node: title)
+        engine.enterResult = .moved(EngineCursor(path: [0, 1, 0], offset: 0))
+
+        let text = model.activeText.characters
+        model.activeText.insert(AttributedString("A\nB\nC"), at: text.index(text.startIndex, offsetBy: 2))
+        model.activeTextChanged()
+        while engine.enteredLines.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+
+        let lines = try #require(engine.enteredLines.first)
+        #expect(lines.node.plainText == "TiA")
+        #expect(lines.lines.map { $0.map(\.plainText).joined() } == ["B", "CTel"])
+    }
+
+    /// A typed Return, its cursor right after the break, stays one Return, also in a toggle's title.
+    @Test(.timeLimit(.minutes(1))) func typedReturnStaysOneReturn() async throws {
+        let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "TiTel")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])]),
+        ]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0, 0], node: title), node: title)
+        engine.enterResult = .moved(EngineCursor(path: [0, 1, 0], offset: 0))
+
+        let text = model.activeText.characters
+        model.activeText.insert(AttributedString("\n"), at: text.index(text.startIndex, offsetBy: 2))
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 3))
+        model.activeTextChanged()
+        while engine.enters.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.enteredLines.isEmpty)
+        #expect(engine.enters.first?.node.plainText == "Ti")
+    }
+
     /// A toggle without `open` is closed, as on the web: Backspace in the empty line after it, which the engine removes,
     /// goes to its title, not into its hidden content.
     @Test(.timeLimit(.minutes(1))) func toggleWithoutOpenIsClosed() async throws {
@@ -2105,6 +2218,15 @@ final class FakeDocumentEngine: DocumentEngine {
     var enterResult = KeyResult.moved(EngineCursor(path: [1], offset: 0))
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult {
         enters.append((target, node, after, base))
+        if refusesSaves { return .refused }
+        if savesUnavailable { return .unavailable }
+        whileInserting?()
+        return enterResult
+    }
+    /// Several lines at once (`enterLines`), as the model sent them; answered like `enter`.
+    private(set) var enteredLines: [(target: BlockTarget, node: PMNode, lines: [[PMNode]], base: PMNode?)] = []
+    func enterLines(_ target: BlockTarget, keeping node: PMNode, lines: [[PMNode]], base: PMNode?) async -> KeyResult {
+        enteredLines.append((target, node, lines, base))
         if refusesSaves { return .refused }
         if savesUnavailable { return .unavailable }
         whileInserting?()

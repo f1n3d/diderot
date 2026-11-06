@@ -68,6 +68,10 @@ protocol DocumentEngine: AnyObject, Observable {
     /// `base`), and `after` continues in a new line, where the engine's document has room for it then, in one
     /// transaction. The save and the new line used to be two.
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult
+    /// Return after each of several lines at once, text pasted or dictated with line breaks (`enterLinesEdit` in
+    /// Engine/src/keys.ts): the block keeps `node`, and each of `lines` goes where Return puts it, in one transaction.
+    /// Returns the last line, with the cursor at its start.
+    func enterLines(_ target: BlockTarget, keeping node: PMNode, lines: [[PMNode]], base: PMNode?) async -> KeyResult
     /// Backspace at the start of a text block that holds `node` by now, its input (`backspace` in Engine/src/keys.ts).
     func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult
     /// What Backspace at the start of the block does, empty and with text; nil without an engine or the block.
@@ -490,6 +494,14 @@ final class WebDocumentEngine: DocumentEngine {
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult {
         let result: KeyAnswer<EngineCursor> = await key("return JSON.stringify(window.DocmostEngine.enter(target, json, after, base));",
                                                         ["target": target.jsObject, "json": Self.jsObject(node), "after": after.map(Self.jsObject),
+                                                         "base": base.map { Self.jsObject($0) } ?? NSNull()])
+        return Self.moved(result)
+    }
+
+    func enterLines(_ target: BlockTarget, keeping node: PMNode, lines: [[PMNode]], base: PMNode?) async -> KeyResult {
+        let result: KeyAnswer<EngineCursor> = await key("return JSON.stringify(window.DocmostEngine.enterLines(target, json, lines, base));",
+                                                        ["target": target.jsObject, "json": Self.jsObject(node),
+                                                         "lines": lines.map { $0.map(Self.jsObject) },
                                                          "base": base.map { Self.jsObject($0) } ?? NSNull()])
         return Self.moved(result)
     }

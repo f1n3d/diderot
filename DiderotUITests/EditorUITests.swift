@@ -1951,6 +1951,26 @@ import XCTest
         finishEditing(app)
     }
 
+    /// Text pasted with line breaks goes in in one step, each line its own paragraph (Tools/run-uitests.sh checks them),
+    /// and typing goes on where the paste ends. One Return per line took seconds for many lines, jumping from line to line.
+    func test83_PasteLines() {
+        UIPasteboard.general.string = "Zeile1\(stamp)\nZeile2\(stamp)\nZeile3\(stamp)"
+        let app = launchPage()
+        let editor = appendParagraph(app)
+        paste(into: editor, in: app)
+        XCTAssertTrue(waitForText(editor, contains: "Zeile3\(stamp)", timeout: 10), "The editor isn't in the last pasted line: “\(editor.value ?? "")”")
+        XCTAssertFalse((editor.value as? String ?? "").contains("Zeile2\(stamp)"), "The pasted lines stay in one line: “\(editor.value ?? "")”")
+        // The space as a tap on the on-screen keyboard: key events after a paste can go nowhere until then (test74).
+        let space = app.keyboards.keys.matching(NSPredicate(format: "label IN %@", ["space", "Leerzeichen"])).firstMatch
+        XCTAssertTrue(space.waitForExistence(timeout: 5), "No space key on the keyboard")
+        waitForKeyboard(app)
+        space.tap()
+        editor.typeText("Ende\(stamp)")
+        XCTAssertTrue(waitForText(editor, contains: "Zeile3\(stamp) Ende\(stamp)"), "Typing doesn't go on where the paste ends: “\(editor.value ?? "")”")
+        snapshot(app, "83-pasted-lines")
+        finishEditing(app)
+    }
+
     /// While a block is edited, a long press belongs to the text, not to moving blocks: in the edited text the text
     /// view's magnifier moves the caret ("Lupe<stamp>" at the start of "Erster Absatz"), on another paragraph the caret
     /// goes where the finger was ("Halten<stamp>" at the start of "Letzter Absatz"), and holding and moving the list
