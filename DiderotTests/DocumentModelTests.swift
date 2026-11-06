@@ -737,7 +737,7 @@ struct DocumentModelTests {
         engine.sendDocument()
         let cell = try #require(model.node(at: [0, 0, 0, 0]))
         model.activate(NodeRef(path: [0, 0, 0, 0], node: cell), node: cell)
-        engine.tableFocus = [1, 0]
+        engine.tableFocus = [0, 1, 0]
         engine.whileInserting = {
             engine.sendDocument()  // an event from before the new row
             engine.document = table([("a", "Eins"), ("c", nil), ("b", "Zwei")])
@@ -747,7 +747,7 @@ struct DocumentModelTests {
         engine.sendDocument()  // the new row's own document event
 
         let command = try #require(engine.tableCommands.first)
-        #expect(command.target == .path([0], type: "table") && command.cell == [0, 0] && command.command == ["name": "addRowAfter"])
+        #expect(command.target == .id("a", path: [0, 0, 0, 0]) && command.cell == [0, 0] && command.command == ["name": "addRowAfter"])
         #expect(model.active?.ref == NodeRef(path: [0, 1, 0, 0], id: "c"))
     }
 
@@ -2248,8 +2248,10 @@ final class FakeDocumentEngine: DocumentEngine {
     var attributesResult = EngineResult.applied
     /// Table commands, with the table and the cell they ran on.
     private(set) var tableCommands: [(target: BlockTarget, cell: [Int], command: [String: JSONValue])] = []
-    /// What `tableCommand` returns: the cell for the cursor afterwards; nil refuses the command.
-    var tableFocus: [Int]? = [0, 0]
+    /// What `tableCommand` returns: the path of the cell for the cursor afterwards; nil refuses the command.
+    var tableFocus: [Int]? = [0, 0, 0]
+    /// `tableCommand` finds no engine to take it.
+    var tableCommandsUnavailable = false
 
     init(document: PMNode) {
         self.document = document
@@ -2392,10 +2394,11 @@ final class FakeDocumentEngine: DocumentEngine {
         attributeTargets.append(target)
         return attributesResult
     }
-    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]? {
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> (result: EngineResult, focus: [Int]?) {
+        if tableCommandsUnavailable { return (.unavailable, nil) }
         tableCommands.append((target, cell, command))
         whileInserting?()
-        return tableFocus
+        return (tableFocus == nil ? .refused : .applied, tableFocus)
     }
     func undo() async -> EngineResult { historyResult }
     func redo() async -> EngineResult { historyResult }

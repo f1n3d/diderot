@@ -51,10 +51,10 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Splits a list, quote or callout after `child`: the children below go into a new one of the same kind right after.
     func splitContainer(after child: BlockTarget) async -> EngineResult
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult
-    /// Runs a table command (`TableCommand` in Engine/src/tables.ts) on a cell of the table at `target`, given by its
-    /// row and its index in the row. Returns the cell for the cursor afterwards the same way, empty when the table is
-    /// gone, nil when the command didn't apply.
-    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]?
+    /// Runs a table command (`TableCommand` in Engine/src/tables.ts) on a cell: `cell` (its row and its index in the row)
+    /// of the table at `target`, or the cell of the block at `target` (`tableAround`). With the path of the cell for the
+    /// cursor afterwards, empty when the table is gone.
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> (result: EngineResult, focus: [Int]?)
     /// Refused with nothing to undo or redo.
     func undo() async -> EngineResult
     func redo() async -> EngineResult
@@ -517,15 +517,17 @@ final class WebDocumentEngine: DocumentEngine {
                    ["target": target.jsObject, "attrs": Self.jsObject(attributes)])
     }
 
-    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> [Int]? {
-        guard let page else { return nil }
+    func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> (result: EngineResult, focus: [Int]?) {
+        guard let page else { return (.unavailable, nil) }
         do {
-            let result = try await page.callJavaScript("return window.DocmostEngine.tableCommand(target, cell, command) ?? null;",
+            let answer = try await page.callJavaScript("return window.DocmostEngine.tableCommand(target, cell, command);",
                                                        arguments: ["target": target.jsObject, "cell": cell, "command": Self.jsObject(command)])
-            return (result as? [NSNumber])?.map(\.intValue)
+            if let focus = answer as? [Int] { return (.applied, focus) }
+            // Without an engine to take it, not refused: a restart said "could not be applied".
+            return (answer as? Bool == false ? .refused : .unavailable, nil)
         } catch {
             AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
-            return nil
+            return (.unavailable, nil)
         }
     }
 

@@ -647,7 +647,7 @@ final class DocumentModel {
                     answers.inLine = Set(zip(lines, fits).filter(\.1).map(\.0))
                 }
             }
-            if let table, let apply = await engine.tableCommandsThatApply(.path(table.tablePath, type: "table"), cell: [table.row, table.column],
+            if let table, let apply = await engine.tableCommandsThatApply(ref.target, cell: [table.row, table.column],
                                                                          commands: Self.tableQuestions.map(\.engineCommand)) {
                 answers.tableCommands = Set(zip(Self.tableQuestions, apply).filter(\.1).compactMap { $0.0.engineCommand["name"]?.stringValue })
             }
@@ -2121,10 +2121,11 @@ final class DocumentModel {
         defer { editsTable = false }
         // The cell's typed text goes first: the edit can move its block or remove it.
         await flush()
-        guard let position = activeTablePosition else { return }
-        let focus = await engine.tableCommand(.path(position.tablePath, type: "table"), cell: [position.row, position.column],
-                                              command: edit.engineCommand)
-        guard report(focus != nil ? .applied : .refused), let focus, let latest = await engine.currentDocument() else { return }
+        guard let cellBlock = active?.ref, let position = activeTablePosition else { return }
+        // Through the cell's block, by its id: the table's path in this copy, which lags behind a collaborator's blocks
+        // above, could reach the table beside it, and a deletion took that.
+        let (result, focus) = await engine.tableCommand(cellBlock.target, cell: [position.row, position.column], command: edit.engineCommand)
+        guard report(result), let focus, let latest = await engine.currentDocument() else { return }
         show(latest)
         // The table is gone: deleted, or its only row or column.
         guard !focus.isEmpty else {
@@ -2138,7 +2139,7 @@ final class DocumentModel {
             return
         }
         // To the cell's first text (into a list's first item); a cell starting with an image or formula ends editing.
-        let path = document.textPath(from: position.tablePath + focus)
+        let path = document.textPath(from: focus)
         pendingFocus = (path, { _ in .end })
         adopt(latest)
         pendingFocus = nil

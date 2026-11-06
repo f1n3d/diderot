@@ -102,7 +102,7 @@ struct TableEditingTests {
     /// editing: the keyboard, with the table row in its toolbar, would go and come back.
     @Test func editingGoesOnThroughATableAction() async throws {
         let (model, engine) = try editing(document([[cell("a", "Eins")], [cell("b", "Zwei")]]), row: 0, column: 0)
-        engine.tableFocus = [0, 0]
+        engine.tableFocus = [0, 0, 0]
         var activeMeanwhile: Bool?
         engine.whileInserting = {
             engine.document = self.document([[self.cell("b", "Zwei")]])
@@ -119,13 +119,35 @@ struct TableEditingTests {
     /// Clearing the cell takes its block: the cursor goes to the cell's new paragraph.
     @Test func clearingMovesTheCursorToTheEmptyCell() async throws {
         let (model, engine) = try editing(document([[cell("a", "Eins"), cell("b", "Zwei")]]), row: 0, column: 1)
-        engine.tableFocus = [0, 1]
+        engine.tableFocus = [0, 0, 1]
         engine.whileInserting = { engine.document = self.document([[self.cell("a", "Eins"), self.cell("c", "")]]) }
 
         await model.editTable(.clear(.row))
 
         #expect(engine.tableCommands.map(\.command) == [["name": "clear", "scope": "row"]])
         #expect(model.active?.ref == NodeRef(path: [0, 0, 1, 0], id: "c"))
+    }
+
+    /// A table action runs on the cell being edited, found by its block's id, and the cursor goes to the cell the engine
+    /// names in its page: the table's path in the page's copy lags behind a collaborator's block above, and reached the
+    /// table beside it. Without an engine to take it, the action isn't refused and says nothing.
+    @Test func tableActionFollowsTheEnginesTable() async throws {
+        let (model, engine) = try editing(document([[cell("a", "Eins")], [cell("b", "Zwei")]]), row: 0, column: 0)
+        engine.tableCommandsUnavailable = true
+        await model.editTable(.deleteRow)
+        #expect(model.errorMessage == nil)
+
+        engine.tableCommandsUnavailable = false
+        engine.tableFocus = [1, 0, 0]
+        engine.whileInserting = {
+            engine.document = PMNode(type: "doc", content: [
+                PMNode(type: "paragraph", attrs: ["id": "x"]),
+                PMNode(type: "table", content: [PMNode(type: "tableRow", content: [self.cell("b", "Zwei")])]),
+            ])
+        }
+        await model.editTable(.deleteRow)
+        #expect(engine.tableCommands.map(\.target) == [.id("a", path: [0, 0, 0, 0])])
+        #expect(model.active?.ref == NodeRef(path: [1, 0, 0, 0], id: "b"))
     }
 
     /// The table's only row deleted, the table is gone and editing ends; a refused action shows why nothing happened.
@@ -165,7 +187,8 @@ struct TableEditingTests {
         #expect(state.canMoveRowUp && !state.canMoveRowDown && state.canMoveColumnLeft && !state.canMoveColumnRight)
         #expect(!state.canMergeRight && !state.canMergeDown && !state.canSplit && state.canSort)
         let question = try #require(engine.tableQuestions.last)
-        #expect(question.target == .path([0], type: "table") && question.cell == [1, 1])
+        // Asked through the cell's block, as the commands run (`tableAround`).
+        #expect(question.target == .id("b", path: [0, 1, 1, 0]) && question.cell == [1, 1])
         #expect(question.commands.compactMap { $0["name"]?.stringValue }
             == ["mergeRight", "mergeDown", "split", "moveRowUp", "moveRowDown", "moveColumnLeft", "moveColumnRight", "sort"])
     }

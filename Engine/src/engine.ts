@@ -12,8 +12,8 @@ import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, t
 import { backspaceEdit, backspacePlan, enterEdit, enterLinesEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
-import { applyPlacement, applySteps, locate, unsetComment, type Placement, type Step, type Target } from "./steps";
-import { runTableCommand, type TableCommand } from "./tables";
+import { applyPlacement, applySteps, pathOf, unsetComment, type Placement, type Step, type Target } from "./steps";
+import { runTableCommand, tableAround, type TableCommand } from "./tables";
 
 declare global {
   interface Window {
@@ -227,22 +227,23 @@ class DocmostEngine {
   }
 
   /**
-   * Runs a table command on a cell (row, index in the row) of the table at `target`, as the web's table menus do
-   * (src/tables.ts). Returns the cell for the cursor afterwards the same way, [] when the table is gone, undefined when
-   * the command didn't apply.
+   * Runs a table command on a cell, as the web's table menus do (src/tables.ts): `cell` (row, index in the row) of the
+   * table at `target`, or the cell of the block at `target` (`tableAround`). Returns the path of the cell for the cursor
+   * afterwards, [] when the table is gone; false when the command doesn't apply, null when the engine takes no edits.
    */
-  tableCommand(target: Target, cell: [number, number], command: TableCommand): number[] | undefined {
-    let focus: number[] | undefined;
-    this.transact((editor) => {
-      const found = locate(editor.state.doc, target);
+  tableCommand(target: Target, cell: [number, number], command: TableCommand): number[] | false | null {
+    let focus: number[] = [];
+    const applied = this.transact((editor) => {
+      const found = tableAround(editor.state.doc, target, cell);
       if (!found) return false;
-      const result = runTableCommand(editor.state, found.pos, cell, command);
+      const result = runTableCommand(editor.state, found.pos, found.cell, command);
       if (!result) return false;
       if (result.tr?.docChanged) editor.view.dispatch(result.tr);
-      focus = result.focus ?? [];
+      // The table stays where it was; only its content changes.
+      focus = result.focus ? [...pathOf(editor.state.doc, found.pos), ...result.focus] : [];
       return true;
     });
-    return focus;
+    return applied ? focus : applied;
   }
 
   // MARK: Keys
@@ -377,17 +378,17 @@ class DocmostEngine {
   }
 
   /**
-   * For each command, whether `tableCommand` would apply it to the cell (row, index in the row) of the table at
-   * `target`, run without changing anything; null when the table is gone too.
+   * For each command, whether `tableCommand` would apply it to the cell, found as it finds it (`tableAround`), run
+   * without changing anything; null when the table is gone too.
    */
   tableCommandsThatApply(target: Target, cell: [number, number], commands: TableCommand[]): boolean[] | null {
     if (!this.editor || this.failed) return null;
     const state = this.editor.state;
-    const found = locate(state.doc, target);
+    const found = tableAround(state.doc, target, cell);
     if (!found) return null;
     return commands.map((command) => {
       try {
-        return runTableCommand(state, found.pos, cell, command) !== null;
+        return runTableCommand(state, found.pos, found.cell, command) !== null;
       } catch {
         return false;
       }
