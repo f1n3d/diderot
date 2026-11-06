@@ -194,6 +194,15 @@ The paste test of integration links (Docmost 0.97) needs an installed GitHub int
 
 Debug builds and tests talk to the dev instance (`http://localhost:3000`, from an iPhone `http://<mac>.local:3000`). A debug launch with `DOCMOST_DEBUG_SERVER` (scripts, UI tests) picks that server on start, even if another saved server was active in the app, and returns to it after signing out, so tests never reach another server.
 
+### How a change goes in
+
+- One change per pull request, small enough to read in one go.
+- A bug fix comes with a test that fails without it; a feature with tests of what it promises.
+- Before the pull request opens, someone reviews its diff: `/code-review` in Claude Code (medium for content, the engine or the session; low for small changes), or a person. What the review finds is fixed or answered in the pull request.
+- The touched area's UI tests run (`AREA=… Tools/run-uitests.sh`). The whole suite runs on both Docmost versions before a release, or for a change that reaches across the app.
+- CI passes before the merge (build, unit tests, engine and project checks).
+- A finding that waits goes to BACKLOG.md with why. A review of the whole code is for an occasion, such as a release or a big redesign, not for a schedule; the review documents in `Docs/` are those.
+
 ## Notes on the Docmost API
 
 - The sign-in token comes only as the HttpOnly cookie `authToken`; the app sends it as `Authorization: Bearer`. A cookie sent along would take precedence, so the API client stores no cookies.
