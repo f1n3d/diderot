@@ -200,7 +200,7 @@ struct PageView: View {
             }
             Button("Show as URL") { Task { await model?.showMention(target, as: .link) } }
             Button("Remove", role: .destructive) {
-                Task { await model?.replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index, with: nil) }
+                Task { await model?.removeMention(target) }
             }
         }
         .linkSheet(isPresented: $showsComments, onDismiss: dismissedComments) {

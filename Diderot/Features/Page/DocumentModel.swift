@@ -938,6 +938,8 @@ final class DocumentModel {
         /// As the engine said when the mention was tapped (`canShowAsCard`).
         var canShowAsCard = false
         var id: String { "\(ref.identity)/\(index)" }
+        /// Whether `node`, the mention at its index by now, is this one: one put before it since links elsewhere.
+        func isMeant(_ node: PMNode) -> Bool { node.string("url") == url }
         /// What "Open Link" opens in the in-app browser: web addresses only, as the web treats a mention with another
         /// address as one without a link (Safari's view throws, ending the app, on any other).
         var webURL: URL? {
@@ -965,7 +967,7 @@ final class DocumentModel {
         case .mention:
             return
         case .link:
-            await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index,
+            await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index, if: target.isMeant,
                               with: NodeFactory.integrationLinkText(url: target.url, provider: target.provider))
         case .card:
             // From the paragraph as the engine holds it: made from this copy, the card's paragraphs dropped what a
@@ -986,7 +988,7 @@ final class DocumentModel {
     /// mention at the target's index links elsewhere: one went in before it since.
     private func cardReplacement(for target: MentionTarget, in paragraph: PMNode) -> [PMNode]? {
         guard let position = paragraph.childPosition(ofType: "integrationMention", index: target.index),
-              paragraph.children[position].string("url") == target.url
+              target.isMeant(paragraph.children[position])
         else { return nil }
         return blockReplacement(NodeFactory.integrationCard(url: target.url, provider: target.provider), paragraph: paragraph,
                                 before: Array(paragraph.children[..<position]), after: Array(paragraph.children[(position + 1)...]))
@@ -1321,8 +1323,8 @@ final class DocumentModel {
         switch target {
         case .insert(let offset):
             if let node { insertAtom(node, offset: offset) }
-        case .edit(let ref, let index):
-            await replaceAtom(ofType: type, in: ref, index: index, with: node)
+        case .edit(let ref, let index, let atom):
+            await replaceAtom(ofType: type, in: ref, index: index, if: { $0 == atom }, with: node)
         }
     }
 
@@ -1331,11 +1333,22 @@ final class DocumentModel {
         return node.children[position]
     }
 
-    /// Replaces or removes the `index`-th atom of type `type` in a (non-active) block.
-    func replaceAtom(ofType type: String, in ref: NodeRef, index: Int, with replacement: PMNode?) async {
+    /// Removes a mention (its menu's "Remove").
+    func removeMention(_ target: MentionTarget) async {
+        await replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index, if: target.isMeant, with: nil)
+    }
+
+    /// Replaces or removes the `index`-th atom of type `type` in a (non-active) block as the engine holds it, while it is
+    /// the one meant (`isMeant`). Taken by its index alone, it could be a collaborator's atom put before it while a sheet
+    /// was open, and the edit overwrote theirs.
+    private func replaceAtom(ofType type: String, in ref: NodeRef, index: Int, if isMeant: (PMNode) -> Bool,
+                             with replacement: PMNode?) async {
         guard let engine, let block = await currentBlock(ref) else { return }
         let node = block.latest
-        guard let position = node.childPosition(ofType: type, index: index) else { return }
+        guard let position = node.childPosition(ofType: type, index: index), isMeant(node.children[position]) else {
+            report(.refused)
+            return
+        }
         var children = node.children
         if let replacement { children[position] = replacement } else { children.remove(at: position) }
         let updated = PMNode(type: node.type, attrs: node.attrs, content: children.isEmpty ? nil : children)
@@ -1749,9 +1762,9 @@ final class DocumentModel {
         guard isEditable, let ref = ref(forIdentity: blockIdentity), let node = atom(ofType: type, in: ref, index: index) else { return }
         switch type {
         case "status":
-            editorSheet = .status(.edit(ref: ref, index: index), text: node.string("text") ?? "", color: node.string("color") ?? "gray")
+            editorSheet = .status(.edit(ref: ref, index: index, atom: node), text: node.string("text") ?? "", color: node.string("color") ?? "gray")
         case "mathInline":
-            editorSheet = .mathInline(.edit(ref: ref, index: index), latex: node.string("text") ?? "")
+            editorSheet = .mathInline(.edit(ref: ref, index: index, atom: node), latex: node.string("text") ?? "")
         case "integrationMention":
             var target = MentionTarget(ref: ref, index: index, url: node.string("url") ?? "", provider: node.string("provider") ?? "")
             Task {

@@ -52,7 +52,7 @@ What's left to fix now:
 
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
 
-- A status or formula edit (V16) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
+- A kept database input (V6) can overwrite what the other person changed since.
 - A selection collapses (V15), and an open preview closes (V43), when the other person types.
 
 **C. Between users.**
@@ -67,7 +67,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Working together | V16, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
+| **B** Working together | V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
@@ -76,16 +76,6 @@ Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32
 ---
 
 ## B. Working together
-
-### V16 [low] ○ A status or formula edit finds its atom by index when it's applied
-
-**Where:** `Diderot/Features/Page/DocumentModel.swift:1302–1310` (`replaceAtom`).
-
-**Problem:** The edit takes the index-th atom of the block as read when the sheet closes, and passes that same block as `expected`.
-
-**Scenario:** While the sheet is open, a collaborator inserts a status earlier in the paragraph. The user's edit overwrites theirs.
-
-**Fix:** Pass the block as it was when the sheet opened as `expected`.
 
 ### V6 [medium] ○ An old kept database input can overwrite a newer value
 

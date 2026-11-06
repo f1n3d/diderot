@@ -205,10 +205,11 @@ enum InsertFocus: Equatable {
 
 /// Editor input sheet (status, math, embed) for inserting or editing.
 enum EditorSheet: Identifiable, Equatable {
-    /// Inline atom target: insert at the active block's cursor, or edit the block's `index`-th atom of this type.
+    /// Inline atom target: insert at the active block's cursor, or edit the block's `index`-th atom of this type, `atom`
+    /// when the sheet opened.
     enum AtomTarget: Equatable {
         case insert(offset: Int)
-        case edit(ref: NodeRef, index: Int)
+        case edit(ref: NodeRef, index: Int, atom: PMNode)
     }
 
     /// Block target: insert a new one or change an existing one.

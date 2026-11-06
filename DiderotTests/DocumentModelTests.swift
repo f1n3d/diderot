@@ -414,6 +414,36 @@ struct DocumentModelTests {
         #expect(model.errorMessage != nil)
     }
 
+    /// A status edited in its sheet goes into the paragraph as the engine holds it, a collaborator's words in it included,
+    /// while the status at its index is the one the sheet opened with. Their status put before it meanwhile makes the
+    /// edit refused: taken by its index alone, theirs was overwritten.
+    @Test func atomEditKeepsACollaboratorsAtom() async throws {
+        let mine = PMNode(type: "status", attrs: ["text": "Offen", "color": "gray"])
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Stand "), mine])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        model.editAtom(blockIdentity: "p1", type: "status", index: 0)
+        guard case .status(let target, _, _) = model.editorSheet else {
+            Issue.record("No status sheet")
+            return
+        }
+        let done = PMNode(type: "status", attrs: ["text": "Fertig", "color": "green"])
+        func page(_ inlines: PMNode...) -> PMNode {
+            PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "p1"], content: inlines)])
+        }
+
+        engine.document = page(PMNode(type: "text", text: "Stand heute "), mine)
+        await model.applyAtom(done, type: "status", target: target)
+        #expect(engine.saved.last == page(PMNode(type: "text", text: "Stand heute "), done).children[0])
+        #expect(model.errorMessage == nil)
+
+        let theirs = PMNode(type: "status", attrs: ["text": "Blockiert", "color": "red"])
+        engine.document = page(theirs, PMNode(type: "text", text: " Stand "), mine)
+        await model.applyAtom(done, type: "status", target: target)
+        #expect(engine.saved.count == 1)
+        #expect(model.errorMessage != nil)
+    }
+
     /// A link shown as a card in the line being edited: the line's input goes in first, with its base, and the card's
     /// blocks take the line's place only while it is what they were made from. A collaborator's words in it since make
     /// the engine refuse them; written over the line unchecked, they were gone.
