@@ -6,7 +6,7 @@
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
-import { applySteps, locate, unsetComment, type Step } from "../src/steps";
+import { applyPlacement, applySteps, locate, unsetComment, type Placement, type Step } from "../src/steps";
 import { schemaExtensions } from "../src/schema";
 import { tabIds, withUniqueTabIds } from "../src/extensions";
 
@@ -130,6 +130,23 @@ expect("a paragraph moved into a synced block", "transclusionSource(Synced, One)
 expect("a paragraph moved into a footnote", "Two footnotes(footnote(One, Note))", run(page(paragraph("1", "One"), paragraph("2", "Two"), footnotes), [
   { op: "move", target: { path: [0] }, destination: { id: "n" }, position: "before" },
 ]));
+
+// Where blocks put on the page went (`applyPlacement`): the app puts the cursor from there, not from its copy of the
+// page, which lags behind a collaborator's blocks above.
+function placed(before: PMNode, step: Placement): unknown {
+  const tr = EditorState.create({ schema, doc: before }).tr;
+  return applyPlacement(tr, step) ?? "refused";
+}
+const divider: JSONContent = { type: "horizontalRule" };
+const shifted = page(paragraph("x", "Theirs"), paragraph("a", "A"), list(item(paragraph("b", "B"))));
+expect("blocks after a line a collaborator's block now precedes", [2],
+  placed(shifted, { op: "insert", target: { id: "a", path: [0] }, json: [divider, paragraph("n")], position: "after" }));
+expect("blocks before a line", [1], placed(shifted, { op: "insert", target: { id: "a" }, json: [divider], position: "before" }));
+expect("blocks in place of a line", [1], placed(shifted, { op: "replace", target: { id: "a" }, json: [divider, paragraph("n")] }));
+expect("blocks in a list item", [2, 0, 1], placed(shifted, { op: "insert", target: { id: "b" }, json: [divider], position: "after" }));
+expect("blocks at the end, before the footnotes", [1], placed(page(paragraph("1", "One"), footnotes), { op: "insert", target: null, json: [divider] }));
+expect("blocks that don't fit", "refused",
+  placed(page({ type: "transclusionSource", content: [paragraph("s", "Synced")] }), { op: "insert", target: { id: "s" }, json: [{ type: "pageBreak" }] }));
 
 // Setting attributes: a value the app sets lands; one it doesn't throws (src/guards.ts' `settable`), and the engine then
 // drops the whole batch, steps before it included, as it dispatches only a batch that applied.

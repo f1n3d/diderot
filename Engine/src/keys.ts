@@ -10,7 +10,7 @@ import type { JSONContent } from "@tiptap/core";
 import { Fragment, Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 import { difference, rebase } from "./rebase";
-import { applySteps, locate, type Step, type Target } from "./steps";
+import { applySteps, locate, pathOf, type Step, type Target } from "./steps";
 
 /** Where the cursor goes: the text block at `path`, `offset` into its content (ProseMirror's count). */
 export type Cursor = { path: number[]; offset: number };
@@ -273,12 +273,6 @@ function lift(doc: PMNode, line: number[], levels: number, withItem: boolean, re
     steps.push({ op: "delete", target: { path: [...containerNow, ...removing.slice(containerPath.length)], type: gone.type.name } });
   }
   return { steps, cursor: { path: cursorPath, offset: 0 } };
-}
-
-/** The path (child indices from the root) of the node that starts at `pos`. */
-export function pathOf(doc: PMNode, pos: number): number[] {
-  const $pos = doc.resolve(pos);
-  return Array.from({ length: $pos.depth + 1 }, (_, depth) => $pos.index(depth));
 }
 
 function nodeAt(doc: PMNode, path: number[]): PMNode | undefined {

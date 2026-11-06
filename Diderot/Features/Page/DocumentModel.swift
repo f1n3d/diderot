@@ -1089,8 +1089,8 @@ final class DocumentModel {
               let blockOffset = nodes.firstIndex(of: block)
         else { return false }
         let parentPath = Array(path.dropLast()), index = path[path.count - 1]
-        let afterPath = parentPath + [index + blockOffset + 1]
-        var focus: [Int]? = afterPath
+        // The cursor's block, counted from the first new one where the engine put it (`placeBlocks`).
+        var focus: Int? = blockOffset + 1
         if nodes.last == block {
             let siblings = parentPath.isEmpty ? document.children : node(at: parentPath)?.children ?? []
             if siblings.indices.contains(index + 1), siblings[index + 1].type != "footnotes" {
@@ -1112,8 +1112,9 @@ final class DocumentModel {
             let expected = session.base ?? line
             // The new blocks hold the active text.
             session.dropActive()
-            if report(await engine.replaceBlock(target, withNodes: nodes, expected: expected)), let focus {
-                await focusAfterOperation(focus, .start)
+            let (applied, placed) = await engine.placeBlocks(nodes, at: target, position: .replace, expected: expected)
+            if report(applied), let focus, let placed {
+                await focusAfterOperation(Self.sibling(of: placed, offset: focus), .start)
             }
         }
         return true
@@ -1384,7 +1385,8 @@ final class DocumentModel {
                 last.node.type == "paragraph" && last.node.children.isEmpty && active?.ref != last.ref ? last.ref : nil
             }
             if let anchor, nodes == [PMNode(type: "paragraph")] {
-                await focusAfterOperation(anchor.path, .end)
+                // Where the engine has it: a collaborator's blocks above move it.
+                if let (path, _) = await engine.currentDocument()?.locate(anchor) { await focusAfterOperation(path, .end) }
                 return .applied
             }
         }
@@ -1400,32 +1402,30 @@ final class DocumentModel {
                 anchor = block.ref
             }
         }
-        let newPath: [Int]
         let next: PMNode?
         if let anchor {
             let index = anchor.path[anchor.path.count - 1]
             let parentPath = Array(anchor.path.dropLast())
             let siblings = parentPath.isEmpty ? document.children : node(at: parentPath)?.children ?? []
             let nextIndex = before ? index : index + 1
-            newPath = parentPath + [replace ? index : nextIndex]
             next = siblings.indices.contains(nextIndex) ? siblings[nextIndex] : nil
         } else {
-            newPath = [contentBlocks.count]
             next = nil
         }
         var blocks = nodes
-        var focusTarget: (path: [Int], cursor: CursorRequest)?
-        var afterPath = newPath
-        afterPath[afterPath.count - 1] += nodes.count
+        // Where the cursor goes, from the first new block where the engine put it (`placeBlocks`): into it, or into the
+        // block after the new ones.
+        var focusTarget: (path: ([Int]) -> [Int], cursor: CursorRequest)?
+        let afterThem = { (first: [Int]) in Self.sibling(of: first, offset: nodes.count) }
         switch focus {
         case .inside(let relative):
-            focusTarget = (newPath + relative, .end)
+            focusTarget = ({ $0 + relative }, .end)
         case .after:
             if let next, next.type != "footnotes" {
-                if PMNode.editableTextTypes.contains(next.type) { focusTarget = (afterPath, .start) }
+                if PMNode.editableTextTypes.contains(next.type) { focusTarget = (afterThem, .start) }
             } else {
                 blocks.append(PMNode(type: "paragraph"))
-                focusTarget = (afterPath, .start)
+                focusTarget = (afterThem, .start)
             }
         case nil:
             break
@@ -1441,18 +1441,19 @@ final class DocumentModel {
             }
             // Otherwise it stays active until the new block takes focus (the keyboard stays up).
         }
-        let applied: EngineResult
-        if replace, let anchor {
-            applied = await engine.replaceBlock(anchor.target, withNodes: blocks, expected: replacedBlock)
-        } else if let anchor {
-            applied = await engine.insertBlocks(blocks, relativeTo: anchor.target, position: before ? .before : .after)
-        } else {
-            applied = await engine.insertBlocks(blocks, relativeTo: nil, position: .after)
-        }
-        if report(applied), let focusTarget {
-            await focusAfterOperation(focusTarget.path, focusTarget.cursor)
+        let position: BlockPlace.Position = replace ? .replace : before && anchor != nil ? .before : .after
+        let (applied, placed) = await engine.placeBlocks(blocks, at: anchor?.target, position: position, expected: replacedBlock)
+        if report(applied), let focusTarget, let placed {
+            await focusAfterOperation(focusTarget.path(placed), focusTarget.cursor)
         }
         return applied
+    }
+
+    /// The path `offset` siblings after `path`.
+    private static func sibling(of path: [Int], offset: Int) -> [Int] {
+        var path = path
+        path[path.count - 1] += offset
+        return path
     }
 
     /// Whether `nodes` fit where `insertBlocks` puts them (in place of an empty line, or after a block), as the engine
@@ -1692,7 +1693,9 @@ final class DocumentModel {
         if active != nil { deactivate() }
         let lastRef = NodeRef(path: path + [tabs.children.count - 1], node: last)
         let tab = NodeFactory.tab(label: "Tab \(tabs.children.count + 1)")
-        return report(await engine.insertBlock(tab, relativeTo: lastRef.target, position: .after)) ? path + [tabs.children.count] : nil
+        // Where the engine put it: counted in this copy, a tab a collaborator just added would be shown instead.
+        let (applied, placed) = await engine.placeBlocks([tab], at: lastRef.target, position: .after, expected: nil)
+        return report(applied) ? placed : nil
     }
 
     /// Sets a tab's label; empty or unchanged labels are left alone, as on the web.

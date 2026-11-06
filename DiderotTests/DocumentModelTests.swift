@@ -851,6 +851,23 @@ struct DocumentModelTests {
         #expect(model.errorMessage == nil)
     }
 
+    /// The cursor after an insert goes where the engine put the new blocks. The page's copy lags behind a collaborator who
+    /// removed a block above meanwhile: counted there, the cursor went into the paragraph after the new one, and the next
+    /// words with it.
+    @Test func insertFocusesWhereTheEnginePutTheBlocks() async throws {
+        func paragraph(_ id: String, _ text: String = "") -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.isEmpty ? nil : [PMNode(type: "text", text: text)])
+        }
+        let line = paragraph("a", "Zeile")
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("z", "Weg"), line]))
+        let model = try Self.model(engine)
+        // The engine's page once the divider is in: the block above gone, a paragraph a collaborator added below.
+        engine.document = PMNode(type: "doc", content: [line, PMNode(type: "horizontalRule"), paragraph("new"), paragraph("y", "Danach")])
+        await model.insertBlocks([PMNode(type: "horizontalRule")], placement: .replaceOrAfter(NodeRef(path: [1], node: line)), focus: .after)
+        #expect(engine.inserted.map(\.node.type) == ["horizontalRule", "paragraph"])
+        #expect(model.active?.ref.id == "new")
+    }
+
     /// The engine goes while a block just left is saved (its web process ended): the block keeps its input, which goes
     /// in once the engine is back, and nothing says "could not be applied". It counted as refused, and the text was gone.
     @Test(.timeLimit(.minutes(1))) func unavailableEngineKeepsTheInputOfALeftBlock() async throws {
@@ -2266,6 +2283,22 @@ final class FakeDocumentEngine: DocumentEngine {
         return block(at: target) == expected ? nil : .refused
     }
 
+    /// The path of the block at `target` in this document.
+    private func path(of target: BlockTarget) -> [Int]? {
+        func find(_ node: PMNode, _ id: String, _ path: [Int]) -> [Int]? {
+            for (index, child) in node.children.enumerated() {
+                if child.string("id") == id { return path + [index] }
+                if let found = find(child, id, path + [index]) { return found }
+            }
+            return nil
+        }
+        guard let document else { return nil }
+        switch target {
+        case .id(let id, _): return find(document, id, [])
+        case .path(let path, _): return block(at: target) == nil ? nil : path
+        }
+    }
+
     private func block(at target: BlockTarget) -> PMNode? {
         func find(_ node: PMNode, _ id: String) -> PMNode? {
             for child in node.children {
@@ -2326,6 +2359,25 @@ final class FakeDocumentEngine: DocumentEngine {
         inserted += nodes.map { ($0, target, position) }
         whileInserting?()
         return .applied
+    }
+    /// As `insertBlocks` or `replaceBlock(_:withNodes:expected:)`, with the first block's path where this document puts
+    /// it, as the engine finds its target before it inserts (before `whileInserting`).
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+        -> (result: EngineResult, path: [Int]?) {
+        var placed: [Int]?
+        if let target {
+            placed = path(of: target)
+            if position == .after, let path = placed { placed = Array(path.dropLast()) + [path[path.count - 1] + 1] }
+        } else if let document {
+            placed = [document.children.last?.type == "footnotes" ? document.children.count - 1 : document.children.count]
+        }
+        let result = switch (position, target) {
+        case (.replace, let target?): await replaceBlock(target, withNodes: nodes, expected: expected)
+        case (.replace, nil): EngineResult.refused
+        case (.before, _): await insertBlocks(nodes, relativeTo: target, position: .before)
+        case (.after, _): await insertBlocks(nodes, relativeTo: target, position: .after)
+        }
+        return (result, result.isApplied ? placed : nil)
     }
     func deleteBlock(_ target: BlockTarget) async -> EngineResult {
         deleted.append(target)

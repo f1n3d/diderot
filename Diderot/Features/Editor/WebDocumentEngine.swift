@@ -41,6 +41,11 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Without a target: at the end of the document, before the footnotes.
     func insertBlock(_ node: PMNode, relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult
     func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult
+    /// Inserts blocks before or after `target` (without one, at the end of the page), or puts them in its place
+    /// (`expected` as above), and says where the first of them is (`placeBlocks` in Engine/src/engine.ts): the cursor goes
+    /// from there. Counted in the page's copy, which lags behind a collaborator's blocks above, it went into another block.
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+        -> (result: EngineResult, path: [Int]?)
     func deleteBlock(_ target: BlockTarget) async -> EngineResult
     func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult
     /// Splits a list, quote or callout after `child`: the children below go into a new one of the same kind right after.
@@ -476,6 +481,22 @@ final class WebDocumentEngine: DocumentEngine {
     func insertBlocks(_ nodes: [PMNode], relativeTo target: BlockTarget?, position: BlockInsertPosition) async -> EngineResult {
         await call("return window.DocmostEngine.insertBlocks(target, json, position);",
                    ["target": target?.jsObject ?? NSNull(), "json": nodes.map(Self.jsObject), "position": position.rawValue])
+    }
+
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+        -> (result: EngineResult, path: [Int]?) {
+        guard let page else { return (.unavailable, nil) }
+        do {
+            let answer = try await page.callJavaScript("return window.DocmostEngine.placeBlocks(target, json, position, expected);", arguments: [
+                "target": target?.jsObject ?? NSNull(), "json": nodes.map(Self.jsObject), "position": position.rawValue,
+                "expected": expected.map { Self.jsObject($0) } ?? NSNull(),
+            ])
+            if let path = answer as? [Int] { return (.applied, path) }
+            return (answer as? Bool == false ? .refused : .unavailable, nil)
+        } catch {
+            AppLog.ui.error("Engine call failed: \(error.localizedDescription, privacy: .public)")
+            return (.unavailable, nil)
+        }
     }
 
     func deleteBlock(_ target: BlockTarget) async -> EngineResult {

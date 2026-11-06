@@ -7,8 +7,8 @@ import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { uniqueIdTypes } from "./extensions";
 import { holds, slotAt } from "./fits";
-import { liftLineEdit, pathOf, type KeyEdit } from "./keys";
-import { locate, type Step, type Target } from "./steps";
+import { liftLineEdit, type KeyEdit } from "./keys";
+import { locate, pathOf, type Step, type Target } from "./steps";
 
 /** What a line can turn into: the app's block types for "/" and the toolbar, and a synced block. */
 export type Kind =

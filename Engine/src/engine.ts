@@ -12,7 +12,7 @@ import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, t
 import { backspaceEdit, backspacePlan, enterEdit, enterLinesEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
-import { applySteps, locate, unsetComment, type Step, type Target } from "./steps";
+import { applyPlacement, applySteps, locate, unsetComment, type Placement, type Step, type Target } from "./steps";
 import { runTableCommand, type TableCommand } from "./tables";
 
 declare global {
@@ -185,6 +185,26 @@ class DocmostEngine {
   /** Inserts one or more blocks in one step (e.g. a divider plus a paragraph to keep typing in). */
   insertBlocks(target: Target | null, json: JSONContent[], position: "before" | "after" = "after"): boolean | null {
     return this.batch([{ op: "insert", target, json, position }]);
+  }
+
+  /**
+   * Inserts blocks before or after a block, or at the end of the page without one (as `insertBlocks`), or puts them in
+   * place of one ("replace", with `expected` as in `replaceBlockWith`), and returns the path of the first of them, for
+   * the cursor (`applyPlacement`). False when refused.
+   */
+  placeBlocks(target: Target | null, json: JSONContent[], position: "before" | "after" | "replace",
+    expected?: JSONContent | null): number[] | false | null {
+    if (position === "replace" && !target) return false;
+    const step: Placement = position === "replace" ? { op: "replace", target: target!, json, expected } : { op: "insert", target, json, position };
+    let path: number[] | undefined;
+    const applied = this.transact((editor) => {
+      const tr = editor.state.tr;
+      path = applyPlacement(tr, step);
+      if (!path) return false;
+      editor.view.dispatch(tr);
+      return true;
+    });
+    return applied ? path! : applied;
   }
 
   deleteBlock(target: Target): boolean | null {

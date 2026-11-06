@@ -4,6 +4,7 @@
 import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode, type Mark } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
+import { ReplaceStep } from "@tiptap/pm/transform";
 import { tabIds, withTabIds } from "./extensions";
 import { endSlot, holds, slotAt } from "./fits";
 import { checkAttributes, checkBlocks, unchanged } from "./guards";
@@ -114,6 +115,28 @@ function applyStep(tr: Transaction, step: Step): boolean {
       return true;
     }
   }
+}
+
+/** A step that puts blocks on the page. */
+export type Placement = Extract<Step, { op: "insert" | "replace" }>;
+
+/**
+ * Puts blocks on the page with one insert or replace step, and returns the path of the first of them: the app puts the
+ * cursor from there. Counted in its copy of the page, which lags behind a collaborator's changes, it went into another
+ * block when they had added or removed blocks above. Undefined when the step is refused.
+ */
+export function applyPlacement(tr: Transaction, step: Placement): number[] | undefined {
+  const start = tr.steps.length;
+  if (!applyStep(tr, step)) return undefined;
+  // The blocks fit there (`holds`), so the step put them where it starts.
+  const placed = tr.steps[start];
+  return placed instanceof ReplaceStep ? pathOf(tr.doc, placed.from) : undefined;
+}
+
+/** The path (child indices from the root) of the node that starts at `pos`. */
+export function pathOf(doc: PMNode, pos: number): number[] {
+  const $pos = doc.resolve(pos);
+  return Array.from({ length: $pos.depth + 1 }, (_, depth) => $pos.index(depth));
 }
 
 /** The block at `target`, unless it changed from `expected`. */

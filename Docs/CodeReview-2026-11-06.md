@@ -52,7 +52,7 @@ What's left to fix now:
 
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
 
-- The focus after an insert (V10), a status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
+- A status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
 - A selection collapses (V15), and an open preview closes (V43), when the other person types.
 
 **C. Between users.**
@@ -67,7 +67,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Working together | V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
+| **B** Working together | V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
@@ -76,16 +76,6 @@ Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32
 ---
 
 ## B. Working together
-
-### V10 [medium] ○ Inserted blocks are focused by a path from the app's lagging copy
-
-**Where:** `Diderot/Features/Page/DocumentModel.swift:1371–1400, 1420–1421` (`insertBlocks`), `:1066–1068` (`placeBlockInActiveText`), `:1653` (`addTab`).
-
-**Problem:** Return, Backspace and conversions focus where the engine says. Inserts compute the path to focus from `document`, and `focusAfterOperation` activates whatever sits there in the engine's document. The backlog's F45 note names toggles, callout types and code languages; it reaches inserts too.
-
-**Scenario:** A collaborator adds or removes blocks above while the user inserts a divider through "/". The caret lands in another block, and the next words go there.
-
-**Fix:** Let the engine return where the new blocks are, or give the paragraph to focus an id the app chose and focus it by that.
 
 ### V16 [low] ○ A status or formula edit finds its atom by index when it's applied
 
