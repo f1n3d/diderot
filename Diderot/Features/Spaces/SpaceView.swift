@@ -10,7 +10,8 @@ struct SpaceView: View {
     @State private var store: PageTreeStore
     @State private var runner: PageActionRunner?
     @State private var mode: Mode = .hierarchy
-    @State private var recent: LoadState<[Page]> = .idle
+    /// Only the newest load's answer shows: a change, a pull and a switch to Recent each load.
+    @State private var recent = RemoteValue<[Page]>()
     @State private var search: SearchModel
     @State private var isCreatingPage = false
     @State private var showsTemplates = false
@@ -220,7 +221,7 @@ struct SpaceView: View {
 
     @ViewBuilder
     private var recentCard: some View {
-        AsyncContentView(state: recent, layout: .inline(), retry: { await loadRecent() }) { pages in
+        AsyncContentView(state: recent.state, layout: .inline(), retry: { await loadRecent() }) { pages in
             if pages.isEmpty {
                 ContentUnavailableView("Nothing here yet", systemImage: "clock", description: Text("Recently updated pages in this space show up here."))
                     .padding(.vertical, 20)
@@ -322,15 +323,8 @@ struct SpaceView: View {
     }
 
     private func loadRecent() async {
-        guard session.client != nil else { return }
-        if recent.value == nil { recent = .loading }
-        do {
-            let page = try await session.send(Endpoints.Pages.recent(spaceId: space.id, limit: 50))
-            recent = .loaded(page.items)
-        } catch is CancellationError {
-        } catch {
-            if recent.value == nil { recent = .failed(error) }
-        }
+        guard let ready = session.ready else { return }
+        await recent.load { try await session.load(Endpoints.Pages.recent(spaceId: space.id, limit: 50), of: ready).items }
     }
 }
 
