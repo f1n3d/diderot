@@ -449,8 +449,9 @@ final class AppSession {
     }
 
     /// Drops the page's kept title: it, or a newer one, reached the server. With `title`, only while it is still that one.
-    func forgetUnsentTitle(pageId: String, title: String? = nil) async {
-        guard let store = ready?.unsentChanges else { return }
+    /// `store`: the one it was kept in (the page's session's); the current session's may be another server's by now.
+    func forgetUnsentTitle(pageId: String, title: String? = nil, in store: UnsentStore? = nil) async {
+        guard let store = store ?? ready?.unsentChanges else { return }
         await UnsentEdits.forgetTitle(pageId: pageId, title: title, in: store)
     }
 
@@ -564,8 +565,8 @@ final class AppSession {
         await ready.cache.write(ready.currentUser, key: CacheKey.currentUser)
         await ready.cache.write(ready.entitlements, key: CacheKey.entitlements)
         if let version { await ready.cache.write(version, key: CacheKey.serverVersion) }
-        // Not its staged uploads: a running upload reads them.
-        await removeLocalData(for: ready.server.url, uploads: false)
+        // Not its staged uploads: a running upload reads them. Nor the web editor's edits the server doesn't have yet.
+        await removeLocalData(for: ready.server.url, LocalDataRemoval(uploads: false, webStorage: false))
     }
 
     /// Whether the signed-out server keeps its offline copies from before: for the same person when they sign in again.
@@ -573,13 +574,14 @@ final class AppSession {
         await makeCache(for: server.url).totalSize() > 0
     }
 
-    /// Removes the offline copies, files and web editor data the signed-out server's sign-in left, on its sign-in
-    /// screen: once signed out, the server was in no list where they could be removed, as the privacy policy says they
-    /// can (code review R16). Not its changes the server doesn't have yet: they go out at the next sign-in there.
+    /// Removes the offline copies and files the signed-out server's sign-in left, on its sign-in screen: once signed
+    /// out, the server was in no list where they could be removed, as the privacy policy says they can (code review R16).
+    /// Not its changes the server doesn't have yet: they go out at the next sign-in there. The web editor's go with
+    /// signing out (R24); after a 401 they are still there, and stay.
     func clearSavedContent(of server: ServerInfo) async {
         guard case .signedOut(let current) = state, Self.isSameServer(current, as: server) else { return }
         await makeCache(for: server.url).removeAll()
-        await removeLocalData(for: server.url)
+        await removeLocalData(for: server.url, .savedContent)
     }
 
     // MARK: - Internal
@@ -690,8 +692,8 @@ final class AppSession {
     }
 
     /// Removes what the offline cache doesn't cover (`SessionEnvironment.removeLocalData`).
-    private func removeLocalData(for serverURL: URL, uploads: Bool = true) async {
-        await environment.removeLocalData(serverURL, uploads)
+    private func removeLocalData(for serverURL: URL, _ removal: LocalDataRemoval = .all) async {
+        await environment.removeLocalData(serverURL, removal)
     }
 
     /// Checks the saved sign-in the start couldn't check (`uncheckedSignIn`) again. Its result counts only while the

@@ -1,7 +1,7 @@
 // Docmost's own node and mark types and the changes its web editor makes to documents on its own, as TipTap
 // extensions. Written from FORMAT.md and spec/, on TipTap's MIT extensions; `pnpm run check` compares them with
 // Docmost's editor. The engine's editor is never shown, so nodes render as plain elements.
-import { Extension, Mark, Node, mergeAttributes, type Attribute, type NodeConfig } from "@tiptap/core";
+import { Extension, Mark, Node, mergeAttributes, type Attribute, type JSONContent, type NodeConfig } from "@tiptap/core";
 import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { Fragment, type Node as PMNode, type Slice } from "@tiptap/pm/model";
 import { ReplaceAroundStep, ReplaceStep } from "@tiptap/pm/transform";
@@ -13,6 +13,9 @@ import { customAlphabet } from "nanoid";
 
 /** New block ids: 12 random lowercase letters. */
 export const newBlockId = customAlphabet("abcdefghijklmnopqrstuvwxyz", 12);
+
+/** The blocks UniqueID gives an id (`attrs.id`), as Docmost's editor does. */
+export const uniqueIdTypes = ["heading", "paragraph", "transclusionSource"];
 
 const required: Partial<Attribute> = { isRequired: true };
 
@@ -124,8 +127,29 @@ function followTabIds(transactions: readonly Transaction[], _oldState: EditorSta
   return transactions.some(touchesTabs) ? withUniqueTabIds(newState) : null;
 }
 
+/**
+ * `json` with a new id for each tab in it that has none (empty or not a string), none of them taken (`taken`, asked only
+ * when a tab needs one, gets them): the steps give them as they insert or replace, as the web gives a new tab one, so the
+ * rule above appends nothing to the app's own changes.
+ */
+export function withTabIds(json: JSONContent, taken: () => Set<unknown>): JSONContent {
+  const content = json.content?.map((child) => withTabIds(child, taken));
+  const id = json.attrs?.id;
+  if (json.type !== "tab" || (typeof id === "string" && id !== "")) return content ? { ...json, content } : json;
+  const ids = taken();
+  let fresh = newBlockId();
+  while (ids.has(fresh)) fresh = newBlockId();
+  ids.add(fresh);
+  return { ...json, attrs: { ...json.attrs, id: fresh }, ...(content ? { content } : {}) };
+}
+
+/** The ids of the tabs in `doc`. */
+export function tabIds(doc: PMNode): Set<unknown> {
+  return new Set(tabIdsOf(doc));
+}
+
 /** New ids for tabs without one (empty or not a string) or with one an earlier tab has; null if all are fine. */
-function withUniqueTabIds(state: EditorState): Transaction | null {
+export function withUniqueTabIds(state: EditorState): Transaction | null {
   const { tr } = state;
   const taken = new Set(tabIdsOf(state.doc));
   const seen = new Set<unknown>();

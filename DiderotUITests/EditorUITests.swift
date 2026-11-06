@@ -1155,6 +1155,38 @@ import XCTest
         let shown = expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: marked)
         XCTAssertEqual(XCTWaiter().wait(for: [shown], timeout: 5), .completed, "“Show on Page” doesn't scroll to the passage")
         snapshot(app, "33-shown-on-page")
+
+        // A deleted inline comment's passage loses its mark, as on the web: it used to stay marked for everyone.
+        let last = edit(app, blockContaining: "Letzter Absatz")
+        last.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 14, dy: 12)).doubleTap()
+        XCTAssertTrue(commentItem.waitForExistence(timeout: 5), "“Comment” missing from the selection menu")
+        commentItem.tap()
+        XCTAssertTrue(inlineText.waitForExistence(timeout: 5), "Sheet for the second inline comment doesn't open")
+        let secondQuote = app.staticTexts["inline-comment-quote"].label
+        inlineText.typeText("Weg\(stamp)")
+        app.buttons["inline-comment-send"].tap()
+        XCTAssertTrue(inlineText.waitForNonExistence(timeout: 10), "Sheet doesn't close after sending")
+        finishEditing(app)
+        let secondMarked = app.links.matching(NSPredicate(format: "label == %@", secondQuote)).firstMatch
+        XCTAssertTrue(secondMarked.waitForExistence(timeout: 10), "The second passage isn't marked")
+        commentsButton.tap()
+        let secondRow = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'comment-'"))
+            .containing(NSPredicate(format: "label == %@", "Weg\(stamp)")).firstMatch
+        XCTAssertTrue(secondRow.waitForExistence(timeout: 10), "The second inline comment is missing from the comments")
+        let secondMenu = app.buttons["comment-menu-\(secondRow.identifier.dropFirst("comment-".count))"]
+        XCTAssertTrue(secondMenu.waitForExistence(timeout: 5), "The second inline comment has no menu")
+        secondMenu.tap()
+        let deleteItem = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(deleteItem.waitForExistence(timeout: 5), "“Delete” missing from the comment menu")
+        deleteItem.tap()
+        let confirmDelete = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: 5), "Delete confirmation missing")
+        confirmDelete.tap()
+        XCTAssertTrue(secondRow.waitForNonExistence(timeout: 10), "The deleted inline comment remains")
+        tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
+        // The first comment's mark stays: the server check reads it in the page content.
+        XCTAssertTrue(secondMarked.waitForNonExistence(timeout: 10), "The deleted comment's passage is still marked")
+        snapshot(app, "33-deleted-inline-comment")
     }
 
     /// Links leave the app as from the web client in a browser (the last paragraph of Tools/editor-test-page.json): a
@@ -1637,6 +1669,28 @@ import XCTest
         let two = expectation(for: NSPredicate(format: "count >= 2"), evaluatedWith: references)
         wait(for: [two], timeout: 10)
         if app.textViews["active-editor"].exists { finishEditing(app) }
+
+        // Unsynced, the embed is the page's own copy: an edit of it stays there, and the original keeps its text. The copy
+        // used to keep the original's block ids, and the edit landed in the original.
+        let second = references.element(boundBy: references.count - 1)
+        XCTAssertTrue(scrollTo(second, in: app), "The second embed's menu is missing")
+        second.tap()
+        let unsync = button(app, labels: ["Unsync", "Synchronisierung aufheben"])
+        XCTAssertTrue(unsync.waitForExistence(timeout: 5), "“Unsync” missing from the embed's menu")
+        unsync.tap()
+        let one = expectation(for: NSPredicate(format: "count == 1"), evaluatedWith: references)
+        wait(for: [one], timeout: 15)
+        // The copy is the last text with the original's words: the original and the first embed come before it.
+        let copies = app.staticTexts.matching(NSPredicate(format: "label == %@", "Sync\(stamp)"))
+        let unsynced = copies.element(boundBy: copies.count - 1)
+        let end = CGVector(dx: 1, dy: 0.85)
+        XCTAssertTrue(scrollTo(unsynced, in: app, anchor: end), "The unsynced copy doesn't show")
+        unsynced.coordinate(withNormalizedOffset: end).withOffset(CGVector(dx: -2, dy: 0)).tap()
+        editor = activeEditor(app, "The unsynced copy doesn't open in the editor")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText(" Kopie")
+        snapshot(app, "38-unsynced-copy")
+        finishEditing(app)
 
         editor = appendParagraph(app)
         editor.typeText("Wrap\(stamp)")
@@ -2125,8 +2179,19 @@ import XCTest
         delete.tap()
         XCTAssertTrue(fourth.waitForNonExistence(timeout: 8), "The deleted tab remains")
 
+        // Undo takes back an added tab. The ids for the new tab came in a transaction kept from the history, which took
+        // the insert with it: Undo reverted the change before, here the deletion, and the tab stayed.
+        add.tap()
+        XCTAssertTrue(cancel.waitForExistence(timeout: 8), "Adding a tab doesn't ask for its name")
+        cancel.tap()
+        XCTAssertTrue(fourth.waitForExistence(timeout: 8), "The added tab “Tab 4” doesn't show")
         first.tap()
         XCTAssertTrue(text.waitForExistence(timeout: 5), "The first tab doesn't show its text again")
+        _ = edit(app, blockContaining: "Reiter\(stamp)")
+        tapToolbarButton(app, "editor-undo")
+        XCTAssertTrue(fourth.waitForNonExistence(timeout: 8), "Undo doesn't take back the added tab")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'tab-'")).count, 3, "Undo brought a tab back")
+        finishEditing(app)
         snapshot(app, "69-tabs")
     }
 

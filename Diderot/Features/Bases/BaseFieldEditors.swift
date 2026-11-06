@@ -262,12 +262,11 @@ struct BaseTextFieldEditor: View {
                 .accessibilityLabel(kind == .email ? Text("Send Email") : Text("Open Link"))
             }
         }
-        .onChange(of: draft.text) { _, text in
-            // Text is single-line but wraps: Return ends the input.
-            if kind == .text, text.contains("\n") {
-                draft.text = text.replacingOccurrences(of: "\n", with: "")
-                focused = false
-            }
+        .onChange(of: draft.text) { old, text in
+            // Text is single-line but wraps: Return ends the input (`SingleLineInput`), only while the user types.
+            guard kind == .text, focused, let taken = SingleLineInput.taking(text, after: old) else { return }
+            draft.text = taken.text
+            if taken.endsInput { focused = false }
         }
         .baseDraft($draft, focused: focused, stored: storedText, model: model, rowId: rowId, propertyId: property.id, value: value)
     }

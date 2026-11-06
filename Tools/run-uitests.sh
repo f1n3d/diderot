@@ -438,6 +438,7 @@ def plain(node):
     return ""
 comments = call("comments", {"pageId": page, "limit": 100})["items"]
 inline = next((c for c in comments if plain(c.get("content")) == "Inline" + stamp), None)
+deleted_inline = next((c for c in comments if plain(c.get("content")) == "Weg" + stamp), None)
 mark_ids = set()
 def walk(node):
     for mark in node.get("marks") or []:
@@ -451,6 +452,8 @@ checks = [
     (E + "test33_Comments", "Comment: text \"" + str((inline or {}).get("selection")) + "\" as inline comment Inline" + stamp,
      inline is not None and inline.get("type") == "inline" and bool(inline.get("selection"))),
     (E + "test33_Comments", "Comment: mark on the commented text in the page content", inline is not None and inline["id"] in mark_ids),
+    (E + "test33_Comments", "Comment: Weg" + stamp + " deleted, and its passage's mark with it (only Inline" + stamp + "'s left)",
+     deleted_inline is None and inline is not None and mark_ids == {inline["id"]}),
     (E + "test33_Comments", "Comment: Seitenkommentar" + stamp + " edited and deleted again",
      not any(plain(c.get("content")).startswith("Seitenkommentar" + stamp) for c in comments)),
 ]
@@ -523,6 +526,9 @@ sync = next((b for b in sources if ("Sync" + stamp) in text(b)), {})
 references = [b for b in blocks if b.get("type") == "transclusionReference"
               and attrs(b).get("transclusionId") == attrs(sync).get("id") and attrs(b).get("sourcePageId") == page]
 wrapped = next((b for b in sources if ("Wrap" + stamp + " weiter") in text(b)), {})
+# The second embed, unsynced and edited: a paragraph of the page's own, with an id of its own.
+copy = next((b for b in blocks if b.get("type") == "paragraph" and text(b) == "Sync" + stamp + " Kopie"), {})
+copied_ids = [attrs(n).get("id") for n in nodes(sync, "paragraph")]
 # test39: "+" insert menus and database.
 plus_next = after(lambda b: b.get("type") == "paragraph" and text(b) == "Plus" + stamp)
 fab_date = next((b for b in blocks if b.get("type") == "paragraph" and ("FabDatum" + stamp) in text(b)), {})
@@ -544,7 +550,9 @@ checks = [
     (E + "test36_BlockCommands", "Slash: Mermaid code block with example", "A --> B" in text(mermaid)),
     (E + "test37_Columns", "Columns: three (three_equal), Links" + stamp + " in the first, Mitte" + stamp + " in the second",
      len(cols) == 3 and attrs(columns).get("layout") == "three_equal" and ("Links" + stamp) in text(cols[0]) and ("Mitte" + stamp) in text(cols[1])),
-    (E + "test38_SyncedBlocks", "Synced: original with Sync" + stamp + " and two embeds (Paste, /)", bool(attrs(sync).get("id")) and len(references) >= 2),
+    (E + "test38_SyncedBlocks", "Synced: original with Sync" + stamp + ", an embed (Paste) and an unsynced one (/)", bool(attrs(sync).get("id")) and len(references) >= 1),
+    (E + "test38_SyncedBlocks", "Synced: the unsynced copy has Sync" + stamp + " Kopie with an id of its own, the original Sync" + stamp,
+     bool(copy) and text(sync) == "Sync" + stamp and attrs(copy).get("id") not in copied_ids),
     (E + "test38_SyncedBlocks", "Synced: \"Text ▾\" turns Wrap" + stamp + " into a synced block", bool(wrapped)),
     (E + "test39_PlusMenusAndDatabase", "Plus: heading 2 PlusH2" + stamp + " right after Plus" + stamp,
      plus_next.get("type") == "heading" and attrs(plus_next).get("level") == 2 and text(plus_next) == "PlusH2" + stamp),

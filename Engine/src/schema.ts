@@ -19,7 +19,7 @@ import {
   Attachment, Audio, BaseEmbed, Callout, CodeBlock, Column, Columns, Comment, Details, DetailsContent, DetailsSummary,
   Drawio, Embed, Excalidraw, Footnote, FootnoteReference, Footnotes, Highlight, Image, Indent, IntegrationCard,
   IntegrationMention, Link, MathBlock, MathInline, Mention, PageBreak, Pdf, Status, Subpages, Tab, TabLabel, TabPanel,
-  Tabs, TableCell, TableHeader, TrailingNode, TransclusionReference, TransclusionSource, Video, newBlockId,
+  Tabs, TableCell, TableHeader, TrailingNode, TransclusionReference, TransclusionSource, Video, newBlockId, uniqueIdTypes,
 } from "./extensions";
 
 /**
@@ -44,7 +44,7 @@ export const schemaExtensions: AnyExtension[] = [
   }),
   Heading,
   UniqueID.configure({
-    types: ["heading", "paragraph", "transclusionSource"],
+    types: uniqueIdTypes,
     generateID: () => newBlockId(),
   }),
   Comment,

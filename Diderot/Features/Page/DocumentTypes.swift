@@ -29,7 +29,7 @@ struct NodeRef: Hashable, Sendable {
     }
 
     var identity: String { id ?? "path:" + path.map(String.init).joined(separator: ".") }
-    var target: BlockTarget { id.map { .id($0) } ?? .path(path, type: type) }
+    var target: BlockTarget { id.map { .id($0, path: path) } ?? .path(path, type: type) }
     /// Anchor ID as in the reader (`ContentParser`): UniqueID or path "0.3.1".
     var anchorId: String { id ?? path.map(String.init).joined(separator: ".") }
     var isTopLevel: Bool { path.count == 1 }

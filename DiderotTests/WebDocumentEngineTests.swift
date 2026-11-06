@@ -52,13 +52,16 @@ struct WebDocumentEngineTests {
     }
 
     /// A block without an id is found by position and carries its type, so the engine refuses another kind of block
-    /// a collaborator moved there meanwhile; a block with an id needs no type.
+    /// a collaborator moved there meanwhile. A block with an id needs no type; it carries where the app saw it, which
+    /// tells it apart from a block that shares its id (a synced block unsynced on the web) but isn't part of its identity.
     @Test func positionTargetCarriesTheBlockType() throws {
         let code = try #require(PMNode(json: JSONDecoder().decode(JSONValue.self, from: Data(#"{"type": "codeBlock"}"#.utf8))))
         let heading = try #require(PMNode(json: JSONDecoder().decode(JSONValue.self, from: Data(#"{"type": "heading", "attrs": {"id": "h1"}}"#.utf8))))
 
         #expect(NSDictionary(dictionary: NodeRef(path: [2, 0], node: code).target.jsObject) == ["path": [2, 0], "type": "codeBlock"])
-        #expect(NSDictionary(dictionary: NodeRef(path: [1], node: heading).target.jsObject) == ["id": "h1"])
+        #expect(NSDictionary(dictionary: NodeRef(path: [1], node: heading).target.jsObject) == ["id": "h1", "path": [1]])
         #expect(NSDictionary(dictionary: BlockTarget.path([3]).jsObject) == ["path": [3]])
+        #expect(NodeRef(path: [1], node: heading).target == .id("h1"))
+        #expect(Set([BlockTarget.id("h1", path: [1]), .id("h1", path: [4])]).count == 1)
     }
 }

@@ -227,12 +227,12 @@ private struct BaseTitleField: View {
                 .font(.title2.bold())
                 .focused($focused)
                 .submitLabel(.done)
-                .onChange(of: draft.text) { _, text in
-                    // Titles are single-line: Return ends the input instead of adding a line break.
-                    if text.contains("\n") {
-                        draft.text = text.replacingOccurrences(of: "\n", with: "")
-                        focused = false
-                    }
+                .onChange(of: draft.text) { old, text in
+                    // Titles are single-line: Return ends the input instead of adding a line break (`SingleLineInput`),
+                    // only while the user types.
+                    guard focused, let taken = SingleLineInput.taking(text, after: old) else { return }
+                    draft.text = taken.text
+                    if taken.endsInput { focused = false }
                 }
                 .baseDraft($draft, focused: focused, stored: stored, model: model, rowId: row.id, propertyId: primary.id) {
                     .value(BaseValue.text($0))

@@ -59,7 +59,7 @@ enum NodeFactory {
         PMNode(type: "tabs", content: [tab(label: "Tab 1"), tab(label: "Tab 2")])
     }
 
-    /// A tab without an id (Docmost gives it one): its label and a panel with an empty paragraph.
+    /// A tab without an id (the engine gives it one as it inserts it): its label and a panel with an empty paragraph.
     static func tab(label: String, panel: [PMNode] = [PMNode(type: "paragraph")]) -> PMNode {
         PMNode(type: "tab", content: [
             PMNode(type: "tabLabel", content: label.isEmpty ? nil : [PMNode(type: "text", text: label)]),

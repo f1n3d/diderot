@@ -12,7 +12,7 @@ import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, t
 import { backspaceEdit, backspacePlan, enterEdit, enterLinesEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
-import { applySteps, locate, type Step, type Target } from "./steps";
+import { applySteps, locate, unsetComment, type Step, type Target } from "./steps";
 import { runTableCommand, type TableCommand } from "./tables";
 
 declare global {
@@ -286,6 +286,18 @@ class DocmostEngine {
   /** Replaces an embedded synced block with its content as the server returned it, where it is now (`referenceEdit`). */
   replaceReference(path: number[], source: { sourcePageId: string; transclusionId: string }, json: JSONContent[]): boolean | null {
     return this.applyBuilt((editor) => referenceEdit(editor.state.doc, path, source, json));
+  }
+
+  /**
+   * Removes the marks of the deleted comment `commentId` from the whole page (`unsetComment`); none there is no change.
+   * Kept from the history: Undo would bring back a mark whose comment is gone.
+   */
+  unsetComment(commentId: string): boolean | null {
+    return this.transact((editor) => {
+      const tr = editor.state.tr;
+      if (unsetComment(tr, commentId)) editor.view.dispatch(tr.setMeta("addToHistory", false));
+      return true;
+    });
   }
 
   /** Applies an edit's steps and returns its cursor; an edit without steps changes nothing. */

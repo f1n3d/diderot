@@ -108,21 +108,27 @@ extension AppSessionRaceTests {
         }
 
         /// Clearing the cache, removing another server and signing out remove what the offline cache doesn't cover (files,
-        /// web editor data) for that server; clearing the cache keeps the files staged for upload, which a running upload
-        /// reads.
+        /// web editor data) for that server. Clearing the cache keeps the files staged for upload, which a running upload
+        /// reads, and the web editor's own storage, with its edits the server doesn't have yet; so does clearing a
+        /// signed-out server's saved content.
         @Test func localDataGoesWithTheServersData() async throws {
             try store.save(StoredSession(serverURL: b, token: "b"))
             try store.save(StoredSession(serverURL: a, token: "a"))
             var removed: [String] = []
             var environment = SessionEnvironment(protocolClasses: [StubURLProtocol.self])
-            environment.removeLocalData = { url, uploads in removed.append("\(url.host() ?? "")\(uploads ? " with uploads" : "")") }
+            environment.removeLocalData = { url, removal in
+                removed.append("\(url.host() ?? "")\(removal.uploads ? " with uploads" : "")\(removal.webStorage ? " and web storage" : "")")
+            }
             let session = AppSession(sessionStore: store, environment: environment)
             await session.restore()
             try #require(session.ready?.server.url == a && removed.isEmpty)
+            let server = try #require(session.server)
             await session.clearCache()
             await session.removeAccount(StoredSession(serverURL: b, token: "b"))
             await session.signOut()
-            #expect(removed == ["a.example.com", "b.example.com with uploads", "a.example.com with uploads"])
+            await session.clearSavedContent(of: server)
+            #expect(removed == ["a.example.com", "b.example.com with uploads and web storage", "a.example.com with uploads and web storage",
+                                "a.example.com with uploads"])
             await removeCaches()
         }
 

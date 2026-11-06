@@ -50,15 +50,6 @@ The October work holds up. The session's state machine stays right through start
 
 What's left to fix now:
 
-**A. Content that goes missing without a sign.**
-
-- An unsynced synced block keeps its source's block ids, so edits to the copy land in the source (V1).
-- A database entry removes the line breaks from its text fields as soon as it opens, and saves that (V3).
-- The save of unsent changes keeps moving while the user types (V4), and one tap on "Clear Saved Content" removes the web editor's unsynced edits (V5).
-- An old title can come back over a newer one (V9).
-- Undo after adding a tab removes the change before it (V7).
-- A deleted inline comment's mark stays on the page (V32).
-
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
 
 - Backspace (V2), a drag (V8), the focus after an insert (V10), a status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
@@ -76,91 +67,11 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** Content that goes missing | V1, V3, V4, V5, V7, V9, V32 | engine checks, unit tests, UI tests | low |
 | **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
-A first: small fixes for silent losses. B is the larger part: V2 needs the engine to rebase a line before it plans the key, and its fixes are tried with two clients on one page.
-
----
-
-## A. Content that goes missing
-
-### V1 [high] ✔ An unsynced copy keeps its source's block ids, and edits to it land in the source
-
-**Where:** `Engine/src/conversions.ts:163–176` (`referenceEdit`), `Engine/src/steps.ts:115–127` (`locate`).
-
-**Problem:** `referenceEdit` replaces the embed with the content the server returns, ids and all. UniqueID only renames duplicates among the new nodes, so the copy and the source share their ids. `locate` takes the first block with an id and ignores the path; the app targets paragraphs and headings by id alone. The web's `insertContentAt` keeps the ids too, so a copy unsynced on the web has the same problem in the app.
-
-**Scenario:** A synced block is embedded on its own page (test38 makes exactly this), and the embed is unsynced. Both paragraphs carry the same id. A save in the copy changes the source, which shows it on every page that embeds it, and the copy stays as it was. Return, Backspace and conversions hit the source the same way. Reproduced with the engine's own code: the source read "Shared text, edited in the copy", the copy "Shared text".
-
-**Fix:** Strip the ids from the blocks `referenceEdit` inserts, as Duplicate does (`strippingIds`). Let `locate` refuse an id that occurs more than once, or check it against the path the app sends along.
-
-### V3 [high] ✔ Opening a database entry removes the line breaks from its title and text fields, and saves that
-
-**Where:** `Diderot/Features/Bases/BaseFieldEditors.swift:265–272` (with `:177` and `:190–204`), `Diderot/Features/Bases/BaseRowDetailSheet.swift:230–237`.
-
-**Problem:** The fields remove line breaks whenever their text changes, also when the change is the stored value being shown (`showStored` on appear). The field then differs from its original and saves when it disappears:
-
-```swift
-if kind == .text, text.contains("\n") { draft.text = text.replacingOccurrences(of: "\n", with: "") … }
-.onDisappear(perform: commit)   // commit: guard draft.text != draft.original
-```
-
-**Scenario:** A cell holds "Line one\nLine two", written through the API, an import or a property turned into text. Someone who may edit opens the entry and closes it, or scrolls the field away. The app saves "Line oneLine two" without anyone typing. Offline, the value is kept and sent later.
-
-**Fix:** Remove line breaks only from typed or pasted input (while the field has focus), never from the stored value. Compare a commit against the text as shown.
-
-### V4 [medium] ✔ Typing keeps pushing back the save of unsent changes
-
-**Where:** `Diderot/Features/Page/EngineConnection.swift:155–157` (`documentShown`), `:177–191` (`scheduleUnsentSave`).
-
-**Problem:** Every document event cancels the 2 s wait and starts it again. Offline, or on a connection that died without notice, each save brings a document event, so while the user writes with pauses under 2 s, nothing reaches the device's store.
-
-**Scenario:** The user writes offline for some minutes without a longer pause. Then iOS ends the engine's web process (memory) or the app (swiped away, a crash). Everything since the last pause of 2 s is gone, without a word: the reopened engine loads the older stored state.
-
-**Fix:** Save no later than 2 s after the first unconfirmed change, as the document events have a maximum wait (`documentMaxWait`).
-
-### V5 [medium] ✔ "Clear Saved Content" removes the web editor's unsynced edits
-
-**Where:** `Diderot/App/AppSession.swift:560–569` (`clearCache`) and `:579–583` (`clearSavedContent`), `Diderot/App/SessionEnvironment.swift:35–40`, `Diderot/Features/Writing/WebEditorView.swift` (`WebEditorStores.remove`), `Diderot/Features/Settings/SettingsView.swift:64–69`.
-
-**Problem:** Both remove the server's whole web editor store (`WKWebsiteDataStore.remove(forIdentifier:)`). It holds the web client's Yjs offline copy in IndexedDB, which keeps edits until the server has them (`AppSession.swift:681` relies on that). In Settings the button acts on one tap, without asking, and the store isn't counted in "Saved content". `clearSavedContent` promises to keep "changes the server doesn't have yet", and does for the native editor only. On iPad, an editor open in another window loses its cookie and storage mid-edit. Sign-out removes the store too (R24); that was decided.
-
-**Scenario:** The user edits a drawing in the web editor, the connection drops, and they close it. Later they tap "Clear Saved Content". The edit would have synced the next time the web editor opened that page; now it's gone.
-
-**Fix:** Leave the web editor's storage alone there and clear only its HTTP cache; or ask first and say what goes.
-
-### V7 [medium] ○ Adding or duplicating a tab bypasses undo, and Undo reverts the change before it
-
-**Where:** `Engine/src/extensions.ts:127–147`, `Diderot/Features/Page/NodeFactory.swift:62–68`, `DocumentModel.swift:1648, 1667`.
-
-**Problem:** The app inserts tabs without an id, and Duplicate strips it. The tab-id rule then appends a transaction marked `addToHistory: false`. y-tiptap takes the flag from the last transaction of the chain, so the whole write, the insert included, bypasses the undo manager. The web gives new tabs an id itself (Docmost `tabs.ts:109, 219`), so the rule never runs there.
-
-**Scenario:** The user types a word, adds a tab and taps Undo: the tab stays and the word disappears. Measured in the engine: the chain's flags were `[undefined, undefined, false]`.
-
-**Fix:** Give inserted tabs a fresh id, in the engine's insert and replace steps (`newBlockId()`) or in NodeFactory and Duplicate.
-
-### V9 [medium] ○ A sent title is forgotten in the current session's store, not the page's
-
-**Where:** `Diderot/Features/Page/PageTitleEdit.swift:48–49, 56`, `Diderot/App/AppSession.swift:452–455`.
-
-**Problem:** The title is kept in the page session's store (`pageSession.unsentChanges`) but forgotten through `ready`'s store (`forgetUnsentTitle` reads `ready?.unsentChanges`).
-
-**Scenario:** The user renames a page on server A and signs out, or a link switches servers, while `pages/update` is on its way. It succeeds, but `ready` is nil or B by then, so A's store keeps the title. At the next sign-in to A, the old title goes out again and overwrites a rename made on the web meanwhile. A final error (line 56) leaves its title behind the same way.
-
-**Fix:** Forget the title in the store it was kept in (`pageSession.unsentChanges`), in both branches.
-
-### V32 [medium] ✔ Deleting an inline comment leaves its mark in the page
-
-**Where:** `Diderot/Features/Comments/PageComments.swift:95–98`; the action at `CommentsView.swift:182–185`.
-
-**Problem:** The app deletes the comment on the server and in its list. The web also removes the mark from the document (`editor.commands.unsetComment(comment.id)` in `comment-list-item.tsx:81`); the server's `comments/delete` doesn't touch the page.
-
-**Scenario:** An author or space admin deletes an inline comment in the app. The passage stays highlighted for everyone, and tapping it opens nothing.
-
-**Fix:** After a delete, remove the `comment` marks with that id through the page's engine, as the web does.
+Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done. B is the larger part: V2 needs the engine to rebase a line before it plans the key, and its fixes are tried with two clients on one page.
 
 ---
 

@@ -18,12 +18,13 @@ final class PageTitleEdit {
         if !typing { text = unsent ?? page.title ?? "" }
     }
 
-    /// Return in the field (it takes it as a line break, being vertical) ends the title: the break becomes a space.
-    /// Returns whether it did, so the field gives up focus.
-    func takeReturn() -> Bool {
-        guard text.contains("\n") else { return false }
-        text = text.replacingOccurrences(of: "\n", with: " ")
-        return true
+    /// Return in the field (it takes it as a line break, being vertical) ends the title (`SingleLineInput`): a pasted
+    /// title's line breaks become spaces, a stored one stays. `old`: the text before this change. Returns whether the
+    /// input ends, so the field gives up focus.
+    func takeReturn(after old: String) -> Bool {
+        guard let taken = SingleLineInput.taking(text, after: old) else { return false }
+        text = taken.text
+        return taken.endsInput
     }
 
     /// Saves the typed title in `pageSession`, the session the page loaded in; reads its values before the task starts,
@@ -46,14 +47,16 @@ final class PageTitleEdit {
             do {
                 // With the page's session: a switch while the title was kept would take it to the other server.
                 _ = try await session.send(Endpoints.Pages.update(pageId: page.id, title: trimmed), on: pageSession)
-                await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
+                // From the store it was kept in: a sign-out or switch meanwhile left it there, to go out again later
+                // over a newer rename.
+                await session.forgetUnsentTitle(pageId: page.id, title: trimmed, in: pageSession.unsentChanges)
                 unsent = nil
                 changes.pageChanged(in: page.spaceId)
                 // The response lacks permissions and space info, so the page loads again instead of taking it; on its
                 // own, so a background task doesn't wait for it.
                 Task { await sent() }
             } catch where UnsentChanges.isFinal(error) {
-                await session.forgetUnsentTitle(pageId: page.id, title: trimmed)
+                await session.forgetUnsentTitle(pageId: page.id, title: trimmed, in: pageSession.unsentChanges)
                 report(error.userMessage)
             } catch where kept {
                 unsent = trimmed

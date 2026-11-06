@@ -34,10 +34,29 @@ extension PMNode {
         return search(self, [])
     }
 
-    /// Path and node of a block: by its ID (stable when something before it changes), otherwise by path.
+    /// Path and node of a block: by its ID (stable when something before it changes), otherwise by path. An ID found more
+    /// than once (a synced block unsynced on the web keeps its source's) counts only at `ref.path`, where the app saw the
+    /// block: the first could be the source, and an edit there shows on every page that embeds it. As the engine finds
+    /// blocks (`locate` in Engine/src/steps.ts).
     func locate(_ ref: NodeRef) -> (path: [Int], node: PMNode)? {
         guard let id = ref.id else { return node(at: ref.path).map { (ref.path, $0) } }
-        return path(where: { $0.string("id") == id }).flatMap { path in node(at: path).map { (path, $0) } }
+        if let seen = node(at: ref.path), seen.string("id") == id { return (ref.path, seen) }
+        let found = paths(where: { $0.string("id") == id }, limit: 2)
+        guard found.count == 1, let path = found.first, let node = node(at: path) else { return nil }
+        return (path, node)
+    }
+
+    /// Paths of the nodes that match, in document order, at most `limit`.
+    func paths(where matches: (PMNode) -> Bool, limit: Int = .max) -> [[Int]] {
+        var found: [[Int]] = []
+        func search(_ node: PMNode, _ path: [Int]) {
+            for (index, child) in node.children.enumerated() where found.count < limit {
+                if matches(child) { found.append(path + [index]) }
+                search(child, path + [index])
+            }
+        }
+        search(self, [])
+        return found
     }
 
     /// Types of a node's ancestors, excluding the node.
