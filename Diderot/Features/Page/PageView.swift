@@ -45,6 +45,12 @@ struct PageView: View {
     @State private var comments: PageComments?
     /// Comment the sheet jumps to on open (tap on a highlighted passage).
     @State private var commentsFocusId: String?
+    /// A link's comment, shown once the page has pushed in: a sheet asked for mid-push doesn't show.
+    @State private var pendingCommentId: String?
+    /// A new page's title takes the cursor once the page has pushed in: focus asked for mid-push is dropped.
+    @State private var focusesTitle = false
+    /// Block a comment's passage is in ("Show on Page"), scrolled to once the comments are gone.
+    @State private var revealsAnchor: String?
     /// A web page in the in-app browser (an integration mention's link).
     @State private var browsing: URL?
     /// The page's space; its settings say whether readers may comment.
@@ -76,13 +82,22 @@ struct PageView: View {
     /// Content with navigation bar, toolbars and floating buttons.
     private var chrome: some View {
         AsyncContentView(state: state, retry: { await load(force: true) }) { page in
-            if page.isBase == true {
-                baseDocument(page)
-            } else if showsWebLayout, let webHTML, let serverURL = session.server?.url {
-                WebLayoutView(html: webHTML, title: page.displayTitle, serverURL: serverURL, token: session.ready?.token)
-                    .handlesLinks(handle)
-            } else {
-                document(page)
+            Group {
+                if page.isBase == true {
+                    baseDocument(page)
+                } else if showsWebLayout, let webHTML, let serverURL = session.server?.url {
+                    WebLayoutView(html: webHTML, title: page.displayTitle, serverURL: serverURL, token: session.ready?.token)
+                        .handlesLinks(handle)
+                } else {
+                    document(page)
+                }
+            }
+            .background {
+                AfterTransition {
+                    guard let commentId = pendingCommentId else { return }
+                    pendingCommentId = nil
+                    openComments(focus: commentId)
+                }
             }
         }
         .environment(\.renderContext, RenderContext(session: session, pageId: state.value?.id))
@@ -188,7 +203,7 @@ struct PageView: View {
                 Task { await model?.replaceAtom(ofType: "integrationMention", in: target.ref, index: target.index, with: nil) }
             }
         }
-        .linkSheet(isPresented: $showsComments, onDismiss: { commentsFocusId = nil }) {
+        .linkSheet(isPresented: $showsComments, onDismiss: dismissedComments) {
             if let page = state.value, let comments {
                 CommentsView(page: page, comments: comments, canComment: canComment(on: page),
                              isSpaceAdmin: spaces.state.value?.first { $0.id == page.spaceId }?.role == .admin,
@@ -548,6 +563,13 @@ struct PageView: View {
                         .focused($titleFocused)
                         .submitLabel(.done)
                         .accessibilityIdentifier("page-title")
+                        .background {
+                            AfterTransition {
+                                guard focusesTitle else { return }
+                                focusesTitle = false
+                                titleFocused = true
+                            }
+                        }
                 } else {
                     Text(titleEdit.unsent ?? page.displayTitle)
                         .font(.largeTitle.bold())
@@ -763,17 +785,11 @@ struct PageView: View {
         state = .loaded(page)
         titleEdit.show(page, typing: titleFocused)
         if isFirst, selection.focusTitle, canEditMeta(page) {
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(350))
-                titleFocused = true
-            }
+            focusesTitle = true
         }
         // A link to a comment: show it once the page is there.
         if isFirst, let commentId = selection.commentId, page.isBase != true {
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(350))
-                openComments(focus: commentId)
-            }
+            pendingCommentId = commentId
         }
         // Load comments right away for the button badge; database pages have none.
         if page.isBase != true, comments?.pageId != page.id {
@@ -827,18 +843,24 @@ struct PageView: View {
         showsComments = true
     }
 
-    /// Shows a comment's passage by scrolling to the top-level block that contains its mark.
+    private func dismissedComments() {
+        commentsFocusId = nil
+        // The page can only scroll once the sheet is gone.
+        if let anchor = revealsAnchor {
+            revealsAnchor = nil
+            withAnimation { position.scrollTo(id: anchor, anchor: .center) }
+        }
+    }
+
+    /// Shows a comment's passage by scrolling to the top-level block that contains its mark, once the comments are
+    /// gone (`dismissedComments`).
     private func showInPage(_ comment: PageComment) {
         guard let model else { return }
         func contains(_ node: PMNode) -> Bool {
             node.marks?.contains { $0.type == "comment" && $0.string("commentId") == comment.id } == true || node.children.contains(where: contains)
         }
         guard let entry = model.topLevel.first(where: { contains($0.node) }) else { return }
-        Task { @MainActor in
-            // The page can only scroll once the sheet is gone.
-            try? await Task.sleep(for: .milliseconds(400))
-            withAnimation { position.scrollTo(id: entry.ref.anchorId, anchor: .center) }
-        }
+        revealsAnchor = entry.ref.anchorId
     }
 
     /// Routes "Comment" in the editor's selection menu (UIKit, see `AppDelegate`) to this page.

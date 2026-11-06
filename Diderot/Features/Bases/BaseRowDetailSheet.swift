@@ -104,18 +104,13 @@ struct BaseRowDetailSheet: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .task {
-                // Scroll once to the field tapped in the table and briefly highlight it.
-                guard let fieldId = pendingJump else { return }
-                try? await Task.sleep(for: .milliseconds(200))
-                guard !Task.isCancelled else { return }
-                pendingJump = nil
-                withAnimation {
-                    proxy.scrollTo(fieldId, anchor: .top)
-                    highlighted = fieldId
+            .background {
+                // Scroll once to the field tapped in the table and briefly highlight it, once the sheet is up.
+                AfterTransition {
+                    guard let fieldId = pendingJump else { return }
+                    pendingJump = nil
+                    Task { await proxy.reveal(fieldId, highlighting: $highlighted) }
                 }
-                try? await Task.sleep(for: .seconds(1.6))
-                withAnimation(.easeOut(duration: 0.6)) { highlighted = nil }
             }
         }
         .navigationTitle(BaseLayout.title(of: row, in: base))
@@ -242,14 +237,15 @@ private struct BaseTitleField: View {
                 .baseDraft($draft, focused: focused, stored: stored, model: model, rowId: row.id, propertyId: primary.id) {
                     .value(BaseValue.text($0))
                 }
-                .task {
-                    guard autoFocus else { return }
-                    try? await Task.sleep(for: .milliseconds(450))
-                    guard !Task.isCancelled, autoFocus else { return }
-                    autoFocus = false
-                    focused = true
-                }
                 .accessibilityIdentifier("base-row-title")
+                .background {
+                    // Once the sheet is up: focus asked for while it slides in is dropped.
+                    AfterTransition {
+                        guard autoFocus else { return }
+                        autoFocus = false
+                        focused = true
+                    }
+                }
         } else {
             Text(stored.isEmpty ? PageTitle.untitled : stored)
                 .font(.title2.bold())

@@ -717,8 +717,6 @@ struct DocumentModelTests {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
         let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
         engine.sendDocument()
-        let clock = TestClock()
-        model.dependencies.clock = clock
 
         model.performAtEnd(.date)
         while engine.failsNextInsert { try await Task.sleep(for: .milliseconds(10)) }
@@ -728,11 +726,40 @@ struct DocumentModelTests {
         model.activeText.append(AttributedString("\n"))
         model.activeTextChanged()
         while engine.enters.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        await clock.advance(by: .milliseconds(400))  // as long as an inline command waits for the editor's focus
+        let new = try #require(model.active?.ref)
+        model.editorFocusChanged(true, instance: UUID(), ref: new)  // when an inline command would run
 
-        #expect(model.active?.ref == NodeRef(path: [1], id: "b"))
+        #expect(new == NodeRef(path: [1], id: "b"))
         #expect(String(model.activeText.characters).isEmpty)
         #expect(engine.enters.map(\.node.plainText) == ["Eins"])
+    }
+
+    /// Floating "+" → Date: the date goes into the new paragraph at the end once its editor has focus, not before (an
+    /// emoji keyboard or sheet opened sooner would take that focus away), and only into that paragraph.
+    @Test(.timeLimit(.minutes(1))) func endInlineCommandWaitsForItsEditorsFocus() async throws {
+        func paragraph(_ id: String, _ text: String?) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.map { [PMNode(type: "text", text: $0)] })
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins"), paragraph("b", nil)]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+
+        model.performAtEnd(.date)
+        while model.active == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let end = NodeRef(path: [1], id: "b")
+        #expect(model.active?.ref == end)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(String(model.activeText.characters).isEmpty)
+
+        model.editorFocusChanged(true, instance: UUID(), ref: NodeRef(path: [0], id: "a"))
+        #expect(String(model.activeText.characters).isEmpty)
+        model.editorFocusChanged(true, instance: UUID(), ref: end)
+        let date = String(model.activeText.characters)
+        #expect(!date.isEmpty)
+        // Once only: focus coming back (after a sheet) adds nothing.
+        model.editorFocusChanged(true, instance: UUID(), ref: end)
+        #expect(String(model.activeText.characters) == date)
     }
 
     /// A change the engine refuses without a reason (e.g. at a block a collaborator just deleted): the page says it

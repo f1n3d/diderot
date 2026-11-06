@@ -56,9 +56,9 @@ So a bug gets fixed in one place and stays in others. Example: the race fixed fo
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **E** Structure, in steps | S4, then S2's last step if the model's size still hurts | unit tests and UI tests | medium to high |
+| **E** Structure, in steps | S2's last step, if the model's size still hurts | unit tests and UI tests | medium to high |
 
-S1 and S3 are done. S1: what fits where, Return, Backspace, conversions, columns and unsync are decided and applied in the engine and checked in `pnpm run check`. Package C's stopgap for R1 remains for cards, atoms and templates. DocumentModel didn't get shorter by it (about 3,000 lines): the engine's answers it asks for and keeps took the place of the rules.
+S1, S3 and S4 are done. S1: what fits where, Return, Backspace, conversions, columns and unsync are decided and applied in the engine and checked in `pnpm run check`. Package C's stopgap for R1 remains for cards, atoms and templates. DocumentModel didn't get shorter by it (about 3,000 lines): the engine's answers it asks for and keeps took the place of the rules. S4: what waited a guessed time for a push or a sheet, the web client, the keyboard, find's match or an inline command's focus waits for that event (`AfterTransition`, the web client's answer, the placed caret, the match's frame, the editor's focus); the Backspace hook keeps to the view's class, hooks it once and says when it can't. The waits left in the editor have no event that says when they end; they are bounded and listed in BACKLOG.md.
 
 ---
 
@@ -75,51 +75,6 @@ S1 and S3 are done. S1: what fits where, Return, Backspace, conversions, columns
 Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), the lookups in a document (`DocumentTree.swift`), the nodes the editor makes (`NodeFactory.swift`), "/" and "@" in the text (`TriggerParser.swift`) and the table toolbar's types (`TableEditing.swift`). The insert rules S1 left are the menus' state and stay.
 
 **Then the stateful parts (L).** `EngineConnection` is out (S2, part 2): where the engine is, why the page is read-only, opening and closing one after the other, the save of the unsent changes, the uploads that keep a leaving page open, and what follows when the engine fails or its web process ends. It asks the page back through `EngineConnectionOwner` and is tested on its own (`EngineConnectionTests`). `ActiveTextSession` is out too (S2, part 3): the block being edited, its text and selection, the input not yet saved, the base each save passes, the app's own text that isn't input, and the saves (after a pause, at once, before an edit, once the engine is back); it asks the page back through `ActiveTextSessionOwner` (`ActiveTextSessionTests`). The model forwards the editor's state, so its views bind as before. What remains in it is what the keys and menus do: Return, Backspace, inserting, pasting, the block operations and the engine's answers, which reach the session's input directly where they hand it over (Return keeps a line's input pending while the engine splits it). Moving those into types of their own is the next step, if the model's size still hurts.
-
-### S4 Time as a control mechanism
-
-There are 47 `Task.sleep`/`asyncAfter` calls in the app. DocumentModel's run on a clock in its dependencies (`DocumentModel.Dependencies.clock`), which tests move by hand (`TestClock`): its tests of a save's wait for more input, the unsent save and an inline command's wait for focus no longer sleep, so their checks that nothing happened no longer pass while the main actor is busy elsewhere. The other waits still sleep in real time: mostly the views' (the fragile ones below), and a few debounces and timeouts (pickers, the engine's). The search's runs on a clock of its own too (`SearchModel`).
-
-**Fragile:** these wait for keyboard, focus, layout or animation, and fail on slow devices.
-
-| Place | Waits for | Event-driven alternative |
-|---|---|---|
-| `CentersAboveKeyboard.activeBlockChanged` | keyboard appearing (hardware keyboard fallback) | centre in `cursorPlaced` when `GCKeyboard.coalesced != nil` |
-| `CentersAboveKeyboard.scrollToUnbuiltActiveBlock` | the lazy list building and measuring the block | `onChange(of: activeBlockFrame)`; `scrollTo(id:)` with `scrollTargetLayout` |
-| `CentersAboveKeyboard.revealFindMatch` | the match block reporting its frame | `onChange(of: find.currentFrame)` |
-| PageView 1058, 1065 | push animation (title focus, comments) | `defaultFocus`; present from `onAppear` |
-| PageView 1151 | comments sheet dismissed | the sheet's `onDismiss` |
-| DocumentModel 562 | a new editor gaining focus | `editorFocusChanged(true)` |
-| DocumentModel 713 | the editor regaining focus | the `FocusWhenInWindow` signal |
-| DocumentModel 1501, 1506 | the text view showing new text; a second reload | `UITextView.textDidChangeNotification` |
-| DocumentModel 1574 | the emoji keyboard gone | `textFieldDidEndEditing` |
-| BlockCards 238 | link tap vs. block tap order | decide in the OpenURLAction, or by gesture priority |
-| BlockCards 375 | next view update (`.zero`) | `onChange` of `activeText` for that ref |
-| BlockCards 411 | the text view showing the block | hit-test a TextKit layout of the block's string |
-| BlockCards 444 | focus accepted after a sheet | retry on failure, or `onDismiss` |
-| WebEditorView 82, 92 | web client ready (polling) | `navigations` plus a MutationObserver message |
-| CommentsView 108, 120 | the list laid out before `scrollTo` | `.scrollPosition(id:anchor:)`, or scroll once the id is shown |
-| BaseRowDetailSheet 111, 258 | the sheet laid out (scroll; focus the title) | `.scrollPosition`; `.defaultFocus` |
-
-Scroll-and-highlight exists twice with different delays (`CommentsView.swift:103–115`, `BaseRowDetailSheet.swift:108–120`).
-
-**Legitimate:**
-
-- debounces: DocumentModel 530, 834, 2056; EditorToolbar 517; EditorSheets 204; SearchModel 41; BasePickers 239 and 329; PageAttachmentsView 48
-- timeouts and timers: WebDocumentEngine 199; TreeDragDrop 97; BaseKanbanView 179; the "Copied" and highlight fades; Toast 19; OfflineMonitor
-- tolerable debounce of a noisy signal: `CentersAboveKeyboard.keyboardChanged`
-- debug or test only: HomeView 56, DocumentModel 2789
-
-Give a debounce the clock where a test needs it (S): the search's has one (`SearchModel`, its spinner test); the other debounces above are the views' and no test waits on them. Then replace the fragile waits with events.
-
-**Method hook in KeyboardObserver.swift:103–121.** The backlog notes its fragility. Beyond that (○):
-
-- `original` is the implementation captured at install time. For an inherited method that's the superclass's, so a later override or swizzle there is bypassed.
-- Hooking a subclass of a hooked class runs the handler twice on the pass-through path.
-- With KVO, `object_getClass` returns the KVO subclass, and the hook detaches when observation ends.
-- A missing selector is a silent no-op.
-
-Resolve the superclass implementation at call time, skip classes whose ancestor is hooked, and log a fault. Or replace the hook with the backlog's own text view.
 
 ---
 

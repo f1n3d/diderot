@@ -24,6 +24,10 @@ struct CommentsView: View {
     @State private var tab = Tab.open
     @State private var isSending = false
     @State private var highlighted: String?
+    /// The sheet's presentation has ended: a scroll started before it lands wrong.
+    @State private var presented = false
+    /// Thread of `focusId`, scrolled to once the list shows its tab.
+    @State private var focusedThread: String?
     /// Thread just written in (a new one, or the one replied to), scrolled to above the composer.
     @State private var revealId: String?
     @State private var confirmsDelete: PageComment?
@@ -36,6 +40,7 @@ struct CommentsView: View {
             AsyncContentView(state: comments.state, retry: { await comments.load() }) { _ in
                 content
             }
+            .background { AfterTransition { presented = true } }
             .safeAreaInset(edge: .bottom) {
                 composer
             }
@@ -99,24 +104,22 @@ struct CommentsView: View {
             }
             .listStyle(.insetGrouped)
             .refreshable { await comments.load() }
-            .task(id: focusId) {
+            .task(id: presented ? focusId : nil) {
                 // Tapped passage: show its thread (even if resolved), briefly highlighted.
                 guard let focusId, let comment = await comments.comment(id: focusId, reloadingIfMissing: true) else { return }
                 let thread = comment.parentCommentId.flatMap { comments.comment(id: $0) } ?? comment
                 tab = thread.isResolved ? .resolved : .open
-                try? await Task.sleep(for: .milliseconds(250))
-                withAnimation {
-                    proxy.scrollTo(thread.id, anchor: .top)
-                    highlighted = thread.id
-                }
-                try? await Task.sleep(for: .seconds(1.6))
-                withAnimation(.easeOut(duration: 0.6)) { highlighted = nil }
+                focusedThread = thread.id
+            }
+            // Started after the update that shows the thread's tab, so the list has its row.
+            .task(id: focusedThread) {
+                guard let focusedThread else { return }
+                await proxy.reveal(focusedThread, highlighting: $highlighted)
             }
             .task(id: revealId) {
                 // On a short screen or with many threads, the new comment would land below the visible part or
-                // under the composer.
+                // under the composer. Started after the update that adds its row.
                 guard let revealId else { return }
-                try? await Task.sleep(for: .milliseconds(250))
                 withAnimation { proxy.scrollTo(revealId, anchor: .bottom) }
                 self.revealId = nil
             }

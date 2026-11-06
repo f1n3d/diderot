@@ -1140,6 +1140,21 @@ import XCTest
         XCTAssertTrue(inlineComment.waitForExistence(timeout: 10), "Tapping the passage doesn't open its comment")
         snapshot(app, "33-inline-comment")
         tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
+
+        // "Show on Page" scrolls back to the passage once the comments are gone.
+        XCTAssertTrue(composer.waitForNonExistence(timeout: 5), "The comments don't close")
+        for _ in 0..<6 where marked.isHittable { app.swipeUp() }
+        commentsButton.tap()
+        let inlineRow = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'comment-'"))
+            .containing(NSPredicate(format: "label == %@", "Inline\(stamp)")).firstMatch
+        XCTAssertTrue(inlineRow.waitForExistence(timeout: 10), "The inline comment is missing from the comments")
+        let showOnPage = inlineRow.buttons.matching(NSPredicate(format: "label IN %@", ["Show on Page", "Auf der Seite zeigen"])).firstMatch
+        XCTAssertTrue(showOnPage.waitForExistence(timeout: 5), "The inline comment has no “Show on Page”")
+        showOnPage.tap()
+        XCTAssertTrue(composer.waitForNonExistence(timeout: 5), "“Show on Page” doesn't close the comments")
+        let shown = expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: marked)
+        XCTAssertEqual(XCTWaiter().wait(for: [shown], timeout: 5), .completed, "“Show on Page” doesn't scroll to the passage")
+        snapshot(app, "33-shown-on-page")
     }
 
     /// Links leave the app as from the web client in a browser (the last paragraph of Tools/editor-test-page.json): a
