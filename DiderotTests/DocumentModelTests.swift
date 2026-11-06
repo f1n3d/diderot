@@ -386,6 +386,80 @@ struct DocumentModelTests {
         ])
     }
 
+    /// A mention shown as a card is made from its paragraph as the engine holds it, which a collaborator typed into while
+    /// the page's copy lagged behind: their words stay. A mention that went in before it since isn't the one shown.
+    @Test func mentionAsCardKeepsACollaboratorsWords() async throws {
+        let url = "https://github.com/o/r/issues/1"
+        let mention = PMNode(type: "integrationMention", attrs: ["url": .string(url), "provider": "github"])
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Siehe "), mention])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        let target = DocumentModel.MentionTarget(ref: NodeRef(path: [0], node: paragraph), index: 0, url: url, provider: "github")
+
+        let typed = PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Siehe auch "), mention])
+        engine.document = PMNode(type: "doc", content: [typed])
+        await model.showMention(target, as: .card)
+        #expect(engine.replacedWith.last == [
+            PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Siehe auch")]),
+            PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": "github"]),
+        ])
+        #expect(engine.expectations.last == typed)
+
+        let other = PMNode(type: "integrationMention", attrs: ["url": "https://github.com/o/r/issues/2", "provider": "github"])
+        engine.document = PMNode(type: "doc", content: [
+            PMNode(type: "paragraph", attrs: ["id": "p1"], content: [other, PMNode(type: "text", text: " "), mention]),
+        ])
+        await model.showMention(target, as: .card)
+        #expect(engine.replacedWith.count == 1)
+        #expect(model.errorMessage != nil)
+    }
+
+    /// A link shown as a card in the line being edited: the line's input goes in first, with its base, and the card's
+    /// blocks take the line's place only while it is what they were made from. A collaborator's words in it since make
+    /// the engine refuse them; written over the line unchecked, they were gone.
+    @Test(.timeLimit(.minutes(1))) func cardInTheActiveLineKeepsACollaboratorsWords() async throws {
+        let url = "https://github.com/o/r/issues/1"
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p1"], content: [
+            PMNode(type: "text", text: "Siehe "), PMNode(type: "text", marks: [PMMark(type: "link", attrs: ["href": .string(url)])], text: url),
+        ])
+        func editing() async throws -> (FakeDocumentEngine, DocumentModel) {
+            let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+            let model = try Self.model(engine)
+            model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+            while model.answers == nil { try await Task.sleep(for: .milliseconds(10)) }
+            return (engine, model)
+        }
+        func showCard(_ engine: FakeDocumentEngine, _ model: DocumentModel) async throws {
+            let link = try #require(model.activeText.runs.first { $0.link != nil }?.range)
+            model.showLink(in: link, provider: "github", as: .card)
+            while engine.replacedWith.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        }
+
+        // Nobody else in the line: the card goes in, against the line as the editor showed it.
+        var (engine, model) = try await editing()
+        try await showCard(engine, model)
+        #expect(engine.replacedWith.last == [
+            PMNode(type: "paragraph", attrs: ["id": "p1"], content: [PMNode(type: "text", text: "Siehe")]),
+            PMNode(type: "integrationCard", attrs: ["url": .string(url), "provider": "github"]),
+            PMNode(type: "paragraph"),
+        ])
+        #expect(engine.expectations.last == paragraph)
+
+        // Typed on while a collaborator typed in the line: the input is saved, and the card refused.
+        (engine, model) = try await editing()
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        engine.collaboratorEdit = {
+            engine.document = PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "p1"], content: [
+                PMNode(type: "text", text: "Siehe auch "), PMNode(type: "text", marks: [PMMark(type: "link", attrs: ["href": .string(url)])], text: url),
+            ])])
+        }
+        try await showCard(engine, model)
+        #expect(engine.saved.last?.plainText == "Siehe \(url)!")
+        #expect(engine.expectations.last == engine.saved.last)
+        #expect(model.errorMessage != nil)
+    }
+
     /// A pasted link to a page of this server becomes a mention of it, with the anchor, as on the web; a query such as
     /// `?commentId=` doesn't count, and a page that can't be found stays a link.
     @Test(.timeLimit(.minutes(1))) func pastedPageLinkBecomesAMention() async throws {
@@ -2317,8 +2391,11 @@ final class FakeDocumentEngine: DocumentEngine {
     }
     private(set) var backspaces: [(target: BlockTarget, node: PMNode)] = []
     var backspaceResult = BackspaceResult.done(.nothing, cursor: nil)
-    func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult {
+    /// The base each Backspace passed.
+    private(set) var backspaceBases: [PMNode?] = []
+    func backspace(_ target: BlockTarget, holding node: PMNode, base: PMNode?) async -> BackspaceResult {
         backspaces.append((target, node))
+        backspaceBases.append(base)
         whileInserting?()
         return backspaceResult
     }

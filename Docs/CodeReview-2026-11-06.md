@@ -52,7 +52,7 @@ What's left to fix now:
 
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
 
-- Backspace (V2), a drag (V8), the focus after an insert (V10), a status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
+- A drag (V8), the focus after an insert (V10), a status or formula edit (V16), a table command (V18) and a kept database input (V6) act on that copy, and can undo or misplace what the other person did.
 - A selection collapses (V15), and an open preview closes (V43), when the other person types.
 
 **C. Between users.**
@@ -67,27 +67,15 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Working together | V2, V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
+| **B** Working together | V8, V10, V16, V18, V6, V15, V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
-Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done. B is the larger part: V2 needs the engine to rebase a line before it plans the key, and its fixes are tried with two clients on one page.
+Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and V2 from B: Backspace, Return and cards in a line keep what a collaborator typed in it. B is the larger part, and its fixes are tried with two clients on one page.
 
 ---
 
 ## B. Working together
-
-### V2 [high] ✔ Backspace at a line's start sends the app's copy of the line: what a collaborator just typed there is gone
-
-**Where:** `Diderot/Features/Page/DocumentModel.swift:1913–1920` (`joinBackward`), `Diderot/Features/Editor/WebDocumentEngine.swift:509`, `Engine/src/keys.ts:168–191` (`backspaceEdit`); Return's lift at `keys.ts:70–79`.
-
-**Problem:** Backspace passes the line's text without a base: `engine.backspace(active.ref.target, holding: …typed…)`. The engine decides from it whether the line is empty, appends it to the line before (`into.content.append(typed.content)`) and deletes the engine's line, whatever that holds by now. Return saves with a base, but its lift decides "empty" from the app's copy (`before.content.size === 0`) and replaces the line. The app's copy lags behind a collaborator by about 0.6 s while they type, longer while the user's own input is pending.
-
-**Scenario:** B types at the end of a paragraph. Within that lag, A presses Backspace at the paragraph's start. The paragraph joins the one before with A's copy of it, and B's words are gone for everyone. The same happens to a list line B just typed into: Return lifts it out, Backspace removes it.
-
-**Same problem elsewhere:** `placeBlockInActiveText` (`DocumentModel.swift:1083`) replaces the paragraph without `expected`. `showMention(.card)` (`:963–969`) builds its nodes from `document` and passes a block it has just read as `expected`, so it can't catch the lag. The October review's S1 ("decided … from its document") overstated what S1 covered.
-
-**Fix:** Send `session.base` with `backspace`, as `enter` does. In the engine, rebase the app's line onto the engine's block before it plans, joins, lifts or splits, and refuse when the block changed in a way the rebase can't take. Build card replacements from `currentBlock().latest`.
 
 ### V8 [medium] ○ A dragged block can split or drop the container it lands in
 

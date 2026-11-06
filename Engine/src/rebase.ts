@@ -3,7 +3,7 @@
 import { Fragment, Node as PMNode } from "@tiptap/pm/model";
 
 /** Where two fragments differ: `a` from `start` to `endA` became `b` from `start` to `endB` (positions in the content). */
-function difference(a: Fragment, b: Fragment): { start: number; endA: number; endB: number } | undefined {
+export function difference(a: Fragment, b: Fragment): { start: number; endA: number; endB: number } | undefined {
   const start = a.findDiffStart(b);
   if (start == null) return undefined;
   let { a: endA, b: endB } = a.findDiffEnd(b)!;

@@ -243,14 +243,14 @@ class DocmostEngine {
   }
 
   /**
-   * Backspace at the start of a text block that holds `json` by now: joins it with the text block before, removes it or
-   * leaves the list (`backspaceEdit`). Says which, with the cursor (none after a removal); "none" when it does nothing
-   * there.
+   * Backspace at the start of a text block that holds `json` by now, made from `base`: joins it with the text block
+   * before, removes it or leaves the list (`backspaceEdit`). Says which, with the cursor (none after a removal); "none"
+   * when it does nothing there.
    */
-  backspace(target: Target, json: JSONContent): { kind: BackspacePlan["kind"]; cursor: Cursor | null } | false | null {
+  backspace(target: Target, json: JSONContent, base?: JSONContent | null): { kind: BackspacePlan["kind"]; cursor: Cursor | null } | false | null {
     let outcome: { kind: BackspacePlan["kind"]; cursor: Cursor | null } | undefined;
     const applied = this.transact((editor) => {
-      const found = backspaceEdit(editor.schema, editor.state.doc, target, json);
+      const found = backspaceEdit(editor.schema, editor.state.doc, target, json, base);
       if (found === null) outcome = { kind: "none", cursor: null };
       if (!found) return false;
       const tr = editor.state.tr;

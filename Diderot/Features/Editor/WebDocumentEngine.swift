@@ -72,8 +72,9 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Engine/src/keys.ts): the block keeps `node`, and each of `lines` goes where Return puts it, in one transaction.
     /// Returns the last line, with the cursor at its start.
     func enterLines(_ target: BlockTarget, keeping node: PMNode, lines: [[PMNode]], base: PMNode?) async -> KeyResult
-    /// Backspace at the start of a text block that holds `node` by now, its input (`backspace` in Engine/src/keys.ts).
-    func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult
+    /// Backspace at the start of a text block that holds `node` by now, its input made from `base` (`backspace` in
+    /// Engine/src/keys.ts): the engine decides and joins with the line as it holds it, a collaborator's words included.
+    func backspace(_ target: BlockTarget, holding node: PMNode, base: PMNode?) async -> BackspaceResult
     /// What Backspace at the start of the block does, empty and with text; nil without an engine or the block.
     func backspacePlans(_ target: BlockTarget) async -> BackspacePlans?
     /// Turns the line at `target` into `kind` (a `BlockTemplate`'s raw value, or "syncedBlock") where it is, from the
@@ -532,13 +533,14 @@ final class WebDocumentEngine: DocumentEngine {
         return Self.moved(result)
     }
 
-    func backspace(_ target: BlockTarget, holding node: PMNode) async -> BackspaceResult {
+    func backspace(_ target: BlockTarget, holding node: PMNode, base: PMNode?) async -> BackspaceResult {
         struct Outcome: Decodable {
             var kind: String
             var cursor: EngineCursor?
         }
-        let result: KeyAnswer<Outcome> = await key("return JSON.stringify(window.DocmostEngine.backspace(target, json));",
-                                                   ["target": target.jsObject, "json": Self.jsObject(node)])
+        let result: KeyAnswer<Outcome> = await key("return JSON.stringify(window.DocmostEngine.backspace(target, json, base));",
+                                                   ["target": target.jsObject, "json": Self.jsObject(node),
+                                                    "base": base.map { Self.jsObject($0) } ?? NSNull()])
         switch result {
         case .value(let outcome):
             let plan: BackspacePlan = switch outcome.kind {

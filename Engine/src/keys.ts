@@ -9,6 +9,7 @@
 import type { JSONContent } from "@tiptap/core";
 import { Fragment, Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
+import { difference, rebase } from "./rebase";
 import { applySteps, locate, type Step, type Target } from "./steps";
 
 /** Where the cursor goes: the text block at `path`, `offset` into its content (ProseMirror's count). */
@@ -30,6 +31,35 @@ const joinable = new Set(["paragraph", "heading", "detailsSummary"]);
 const paragraph: JSONContent = { type: "paragraph" };
 
 /**
+ * The app's line `json` as the engine holds it by now: the app's input (`base` → `json`) applied onto what a
+ * collaborator changed since (`rebase`). The app's copy lags behind their typing, so a key decided on it alone dropped
+ * their words: a line the app has empty may hold them, and its text goes into the line before on Backspace. Undefined
+ * when both changed the same text, which line the user meant then can't be told: the key is refused. Without `base`,
+ * the app's line.
+ */
+function lineNow(schema: Schema, node: PMNode, json: JSONContent, base?: JSONContent | null): PMNode | undefined {
+  const line = PMNode.fromJSON(schema, json);
+  if (!base) return line;
+  const from = PMNode.fromJSON(schema, base);
+  return node.eq(from) ? line : rebase(node, from, line);
+}
+
+/**
+ * Whether a collaborator changed the line (`base` → `node`) at or after the cursor, where Return splits it: the text
+ * after the cursor goes on in the new line as the app has it (`after`), so their change there would be lost or end up
+ * before it. `before` and `after` are the app's line on both sides of the cursor.
+ */
+function changedAfterCursor(schema: Schema, node: PMNode, base: PMNode, before: PMNode, after: JSONContent[]): boolean {
+  const theirs = difference(base.content, node.content);
+  if (!theirs) return false;
+  const cursor = before.content.size;
+  const mine = difference(base.content, before.content.append(Fragment.fromArray(after.map((item) => PMNode.fromJSON(schema, item)))));
+  // The cursor in the line the app's input began from; within the app's own change, at its start.
+  const cursorInBase = !mine || mine.start >= cursor ? cursor : mine.endB <= cursor ? cursor - (mine.endB - mine.endA) : mine.start;
+  return theirs.endA > cursorInBase || theirs.start >= cursorInBase;
+}
+
+/**
  * Return in the text block at `target`: it keeps `json`, its text before the cursor (with `base`, the block the app's
  * input started from, as a save), and the text after the cursor (`after`, inline content) continues in a new line:
  * - a toggle's title stays whole, and an empty line starts its content (open) or follows it (closed);
@@ -38,16 +68,21 @@ const paragraph: JSONContent = { type: "paragraph" };
  * - an item's line continues in a new item after it;
  * - any other line in a new paragraph after it.
  * With `lifts` false, an empty line leaves nothing: a pasted one with more lines after it (`enterLinesEdit`).
- * Undefined when the block is gone or another type.
+ * Decided on the line as the engine holds it by now (`lineNow`): one a collaborator typed into since doesn't count as
+ * empty. Undefined when the block is gone or another type, or when a collaborator changed the line where the app's
+ * input did, or after the cursor, whose text goes on in the new line as the app has it.
  */
 export function enterEdit(schema: Schema, doc: PMNode, target: Target, json: JSONContent, after: JSONContent[],
   base?: JSONContent | null, lifts = true): KeyEdit | undefined {
   const found = locate(doc, target);
   if (!found || found.node.type.name !== json.type) return undefined;
+  const now = lineNow(schema, found.node, json, base);
+  if (!now) return undefined;
+  const before = PMNode.fromJSON(schema, json);
+  if (base && changedAfterCursor(schema, found.node, PMNode.fromJSON(schema, base), before, after)) return undefined;
   const path = pathOf(doc, found.pos);
   const $pos = doc.resolve(found.pos);
   const parent = $pos.parent, index = $pos.index();
-  const before = PMNode.fromJSON(schema, json);
   const save: Step = { op: "replace", target, json: [json], base };
   const line = (content: JSONContent[]): JSONContent => (content.length ? { type: "paragraph", content } : paragraph);
 
@@ -67,7 +102,7 @@ export function enterEdit(schema: Schema, doc: PMNode, target: Target, json: JSO
     return { steps, cursor: { path: next(detailsPath), offset: 0 } };
   }
 
-  if (lifts && before.content.size === 0 && after.length === 0 && path.length >= 2) {
+  if (lifts && now.content.size === 0 && after.length === 0 && path.length >= 2) {
     const last = index === parent.childCount - 1;
     const container = parent.type.name;
     let lifted: KeyEdit | undefined;
@@ -161,15 +196,18 @@ export function backspacePlan(doc: PMNode, target: Target, empty: boolean): Back
 
 /**
  * Backspace at the start of the text block at `target`, which holds `json` by now (its input goes with it): joins it with
- * the text block before, removes it, or leaves the list (`backspacePlan`). Null when it does nothing there, undefined
- * when the block is gone or another type. The cursor goes where the texts meet, or into the line that leaves the list;
- * after a removal (cursor null) the app puts it into the text before.
+ * the text block before, removes it, or leaves the list (`backspacePlan`). Decided and joined with the line as the engine
+ * holds it (`lineNow`, from `base`): a collaborator's words in it go along, and a line they typed into isn't removed. Null
+ * when it does nothing there, undefined when the block is gone or another type, or both changed the same text. The
+ * cursor goes where the texts meet, or into the line that leaves the list; after a removal (cursor null) the app puts it
+ * into the text before.
  */
-export function backspaceEdit(schema: Schema, doc: PMNode, target: Target, json: JSONContent):
+export function backspaceEdit(schema: Schema, doc: PMNode, target: Target, json: JSONContent, base?: JSONContent | null):
   { edit: { steps: Step[]; cursor: Cursor | null }; plan: BackspacePlan } | null | undefined {
   const found = locate(doc, target);
   if (!found || found.node.type.name !== json.type) return undefined;
-  const typed = PMNode.fromJSON(schema, json);
+  const typed = lineNow(schema, found.node, json, base);
+  if (!typed) return undefined;
   const plan = backspacePlan(doc, target, typed.content.size === 0);
   if (!plan || plan.kind === "none") return null;
   const path = pathOf(doc, found.pos);
