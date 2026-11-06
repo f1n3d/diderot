@@ -52,7 +52,6 @@ What's left to fix now:
 
 **B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
 
-- A kept database input (V6) can overwrite what the other person changed since.
 - An open preview closes when the other person adds a block above (V43).
 
 **C. Between users.**
@@ -67,7 +66,7 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Working together | V6, V43 | engine checks, unit tests, UI tests, two clients | medium |
+| **B** Working together | V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
@@ -76,16 +75,6 @@ Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32
 ---
 
 ## B. Working together
-
-### V6 [medium] ○ An old kept database input can overwrite a newer value
-
-**Where:** `Diderot/Features/Bases/BaseFieldEditors.swift:187`, `Diderot/Features/Bases/BaseModel.swift:122–123, 553`, `Diderot/App/UnsentEdits.swift:97–125`.
-
-**Problem:** When a kept input is delivered later (`sendUnsentCells`) or dropped, an open database still holds it in `unsavedDrafts`, which is only built on the first load. A field shows `unsavedDraft ?? stored`.
-
-**Scenario:** A save of "foo" fails and is kept; the network returns and "foo" is delivered; a colleague changes the field to "bar". The user refreshes the still open database and opens the entry: it shows "foo", and closing it writes "foo" over "bar".
-
-**Fix:** Clear the key in any open `BaseModel` when a kept cell is sent or dropped, and don't commit a kept draft the store no longer holds.
 
 ### V43 [medium] ? Previews opened from a media block or card close when a collaborator adds a block above
 

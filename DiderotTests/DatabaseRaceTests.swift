@@ -71,6 +71,31 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// A kept input that went to the server while its database stayed open no longer shows once that loads again, and a
+        /// field closed with it unchanged doesn't send it again: it overwrote what a colleague had changed since.
+        @Test func deliveredKeptInputDoesNotGoAgain() async throws {
+            let (model, session) = try await editableBase()
+            defer { UnsentChanges.removeAll(server: a) }
+            StubURLProtocol.status.withLock { $0 = 500 }
+            await model.setCell(rowId: "r1", propertyId: "p1", to: .string("foo"), typed: "foo")
+            StubURLProtocol.status.withLock { $0 = 200 }
+            let open = BaseModel(pageId: model.pageId, session: session)
+            await open.load()
+            #expect(open.unsavedDraft(rowId: "r1", propertyId: "p1") == "foo")
+
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"p1": "foo"}}}"# }
+            #expect(await session.sendUnsentCells().isEmpty)
+            StubURLProtocol.requests.withLock { $0 = [] }
+            await model.setCell(rowId: "r1", propertyId: "p1", to: .string("foo"), typed: "foo")
+            #expect(!StubURLProtocol.requests.withLock { $0 }.contains("a.example.com/api/bases/rows/update"))
+            #expect(model.unsavedDraft(rowId: "r1", propertyId: "p1") == nil)
+
+            StubURLProtocol.body.withLock { $0 = nil }
+            await open.load()
+            #expect(open.unsavedDraft(rowId: "r1", propertyId: "p1") == nil)
+            await removeCaches()
+        }
+
         /// A kept input for an entry deleted meanwhile can never go: it is dropped, and named for the notice.
         @Test func keptInputOfAGoneEntryIsDropped() async throws {
             let (model, session) = try await editableBase()
