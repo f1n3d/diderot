@@ -13,6 +13,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 - Idea: the identity provider's domain as a build setting, so people building the app themselves change one line.
 - Idea: point out in the in-app browser that passkeys don't work there and another method (such as TOTP) can be chosen.
 - Sign-in with an API key (technically possible, Business license and up; a way out for accounts with only a passkey).
+- A password, LDAP or MFA sign-in that fails after the token arrived (`users/me` times out, a link switches servers) drops the token without signing out; the session stays on the server until it expires (V22 of the code review of November 6, 2026; the browser sign-in keeps a pending logout, R12). It waits: the session is unused and the user's devices list it.
 
 ## App Store
 
@@ -71,6 +72,19 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
     - A tap on a block waits 80 ms for a link's `OpenURLAction` before it opens the editor (`BlockCards`): which comes first isn't defined. Deciding in the tap would need the text's layout, to know whether a link run lies under the finger.
     - After a sheet the editor asks for focus again 500 ms later (`EditorFocus`): on a device UIKit sometimes refuses it while the sheet is still going, without a sign.
     - A new block outside the built part of the page: the page scrolls there and, near the end, steps up every 150 ms until the lazy list has built it (`CentersAboveKeyboard`). No event says a row will be built.
+- Postponed in the code review of November 6, 2026 (rare, or with a sign the user sees):
+  - Write access taken away while typing: "You can no longer edit this page" goes with the save of the pending input; the pill keeps saying "Read only" (V11).
+  - A reconnect that is refused (the page deleted, access taken away) leaves the editor open; typing goes in as unsent changes the server may never take (V12).
+  - When the engine can't come back (a restart offline, a second engine error), input it couldn't take is dropped once the page is left; a web process that ends while the engine opens leaves "Connecting" without a reason (V13).
+  - Pasted lines run together when the engine refuses `enterLines` (its fallback joins them without a separator), and two paragraphs pasted as HTML into a toggle's title run together (V14).
+  - Pasting web HTML that holds a synced block takes only the synced block (V17).
+  - An unsent-changes file that can't be read is replaced by the next save, against the unsent store's contract (V19). Needs a damaged file.
+  - Done in the web editor drops its page at once; a drawing or picture still being sent may not arrive (V41, suspected: to confirm with the Network Link Conditioner first).
+  - A web editor that can't load (offline, a sign-in proxy) ends on a blank sheet, and "Edit in Web Editor" is offered offline too (V42). The comment in `WebEditorView.loaded()` ("the web view shows why") is wrong: WebKit draws nothing for a failed provisional navigation.
+  - The image viewer keeps each photo it decoded, up to about 48 MB, in its page's state outside the image cache (V44, suspected: to measure with 30 and more photos first; M51 above covers the page's own images).
+  - Unknown inline atoms (a newer server's) show as nothing outside the active editor, so a paragraph holding only one looks empty (V45).
+  - A note being appended lives only in its sheet: a crash or a server switch loses it (V49).
+  - DocumentModel (about 2,280 lines) still holds what the keys and menus do: Return, Backspace, inserting, pasting, the block operations and the engine's answers (S2 of October 31; its pure parts, `EngineConnection` and `ActiveTextSession` are out). Split further only if its size hurts.
 
 - iPad with a hardware keyboard (checked on October 23, 2026, simulator only): the editor's UI tests pass there except test10 and test14, which expect the on-screen keyboard (also before the page's one editor). Return and Backspace from a hardware keyboard couldn't be checked reliably in the simulator; to try on a real iPad with a keyboard.
   - After pasting into the editor through the edit menu, keys from a hardware keyboard can go nowhere until something is typed on the on-screen keyboard or the cursor moves (found on October 26, 2026, simulator only). XCUITest's `typeKey` and `typeText` show it after a pasted link and after plain text, taps on the on-screen keyboard don't. The space search field doesn't have it, and the editor without the app's paste handling does, so it is probably there since 1.0. Whether ⌘V does the same couldn't be checked: XCUITest's ⌘V pasted nothing. Reloading the keyboard (as after a pasted page link turns into its mention) helps only sometimes. To try on a real iPad with a keyboard; test74 types its first key on the on-screen keyboard for this reason.
@@ -97,6 +111,9 @@ Also open: returning to a large table loads only its first 100 rows again and sc
 Deliberately not yet like the web (found in the code review on October 13, 2026):
 
 - If a space allows comments by readers, readers can also comment on selected text on the web (inline comments). The app doesn't offer readers inline comments.
+- Postponed in the code review of November 6, 2026:
+  - A new inline comment whose passage a collaborator deleted meanwhile is made without a mark, and the sheet closes without a word (V39). Rare.
+  - Editing a comment with line breaks makes each line a paragraph of its own (V40).
 
 ## Templates
 
@@ -125,3 +142,38 @@ Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the 
   - All windows share one navigation (R46): a link, or "Open Link" in one window, opens in whichever window reacts first, and a selection waiting for a server switch doesn't record its server, so after a failed or raced switch it lands on whatever server becomes ready ("not found"). A crafted `diderot://` link can switch servers without asking and close the open pages in every window, but can't add a server or sign in anywhere new. A navigation per window, and waiting selections that keep their server, would fix it.
 - Not for the Mac (decided on October 25, 2026: on a Mac, Docmost's web client does the job). Its availability for Macs with Apple silicon is turned off in App Store Connect (Pricing and Availability; the API has no field for it). One more reason: on a Mac with macOS 27.0.1, writing a file with `.completeFileProtection` fails with EPERM, also outside a sandbox (`.completeFileProtectionUntilFirstUserAuthentication` works), so the offline cache would stay empty there; for the same reason DocmostKit's `DiskCacheTests` fail on such a Mac (GitHub's runners and iPhones are fine).
 - Unit tests on GitHub's runners: `keepsItsContentOnReturn` (MediaBlockViewTests) and `lateReconnectKeepsTheSwitch` (AppSessionRaceTests) failed there before October 23, 2026, never locally; since then MediaBlockViewTests wait up to 20 s, and the second one's hook waits for the reconnect's own request. If one fails there again, look further. `lateReconnectKeepsTheSwitch` did on October 31, 2026 (PR #66, first run; the rerun passed). `formulaRendersAgainAfterItsWebProcessEnded` failed there twice more (October 24 and 25, 2026): GitHub's simulator sometimes doesn't let the app end the web process (RunningBoard: "Client not entitled"); the test is cancelled then and shows as skipped.
+- Postponed in the code review of November 6, 2026 (rare, or the server refuses with a message):
+  - Notices of work that outlives its page (a failed close-save on a full disk, a failed upload) are lost when a sign-out, a 401 or a server switch replaces the main view, and a staged camera photo is then deleted without a word (V21). The fix keeps the notices above the session.
+  - Unsent changes of a server added under an older spelling (upper case, `:443`, before the address was normalized) can't be found after signing out and adding it again (V23). Only for servers added before that.
+  - One send at a time for kept titles and fields, and one for pending sign-outs: a second request while one waits (30 s on an unreachable server) is dropped until the next activation or network change (V24).
+  - After an offline start with the network up, turning a VPN on doesn't reconnect; only returning to the app or a network change does (V25; the note above on servers that don't answer says "or of the network", which a VPN doesn't change).
+  - With two iPad windows on the server setup, Continue in one and Cancel in the other can end on the new server's sign-in (V26).
+  - A late "Try Again" of a sign-in writes its user into the cache before it knows the sign-in still counts (V27, suspected: to confirm with a session test that delays the retry's `users/me`).
+  - Cached images, PDFs and diagrams keep showing after the server says they're gone, such as a deleted attachment, until the 30-day prune (V28).
+  - The web editor's website data likely has the app's default file protection and goes into backups, unlike the offline cache (V29, suspected: to read on a device).
+  - A page dropped into a page whose children are still loading (slow network) lands near the top instead of last (V33).
+  - When the newest of overlapping loads is cancelled, a screen without a saved copy can keep its spinner until a pull (V34, `RemoteValue`).
+  - The trash offers permanent deletion to editors; the server allows it only for space admins and says so (V35).
+  - The page tree offers drags and new subpages on pages the user can't edit (Docmost 0.97's restricted pages); the server refuses them (V36).
+  - A failed switch of the notification filter keeps the other filter's list, without a message (V37).
+  - Templates and search load again on every return: a spinner, the place lost, what "Load More" added gone (V38).
+
+## Accessibility
+
+To do as one round with VoiceOver on a device (code review of November 6, 2026):
+
+- VoiceOver hears no list numbers and no heading levels: the list marker is hidden, numbers included, and headings have no level (V46).
+- Database table cells read only their value, an empty one as "Button"; rows are a fixed 44 pt and clip large text (V47).
+- The page tree can be rearranged only by dragging: no accessibility actions to move a page up, down or into another (V48, to confirm with VoiceOver's actions).
+
+## Tests and CI
+
+From the code reviews of October 31 and November 6, 2026:
+
+- The UI test runner's checks are inline Python: about 690 lines in `Tools/run-uitests.sh`, with fractional indexing of their own next to DocmostKit's tested one. Move them into `Tools/uitest_checks.py` or into the UI tests (T3).
+- The test setup invites flakes (T6). The session race tests share static `StubURLProtocol` hooks, so they run serially, and touch the real Caches folder, WebKit and temp files and the real network monitor; a transport per test and a test environment by default would let them run in parallel. The EditorUITests share one page whose state accumulates, with `Thread.sleep` calls adding up to about 105 s; pages per test and condition-based waits would end that.
+- Nothing in CI calls the engine the way the app does: `DocmostEngine`'s parameters and results are reached only by the local UI tests, so a rename there passes CI and breaks every Return (V52). A node check driving it with the calls `WebDocumentEngine.swift` makes.
+- CI doesn't compile the UI tests (V53): `xcodebuild build-for-testing -scheme DiderotUI`.
+- CI checks engine.js against its sources but not the islands' KaTeX and Mermaid, committed and never rebuilt (V54).
+- The server checks of deletions and undo check only that something is absent, so something that never reached the server passes (V55).
+- test76 presents a page without formulas or diagrams, which the presentation pages as web views (V56). Tried by hand on November 6, 2026 on "Fixture: Blocks": no trap, the formula rendered.
