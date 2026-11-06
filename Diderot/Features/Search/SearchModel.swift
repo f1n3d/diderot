@@ -21,10 +21,13 @@ final class SearchModel {
     private let pageSize = 25
     /// Searches started (`run`, `loadMore`): only the latest ends `isSearching`, as an earlier one's query is gone.
     @ObservationIgnored private var started = 0
+    /// What the wait for more typing runs on; tests move a clock of their own (`TestClock`).
+    @ObservationIgnored private let clock: any Clock<Duration>
 
-    init(spaceId: String? = nil, query: String = "") {
+    init(spaceId: String? = nil, query: String = "", clock: any Clock<Duration> = ContinuousClock()) {
         self.spaceId = spaceId
         self.query = query
+        self.clock = clock
     }
 
     var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -45,7 +48,7 @@ final class SearchModel {
         }
         // From the first key on: during the debounce, the results said "No Results" for a query not sent yet.
         isSearching = true
-        try? await Task.sleep(for: .milliseconds(300))
+        try? await clock.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
         await search(append: false)
         if generation == started { isSearching = false }

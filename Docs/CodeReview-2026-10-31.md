@@ -84,7 +84,7 @@ Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), th
 
 ### S4 Time as a control mechanism
 
-There are 47 `Task.sleep`/`asyncAfter` calls in the app. DocumentModel's run on a clock in its dependencies (`DocumentModel.Dependencies.clock`), which tests move by hand (`TestClock`): its tests of a save's wait for more input, the unsent save and an inline command's wait for focus no longer sleep, so their checks that nothing happened no longer pass while the main actor is busy elsewhere. The other waits still sleep in real time: mostly the views' (the fragile ones below), and a few debounces and timeouts (search, pickers, the engine's).
+There are 47 `Task.sleep`/`asyncAfter` calls in the app. DocumentModel's run on a clock in its dependencies (`DocumentModel.Dependencies.clock`), which tests move by hand (`TestClock`): its tests of a save's wait for more input, the unsent save and an inline command's wait for focus no longer sleep, so their checks that nothing happened no longer pass while the main actor is busy elsewhere. The other waits still sleep in real time: mostly the views' (the fragile ones below), and a few debounces and timeouts (pickers, the engine's). The search's runs on a clock of its own too (`SearchModel`).
 
 **Fragile:** these wait for keyboard, focus, layout or animation, and fail on slow devices.
 
@@ -116,7 +116,7 @@ Scroll-and-highlight exists twice with different delays (`CommentsView.swift:103
 - tolerable debounce of a noisy signal: `CentersAboveKeyboard.keyboardChanged`
 - debug or test only: HomeView 56, DocumentModel 2789
 
-Give a debounce the clock where a test needs it (S), and replace the fragile waits with events.
+Give a debounce the clock where a test needs it (S): the search's has one (`SearchModel`, its spinner test); the other debounces above are the views' and no test waits on them. Then replace the fragile waits with events.
 
 **Method hook in KeyboardObserver.swift:103–121.** The backlog notes its fragility. Beyond that (○):
 
