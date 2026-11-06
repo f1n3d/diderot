@@ -50,15 +50,15 @@ The debt sits in two places.
 - "is this answer still current?"
 - media loading
 
-So a bug gets fixed in one place and stays in others. Example: the race fixed for favorites and notifications was still open in comments (R18, fixed in package B). Web views are set up by role in one place since S3 (`WebViews`), every error shown reads as a sentence (`Error.userMessage`), a server is one origin however its address is spelled (`ServerKey`), and unsent changes have a store of their own (`UnsentStore`).
+So a bug gets fixed in one place and stays in others. Example: the race fixed for favorites and notifications was still open in comments (R18, fixed in package B). Since S3, what a screen loads goes through one type (`RemoteValue`), web views are set up by role in one place (`WebViews`), every error shown reads as a sentence (`Error.userMessage`), a server is one origin however its address is spelled (`ServerKey`), and unsent changes have a store of their own (`UnsentStore`).
 
 ## Order of work
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **E** Structure, in steps | S2 → S3 → S4 | unit tests and UI tests | medium to high |
+| **E** Structure, in steps | S4, then S2's last step if the model's size still hurts | unit tests and UI tests | medium to high |
 
-S1 is done: what fits where, Return, Backspace, conversions, columns and unsync are decided and applied in the engine and checked in `pnpm run check`. Package C's stopgap for R1 remains for cards, atoms and templates. DocumentModel didn't get shorter by it (about 3,000 lines): the engine's answers it asks for and keeps took the place of the rules.
+S1 and S3 are done. S1: what fits where, Return, Backspace, conversions, columns and unsync are decided and applied in the engine and checked in `pnpm run check`. Package C's stopgap for R1 remains for cards, atoms and templates. DocumentModel didn't get shorter by it (about 3,000 lines): the engine's answers it asks for and keeps took the place of the rules.
 
 ---
 
@@ -75,12 +75,6 @@ S1 is done: what fits where, Return, Backspace, conversions, columns and unsync 
 Its pure parts are out (S2, part 1): the value types (`DocumentTypes.swift`), the lookups in a document (`DocumentTree.swift`), the nodes the editor makes (`NodeFactory.swift`), "/" and "@" in the text (`TriggerParser.swift`) and the table toolbar's types (`TableEditing.swift`). The insert rules S1 left are the menus' state and stay.
 
 **Then the stateful parts (L).** `EngineConnection` is out (S2, part 2): where the engine is, why the page is read-only, opening and closing one after the other, the save of the unsent changes, the uploads that keep a leaving page open, and what follows when the engine fails or its web process ends. It asks the page back through `EngineConnectionOwner` and is tested on its own (`EngineConnectionTests`). `ActiveTextSession` is out too (S2, part 3): the block being edited, its text and selection, the input not yet saved, the base each save passes, the app's own text that isn't input, and the saves (after a pause, at once, before an edit, once the engine is back); it asks the page back through `ActiveTextSessionOwner` (`ActiveTextSessionTests`). The model forwards the editor's state, so its views bind as before. What remains in it is what the keys and menus do: Return, Backspace, inserting, pasting, the block operations and the engine's answers, which reach the session's input directly where they hand it over (Return keeps a line's input pending while the engine splits it). Moving those into types of their own is the next step, if the model's size still hurts.
-
-### S3 Missing shared building blocks
-
-| Topic | Today | Target |
-|---|---|---|
-| Loading | `RemoteValue` loads history, members, trash, templates, sessions, spaces, recent pages, comments, a database's card, synced block references and sub-pages: its state, a later load winning, the saved copy first, a failed refresh keeping what shows. `AsyncContentView` has an inline layout (Home's spaces, a space's tree and recent pages). Loaders of their own stay where they add rules: favorites and notifications (marks and toggles merged in), the page tree, the page, databases, the space header (a gone space shows so over its saved copy), a synced block, attachments (per query); the notifications popover and a database's status lay out their own states. | Move them where their rules allow. (S) |
 
 ### S4 Time as a control mechanism
 

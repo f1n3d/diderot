@@ -398,7 +398,7 @@ private struct SubpageRow: View {
     @Environment(\.renderContext) private var context
     @Environment(ReaderNavigation.self) private var navigation
     @State private var isExpanded = false
-    @State private var children: LoadState<[SidebarPage]> = .idle
+    @State private var children = RemoteValue<[SidebarPage]>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -438,7 +438,7 @@ private struct SubpageRow: View {
             }
             .padding(.leading, CGFloat(depth) * 20)
             if isExpanded {
-                switch children {
+                switch children.state {
                 case .loaded(let pages):
                     ForEach(SubpageSorting.sorted(pages, by: sortBy)) { child in
                         SubpageRow(page: child, sortBy: sortBy, depth: depth + 1)
@@ -452,14 +452,7 @@ private struct SubpageRow: View {
         }
         .task(id: isExpanded) {
             guard isExpanded, children.value == nil, context.canRequest else { return }
-            children = .loading
-            do {
-                children = .loaded(try await Paginated.all { try await context.send(Endpoints.Pages.children(of: page.id, cursor: $0)) })
-            } catch is CancellationError {
-                children = .idle
-            } catch {
-                children = .failed(error)
-            }
+            await children.load { try await Paginated.all { try await context.send(Endpoints.Pages.children(of: page.id, cursor: $0)) } }
         }
     }
 }
