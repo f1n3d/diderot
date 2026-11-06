@@ -138,6 +138,7 @@ struct IntegrationCardView: View {
     @Environment(\.linkPreviews) private var previews
     @Environment(\.renderContext) private var context
     @Environment(\.openURL) private var openURL
+    @Environment(\.presentFromPage) private var presentFromPage
     /// The service whose account the user connects in the sheet.
     @State private var connecting: ConnectRequest?
 
@@ -222,13 +223,26 @@ struct IntegrationCardView: View {
 
     private func connectButton(_ needed: LinkPreview.ConnectionNeeded) -> some View {
         Button {
-            connecting = ConnectRequest(type: needed.integrationType)
+            connect(needed.integrationType)
         } label: {
             Label("Connect to \(needed.integrationName) to preview", systemImage: "link.badge.plus")
                 .font(.subheadline.weight(.medium))
         }
         .buttonStyle(.bordered)
         .accessibilityIdentifier("integration-connect")
+    }
+
+    /// The sign-in to the service, from the page where it can (`blockPresentations`): a block above, from a collaborator,
+    /// makes this card anew, and the sign-in closed halfway. Closed, the card asks for its preview again.
+    private func connect(_ type: String) {
+        guard let presentFromPage, let server = context.baseURL else {
+            connecting = ConnectRequest(type: type)
+            return
+        }
+        let token = context.token, url = link.url, previews = previews
+        presentFromPage(.modal(BlockSheet(id: "connect:\(type)", onDismiss: { Task { await previews?.load([url], force: true) } }) {
+            AnyView(IntegrationConnectSheet(server: server, token: token, type: type))
+        }))
     }
 }
 

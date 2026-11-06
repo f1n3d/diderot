@@ -50,10 +50,6 @@ The October work holds up. The session's state machine stays right through start
 
 What's left to fix now:
 
-**B. Working together.** The app's copy of a page lags behind a collaborator's typing by about 0.6 s.
-
-- An open preview closes when the other person adds a block above (V43).
-
 **C. Between users.**
 
 - A file link on a page can sign the reader out (V20).
@@ -66,25 +62,10 @@ What's left to fix now:
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **B** Working together | V43 | engine checks, unit tests, UI tests, two clients | medium |
 | **C** Between users | V20, V30, V31 | unit tests | low |
 | **D** The developer's Mac | V50, V51 | a UI test run | low |
 
-Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and V2 and V8 from B: Backspace, Return and cards in a line keep what a collaborator typed in it, and a dragged block goes only where it fits. B is the larger part, and its fixes are tried with two clients on one page.
-
----
-
-## B. Working together
-
-### V43 [medium] ? Previews opened from a media block or card close when a collaborator adds a block above
-
-**Where:** `Diderot/Rendering/MediaBlockViews.swift:94/104, 152/178, 243/260`, `Diderot/Rendering/IntegrationViews.swift:142/182`, `Diderot/Features/Page/BlockCards.swift:10`, `DocumentTypes.swift:31`.
-
-**Problem:** Media and cards have no id, so the editor keys their rows by path. An edit above gives the row another node; the view is built anew, and SwiftUI dismisses what its state presented. The backlog's F164 names the math flash, the PDF back on page 1 and the video starting over, not this.
-
-**Scenario:** The user reads a PDF full screen, previews an attachment, or is halfway through OAuth in "Connect to …", and a web user presses Return above: it closes, and the sign-in is lost.
-
-**Fix:** Present these from a page-level host keyed by the source, as the media viewer does.
+Package A (content that went missing without a sign: V1, V3, V4, V5, V7, V9, V32) is done, and so is B (working together: V2, V6, V8, V10, V15, V16, V18, V43). B's fixes have engine checks and unit tests that act out the collaborator; V43's UI test has a second client, the test script, add a block above.
 
 ---
 
