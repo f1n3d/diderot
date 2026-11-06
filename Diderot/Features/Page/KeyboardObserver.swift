@@ -101,22 +101,37 @@ enum TextInputHooks {
     private static var hooked: Set<ObjectIdentifier> = []
 
     static func install(on view: UITextView) {
-        guard let cls = object_getClass(view), hooked.insert(ObjectIdentifier(cls)).inserted else { return }
+        // The class the view says it has: while it is observed, `object_getClass` gives KVO's subclass, which goes,
+        // with the hook, once the observation ends.
+        let cls: AnyClass = view.classForCoder
+        // A subclass of a hooked class has the hook: a second one would ask the handler twice.
+        guard !sequence(first: cls, next: class_getSuperclass).contains(where: { hooked.contains(ObjectIdentifier($0)) }) else { return }
         let selector = #selector(UITextView.deleteBackward)
-        guard let method = class_getInstanceMethod(cls, selector) else { return }
+        guard let method = class_getInstanceMethod(cls, selector) else {
+            AppLog.ui.fault("\(NSStringFromClass(cls), privacy: .public) has no deleteBackward: Backspace at a block's start won't join it")
+            return
+        }
+        hooked.insert(ObjectIdentifier(cls))
         typealias Function = @convention(c) (AnyObject, Selector) -> Void
-        let original = unsafeBitCast(method_getImplementation(method), to: Function.self)
+        /// The class's own implementation, if it had one; an inherited one is looked up at each call.
+        var own: Function?
         let block: @convention(block) (AnyObject) -> Void = { object in
             let handled = MainActor.assumeIsolated {
                 guard let view = object as? UITextView, view.selectedRange == NSRange(location: 0, length: 0) else { return false }
                 return onBackspaceAtStart?(view) ?? false
             }
-            if !handled { original(object, selector) }
+            guard !handled else { return }
+            if let own {
+                own(object, selector)
+            } else if let superclass = class_getSuperclass(cls), let inherited = class_getMethodImplementation(superclass, selector) {
+                // As the superclass has it now, so a change made there later (another hook) still runs.
+                unsafeBitCast(inherited, to: Function.self)(object, selector)
+            }
         }
         let implementation = imp_implementationWithBlock(block)
         // An inherited method gets an override on this class only, so other subclasses of its superclass stay as they are.
         if !class_addMethod(cls, selector, implementation, method_getTypeEncoding(method)) {
-            method_setImplementation(method, implementation)
+            own = unsafeBitCast(method_setImplementation(method, implementation), to: Function.self)
         }
     }
 }
