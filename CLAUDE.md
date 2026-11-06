@@ -1,0 +1,2 @@
+- Before a pull request opens, run `/code-review` on its diff. The rest of the process is in README.md › "How a change goes in".
+- Never run unit tests and UI tests on the same simulator at once; they get in each other's way.
