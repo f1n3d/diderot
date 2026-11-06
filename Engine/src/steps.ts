@@ -31,6 +31,12 @@ export type Step =
  * caller then drops `tr`, steps before included. Throws for a block the schema can't hold (`checkBlocks`), and for an
  * attribute value the app doesn't set (`checkAttributes`).
  */
+/** The document's tab ids, read once a step meets a tab without an id: most steps hold none (every save of text). */
+function takenTabIds(tr: Transaction): () => Set<unknown> {
+  let ids: Set<unknown> | undefined;
+  return () => (ids ??= tabIds(tr.doc));
+}
+
 export function applySteps(tr: Transaction, steps: readonly Step[]): boolean {
   return steps.every((step) => applyStep(tr, step));
 }
@@ -42,8 +48,7 @@ function applyStep(tr: Transaction, step: Step): boolean {
       // With `base`, the text block the app's edit started from: a collaborator's edit since then stays (`rebase`).
       const found = find(tr.doc, step.target, step.expected);
       if (!found) return false;
-      const taken = tabIds(tr.doc);
-      let nodes = step.json.map((item) => PMNode.fromJSON(schema, withTabIds(item, taken)));
+      let nodes = step.json.map((item) => PMNode.fromJSON(schema, withTabIds(item, takenTabIds(tr))));
       if (step.base && nodes.length === 1) nodes = [rebase(found.node, PMNode.fromJSON(schema, step.base), nodes[0]) ?? nodes[0]];
       checkBlocks(nodes);
       if (!holds(slotAt(tr.doc, found.pos, "replace"), nodes)) return false;
@@ -51,8 +56,7 @@ function applyStep(tr: Transaction, step: Step): boolean {
       return true;
     }
     case "insert": {
-      const taken = tabIds(tr.doc);
-      const nodes = step.json.map((item) => PMNode.fromJSON(schema, withTabIds(item, taken)));
+      const nodes = step.json.map((item) => PMNode.fromJSON(schema, withTabIds(item, takenTabIds(tr))));
       checkBlocks(nodes);
       let pos: number;
       if (!step.target) {

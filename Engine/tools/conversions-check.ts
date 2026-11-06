@@ -176,6 +176,11 @@ expect("an embed replaced by its content", "Eins Inhalt transclusionReference", 
 const moved = page(paragraph("z", "Neu"), paragraph("a", "Eins"), reference("u"), reference("t"));
 expect("an embed found where it is now", "Neu Eins transclusionReference Inhalt", run(moved, referenceEdit(moved, [1], { sourcePageId: "p", transclusionId: "t" }, content)));
 expect("an embed that is gone", "refused", run(line, referenceEdit(line, [1], { sourcePageId: "p", transclusionId: "t" }, content)));
+// A copied tab comes without its source's id too; the step gives it a new one.
+const tabbed: JSONContent[] = [{ type: "tabs", content: [{ type: "tab", attrs: { id: "quelltab" }, content: [
+  { type: "tabLabel", content: text("Reiter") }, { type: "tabPanel", content: [paragraph("z", "Im Reiter")] }] }] }];
+const copiedTab = blockAfter(embeds, referenceEdit(embeds, [1], { sourcePageId: "p", transclusionId: "t" }, tabbed), [1, 0])?.attrs?.id;
+expect("an embed's tab with an id of its own", [true, true], [typeof copiedTab === "string" && copiedTab !== "", copiedTab !== "quelltab"]);
 // The content's blocks come without their source's ids (UniqueID gives them new ones), at any depth; other attributes stay.
 const withIds: JSONContent[] = [paragraph("x", "Inhalt", { textAlign: "center" }), quote(paragraph("y", "Zitat"))];
 expect("an embed's content without its source's ids", [null, "center", null], [

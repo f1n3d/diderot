@@ -178,9 +178,12 @@ export function referenceEdit(doc: PMNode, path: number[], source: { sourcePageI
   return at && [{ op: "replace", target: { path: pathOf(doc, at.pos), type: "transclusionReference" }, json: json.map(withoutIds) }];
 }
 
-/** `json` without the ids UniqueID gives (`uniqueIdTypes`), at any depth. */
+/** The blocks whose ids an unsynced copy drops: UniqueID's, and tabs', which the steps give anew (`withTabIds`). */
+const copiedIdTypes = [...uniqueIdTypes, "tab"];
+
+/** `json` without the ids of `copiedIdTypes`, at any depth. */
 function withoutIds(json: JSONContent): JSONContent {
-  const attrs = json.attrs && uniqueIdTypes.includes(json.type ?? "")
+  const attrs = json.attrs && copiedIdTypes.includes(json.type ?? "")
     ? Object.fromEntries(Object.entries(json.attrs).filter(([name]) => name !== "id"))
     : json.attrs;
   return { ...json, ...(attrs ? { attrs } : {}), ...(json.content ? { content: json.content.map(withoutIds) } : {}) };

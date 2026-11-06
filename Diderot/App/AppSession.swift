@@ -576,7 +576,8 @@ final class AppSession {
 
     /// Removes the offline copies and files the signed-out server's sign-in left, on its sign-in screen: once signed
     /// out, the server was in no list where they could be removed, as the privacy policy says they can (code review R16).
-    /// Not its changes the server doesn't have yet, the web editor's included: they go out at the next sign-in there.
+    /// Not its changes the server doesn't have yet: they go out at the next sign-in there. The web editor's go with
+    /// signing out (R24); after a 401 they are still there, and stay.
     func clearSavedContent(of server: ServerInfo) async {
         guard case .signedOut(let current) = state, Self.isSameServer(current, as: server) else { return }
         await makeCache(for: server.url).removeAll()

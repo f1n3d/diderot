@@ -9,9 +9,12 @@ struct PageTitleEditTests {
     @Test func returnEndsTheTitle() {
         let edit = PageTitleEdit()
         edit.text = "Neue Seite"
-        #expect(!edit.takeReturn() && edit.text == "Neue Seite")
-        edit.text = "Neue\nSeite"
-        #expect(edit.takeReturn() && edit.text == "Neue Seite")
+        #expect(!edit.takeReturn(after: "Neue Seit") && edit.text == "Neue Seite")
+        edit.text = "Neue Seite\n"
+        #expect(edit.takeReturn(after: "Neue Seite") && edit.text == "Neue Seite")
+        // Typing beside a line break the title has stays: only the user's own line break counts.
+        edit.text = "Eins\nZweiX"
+        #expect(!edit.takeReturn(after: "Eins\nZwei") && edit.text == "Eins\nZweiX")
     }
 
     @Test func aTitleBeingTypedStays() throws {

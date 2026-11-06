@@ -6,6 +6,10 @@ struct SingleLineInputTests {
     @Test func returnEndsTheInput() {
         #expect(SingleLineInput.taking("abc\n", after: "abc")! == ("abc", true))
         #expect(SingleLineInput.taking("ab\nc", after: "abc")! == ("abc", true))
+        // Over a selection ("b"), Return keeps it: it only ends the input.
+        #expect(SingleLineInput.taking("a\nc", after: "abc")! == ("abc", true))
+        // Keys typed so fast that they come as one change, Return last.
+        #expect(SingleLineInput.taking("Titel\n", after: "Tit")! == ("Titel", true))
     }
 
     @Test func pastedLinesBecomeOneLine() {

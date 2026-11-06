@@ -128,18 +128,18 @@ function followTabIds(transactions: readonly Transaction[], _oldState: EditorSta
 }
 
 /**
- * `json` with a new id for each tab in it that has none (empty or not a string), none of them `taken` (which gets them):
- * the steps give them as they insert or replace, as the web gives a new tab one. Left to the rule above, the ids came in
- * a transaction appended to the insert and kept from the history, which took the insert with it: Undo then reverted the
- * change before, and the tab stayed.
+ * `json` with a new id for each tab in it that has none (empty or not a string), none of them taken (`taken`, asked only
+ * when a tab needs one, gets them): the steps give them as they insert or replace, as the web gives a new tab one, so the
+ * rule above appends nothing to the app's own changes.
  */
-export function withTabIds(json: JSONContent, taken: Set<unknown>): JSONContent {
+export function withTabIds(json: JSONContent, taken: () => Set<unknown>): JSONContent {
   const content = json.content?.map((child) => withTabIds(child, taken));
   const id = json.attrs?.id;
   if (json.type !== "tab" || (typeof id === "string" && id !== "")) return content ? { ...json, content } : json;
+  const ids = taken();
   let fresh = newBlockId();
-  while (taken.has(fresh)) fresh = newBlockId();
-  taken.add(fresh);
+  while (ids.has(fresh)) fresh = newBlockId();
+  ids.add(fresh);
   return { ...json, attrs: { ...json.attrs, id: fresh }, ...(content ? { content } : {}) };
 }
 

@@ -288,11 +288,14 @@ class DocmostEngine {
     return this.applyBuilt((editor) => referenceEdit(editor.state.doc, path, source, json));
   }
 
-  /** Removes the marks of the deleted comment `commentId` from the whole page (`unsetComment`); none there is no change. */
+  /**
+   * Removes the marks of the deleted comment `commentId` from the whole page (`unsetComment`); none there is no change.
+   * Kept from the history: Undo would bring back a mark whose comment is gone.
+   */
   unsetComment(commentId: string): boolean | null {
     return this.transact((editor) => {
       const tr = editor.state.tr;
-      if (unsetComment(tr, commentId)) editor.view.dispatch(tr);
+      if (unsetComment(tr, commentId)) editor.view.dispatch(tr.setMeta("addToHistory", false));
       return true;
     });
   }

@@ -133,28 +133,6 @@ struct BaseDraft {
     var original = ""
 }
 
-/// Line breaks in a single-line input (a title, a text field), which wraps but ends with Return. Only what the user just
-/// put in counts: the stored value keeps its line breaks (written through the API or an import). Removed from it, the
-/// field differed from what was stored and saved that when it went, without anyone typing.
-enum SingleLineInput {
-    /// The change from `old` to `new` as the input takes it, or nil when it brought no line break: Return (the line break
-    /// alone) goes and ends the input; a pasted text's line breaks become spaces.
-    static func taking(_ new: String, after old: String) -> (text: String, endsInput: Bool)? {
-        let before = Array(old), after = Array(new)
-        var start = 0
-        while start < before.count, start < after.count, before[start] == after[start] { start += 1 }
-        var end = 0
-        while end < before.count - start, end < after.count - start, before[before.count - 1 - end] == after[after.count - 1 - end] {
-            end += 1
-        }
-        let inserted = after[start..<(after.count - end)]
-        guard inserted.contains(where: \.isNewline) else { return nil }
-        let isReturn = inserted.allSatisfy(\.isNewline)
-        let kept = isReturn ? "" : String(inserted.map { $0.isNewline ? " " : $0 })
-        return (String(after[..<start]) + kept + String(after[(after.count - end)...]), isReturn)
-    }
-}
-
 /// What a database input's typed text saves as.
 enum BaseDraftValue {
     /// The cell's new value; nil clears it.

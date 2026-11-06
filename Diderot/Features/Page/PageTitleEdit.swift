@@ -18,12 +18,13 @@ final class PageTitleEdit {
         if !typing { text = unsent ?? page.title ?? "" }
     }
 
-    /// Return in the field (it takes it as a line break, being vertical) ends the title: the break becomes a space.
-    /// Returns whether it did, so the field gives up focus.
-    func takeReturn() -> Bool {
-        guard text.contains("\n") else { return false }
-        text = text.replacingOccurrences(of: "\n", with: " ")
-        return true
+    /// Return in the field (it takes it as a line break, being vertical) ends the title (`SingleLineInput`): a pasted
+    /// title's line breaks become spaces, a stored one stays. `old`: the text before this change. Returns whether the
+    /// input ends, so the field gives up focus.
+    func takeReturn(after old: String) -> Bool {
+        guard let taken = SingleLineInput.taking(text, after: old) else { return false }
+        text = taken.text
+        return taken.endsInput
     }
 
     /// Saves the typed title in `pageSession`, the session the page loaded in; reads its values before the task starts,

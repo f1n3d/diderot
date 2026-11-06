@@ -351,7 +351,8 @@ final class DocumentModel {
     /// The active block follows by its UniqueID when its path shifts; otherwise the editor would edit another block.
     private func followMovedBlocks() {
         if let active, let id = active.ref.id, node(at: active.ref.path)?.string("id") != id {
-            if let path = document.path(where: { $0.string("id") == id }) {
+            // Not where it was: found by its id, if that is the only block with it (`locate`).
+            if let path = document.locate(active.ref)?.path {
                 self.active = Active(ref: NodeRef(path: path, id: id), type: active.type, attrs: active.attrs, itemPath: enclosingItemPath(path))
             } else if !editsTable && typingSwitches == 0 {
                 // A collaborator deleted it. Its editor used to vanish with it; the page's one editor stays, so end here.
@@ -2191,7 +2192,7 @@ final class DocumentModel {
             report(.unavailable)
             return nil
         }
-        let found = ref.id.map { id in current.path(where: { $0.string("id") == id }) } ?? ref.path
+        let found = ref.id == nil ? ref.path : current.locate(ref)?.path
         guard let found, let source = node(at: found, in: current), ref.type == nil || source.type == ref.type else {
             report(.refused)
             return nil
