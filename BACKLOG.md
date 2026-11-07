@@ -110,7 +110,6 @@ Deliberately not yet like the web (found in the code review on October 13, 2026)
 - If a space allows comments by readers, readers can also comment on selected text on the web (inline comments). The app doesn't offer readers inline comments.
 - Postponed in the code review of November 6, 2026:
   - A new inline comment whose passage a collaborator deleted meanwhile is made without a mark, and the sheet closes without a word (V39). Rare.
-  - Editing a comment with line breaks makes each line a paragraph of its own (V40).
   - An inline comment deleted while the page's engine takes no edits (still connecting, or failed and not back yet) keeps its passage's mark: the removal isn't kept for later (review of the pull request for package A, November 6, 2026). Rare: the comments sheet is open over a page whose engine is almost always there.
 
 ## Templates
