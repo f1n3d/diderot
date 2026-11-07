@@ -1,6 +1,6 @@
 # Checks the editor engine against Docmost's document format and the project files, builds the app and runs the
 # DocmostKit and app unit tests for every pull request to main and every push to main.
-# The UI tests need the local dev Docmost instance, so they stay local (Tools/run-uitests.sh).
+# The UI tests need the local dev Docmost instance, so they run locally (Tools/run-uitests.sh); here they are only built.
 # Actions are pinned to a commit (Dependabot proposes updates, .github/dependabot.yml).
 name: CI
 
@@ -97,6 +97,19 @@ jobs:
         # never imported (xcodebuild -exportLocalizations, Tools/localize.py --import) shows in English in the German
         # interface. From the strings the test build extracted (SWIFT_EMIT_LOC_STRINGS), so no second build.
         run: python3 Tools/localize.py --unimported "$RUNNER_TEMP/DerivedData"
+
+      - name: UI tests build
+        # The UI tests run only on the Mac, against the dev instance (Tools/run-uitests.sh), so a change that broke their
+        # build passed CI. Built, not run, on the app the unit tests built: with their scheme's code coverage, else the
+        # app is compiled again. After the strings check, which reads the strings the app's build extracted.
+        run: >
+          xcodebuild build-for-testing
+          -project Diderot.xcodeproj
+          -scheme DiderotUI
+          -destination "platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0"
+          -derivedDataPath "$RUNNER_TEMP/DerivedData"
+          -enableCodeCoverage YES
+          CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
 
       - name: Keep the test results
         if: failure()
