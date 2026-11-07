@@ -155,7 +155,6 @@ Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the 
   - The trash offers permanent deletion to editors; the server allows it only for space admins and says so (V35).
   - The page tree offers drags and new subpages on pages the user can't edit (Docmost 0.97's restricted pages); the server refuses them (V36).
   - A failed switch of the notification filter keeps the other filter's list, without a message (V37).
-  - Templates and search load again on every return: a spinner, the place lost, what "Load More" added gone (V38).
   - The app's own links (comments, atoms) are kept from page content where content becomes a URL: hrefs, cards, embeds, integration mentions and web views drop the app's schemes (R13, V30). A new place that forgets would open them again. One rule where the page handles links would end that: the app's own links carry a key of each launch, which content can't know (review of package C).
 
 ## Accessibility

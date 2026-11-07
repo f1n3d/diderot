@@ -83,15 +83,21 @@ struct RemoteValueTests {
         #expect(value.value == 2)
     }
 
-    /// Another query's value (a scope switched) goes at once; a spinner shows until the answer.
-    @Test func aFreshLoadDropsTheOtherQuerysValue() async {
+    /// Another query's value (a scope switched) goes at once; a spinner shows until the answer. The same query's stays
+    /// while it refreshes, as back from a template's preview: the list started over at the top (code review V38).
+    @Test func aLoadForAnotherKeyDropsTheValueOneForTheSameKeepsIt() async {
         let value = RemoteValue<Int>()
-        await value.load { 1 }
+        await value.load(for: "space") { 1 }
         var shownWhileLoading: Int?
-        await value.load(fresh: true) {
+        await value.load(for: "space") {
             shownWhileLoading = value.value
             return 2
         }
-        #expect(shownWhileLoading == nil && value.value == 2)
+        #expect(shownWhileLoading == 1 && value.value == 2)
+        await value.load(for: "all") {
+            shownWhileLoading = value.value
+            return 3
+        }
+        #expect(shownWhileLoading == nil && value.value == 3)
     }
 }

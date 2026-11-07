@@ -106,8 +106,9 @@ struct TemplatePickerView: View {
     private func load() async {
         guard let ready = session.ready else { return }
         let space = scope == .space ? spaceId : nil
-        // Each scope is a list of its own: the other's goes.
-        await templates.load(fresh: true) {
+        // Each scope is a list of its own: the other's goes. Back from a template's preview the task starts again, and
+        // the list refreshes where it is (code review V38: it started over with a spinner, at the top).
+        await templates.load(for: scope) {
             try await Paginated.all { cursor in
                 try await session.load(Endpoints.Templates.list(spaceId: space, cursor: cursor), of: ready)
             }
