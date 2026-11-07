@@ -8,10 +8,13 @@
 #   DEVICES="iPhone 18 Pro Max" LANGUAGES=de Tools/screenshots.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# What the runs leave is this user's only, as with Tools/run-uitests.sh.
+umask 077
+mkdir -p Tools/.cache && chmod 700 Tools/.cache
 
-# The demo member on the dev instance, as Tools/seed-demo.py creates it.
+# The demo member on the dev instance, as Tools/seed-demo.py creates it, with the password derived for it.
 EMAIL="alex@docmost.local"
-PASSWORD="alex-dev-123"
+PASSWORD=$(DOCMOST_SEED_URL="http://localhost:3000" Tools/dev_api.py dev-password "$EMAIL")
 DERIVED="Tools/.cache/DerivedData"
 IFS=',' read -ra DEVICE_LIST <<< "${DEVICES:-iPhone 18 Pro Max,iPad Pro 13-inch (M5)}"
 IFS=',' read -ra LANGUAGE_LIST <<< "${LANGUAGES:-en,de}"
