@@ -202,7 +202,7 @@ Debug builds and tests talk to the dev instance (`http://localhost:3000`, from a
 - A bug fix comes with a test that fails without it; a feature with tests of what it promises.
 - Before the pull request opens, someone reviews its diff: `/code-review` in Claude Code (medium for content, the engine or the session; low for small changes), or a person. What the review finds is fixed or answered in the pull request.
 - The touched area's UI tests run (`AREA=… Tools/run-uitests.sh`). The whole suite runs on both Docmost versions before a release, or for a change that reaches across the app.
-- CI passes before the merge (build, unit tests, engine and project checks).
+- CI passes before the merge (build, unit tests with the engine as the app calls it, the UI tests' build, engine and project checks).
 - A finding that waits goes to BACKLOG.md with why. A review of the whole code is for an occasion, such as a release or a big redesign, not for a schedule; the review documents in `Docs/` are those.
 
 ## Notes on the Docmost API

@@ -174,7 +174,6 @@ From the code reviews of October 31 and November 6, 2026:
 
 - The UI test runner's checks are inline Python: about 690 lines in `Tools/run-uitests.sh`, with fractional indexing of their own next to DocmostKit's tested one. Move them into `Tools/uitest_checks.py` or into the UI tests (T3).
 - The test setup invites flakes (T6). The session race tests share static `StubURLProtocol` hooks, so they run serially, and touch the real Caches folder, WebKit and temp files and the real network monitor; a transport per test and a test environment by default would let them run in parallel. The EditorUITests share one page whose state accumulates, with `Thread.sleep` calls adding up to about 105 s; pages per test and condition-based waits would end that.
-- CI doesn't compile the UI tests (V53): `xcodebuild build-for-testing -scheme DiderotUI`.
 - CI checks engine.js against its sources but not the islands' KaTeX and Mermaid, committed and never rebuilt (V54).
 - The server checks of deletions and undo check only that something is absent, so something that never reached the server passes (V55).
 - Two clients in the UI tests: the script sends a page update as another client when a test asks for it (`DOCMOST_UITEST_COLLEAGUE`), which test84 uses. Backspace or Return while a collaborator types in the same line (V2) would need their change to land within the app's lag of about 0.6 s; engine checks and unit tests act it out instead.
