@@ -17,33 +17,41 @@ import uuid
 
 import dev_api
 
-# The second user gets a fixed password: only ever on a dev instance on this Mac.
-if urllib.parse.urlsplit(dev_api.base_url()).hostname not in ("localhost", "127.0.0.1", "::1"):
-    sys.exit(f"{dev_api.base_url()} is no local dev instance: this script creates a user with a fixed password there.")
+# Only ever on a dev instance on this Mac: the script creates a test user and deletes comments.
+if not dev_api.is_local(dev_api.base_url()):
+    sys.exit(f"{dev_api.base_url()} is no local dev instance: this script creates a test user there.")
 TESTER_EMAIL = "kollegin@docmost.local"
-TESTER_PASSWORD = "kollegin-dev-123"
 TESTER_NAME = "Test-Kollegin"
 
 
 def ensure_tester(admin):
     """Her session, after creating her through an invitation if she can't sign in."""
+    password = dev_api.dev_password(TESTER_EMAIL)
+    dev_api.replace_fixed_password(TESTER_EMAIL)
     try:
-        tester = dev_api.session(TESTER_EMAIL, TESTER_PASSWORD)
+        tester = dev_api.session(TESTER_EMAIL, password)
         tester.call("users/me")  # a token of hers from before the dev data was reset fails here
         return tester
     except dev_api.ApiError as error:
         if error.status != 401:
             raise
+    # Her fixed password back (the dev data restored from before), or no account yet.
+    if dev_api.replace_fixed_password(TESTER_EMAIL, again=True):
+        return dev_api.session(TESTER_EMAIL, password)
     admin.call("workspace/invites/create", {"emails": [TESTER_EMAIL], "role": "member", "groupIds": []})
     invites = admin.call("workspace/invites", {"limit": 50})
-    invite = next(i for i in invites["items"] if i["email"] == TESTER_EMAIL)
+    invite = next((i for i in invites["items"] if i["email"] == TESTER_EMAIL), None)
+    if invite is None:
+        # Docmost doesn't invite members: she exists, with a password other than hers (the admin's in .env changed).
+        sys.exit(f"{TESTER_EMAIL} exists but doesn't take her password: remove her from the workspace "
+                 "(Settings › Members) and run this again.")
     link = admin.call("workspace/invites/link", {"invitationId": invite["id"]})
     token = re.search(r"token=([^&]+)", link["inviteLink"]).group(1)
     dev_api.Api().call("workspace/invites/accept", {
-        "invitationId": invite["id"], "token": token, "name": TESTER_NAME, "password": TESTER_PASSWORD,
+        "invitationId": invite["id"], "token": token, "name": TESTER_NAME, "password": password,
     })
     print(f"{TESTER_NAME} created")
-    return dev_api.session(TESTER_EMAIL, TESTER_PASSWORD)
+    return dev_api.session(TESTER_EMAIL, password)
 
 
 def main():

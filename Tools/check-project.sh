@@ -3,7 +3,7 @@
 #   - every key in the String Catalog has German or is marked "Don't Translate"
 #   - Diderot.xcodeproj is what xcodegen makes of project.yml
 #   - sheets, full-screen covers and popovers open links as the page does (`linkSheet` and its siblings)
-#   - the dev tools keep passwords and tokens off command lines (Tools/dev_api.py)
+#   - the dev tools keep passwords and tokens off command lines (Tools/dev_api.py), and its tests pass
 #   - the shell scripts pass shellcheck
 # Needs xcodegen and shellcheck (Homebrew); CI pins the versions this was last run with.
 set -euo pipefail
@@ -33,6 +33,9 @@ if grep -nE 'Bear[e]r|(sourc[e]|^[[:space:]]*\.) \.env|--environment-variable[s]
   echo "Read .env with Tools/dev_api.py setting, call the API with Tools/dev_api.py call or upload, and hand the app its sign-in in the environment (SIMCTL_CHILD_*, DEVICECTL_CHILD_*, TEST_RUNNER_*)." >&2
   exit 1
 fi
+
+# Plain http only to this Mac, no token along a redirect, the dev users' made-up passwords: against a stand-in server.
+python3 Tools/test_dev_api.py -q
 
 shellcheck -S warning Tools/*.sh
 echo "Project checks passed."

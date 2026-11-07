@@ -11,13 +11,21 @@ cached per server and user in Tools/.cache/dev-tokens.json, readable by this use
     Tools/dev_api.py call pages/sidebar-pages spaceId=… limit:=5
     Tools/dev_api.py call pages/update - < body.json          # the body as JSON from stdin
     Tools/dev_api.py upload <pageId> <file> [type]            # attach a file to a page
+    Tools/dev_api.py dev-password alex@docmost.local          # a dev user's password, for a script's variable
 
 `key=value` sends a string, `key:=value` a JSON value (a number, null, a list …), as in HTTPie. The calls sign in as
 DOCMOST_API_EMAIL / DOCMOST_API_PASSWORD if set (Tools/run-uitests.sh sets them to the user its tests sign in as),
-else as the admin from .env; DOCMOST_SEED_URL picks the server (default http://localhost:3000).
+else as the admin from .env; DOCMOST_SEED_URL picks the server (default http://localhost:3000). Plain http:// is taken
+for this Mac only, and redirects aren't followed: urllib would send the token along to wherever they point.
+
+The users the tools create (the UI tests' colleague, the demo people) have passwords derived from the admin's in .env
+(`dev_password`): the dev instance listens on every interface for tests on a device, so a password written in this
+repository would let anyone on the network sign in as them.
 """
 import argparse
 import base64
+import hashlib
+import hmac
 import json
 import mimetypes
 import os
@@ -26,14 +34,26 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TOKENS = ROOT / "Tools/.cache/dev-tokens.json"
+# The servers and users whose fixed password `replace_fixed_password` found gone: ["<server>|<email>"]. Lost, it costs
+# one sign-in per server and user to find out again.
+REPLACED = ROOT / "Tools/.cache/dev-fixed-passwords-gone.json"
 # Where the shell tools kept a token before, readable by every user of this Mac; removed when found.
 LEGACY_TOKEN = ROOT / "Tools/.cache/seed-token.txt"
+# The passwords these users had before `dev_password`, written in this repository: `replace_fixed_password` replaces
+# one where it is still set.
+FIXED_PASSWORDS = {
+    "kollegin@docmost.local": "kollegin-dev-123",
+    "alex@docmost.local": "alex-dev-123",
+    "sam@docmost.local": "sam-dev-123",
+}
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 
 
 def read_env(path):
@@ -82,7 +102,40 @@ def user():
 
 
 def base_url():
-    return os.environ.get("DOCMOST_SEED_URL", "http://localhost:3000").rstrip("/")
+    return checked_url(os.environ.get("DOCMOST_SEED_URL", "http://localhost:3000"))
+
+
+def is_local(url):
+    """Whether the address is one of this Mac's."""
+    return urllib.parse.urlsplit(url).hostname in LOCAL_HOSTS
+
+
+def checked_url(url):
+    """The server's address without a trailing slash. Stops for plain http:// to another machine, which would carry
+    passwords and tokens unencrypted."""
+    url = url.rstrip("/")
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        sys.exit(f"{url} is no http(s) address")
+    if parts.scheme == "http" and not is_local(url):
+        sys.exit(f"{url} would carry passwords and tokens unencrypted: use https:// (plain http only for localhost)")
+    return url
+
+
+class RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """urllib follows a 301, 302 or 303 with the request's headers, the token among them, to any host. Refused instead:
+    the redirect comes back as an HTTPError with its status."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPENER = urllib.request.build_opener(RefuseRedirects)
+
+
+def redirect_detail(error):
+    """What to say about a refused redirect (an HTTPError with a 3xx status)."""
+    return f"redirects to {error.headers.get('Location')}, which isn't followed: use that address"
 
 
 class ApiError(Exception):
@@ -98,7 +151,7 @@ class Api:
     """POSTs to one server's API as one user."""
 
     def __init__(self, url=None, token=None, credentials=None, cache=False):
-        self.url = (url or base_url()).rstrip("/")
+        self.url = checked_url(url) if url else base_url()
         self.token = token
         # To sign in again with once, when the server refuses the token (expired, or the dev data was reset).
         self.credentials = credentials
@@ -125,10 +178,12 @@ class Api:
         if self.token:
             request.add_header("Authorization", "Bearer " + self.token)
         try:
-            with urllib.request.urlopen(request) as response:
+            with OPENER.open(request) as response:
                 payload = json.loads(response.read() or b"{}")
                 cookies = response.headers.get_all("Set-Cookie") or []
         except urllib.error.HTTPError as error:
+            if 300 <= error.code < 400:
+                raise ApiError(path, error.code, redirect_detail(error)) from None
             raise ApiError(path, error.code, error.read().decode(errors="replace")) from None
         except urllib.error.URLError as error:
             raise ApiError(path, None, f"no answer from {self.url} ({error.reason}); is the dev instance running?") from None
@@ -214,15 +269,68 @@ def cached_token(url, email):
 def store_token(url, email, token):
     tokens = {key: old for key, old in load_tokens().items() if not expired(old, 0)}
     tokens[token_key(url, email)] = token
-    TOKENS.parent.mkdir(parents=True, exist_ok=True)
-    # Readable by this user only from the first byte: mkstemp makes the file 0600, and the move keeps that.
-    descriptor, temporary = tempfile.mkstemp(dir=TOKENS.parent, prefix=".dev-tokens-")
+    write_private(TOKENS, tokens)
+
+
+def write_private(path, value):
+    """Writes `value` as JSON, readable by this user only from the first byte: mkstemp makes the file 0600, and the move
+    keeps that."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}-")
     try:
         with os.fdopen(descriptor, "w") as file:
-            json.dump(tokens, file)
-        os.replace(temporary, TOKENS)
+            json.dump(value, file)
+        os.replace(temporary, path)
     finally:
         Path(temporary).unlink(missing_ok=True)
+
+
+# The dev users' passwords.
+
+def dev_password(email):
+    """The password of a dev user the tools create, derived from the admin's password in .env: this developer's own,
+    the same on every dev instance (the 0.97 one is a copy of the first), and nothing kept that could go missing."""
+    _, secret = admin()
+    digest = hmac.new(secret.encode(), f"diderot dev user {email.lower()}".encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest)[:24].decode()
+
+
+def replace_fixed_password(email, url=None, again=False):
+    """Gives the user `dev_password` on the server (default: DOCMOST_SEED_URL) if it still has its fixed password, and
+    says whether it did. Each server is asked once, unless `again`: for a user who doesn't take its password, as after
+    the dev data was restored from before. The sign-in's session stays (Docmost ends the user's other ones) and goes
+    into the token cache."""
+    email = email.lower()
+    fixed = FIXED_PASSWORDS.get(email)
+    if not fixed:
+        return False
+    api = Api(url)
+    key = token_key(api.url, email)
+    gone = load_replaced()
+    if key in gone and not again:
+        return False
+    replaced = False
+    try:
+        api.sign_in(email, fixed)
+    except ApiError as error:
+        if error.status != 401:
+            raise
+    else:
+        api.call("auth/change-password", {"oldPassword": fixed, "newPassword": dev_password(email)})
+        store_token(api.url, email, api.token)
+        print(f"Replaced the fixed password of {email} on {api.url}", file=sys.stderr)
+        replaced = True
+    if key not in gone:
+        write_private(REPLACED, sorted(gone | {key}))
+    return replaced
+
+
+def load_replaced():
+    try:
+        gone = json.loads(REPLACED.read_text())
+    except (OSError, ValueError):
+        return set()
+    return {key for key in gone if isinstance(key, str)} if isinstance(gone, list) else set()
 
 
 # The command line.
@@ -257,10 +365,15 @@ def main():
     upload.add_argument("page_id")
     upload.add_argument("file", type=Path)
     upload.add_argument("type", nargs="?", help="its media type (default: from the file name)")
+    password = commands.add_parser("dev-password", help="print the password of a dev user the tools create, for a script's variable")
+    password.add_argument("email")
     args = parser.parse_args()
 
     if args.command == "setting":
         print(settings().get(args.key, ""))
+    elif args.command == "dev-password":
+        replace_fixed_password(args.email)
+        print(dev_password(args.email))
     elif args.command == "call":
         body = body_of(args.items)
         data = session().call(args.path, body)

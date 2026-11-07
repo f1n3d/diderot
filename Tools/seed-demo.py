@@ -13,7 +13,8 @@ separate demo instance. It stops if the server has other users.
 
 .env.demo (git-ignored, in the repository root): DEMO_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD, DEMO_MEMBER_EMAIL,
 DEMO_MEMBER_PASSWORD, DEMO_COLLEAGUE_EMAIL, DEMO_COLLEAGUE_PASSWORD. On the dev instance the two people get fixed
-local addresses and passwords. Passwords are never printed.
+local addresses and passwords derived from the admin's (Tools/dev_api.py, `dev_password`). Passwords are never
+printed.
 """
 import argparse
 import json
@@ -48,7 +49,7 @@ def settings(env_file):
     if env_file:
         env = dev_api.read_env(ROOT / env_file)
         return {
-            "url": env["DEMO_URL"].rstrip("/"),
+            "url": dev_api.checked_url(env["DEMO_URL"]),
             "admin": (env["DEMO_ADMIN_EMAIL"], env["DEMO_ADMIN_PASSWORD"]),
             "member": (env["DEMO_MEMBER_EMAIL"], env["DEMO_MEMBER_PASSWORD"]),
             "colleague": (env["DEMO_COLLEAGUE_EMAIL"], env["DEMO_COLLEAGUE_PASSWORD"]),
@@ -56,8 +57,8 @@ def settings(env_file):
     return {
         "url": "http://localhost:3000",
         "admin": dev_api.admin(),
-        "member": ("alex@docmost.local", "alex-dev-123"),
-        "colleague": ("sam@docmost.local", "sam-dev-123"),
+        "member": ("alex@docmost.local", dev_api.dev_password("alex@docmost.local")),
+        "colleague": ("sam@docmost.local", dev_api.dev_password("sam@docmost.local")),
     }
 
 
@@ -76,7 +77,8 @@ class Api:
         if token:
             request.add_header("Authorization", "Bearer " + token)
         try:
-            with urllib.request.urlopen(request) as response:
+            # Without following redirects, which would take the token along (Tools/dev_api.py).
+            with dev_api.OPENER.open(request) as response:
                 payload = json.loads(response.read() or b"{}")
                 cookie = next((m.group(1) for h in (response.headers.get_all("Set-Cookie") or [])
                                for m in [re.match(r"authToken=([^;]+)", h)] if m), None)
@@ -86,6 +88,8 @@ class Api:
                 raise
             if refusable and error.code in (402, 403, 404):
                 return None, None
+            if 300 <= error.code < 400:
+                sys.exit(f"{path} → HTTP {error.code}: {dev_api.redirect_detail(error)}")
             sys.exit(f"{path} → HTTP {error.code}: {error.read().decode(errors='replace')[:300]}")
 
     def login(self, email, password):
@@ -107,15 +111,24 @@ class Api:
 
 
 def ensure_person(api, admin, email, password, name):
-    """Signs the person in, after inviting them as a member if they don't exist yet."""
+    """Signs the person in, after inviting them as a member if they don't exist yet. A dev person who still has the
+    fixed password of before gets theirs first (Tools/dev_api.py)."""
+    dev_api.replace_fixed_password(email, api.url)
     try:
         return api.login(email, password)
     except urllib.error.HTTPError as error:
         if error.code != 401:
             raise
+    # The fixed password back (the dev data restored from before), or no account yet.
+    if dev_api.replace_fixed_password(email, api.url, again=True):
+        return api.login(email, password)
     api.call("workspace/invites/create", {"emails": [email], "role": "member", "groupIds": []}, admin)
     invites, _ = api.call("workspace/invites", {"limit": 100}, admin)
-    invite = next(i for i in invites["items"] if i["email"].lower() == email.lower())
+    invite = next((i for i in invites["items"] if i["email"].lower() == email.lower()), None)
+    if invite is None:
+        # Docmost doesn't invite members: the person exists, with another password.
+        sys.exit(f"{email} exists but doesn't take the password given for it: correct that, or remove the person from "
+                 "the workspace (Settings › Members) and run this again")
     link, _ = api.call("workspace/invites/link", {"invitationId": invite["id"]}, admin)
     invite_token = re.search(r"token=([^&]+)", link["inviteLink"]).group(1)
     _, cookie = api.call("workspace/invites/accept", {
@@ -397,4 +410,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    dev_api.run(main)
