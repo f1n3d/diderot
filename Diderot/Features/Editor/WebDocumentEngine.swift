@@ -292,6 +292,8 @@ final class WebDocumentEngine: DocumentEngine {
     @ObservationIgnored var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)?
 
     private let session: AppSession
+    /// Scripts the engine's page runs before the engine: `EngineBridgeTests` stand in for the collab server with one.
+    private let pageScripts: [String]
     private var page: WebPage?
     /// Watches for the open page's web process ending; stops with the page.
     private var processWatch: Task<Void, Never>?
@@ -301,8 +303,9 @@ final class WebDocumentEngine: DocumentEngine {
     /// Where `close` keeps the open page's unsent changes (`UnsentChanges`).
     private var unsentStore: (store: UnsentStore, pageId: String)?
 
-    init(session: AppSession) {
+    init(session: AppSession, pageScripts: [String] = []) {
         self.session = session
+        self.pageScripts = pageScripts
     }
 
     /// A fresh collab token for a page opened with `owner`; none once a switch or sign-out replaced that session: another
@@ -349,7 +352,10 @@ final class WebDocumentEngine: DocumentEngine {
             guard let self, self.page != nil, self.opens == attempt else { return }
             self.handle(message)
         }
-        let page = WebViews.engine(server: ready.server.url) { configuration in
+        let page = WebViews.engine(server: ready.server.url) { [pageScripts] configuration in
+            for script in pageScripts {
+                configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            }
             configuration.userContentController.add(handler, name: "engine")
             configuration.userContentController.addScriptMessageHandler(CollabTokenHandler { [session] in
                 await Self.collabToken(session: session, owner: ready)
