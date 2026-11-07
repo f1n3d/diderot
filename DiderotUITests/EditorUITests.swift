@@ -1348,6 +1348,54 @@ import XCTest
         XCTAssertTrue(loaded, "Image in the version doesn't load")
     }
 
+    /// A note being written in "Append Note" stays on the device: after the app ends, as in a crash, the sheet opens
+    /// with it again, and Cancel drops it (code review V49: it lived only in the sheet). Appended, it shows at the page's
+    /// end and is no longer kept.
+    func test85_AppendNoteKeptAcrossLaunches() {
+        let note = "Notiz\(stamp)"
+        var app = launchPage()
+        var field = openAppendNote(app)
+        field.tap()
+        field.typeText(note)
+        // The sheet keeps what is typed once typing pauses for half a second.
+        Thread.sleep(forTimeInterval: 2)
+        app.terminate()
+
+        app = launchPage()
+        field = openAppendNote(app)
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", note), object: field)
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 10), .completed, "The note typed before the app ended is gone: “\(field.value ?? "")”")
+        snapshot(app, "85-note-kept")
+        let cancel = button(app, labels: ["Cancel", "Abbrechen"])
+        cancel.tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 5), "Cancel doesn't close the sheet")
+
+        field = openAppendNote(app)
+        XCTAssertFalse((field.value as? String ?? "").contains(note), "Cancel kept the note: “\(field.value ?? "")”")
+
+        let appended = "Angehängt\(stamp)"
+        field.tap()
+        field.typeText(appended)
+        button(app, labels: ["Append", "Anhängen"]).tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 20), "“Append” doesn't close the sheet")
+        let block = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", appended)).firstMatch
+        XCTAssertTrue(scrollTo(block, in: app, anchor: CGVector(dx: 0.5, dy: 0.5)), "The appended note doesn't show on the page")
+        field = openAppendNote(app)
+        XCTAssertFalse((field.value as? String ?? "").contains(appended), "The appended note is still kept: “\(field.value ?? "")”")
+        cancel.tap()
+    }
+
+    /// Opens "Append Note" from the page's menu; returns its text field.
+    private func openAppendNote(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons["page-more"].tap()
+        let item = button(app, labels: ["Append Note", "Notiz anhängen"])
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Page menu shows no “Append Note”")
+        item.tap()
+        let field = app.textViews["append-note-text"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "“Append Note” doesn't open")
+        return field
+    }
+
     /// A version shows its comment marks as text, as the presentation mode: they showed as links that opened nothing
     /// (code review R42). "Fixture: Text & Marks" (Tools/seed-fixtures.py) has an open comment on "comment mark".
     func test82_HistoryVersionShowsNoCommentLinks() throws {

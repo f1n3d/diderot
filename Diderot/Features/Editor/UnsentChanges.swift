@@ -4,7 +4,8 @@ import DocmostKit
 
 /// Changes a page's engine had made that the server hadn't confirmed when the page closed or the app went to the
 /// background (`CacheKey.unsentChanges`), and the document they make, shown offline (`CacheKey.unsentDocument`); page
-/// titles (`UnsentTitle`) and database fields (`UnsentCell`) whose save didn't reach the server. Per
+/// titles (`UnsentTitle`) and database fields (`UnsentCell`) whose save didn't reach the server, and the note being
+/// written in "Append Note" (`NoteDraft`). Per
 /// server and user, outside the offline cache: clearing or pruning that, iOS purging caches, signing out and another
 /// user's sign-in keep them; removing the server from the app deletes them. Not in backups, like the cache.
 enum UnsentChanges {
@@ -24,7 +25,7 @@ enum UnsentChanges {
         }
     }
 
-    /// Whether any user's changes or titles still wait for the server (asked before removing it).
+    /// Whether any user's changes, titles or notes still wait for the server (asked before removing it).
     static func hasEntries(server: URL) -> Bool {
         guard let files = FileManager.default.enumerator(at: directory(of: server), includingPropertiesForKeys: nil) else { return false }
         return files.contains { item in
