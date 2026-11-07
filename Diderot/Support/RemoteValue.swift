@@ -8,21 +8,27 @@ import Foundation
 final class RemoteValue<Value: Sendable> {
     private(set) var state: LoadState<Value> = .idle
     @ObservationIgnored private var loads = 0
+    /// What the last load was for (`load(for:)`).
+    @ObservationIgnored private var key: AnyHashable?
 
     var value: Value? { state.value }
 
     init() {}
 
     /// Loads with `fetch`. While nothing shows, `cached` shows first if it has a copy, else a spinner; `save` keeps the
-    /// answer. `fresh`: what shows belongs to another query (a scope switched) and goes. Returns the error of a failed
-    /// refresh while a value shows. A cancelled load (its screen closing) and an answer a later load overtook change
-    /// nothing.
+    /// answer. `key`: what the value is for, such as a scope. A load for another key than the last one's starts over,
+    /// as what shows belongs to another query; one for the same key refreshes what shows, which keeps the place in it.
+    /// Returns the error of a failed refresh while a value shows. A cancelled load (its screen closing) and an answer a
+    /// later load overtook change nothing.
     @discardableResult
-    func load(fresh: Bool = false, cached: (() async -> Value?)? = nil, save: ((Value) async -> Void)? = nil,
+    func load(for key: AnyHashable? = nil, cached: (() async -> Value?)? = nil, save: ((Value) async -> Void)? = nil,
               fetch: () async throws -> Value) async -> (any Error)? {
         loads += 1
         let load = loads
-        if fresh { state = .idle }
+        if key != self.key {
+            state = .idle
+            self.key = key
+        }
         if state.value == nil {
             if let saved = await cached?(), load == loads, state.value == nil {
                 state = .loaded(saved)
