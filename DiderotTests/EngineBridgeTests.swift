@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WebKit
 import DocmostKit
 @testable import Diderot
 
@@ -12,17 +13,29 @@ extension AppSessionRaceTests {
     @Suite struct EngineBridge: SessionStubbing {
         let store = SessionStore(keychain: MemorySecretStore())
 
-        @MainActor @Test(.timeLimit(.minutes(2))) func everyOperationReachesTheEngine() async throws {
+        @MainActor @Test(.timeLimit(.minutes(3))) func everyOperationReachesTheEngine() async throws {
             let session = try await sessionOnA()
             defer { UnsentChanges.removeAll(server: a) }
             let engine = WebDocumentEngine(session: session, pageScripts: [StandInCollab.script])
             let seen = Seen()
             engine.onDocument = { _ in seen.documents += 1 }
             engine.onUnsentChangesKept = { seen.kept.append($0) }
+            // WebKit starts its processes with the first page. On GitHub's runners, where this test may open the run's
+            // first page, the engine then didn't start within the app's 15 s; a page loaded first starts them, and the
+            // engine gets a second try.
+            let firstPage = WebPage()
+            for try await _ in firstPage.load(html: "<!doctype html><p>", baseURL: IslandHTML.baseURL) {}
             do {
                 StubURLProtocol.body.withLock { $0 = #"{"data": {"token": "collab"}}"# }
                 defer { StubURLProtocol.body.withLock { $0 = nil } }
-                try await engine.open(pageId: "bridge-\(UUID().uuidString)")
+                for attempt in 1...2 {
+                    do {
+                        try await engine.open(pageId: "bridge-\(UUID().uuidString)")
+                        break
+                    } catch where attempt < 2 {
+                        continue
+                    }
+                }
             }
             // However the checks end (a failed `#require` has recorded its issue), the engine closes and the caches go.
             try? await exercise(engine, seen: seen)
