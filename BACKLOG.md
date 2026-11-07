@@ -83,7 +83,6 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
   - A web editor that can't load (offline, a sign-in proxy) ends on a blank sheet, and "Edit in Web Editor" is offered offline too (V42). The comment in `WebEditorView.loaded()` ("the web view shows why") is wrong: WebKit draws nothing for a failed provisional navigation.
   - The image viewer keeps each photo it decoded, up to about 48 MB, in its page's state outside the image cache (V44, suspected: to measure with 30 and more photos first; M51 above covers the page's own images).
   - Unknown inline atoms (a newer server's) show as nothing outside the active editor, so a paragraph holding only one looks empty (V45).
-  - A note being appended lives only in its sheet: a crash or a server switch loses it (V49).
   - DocumentModel (about 2,280 lines) still holds what the keys and menus do: Return, Backspace, inserting, pasting, the block operations and the engine's answers (S2 of October 31; its pure parts, `EngineConnection` and `ActiveTextSession` are out). Split further only if its size hurts.
 
 - iPad with a hardware keyboard (checked on October 23, 2026, simulator only): the editor's UI tests pass there except test10 and test14, which expect the on-screen keyboard (also before the page's one editor). Return and Backspace from a hardware keyboard couldn't be checked reliably in the simulator; to try on a real iPad with a keyboard.

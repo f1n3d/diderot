@@ -19,6 +19,8 @@ enum CacheKey {
     static let unsentTitles = "unsentTitles"
     /// Database fields the server didn't get, by `UnsentCell.key`.
     static let unsentCells = "unsentCells"
+    /// The note being written for the page in "Append Note" (`NoteDraft`).
+    static func noteDraft(_ pageId: String) -> String { "noteDraft/\(pageId)" }
     static func breadcrumbs(_ pageId: String) -> String { "breadcrumbs/\(pageId)" }
     static func base(_ pageId: String) -> String { "base/\(pageId)" }
     static func baseView(_ pageId: String, viewId: String) -> String { "base/\(pageId)/view/\(viewId)" }
