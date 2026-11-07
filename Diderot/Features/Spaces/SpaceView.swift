@@ -108,6 +108,11 @@ struct SpaceView: View {
             }
         }
         .refreshable {
+            // While results show, pulling searches again: returning from a result keeps them as they were.
+            if search.isActive {
+                await search.refresh()
+                return
+            }
             await store.reload()
             if mode == .recent { await loadRecent() }
         }

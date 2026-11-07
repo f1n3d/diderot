@@ -42,6 +42,11 @@ struct HomeView: View {
             }
         }
         .refreshable {
+            // While results show, pulling searches again: returning from a result keeps them as they were.
+            if let search, search.isActive {
+                await search.refresh()
+                return
+            }
             await spaces.load()
             await notifications.refreshUnreadCount()
         }

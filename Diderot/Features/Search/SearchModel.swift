@@ -21,6 +21,9 @@ final class SearchModel {
     private let pageSize = 25
     /// Searches started (`run`, `loadMore`): only the latest ends `isSearching`, as an earlier one's query is gone.
     @ObservationIgnored private var started = 0
+    /// The query whose results show, from their first page on. Back from a result, `.task(id: key)` starts again with
+    /// the same key: searching again replaced what "Load More" added and lost the place (code review V38).
+    @ObservationIgnored private var shownKey: Key?
     /// What the wait for more typing runs on; tests move a clock of their own (`TestClock`).
     @ObservationIgnored private let clock: any Clock<Duration>
 
@@ -35,14 +38,21 @@ final class SearchModel {
     /// A query is entered: the UI shows results instead of its normal content.
     var isActive: Bool { !trimmedQuery.isEmpty }
 
-    /// For `.task(id: key)`: debounces typing, then searches; an empty query clears the results.
+    /// For `.task(id: key)`: debounces typing, then searches; an empty query clears the results. The results of the same
+    /// query stay as they are (back from a result); `refresh` searches again.
     func run() async {
         started += 1
         let generation = started
         guard isActive else {
             results = []
+            shownKey = nil
             hasMore = false
             errorMessage = nil
+            isSearching = false
+            return
+        }
+        guard key != shownKey || errorMessage != nil else {
+            // A search of a query typed and taken back within the debounce was cancelled before it could end this.
             isSearching = false
             return
         }
@@ -50,6 +60,16 @@ final class SearchModel {
         isSearching = true
         try? await clock.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
+        await search(append: false)
+        if generation == started { isSearching = false }
+    }
+
+    /// Pulling down: the query's first page again, at once.
+    func refresh() async {
+        guard isActive else { return }
+        started += 1
+        let generation = started
+        isSearching = true
         await search(append: false)
         if generation == started { isSearching = false }
     }
@@ -81,6 +101,7 @@ final class SearchModel {
             guard !Task.isCancelled, key == self.key, !append || results.count == offset else { return }
             results = append ? results + response.items : response.items
             hasMore = response.items.count == pageSize
+            if !append { shownKey = key }
         } catch is CancellationError {
         } catch {
             // Cancelled (typing on) or outdated: the search for the current query reports its own errors.

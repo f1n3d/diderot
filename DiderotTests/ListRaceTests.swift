@@ -143,6 +143,53 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// Back from a result, `.task(id: key)` runs the same query again: its results stay as they were, with what
+        /// "Load More" added (code review V38: the search started over and the place was lost). Pulling down searches
+        /// again.
+        @Test func returningKeepsTheResultsUntilAPull() async throws {
+            let session = try await sessionOnA()
+            let search = SearchModel(query: "a")
+            search.session = session
+            StubURLProtocol.body.withLock { $0 = Self.results("a1") }
+            await search.run()
+            StubURLProtocol.body.withLock { $0 = Self.results("a2") }
+            await search.loadMore()
+            #expect(search.results.map(\.id) == ["a1", "a2"])
+            StubURLProtocol.requests.withLock { $0 = [] }
+            StubURLProtocol.body.withLock { $0 = Self.results("new") }
+            await search.run()
+            #expect(search.results.map(\.id) == ["a1", "a2"] && !search.isSearching)
+            #expect(!StubURLProtocol.requests.withLock { $0 }.contains { $0.hasSuffix("/api/search") })
+            await search.refresh()
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(search.results.map(\.id) == ["new"] && !search.isSearching)
+            await removeCaches()
+        }
+
+        /// A query typed and taken back within the debounce: the cancelled search of the longer one doesn't leave the
+        /// spinner on, and the shorter one's results stay.
+        @Test func aQueryTakenBackShowsItsResults() async throws {
+            let session = try await sessionOnA()
+            let clock = TestClock()
+            let search = SearchModel(query: "a", clock: clock)
+            search.session = session
+            StubURLProtocol.body.withLock { $0 = Self.results("a1") }
+            let first = Task { await search.run() }
+            await clock.advance(by: .milliseconds(300))
+            await first.value
+            search.query = "ab"
+            let typing = Task { await search.run() }
+            await clock.advance(by: .milliseconds(100))
+            #expect(search.isSearching)
+            typing.cancel()
+            await typing.value
+            search.query = "a"
+            await search.run()
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(search.results.map(\.id) == ["a1"] && !search.isSearching)
+            await removeCaches()
+        }
+
         /// Typing on cancels the running search (`.task(id:)`); that must not show "Search failed".
         @Test func cancelledSearchShowsNoError() async throws {
             let session = try await sessionOnA()
