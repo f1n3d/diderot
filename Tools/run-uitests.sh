@@ -11,6 +11,11 @@
 #   PORT=3001 Tools/run-uitests.sh <pageId>      # against the Docmost 0.97 dev instance (~/Repositories/docmost-dev-097)
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# What a run leaves is this user's only: the result bundle (XCTest writes every typed text into its activities, the
+# password test12 signs in with among them), the logs and the screenshots stay after the run. The password isn't
+# pasted instead: the Simulator syncs its pasteboard with the Mac's.
+umask 077
+mkdir -p Tools/.cache && chmod 700 Tools/.cache
 
 PAGE="${1:?pageId missing}"
 DEVICE="${DEVICE:-iPhone 18 Pro}"
