@@ -123,6 +123,24 @@ struct WriteEndpointTests {
         #expect(CommentContent.plainText(of: nil) == "")
     }
 
+    /// A line break within a paragraph (Shift-Return on the web) stays one through editing in the app: the comment came
+    /// back with each of its lines a paragraph of its own (code review V40). A new line typed in the app is a paragraph,
+    /// as before.
+    @Test func editingKeepsLineBreaksWithinAParagraph() throws {
+        let web = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Zeile eins"}, {"type": "hardBreak"}, {"type": "text", "text": "Zeile zwei"}]}, {"type": "paragraph", "content": [{"type": "text", "text": "Absatz"}]}]}"#.utf8))
+        let text = CommentContent.plainText(of: web)
+        #expect(text == "Zeile eins\u{2028}Zeile zwei\nAbsatz")
+        #expect(CommentContent.document(for: text) == web)
+        #expect(CommentContent.document(for: text + "\nNeu") == ["type": "doc", "content": [
+            web["content"]![0]!, web["content"]![1]!, ["type": "paragraph", "content": [["type": "text", "text": "Neu"]]],
+        ]])
+        // Breaks at a paragraph's ends and in a row keep their place.
+        let edges: JSONValue = ["type": "doc", "content": [["type": "paragraph", "content": [
+            ["type": "hardBreak"], ["type": "text", "text": "a"], ["type": "hardBreak"], ["type": "hardBreak"],
+        ]]]]
+        #expect(CommentContent.document(for: CommentContent.plainText(of: edges)) == edges)
+    }
+
     @Test func inlineCommentAndResolve() throws {
         let inline = try body(of: Endpoints.Comments.createInline(pageId: "p1", text: "Hm?", selection: "markierter Text"))
         #expect(inline["type"] == "inline")

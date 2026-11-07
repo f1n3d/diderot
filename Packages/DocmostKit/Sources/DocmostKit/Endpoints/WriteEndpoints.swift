@@ -120,13 +120,22 @@ extension Endpoints.Attachments {
 
 /// Builds a comment's ProseMirror document from plain text (one paragraph per line).
 public enum CommentContent {
+    /// What stands for a line break within a paragraph (a `hardBreak`, Shift-Return on the web) in the text a comment is
+    /// edited as: U+2028, which a text view shows as a new line, unlike the "\n" between paragraphs. Edited in the app,
+    /// such a comment kept its text but made each of its lines a paragraph (code review V40).
+    public static let lineBreak: Character = "\u{2028}"
+
     public static func document(for text: String) -> JSONValue {
         let paragraphs = text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> JSONValue in
-            let trimmed = String(line)
-            if trimmed.isEmpty {
+            var inline: [JSONValue] = []
+            for (index, part) in line.split(separator: lineBreak, omittingEmptySubsequences: false).enumerated() {
+                if index > 0 { inline.append(["type": "hardBreak"]) }
+                if !part.isEmpty { inline.append(["type": "text", "text": .string(String(part))]) }
+            }
+            if inline.isEmpty {
                 return ["type": "paragraph"]
             }
-            return ["type": "paragraph", "content": [["type": "text", "text": .string(trimmed)]]]
+            return ["type": "paragraph", "content": .array(inline)]
         }
         return ["type": "doc", "content": .array(paragraphs)]
     }
@@ -152,7 +161,8 @@ public enum CommentContent {
         }
     }
 
-    /// A comment's plain text for editing: one line per paragraph, mentions as "@Name".
+    /// A comment's plain text for editing: one line per paragraph, `lineBreak` for a line break within one, mentions as
+    /// "@Name".
     public static func plainText(of content: JSONValue?) -> String {
         lines(of: content ?? .null).joined(separator: "\n")
     }
@@ -170,7 +180,7 @@ public enum CommentContent {
         if let text = node["text"]?.stringValue { return text }
         switch node["type"]?.stringValue {
         case "mention": return "@" + (node["attrs"]?["label"]?.stringValue ?? "")
-        case "hardBreak": return "\n"
+        case "hardBreak": return String(lineBreak)
         default: return (node["content"]?.arrayValue ?? []).map(inlineText(of:)).joined()
         }
     }
