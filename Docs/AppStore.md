@@ -62,34 +62,23 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notes,knowledge base,documentation,self-hosted,editor,team,pages,markdown
 
-**What's New in This Version** (4000 at most; version 1.1.0)
+**What's New in This Version** (4000 at most; version 1.2.0)
 
 > New:
-> • Presentation mode: a page as slides, from the page menu
-> • Attachments: a page's files in the page menu, to search, open and share
-> • Templates: hold "+" for a new page from a template (needs a Docmost license with templates)
-> • An empty page becomes a database or a kanban board with one tap (needs a Docmost license with databases)
-> • Images, videos and PDFs a page takes from another website load when you tap them, or right away with a new setting
-> • Tables: every table action in the keyboard toolbar, wherever the cursor is in the table: merge and split cells, colors and alignment, move rows and columns, sort a column. Merged cells show as on the web
->
-> For Docmost 0.97:
-> • Tabs: read and switch them; while editing, add, rename, move and delete them
-> • Links to GitHub, GitLab, Jira, Linear, Figma, Azure DevOps and Slack as cards or mentions with previews; connect your account right from the card
-> • Sub-pages sorted by hand, A–Z or by last change
-> • Copy a link to a comment; such links open the page at the comment
-> • Start an empty page from a template
-> • Space admins can delete a page's attachments
+> • Images and diagrams open full screen: swipe through a page's images, zoom in, and share or save them
 >
 > Also:
-> • Editing together: what others type in the paragraph you are editing now shows up and is kept
-> • Changes made offline are saved as you go, and an upload finishes even if you leave the page
-> • More reliable: comments, database fields and page titles keep what you typed when saving fails or the app closes, and many rare crashes are fixed
-> • Pasting a link works as on the web: a web address becomes a link, a link to one of your pages becomes a mention
-> • In the page tree, a dragged page lands where the web puts it: before, after or inside a page
-> • While editing, a long press no longer moves blocks; on another paragraph it places the cursor there
-> • When your server doesn't answer, the app shows your saved pages after 5 seconds instead of 30
-> • Spaces in the app's green
-> • Fixed: a date, time, status or formula inserted at the start of a paragraph landed after its first letter
+> • Editing together: Return, Backspace, a selection and a dragged block keep what someone else just typed in the same line
+> • Pasting or dictating several lines goes in at once, with the cursor where the pasted text ends
+> • A note you append stays on the device until it reaches the server
+> • When your device can't keep unsent changes (a full disk), the page says so
+> • "Saving" shows only while the server hasn't confirmed a change yet
+> • Audio and video in pages play with the silent switch on
+> • Attachments and database files from another website name it before you open them
+> • Search results and the template list keep their place when you come back
+> • Editing a comment keeps its line breaks
+> • On an iPad, the pointer hides under the presentation's laser pointer
+> • More reliable: formulas and diagrams no longer stay cut off, errors read plainly, and many rare problems are fixed
 
 ## Deutsch
 
@@ -135,41 +124,30 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notizen,wissensdatenbank,dokumentation,selbst gehostet,editor,team,seiten,markdown
 
-**Neu in dieser Version** (höchstens 4000; Version 1.1.0)
+**Neu in dieser Version** (höchstens 4000; Version 1.2.0)
 
 > Neu:
-> • Präsentationsmodus: eine Seite als Folien, im Seitenmenü
-> • Anhänge: die Dateien einer Seite im Seitenmenü, zum Suchen, Öffnen und Teilen
-> • Vorlagen: „+“ gedrückt halten für eine neue Seite aus einer Vorlage (braucht eine Docmost-Lizenz mit Vorlagen)
-> • Eine leere Seite wird mit einem Tippen zur Datenbank oder zum Kanban-Board (braucht eine Docmost-Lizenz mit Datenbanken)
-> • Bilder, Videos und PDFs, die eine Seite von einer anderen Website holt, laden nach einem Tippen, oder mit einer neuen Einstellung sofort
-> • Tabellen: alle Tabellenaktionen in der Tastaturleiste, wo immer der Cursor in der Tabelle steht: Zellen verbinden und teilen, Farben und Ausrichtung, Zeilen und Spalten verschieben, eine Spalte sortieren. Verbundene Zellen sehen aus wie im Web
->
-> Für Docmost 0.97:
-> • Registerkarten: lesen und wechseln; beim Bearbeiten hinzufügen, umbenennen, verschieben und löschen
-> • Links zu GitHub, GitLab, Jira, Linear, Figma, Azure DevOps und Slack als Karte oder Erwähnung mit Vorschau; das eigene Konto direkt über die Karte verbinden
-> • Unterseiten von Hand, nach A–Z oder nach letzter Änderung sortiert
-> • Link zu einem Kommentar kopieren; solche Links öffnen die Seite beim Kommentar
-> • Eine leere Seite mit einer Vorlage beginnen
-> • Space-Admins können die Anhänge einer Seite löschen
+> • Bilder und Diagramme öffnen sich im Vollbild: durch die Bilder einer Seite wischen, hineinzoomen, teilen oder sichern
 >
 > Außerdem:
-> • Gemeinsam bearbeiten: Was andere in dem Absatz tippen, den du gerade bearbeitest, erscheint jetzt und bleibt erhalten
-> • Offline gemachte Änderungen werden laufend gesichert, und ein Upload wird auch fertig, wenn du die Seite verlässt
-> • Zuverlässiger: Kommentare, Datenbankfelder und Seitentitel behalten, was du getippt hast, wenn das Speichern scheitert oder die App endet, und viele seltene Abstürze sind behoben
-> • Links einfügen wie im Web: Eine Webadresse wird zum Link, ein Link zu einer deiner Seiten zur Erwähnung
-> • Im Seitenbaum landet eine gezogene Seite dort, wo das Web sie ablegt: davor, dahinter oder als Unterseite
-> • Beim Bearbeiten verschiebt langes Drücken keine Blöcke mehr; auf einem anderen Absatz setzt es den Cursor dorthin
-> • Antwortet dein Server nicht, zeigt die App nach 5 statt 30 Sekunden deine gespeicherten Seiten
-> • Spaces im Grün der App
-> • Behoben: Datum, Uhrzeit, Status oder Formel am Anfang eines Absatzes landeten hinter dem ersten Buchstaben
+> • Gemeinsam bearbeiten: Return, Backspace, eine Auswahl und ein gezogener Block behalten, was jemand anderes gerade in derselben Zeile getippt hat
+> • Mehrere eingefügte oder diktierte Zeilen kommen auf einmal hinein, der Cursor steht danach am Ende des eingefügten Texts
+> • Eine angehängte Notiz bleibt auf dem Gerät, bis sie beim Server ist
+> • Kann dein Gerät ungesendete Änderungen nicht sichern (volle Festplatte), sagt die Seite es
+> • „Speichere“ erscheint nur, solange der Server eine Änderung noch nicht bestätigt hat
+> • Ton und Video in Seiten spielen auch mit Stummschalter
+> • Anhänge und Datenbank-Dateien von einer anderen Website nennen sie, bevor du sie öffnest
+> • Suchergebnisse und die Vorlagenliste behalten ihre Stelle, wenn du zurückkommst
+> • Beim Bearbeiten eines Kommentars bleiben seine Zeilenumbrüche
+> • Auf dem iPad verschwindet der Zeiger unter dem Laserpointer der Präsentation
+> • Zuverlässiger: Formeln und Diagramme bleiben nicht mehr abgeschnitten, Fehler lesen sich verständlich, und viele seltene Probleme sind behoben
 
 ## App Review
 
 Notes for Apple's reviewers (English, 4000 characters at most). They answer the six points App Review asks new developer accounts (Guideline 2.1, Information Needed, October 2026), and the same text goes into the reply in App Store Connect. The demo account's email and password go into the "Sign-in required" fields, never into this file. App Store Connect takes one attachment here: `Diderot-AppReview.mp4`, the screen recording of the release build on an iPhone (launch to sign-out), then the databases on a licensed server.
 
 > 1. Screen recording
-> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight; version 1.1.0 works the same in these steps. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
+> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight; version 1.2.0 works the same in these steps. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
 > • Accounts: the app doesn't create accounts. Accounts belong to the Docmost server that an organization or person runs, and its administrators invite and remove members. The app only signs in to existing accounts, so it has no registration or deletion flow.
 > • User-generated content: pages and comments come only from members of the same private workspace, on a server their own organization runs. There is no public content and no way to reach people outside the workspace. The workspace's administrators decide who is a member and can deactivate or remove members; space administrators can delete any page or comment.
 > • Paid content: none. The app is free, with no in-app purchases, subscriptions, ads or links to buy anything.
