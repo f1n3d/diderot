@@ -29,7 +29,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - A space view with search within the space, the page tree and recently changed pages.
   - The workspace menu: members, profile, appearance, web settings, servers.
 - Page actions: copy link, favorite, export (Markdown or HTML, share sheet), duplicate, move or copy to another space, trash. The page's attachments as on the web: searchable, open in Quick Look (share, save); space admins delete them on Docmost 0.97. Reorder the page tree or nest pages by holding and dragging, with the web client's drop zones: a collapsed page opens while a page is held over it (positions by fractional indexing, like the web client). A trash per space to restore or delete for good. Deep links: `diderot://open?url=…`.
-- A native reader for every Docmost content type (text, lists, code, callouts, tables, images, math, Mermaid, diagrams, video, PDF, attachments, subpages, synced blocks, footnotes), with the web layout as a fallback.
+- A native reader for every Docmost content type (text, lists, code, callouts, tables, images, math, Mermaid, diagrams, video, PDF, attachments, subpages, synced blocks, footnotes), with the web layout as a fallback. Images and draw.io or Excalidraw diagrams open full screen as in the web's lightbox: swipe through the page's images, zoom up to 4×, share or save the file.
 - Links open as from the web in a browser: pages and database entries in the app, web pages in the in-app browser, mail, phone and messages through the system, another app only after asking, scripts and files never. Links in comments, versions, database fields, PDFs, the web layout and the web editor leave the app the same way; the web editor itself stays on the server.
 - Comments like on the web:
   - A button with the number of open comments, tabs for open and resolved ones.
@@ -201,9 +201,9 @@ Debug builds and tests talk to the dev instance (`http://localhost:3000`, from a
 - One change per pull request, small enough to read in one go.
 - A bug fix comes with a test that fails without it; a feature with tests of what it promises.
 - Before the pull request opens, someone reviews its diff: `/code-review` in Claude Code (medium for content, the engine or the session; low for small changes), or a person. What the review finds is fixed or answered in the pull request.
-- The touched area's UI tests run (`AREA=… Tools/run-uitests.sh`). The whole suite runs on both Docmost versions before a release, or for a change that reaches across the app.
+- The touched area's UI tests run (`AREA=… Tools/run-uitests.sh`). The whole suite runs before a release (from 1.2.0 against Docmost 0.97, the version of the demo instance for Apple's App Review), or on both versions for a change that reaches across the app.
 - CI passes before the merge (build, unit tests with the engine as the app calls it, the UI tests' build, engine and project checks).
-- A finding that waits goes to BACKLOG.md with why. A review of the whole code is for an occasion, such as a release or a big redesign, not for a schedule; the review documents in `Docs/` are those.
+- A finding that waits goes to BACKLOG.md with why. A review of the whole code is for an occasion, such as a release or a big redesign, not for a schedule. Its document lives in `Docs/` while its fixes are open; once they are done it goes, and what waits is in BACKLOG.md.
 
 ## Notes on the Docmost API
 

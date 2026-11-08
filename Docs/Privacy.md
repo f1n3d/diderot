@@ -1,6 +1,6 @@
 # Privacy Policy
 
-*Diderot, as of version 1.0 (October 2026). [Deutsche Fassung](#datenschutzerklärung) below.*
+*Diderot, as of version 1.2 (November 2026). [Deutsche Fassung](#datenschutzerklärung) below.*
 
 Diderot is an app for [Docmost](https://github.com/docmost/docmost) servers that you or your organization run. **The app collects no data.** Its developer receives nothing from it: there is no analytics, no advertising, no tracking and no third-party service in the app.
 
@@ -35,7 +35,7 @@ Changes to this policy appear in this repository's history.
 
 # Datenschutzerklärung
 
-*Diderot, Stand Version 1.0 (Oktober 2026).*
+*Diderot, Stand Version 1.2 (November 2026).*
 
 Diderot ist eine App für [Docmost](https://github.com/docmost/docmost)-Server, die du oder deine Organisation betreiben. **Die App erhebt keine Daten.** Ihr Entwickler erhält nichts von ihr: Es gibt keine Analyse, keine Werbung, kein Tracking und keine Dienste Dritter in der App.
 
@@ -45,7 +45,7 @@ Diderot ist eine App für [Docmost](https://github.com/docmost/docmost)-Server, 
 - Fotos und Videos, die du aus deiner Mediathek hochlädst, verlieren dabei ihren Aufnahmeort.
 - Weblinks öffnen sich im In-App-Browser. Ein Link in eine andere App (etwa eine Telefonnummer oder der Link einer anderen App) öffnet sich erst, nachdem die App nachgefragt hat.
 - Eingebettete Inhalte (etwa YouTube) erscheinen als Karte in der Seite und laden erst, wenn du sie öffnest. Web-Layout und Web-Editor zeigen Einbettungen wie das Web.
-- Bilder, Videos und PDFs, die eine Seite oder ein Kommentar von einer anderen Website holt, laden erst, wenn du sie antippst, außer du schaltest in den Einstellungen „Inhalte anderer Server automatisch laden“ ein. Logos und Profilbilder von einer anderen Website sowie solche Inhalte im Web-Layout laden nur mit dieser Einstellung. Der Web-Editor lädt sie wie das Web. Beim Laden erfährt die Website deine IP-Adresse und wann du die Seite liest.
+- Bilder, Videos und PDFs, die eine Seite oder ein Kommentar von einer anderen Website holt, laden erst, wenn du sie antippst, außer du schaltest in den Einstellungen „Inhalte anderer Server automatisch laden“ ein. Anhänge und Datenbank-Dateien von einer anderen Website nennen sie, bevor du sie antippst, solange diese Einstellung aus ist. Logos und Profilbilder von einer anderen Website sowie solche Inhalte im Web-Layout laden nur mit dieser Einstellung. Der Web-Editor lädt sie wie das Web. Beim Laden erfährt die Website deine IP-Adresse und wann du die Seite liest.
 
 ## Was auf deinem Gerät bleibt
 
