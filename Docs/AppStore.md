@@ -62,12 +62,15 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notes,knowledge base,documentation,self-hosted,editor,team,pages,markdown
 
-**What's New in This Version** (4000 at most; version 1.2.0)
+**What's New in This Version** (4000 at most; version 1.2.1, with 1.2.0's below it for those who skip that one)
 
-> New:
+> • "Append Note" adds no note to a page with footnotes anymore: Docmost would put it after them, where the page can't take it. It says so at once and keeps what you typed
+>
+> New in 1.2.0:
 > • Images and diagrams open full screen: swipe through a page's images, zoom in, and share or save them
 >
-> Also:
+> Also in 1.2.0:
+> • Pages that many people have edited for a long time open faster
 > • Editing together: Return, Backspace, a selection and a dragged block keep what someone else just typed in the same line
 > • Pasting or dictating several lines goes in at once, with the cursor where the pasted text ends
 > • A note you append stays on the device until it reaches the server
@@ -124,12 +127,15 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notizen,wissensdatenbank,dokumentation,selbst gehostet,editor,team,seiten,markdown
 
-**Neu in dieser Version** (höchstens 4000; Version 1.2.0)
+**Neu in dieser Version** (höchstens 4000; Version 1.2.1, darunter die von 1.2.0 für alle, die sie überspringen)
 
-> Neu:
+> • „Notiz anhängen“ fügt einer Seite mit Fußnoten keine Notiz mehr an: Docmost würde sie hinter die Fußnoten setzen, wo die Seite sie nicht aufnehmen kann. Die App sagt das sofort und behält, was du getippt hast
+>
+> Neu in 1.2.0:
 > • Bilder und Diagramme öffnen sich im Vollbild: durch die Bilder einer Seite wischen, hineinzoomen, teilen oder sichern
 >
-> Außerdem:
+> Außerdem in 1.2.0:
+> • Seiten, an denen viele schon lange schreiben, öffnen schneller
 > • Gemeinsam bearbeiten: Return, Backspace, eine Auswahl und ein gezogener Block behalten, was jemand anderes gerade in derselben Zeile getippt hat
 > • Mehrere eingefügte oder diktierte Zeilen kommen auf einmal hinein, der Cursor steht danach am Ende des eingefügten Texts
 > • Eine angehängte Notiz bleibt auf dem Gerät, bis sie beim Server ist
@@ -147,7 +153,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 Notes for Apple's reviewers (English, 4000 characters at most). They answer the six points App Review asks new developer accounts (Guideline 2.1, Information Needed, October 2026), and the same text goes into the reply in App Store Connect. The demo account's email and password go into the "Sign-in required" fields, never into this file. App Store Connect takes one attachment here: `Diderot-AppReview.mp4`, the screen recording of the release build on an iPhone (launch to sign-out), then the databases on a licensed server.
 
 > 1. Screen recording
-> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight; version 1.2.0 works the same in these steps. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
+> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight; version 1.2.1 works the same in these steps. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
 > • Accounts: the app doesn't create accounts. Accounts belong to the Docmost server that an organization or person runs, and its administrators invite and remove members. The app only signs in to existing accounts, so it has no registration or deletion flow.
 > • User-generated content: pages and comments come only from members of the same private workspace, on a server their own organization runs. There is no public content and no way to reach people outside the workspace. The workspace's administrators decide who is a member and can deactivate or remove members; space administrators can delete any page or comment.
 > • Paid content: none. The app is free, with no in-app purchases, subscriptions, ads or links to buy anything.
