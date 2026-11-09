@@ -744,7 +744,7 @@ PY
 fi
 
 # Append Note (EditorUITests test85, test86): the note on the page without footnotes; none on the page with them, which
-# still ends with its footnotes.
+# still ends with its footnotes. Without their pages the two tests skip, and so do their checks.
 python3 - "$STAMP" "$APPEND_PAGE" "$FOOTNOTES_PAGE" <<'PY' || CHECKS_FAILED=1
 import json, sys
 from dev_api import session
@@ -752,18 +752,19 @@ from uitest_checks import report
 stamp, append_page, footnotes_page = sys.argv[1:4]
 call = session().call
 def content(page):
-    if not page:
-        return {}
     return call("pages/info", {"pageId": page, "format": "json"}).get("content") or {}
-appended, refused = content(append_page), content(footnotes_page)
-blocks = refused.get("content") or []
-sys.exit(0 if report([
-    ("EditorUITests/test85_AppendNoteKeptAcrossLaunches", "Append Note: Angehängt" + stamp + " on its page",
-     ("Angehängt" + stamp) in json.dumps(appended, ensure_ascii=False)),
-    ("EditorUITests/test86_AppendNoteRefusedOnAPageWithFootnotes",
-     "Append Note: no Abgewiesen" + stamp + " on the page with footnotes, which ends with them (" + str(blocks[-1].get("type") if blocks else None) + ")",
-     ("Abgewiesen" + stamp) not in json.dumps(refused, ensure_ascii=False) and bool(blocks) and blocks[-1].get("type") == "footnotes"),
-]) else 1)
+checks = []
+if append_page:
+    checks.append(("EditorUITests/test85_AppendNoteKeptAcrossLaunches", "Append Note: Angehängt" + stamp + " on its page",
+                   ("Angehängt" + stamp) in json.dumps(content(append_page), ensure_ascii=False)))
+if footnotes_page:
+    refused = content(footnotes_page)
+    blocks = refused.get("content") or []
+    last = blocks[-1].get("type") if blocks else None
+    checks.append(("EditorUITests/test86_AppendNoteRefusedOnAPageWithFootnotes",
+                   "Append Note: no Abgewiesen" + stamp + " on the page with footnotes, which ends with them (" + str(last) + ")",
+                   ("Abgewiesen" + stamp) not in json.dumps(refused, ensure_ascii=False) and last == "footnotes"))
+sys.exit(0 if report(checks) else 1)
 PY
 
 # Tree drop zones (EditorUITests test79): "Baum-Quelle<stamp>" ended up in "Baum-Ziel<stamp>", after "Baum-Kind<stamp>".

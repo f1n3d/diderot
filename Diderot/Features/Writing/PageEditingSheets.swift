@@ -14,11 +14,19 @@ struct AppendNoteSheet: View {
     @State private var text = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
-    /// The server's page has footnotes: found when the sheet opens or before appending, and the note stays kept.
-    @State private var hasFootnotes = false
+    /// The page has footnotes, as far as the sheet knows: "Append" stays off, and the note stays kept. First from the
+    /// page it opens for, so the reason shows at once, also offline; then from the server's page when it opens, when the
+    /// app comes back, and just before appending.
+    @State private var hasFootnotes: Bool
     /// The session's place for the note, once the sheet has looked for one kept from before.
     @State private var draft: NoteDraft?
     @FocusState private var isFocused: Bool
+
+    init(page: Page, onAppended: @escaping () -> Void = {}) {
+        self.page = page
+        self.onAppended = onAppended
+        _hasFootnotes = State(initialValue: page.hasFootnotes)
+    }
 
     var body: some View {
         NavigationStack {
@@ -61,6 +69,8 @@ struct AppendNoteSheet: View {
             .onChange(of: text) { _, text in draft?.keep(text) }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { Task { await draft?.keepNow(text) } }
+                // Footnotes may have come or gone meanwhile, as on the web.
+                if phase == .active { Task { await lookForFootnotes() } }
             }
         }
         // Typed input closes only with Cancel; a swipe threw it away.
@@ -77,17 +87,12 @@ struct AppendNoteSheet: View {
         isFocused = true
     }
 
-    /// Before anything is typed, where it can: a failed look stays quiet, as the sheet takes notes offline too, and
-    /// appending looks again.
+    /// The server's page, where it can be had: a failed look leaves what the sheet knew, as it takes notes offline too,
+    /// and appending looks again.
     private func lookForFootnotes() async {
         guard let owner = session.ready,
               let current = try? await session.send(Endpoints.Pages.info(pageId: page.id), on: owner) else { return }
-        if current.hasFootnotes { refuseForFootnotes() }
-    }
-
-    private func refuseForFootnotes() {
-        hasFootnotes = true
-        errorMessage = nil
+        hasFootnotes = current.hasFootnotes
     }
 
     private static let footnotesNotice = String(localized: "This page has footnotes. Docmost would add the note after them, where the page can't take it. Write the note in the page instead.")
@@ -107,14 +112,13 @@ struct AppendNoteSheet: View {
         Task {
             defer { isSaving = false }
             do {
-                // Again just before, from the server: a collaborator may have added footnotes since the sheet opened.
-                if try await session.send(Endpoints.Pages.info(pageId: page.id), on: owner).hasFootnotes {
-                    refuseForFootnotes()
-                    return
-                }
                 // Without Redis sync the page silently stays unchanged, so compare with the append's Markdown answer.
                 // Not by block count: the server stores native edits ~10 s late, so new deletions could hide the note.
                 let before = try await session.send(Endpoints.Pages.info(pageId: page.id, format: "markdown"), on: owner)
+                // Last before appending, from the server: a collaborator may have added footnotes since the sheet looked.
+                // Docmost's append can't be told to go before them, so this keeps the gap to the append's request.
+                hasFootnotes = try await session.send(Endpoints.Pages.info(pageId: page.id), on: owner).hasFootnotes
+                if hasFootnotes { return }
                 let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 let appended = try await session.send(Endpoints.Pages.appendMarkdown(pageId: page.id, note), on: owner)
                 if appended.content == before.content {

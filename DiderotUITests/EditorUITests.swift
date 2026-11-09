@@ -1396,10 +1396,12 @@ import XCTest
         let page = environment["DOCMOST_UITEST_FOOTNOTES_PAGE"] ?? ""
         try XCTSkipIf(page.isEmpty, "No page with footnotes (Tools/run-uitests.sh)")
         let note = "Abgewiesen\(stamp)"
+        func notice(_ app: XCUIApplication) -> XCUIElement {
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "has footnotes", "hat Fußnoten")).firstMatch
+        }
         var app = launchScriptPage(page)
         var field = openAppendNote(app)
-        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "has footnotes", "hat Fußnoten")).firstMatch
-        XCTAssertTrue(notice.waitForExistence(timeout: 15), "The sheet doesn't say that the page has footnotes")
+        XCTAssertTrue(notice(app).waitForExistence(timeout: 15), "The sheet doesn't say that the page has footnotes")
         field.tap()
         field.typeText(note)
         XCTAssertFalse(button(app, labels: ["Append", "Anhängen"]).isEnabled, "“Append” is enabled on a page with footnotes")
@@ -1412,7 +1414,7 @@ import XCTest
         field = openAppendNote(app)
         let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", note), object: field)
         XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 10), .completed, "The note isn't kept: “\(field.value ?? "")”")
-        XCTAssertTrue(notice.waitForExistence(timeout: 15), "The sheet doesn't say again that the page has footnotes")
+        XCTAssertTrue(notice(app).waitForExistence(timeout: 15), "The sheet doesn't say again that the page has footnotes")
         button(app, labels: ["Cancel", "Abbrechen"]).tap()
         XCTAssertTrue(field.waitForNonExistence(timeout: 5), "Cancel doesn't close the sheet")
     }
