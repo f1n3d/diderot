@@ -72,14 +72,15 @@ export function unchanged(current: PMNode, expected: JSONContent): boolean {
 /**
  * Whether binding an editor to the page's Yjs document would change it. The binding's first render deletes whatever the
  * schema can't hold (unknown types or marks, content a newer Docmost allows in more places) and syncs that to the
- * server, so it runs on a copy here.
+ * server, so it runs on a copy here: of the content only, which is all the binding reads. A copy of the whole state
+ * took the page's history along, on a page edited for long most of its state; it cost as much as the sync itself on
+ * every open, on the UI tests' page (6,718 clients) half a second in Node and more in the app.
  */
 export function bindingChanges(ydoc: Y.Doc, schema: Schema): boolean {
-  const copy = new Y.Doc();
-  Y.applyUpdate(copy, Y.encodeStateAsUpdate(ydoc));
   let changed = false;
-  copy.on("update", () => (changed = true));
   try {
+    const copy = copyContent(ydoc.getXmlFragment("default"));
+    copy.on("update", () => (changed = true));
     const { doc } = initProseMirrorDoc(copy.getXmlFragment("default"), schema);
     // Binding also fits the top level into the schema's order and drops what doesn't fit.
     if (doc.childCount > 0 && !doc.type.validContent(doc.content)) changed = true;
@@ -88,3 +89,38 @@ export function bindingChanges(ydoc: Y.Doc, schema: Schema): boolean {
   }
   return changed;
 }
+
+type XmlContent = Y.XmlElement | Y.XmlText | Y.XmlHook;
+
+/**
+ * A document of its own with what `fragment` holds now: blocks, their attributes, and text with its formatting.
+ * Made in one document and applied to another, so its content is another client's, as the page's is to the binding:
+ * y-tiptap joins neighboring texts the binding's own client wrote (its fix for duplicated characters), which would
+ * count as a change on a copy written by the client that reads it.
+ */
+function copyContent(fragment: Y.XmlFragment): Y.Doc {
+  const writer = new Y.Doc();
+  writer.getXmlFragment("default").insert(0, fragment.toArray().map(copyType) as (Y.XmlElement | Y.XmlText)[]);
+  const copy = new Y.Doc();
+  Y.applyUpdate(copy, Y.encodeStateAsUpdate(writer));
+  return copy;
+}
+
+function copyType(type: XmlContent): XmlContent {
+  if (type instanceof Y.XmlElement) {
+    const element = new Y.XmlElement(type.nodeName);
+    // Any JSON value, as y-tiptap writes them; Yjs types attributes as strings unless told otherwise.
+    for (const [key, value] of Object.entries(type.getAttributes())) element.setAttribute(key, copyValue(value) as string);
+    element.insert(0, type.toArray().map(copyType) as (Y.XmlElement | Y.XmlText)[]);
+    return element;
+  }
+  if (type instanceof Y.XmlText) {
+    const text = new Y.XmlText();
+    text.applyDelta(type.toDelta().map((op: { insert?: unknown }) => ({ ...op, insert: copyValue(op.insert) })));
+    return text;
+  }
+  return type.clone();
+}
+
+/** A shared type can be in one document only; y-tiptap writes none into attributes or text, but other clients might. */
+const copyValue = (value: unknown) => (value instanceof Y.AbstractType ? value.clone() : value);
