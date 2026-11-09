@@ -5702,6 +5702,16 @@
         }
       }
     },
+    "This page has footnotes. Docmost would add the note after them, where the page can't take it. Write the note in the page instead.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Seite hat Fußnoten. Docmost würde die Notiz dahinter einfügen, wo die Seite sie nicht aufnehmen kann. Schreib die Notiz stattdessen direkt in die Seite."
+          }
+        }
+      }
+    },
     "This page is empty.": {
       "localizations": {
         "de": {
