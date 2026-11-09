@@ -93,16 +93,17 @@ export function bindingChanges(ydoc: Y.Doc, schema: Schema): boolean {
 type XmlContent = Y.XmlElement | Y.XmlText | Y.XmlHook;
 
 /**
- * A document of its own with what `fragment` holds now: blocks, their attributes, and text with its formatting.
- * Made in one document and applied to another, so its content is another client's, as the page's is to the binding:
- * y-tiptap joins neighboring texts the binding's own client wrote (its fix for duplicated characters), which would
- * count as a change on a copy written by the client that reads it.
+ * A document of its own with what `fragment` holds now: blocks, their attributes, and text with its formatting. The
+ * copy then takes another client id, so its content is another client's, as the page's is to the binding (Yjs gives a
+ * client a new id when content from elsewhere carries its own): y-tiptap joins neighboring texts the reading client
+ * wrote itself (its fix for duplicated characters), which would count as a change on the copy. Copied into a second
+ * document instead, a page without history (all content) took longer than the copy of the whole state had.
  */
 function copyContent(fragment: Y.XmlFragment): Y.Doc {
-  const writer = new Y.Doc();
-  writer.getXmlFragment("default").insert(0, fragment.toArray().map(copyType) as (Y.XmlElement | Y.XmlText)[]);
   const copy = new Y.Doc();
-  Y.applyUpdate(copy, Y.encodeStateAsUpdate(writer));
+  // `insert` takes hooks as well; Yjs types it for elements and text only.
+  copy.getXmlFragment("default").insert(0, fragment.toArray().map(copyType) as (Y.XmlElement | Y.XmlText)[]);
+  copy.clientID ^= 1;
   return copy;
 }
 
@@ -122,5 +123,9 @@ function copyType(type: XmlContent): XmlContent {
   return type.clone();
 }
 
-/** A shared type can be in one document only; y-tiptap writes none into attributes or text, but other clients might. */
-const copyValue = (value: unknown) => (value instanceof Y.AbstractType ? value.clone() : value);
+/**
+ * A shared type or a subdocument can be in one document only. y-tiptap writes neither into attributes or text, but
+ * other clients might; the binding passes them on as they are, so a stand-in with the same guid does.
+ */
+const copyValue = (value: unknown) =>
+  value instanceof Y.AbstractType ? value.clone() : value instanceof Y.Doc ? new Y.Doc({ guid: value.guid }) : value;

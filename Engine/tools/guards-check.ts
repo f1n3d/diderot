@@ -147,8 +147,17 @@ expect("footnotes before a block", changes, binding(page(element("footnotes"), e
 expect("text outside a block", changes, binding(page(yText("Hello"))));
 // Not found: an unknown attribute of a known block goes when the block changes (BACKLOG.md, "Docmost names its version").
 expect("an unknown attribute", keeps, binding(page(element("paragraph", [yText("Hello")], { futureAttribute: "x" }))));
-// The binding joins neighboring texts only when its own client wrote them; the page's content is never its own.
+// The binding joins neighboring texts only when its own client wrote them, which content from the server never is: Yjs
+// gives a client a new id when content from elsewhere carries its own.
 expect("neighboring texts", keeps, binding(page(element("paragraph", [yText("Hel"), yText("lo")]))));
+// y-tiptap writes no hooks; binding throws on one, at the top level as inside a block.
+expect("a hook", changes, binding(page(new Y.XmlHook("futureHook") as unknown as Y.XmlElement)));
+expect("a hook in a block", changes, binding(page(element("paragraph", [new Y.XmlHook("futureHook") as unknown as Y.XmlElement]))));
+// Values only other clients write: a shared type and a subdocument as attributes.
+const shared = new Y.Map<string>();
+shared.set("key", "value");
+expect("a shared type and a subdocument as attributes", keeps, binding(page(element("paragraph", [yText("Hello")],
+  { futureType: shared as unknown as string, futureDocument: new Y.Doc() as unknown as string }))));
 expect("formatting and attributes of every kind", keeps, binding(prosemirrorJSONToYDoc(schema, { type: "doc", content: [
   { type: "heading", attrs: { level: 2 }, content: [text("Title", [{ type: "bold" }, { type: "italic" }])] },
   { type: "taskList", content: [{ type: "taskItem", attrs: { checked: true }, content: [paragraph(text("Done"))] }] },
@@ -163,31 +172,31 @@ expect("formatting and attributes of every kind", keeps, binding(prosemirrorJSON
 function edited(rounds: number) {
   const blocks = () => Array.from({ length: 40 }, (_, index) => element("paragraph", [yText(`Paragraph ${index}`, index % 3 ? undefined : { bold: {} })]));
   const ydoc = page(...blocks());
-  for (let round = 0; round < rounds; round++) {
-    const editor = new Y.Doc();
-    Y.applyUpdate(editor, Y.encodeStateAsUpdate(ydoc));
-    const fragment = editor.getXmlFragment("default");
-    editor.transact(() => {
+  const fragment = ydoc.getXmlFragment("default");
+  for (let round = 1; round <= rounds; round++) {
+    ydoc.clientID = round;
+    ydoc.transact(() => {
       fragment.delete(0, fragment.length);
       fragment.insert(0, blocks());
     });
-    Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(editor, Y.encodeStateVector(ydoc)));
   }
   return ydoc;
 }
-/** The fastest of five runs, in ms. */
+/** The fastest of seven runs after a first one, in ms: a run a pause or the compiler slowed down doesn't count. */
 function fastest(run: () => void) {
+  run();
   let best = Infinity;
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 7; attempt++) {
     const start = performance.now();
     run();
     best = Math.min(best, performance.now() - start);
   }
   return best;
 }
-const history = edited(300);
+const history = edited(1000);
 expect("a page with a long history", keeps, binding(history));
 // The check reads the content, not the history: it took as long as copying the whole state, every time a page opened.
+// Measured against that copy on the same machine, so a slower one slows both.
 const guard = fastest(() => bindingChanges(history, schema));
 const wholeState = fastest(() => Y.applyUpdate(new Y.Doc(), Y.encodeStateAsUpdate(history)));
 expect(`a long history costs the check little (${guard.toFixed(1)} ms, the whole state ${wholeState.toFixed(1)} ms)`, true, guard < wholeState / 4);
