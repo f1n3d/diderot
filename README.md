@@ -209,7 +209,7 @@ Debug builds and tests talk to the dev instance (`http://localhost:3000`, from a
 
 - The sign-in token comes only as the HttpOnly cookie `authToken`; the app sends it as `Authorization: Bearer`. A cookie sent along would take precedence, so the API client stores no cookies.
 - `POST` calls without parameters need `{}` as their body.
-- "Append note" (`pages/update` with `operation: append`) needs Redis sync enabled on the server (`COLLAB_DISABLE_REDIS` not set).
+- "Append note" (`pages/update` with `operation: append`) needs Redis sync enabled on the server (`COLLAB_DISABLE_REDIS` not set). It inserts at the end of the document, also after a page's footnotes, which Docmost's schema keeps last (`block+ footnotes?`); editors can't hold such a page as it is. So the app appends to no page with footnotes and says why.
 - The web client's page view crashes while `localStorage.currentUser` is missing, so the web editor loads the home page first.
 
 ## License

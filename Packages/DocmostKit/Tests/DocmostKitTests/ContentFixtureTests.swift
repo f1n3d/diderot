@@ -72,6 +72,29 @@ struct ContentFixtureTests {
         #expect(page.content?["content"]?.arrayValue?.count == 5)
     }
 
+    /// "Append Note" refuses pages with footnotes: Docmost's append would put the note after them.
+    @Test func footnotesAreFoundAtTheTopLevel() throws {
+        func page(_ content: JSONValue?) throws -> Page {
+            let body: JSONValue = ["id": "p1", "content": content ?? .null]
+            return try JSONDecoding.makeDecoder().decode(Page.self, from: JSONEncoder().encode(body))
+        }
+        let paragraph: JSONValue = ["type": "paragraph", "content": [["type": "text", "text": "Hello"]]]
+        let footnotes: JSONValue = ["type": "footnotes", "content": [
+            ["type": "footnote", "attrs": ["id": "fn:1", "data-id": "one"], "content": [paragraph]],
+        ]]
+        #expect(try page(["type": "doc", "content": [paragraph, footnotes]]).hasFootnotes)
+        // As Docmost's append leaves a page: a block after the footnotes.
+        #expect(try page(["type": "doc", "content": [paragraph, footnotes, paragraph]]).hasFootnotes)
+        #expect(try !page(["type": "doc", "content": [paragraph]]).hasFootnotes)
+        // A footnote reference alone, or "footnotes" as text, isn't the block.
+        #expect(try !page(["type": "doc", "content": [["type": "paragraph", "content": [
+            ["type": "footnoteReference", "attrs": ["data-id": "one"]], ["type": "text", "text": "footnotes"],
+        ]]]]).hasFootnotes)
+        #expect(try !page(.string("Text with [^1]\n\n[^1]: A footnote")).hasFootnotes)
+        #expect(try !page(nil).hasFootnotes)
+        #expect(try !TestSupport.decodeFixture(Page.self, "page-info").hasFootnotes)
+    }
+
     @Test func pageTitleFallback() {
         #expect(PageTitle.display(nil) == "Untitled")
         #expect(PageTitle.display("  ") == "Untitled")

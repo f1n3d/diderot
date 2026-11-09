@@ -195,6 +195,37 @@ PY
 [ -n "$TWO_CLIENTS_PAGE" ] || echo "No page for the two-client test"
 export TEST_RUNNER_DOCMOST_UITEST_TWO_CLIENTS_PAGE="$TWO_CLIENTS_PAGE"
 
+# The pages of "Append Note" (EditorUITests test85, test86) under "Fixtures", their content made anew each run:
+# "Fixture: Notiz anhängen" without footnotes, as the test page has them after test35, and "Fixture: Notiz und Fußnote"
+# with one, where no note may go (Docmost's append would put it after the footnotes).
+NOTE_PAGES=$(python3 - "$PAGE" <<'PY' || true
+import sys
+from dev_api import session
+call = session().call
+space = call("pages/info", {"pageId": sys.argv[1]})["spaceId"]
+def child(title, parent=None):
+    pages = call("pages/sidebar-pages", {"spaceId": space, **({"pageId": parent} if parent else {}), "limit": 100})["items"]
+    return next((page for page in pages if page["title"] == title), None)
+root = child("Fixtures")
+if root is None:
+    sys.exit("No page \"Fixtures\" (Tools/seed-fixtures.py)")
+def made(title, blocks):
+    page = child(title, root["id"]) or call("pages/create", {"spaceId": space, "parentPageId": root["id"], "title": title})
+    call("pages/update", {"pageId": page["id"], "content": {"type": "doc", "content": blocks}, "operation": "replace", "format": "json"})
+    return page["id"]
+text = lambda value: {"type": "text", "text": value}
+paragraph = lambda *nodes: {"type": "paragraph", "content": list(nodes)}
+reference = {"type": "footnoteReference", "attrs": {"class": "footnote-ref", "data-id": "uitestfn", "referenceNumber": "1", "href": "#fn:1"}}
+footnotes = {"type": "footnotes", "attrs": {"class": "footnotes"}, "content": [
+    {"type": "footnote", "attrs": {"id": "fn:1", "data-id": "uitestfn"}, "content": [paragraph(text("Die Fußnote."))]}]}
+print(made("Fixture: Notiz anhängen", [paragraph(text("Notizen kommen ans Ende."))]),
+      made("Fixture: Notiz und Fußnote", [paragraph(text("Ein Satz mit Fußnote"), reference, text(".")), footnotes]))
+PY
+)
+APPEND_PAGE=${NOTE_PAGES%% *} FOOTNOTES_PAGE=${NOTE_PAGES##* }
+[ -n "$NOTE_PAGES" ] || echo "No pages for the Append Note tests"
+export TEST_RUNNER_DOCMOST_UITEST_APPEND_PAGE="$APPEND_PAGE" TEST_RUNNER_DOCMOST_UITEST_FOOTNOTES_PAGE="$FOOTNOTES_PAGE"
+
 # The colleague of two-client tests: a test that writes <name>.json into this folder, the body of a page update, gets
 # it sent as another client's change (the server applies it through Yjs, as it does the web editor's), then
 # <name>.done. It ends with its folder, which goes when the script ends.
@@ -243,7 +274,7 @@ case "${AREA:-}" in
   schnell) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test5_ReturnAndBackspace,$E/test6_CreatePageFromSpace,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test42_EditAfterReturningToPage,HomeUITests/test19_SearchTabShowsHomeThenResults,HomeUITests/test50_TrashConfirmationAtRow,BaseUITests/test22_BasePageFromTree,BaseUITests/test25_BaseKanbanColumnsAndCard" ;;
   editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly" ;;
   bloecke) ONLY="$E/test7_DragBlock,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink,$E/test84_PreviewStaysOpenWhenABlockComesInAbove" ;;
-  seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test33_Comments,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test85_AppendNoteKeptAcrossLaunches,HomeUITests" ;;
+  seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test33_Comments,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test85_AppendNoteKeptAcrossLaunches,$E/test86_AppendNoteRefusedOnAPageWithFootnotes,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
   server) ONLY="ServerUITests" ;;
   *) echo "Unknown AREA '$AREA': schnell, editor, bloecke, seiten, datenbanken or server" >&2; exit 1 ;;
@@ -711,6 +742,29 @@ if "github" in integrations:
 sys.exit(0 if report(checks) else 1)
 PY
 fi
+
+# Append Note (EditorUITests test85, test86): the note on the page without footnotes; none on the page with them, which
+# still ends with its footnotes.
+python3 - "$STAMP" "$APPEND_PAGE" "$FOOTNOTES_PAGE" <<'PY' || CHECKS_FAILED=1
+import json, sys
+from dev_api import session
+from uitest_checks import report
+stamp, append_page, footnotes_page = sys.argv[1:4]
+call = session().call
+def content(page):
+    if not page:
+        return {}
+    return call("pages/info", {"pageId": page, "format": "json"}).get("content") or {}
+appended, refused = content(append_page), content(footnotes_page)
+blocks = refused.get("content") or []
+sys.exit(0 if report([
+    ("EditorUITests/test85_AppendNoteKeptAcrossLaunches", "Append Note: Angehängt" + stamp + " on its page",
+     ("Angehängt" + stamp) in json.dumps(appended, ensure_ascii=False)),
+    ("EditorUITests/test86_AppendNoteRefusedOnAPageWithFootnotes",
+     "Append Note: no Abgewiesen" + stamp + " on the page with footnotes, which ends with them (" + str(blocks[-1].get("type") if blocks else None) + ")",
+     ("Abgewiesen" + stamp) not in json.dumps(refused, ensure_ascii=False) and bool(blocks) and blocks[-1].get("type") == "footnotes"),
+]) else 1)
+PY
 
 # Tree drop zones (EditorUITests test79): "Baum-Quelle<stamp>" ended up in "Baum-Ziel<stamp>", after "Baum-Kind<stamp>".
 # Then deletes both pages with their subpages.

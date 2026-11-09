@@ -95,6 +95,12 @@ public struct Page: Codable, Sendable, Hashable, Identifiable {
     public var displayTitle: String { PageTitle.display(title) }
     public var isInTrash: Bool { deletedAt != nil }
     public var canEdit: Bool { permissions?.canEdit ?? false }
+    /// Whether the content, as JSON (`pages/info` without a format), has a footnotes block. Docmost's schema keeps it
+    /// last (`block+ footnotes?`), but its `pages/update` with `append` inserts after it (0.96 and 0.97), leaving a page
+    /// that editors can't hold as it is. False for content in another format, or none.
+    public var hasFootnotes: Bool {
+        content?["content"]?.arrayValue?.contains { $0["type"]?.stringValue == "footnotes" } ?? false
+    }
 }
 
 public enum PageTitle {

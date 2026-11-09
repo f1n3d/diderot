@@ -1350,10 +1350,13 @@ import XCTest
 
     /// A note being written in "Append Note" stays on the device: after the app ends, as in a crash, the sheet opens
     /// with it again, and Cancel drops it (code review V49: it lived only in the sheet). Appended, it shows at the page's
-    /// end and is no longer kept.
-    func test85_AppendNoteKeptAcrossLaunches() {
+    /// end and is no longer kept. On a page of its own without footnotes, made anew each run (Tools/run-uitests.sh): the
+    /// test page has footnotes after test35, and a note doesn't go to such a page (test86).
+    func test85_AppendNoteKeptAcrossLaunches() throws {
+        let page = environment["DOCMOST_UITEST_APPEND_PAGE"] ?? ""
+        try XCTSkipIf(page.isEmpty, "No page for Append Note (Tools/run-uitests.sh)")
         let note = "Notiz\(stamp)"
-        var app = launchPage()
+        var app = launchScriptPage(page)
         var field = openAppendNote(app)
         field.tap()
         field.typeText(note)
@@ -1361,7 +1364,7 @@ import XCTest
         Thread.sleep(forTimeInterval: 2)
         app.terminate()
 
-        app = launchPage()
+        app = launchScriptPage(page)
         field = openAppendNote(app)
         let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", note), object: field)
         XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 10), .completed, "The note typed before the app ended is gone: “\(field.value ?? "")”")
@@ -1383,6 +1386,42 @@ import XCTest
         field = openAppendNote(app)
         XCTAssertFalse((field.value as? String ?? "").contains(appended), "The appended note is still kept: “\(field.value ?? "")”")
         cancel.tap()
+    }
+
+    /// "Append Note" doesn't go to a page with footnotes: Docmost's append puts the note after them, where the page can't
+    /// hold it, and the app opened the page read-only from then on (the full suite of November 9, 2026: test85 appended
+    /// to the test page after test35 added footnotes). The sheet says why, and the note stays kept; the script checks
+    /// that nothing reached the page. Its page has a footnote, made anew each run (Tools/run-uitests.sh).
+    func test86_AppendNoteRefusedOnAPageWithFootnotes() throws {
+        let page = environment["DOCMOST_UITEST_FOOTNOTES_PAGE"] ?? ""
+        try XCTSkipIf(page.isEmpty, "No page with footnotes (Tools/run-uitests.sh)")
+        let note = "Abgewiesen\(stamp)"
+        var app = launchScriptPage(page)
+        var field = openAppendNote(app)
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "has footnotes", "hat Fußnoten")).firstMatch
+        XCTAssertTrue(notice.waitForExistence(timeout: 15), "The sheet doesn't say that the page has footnotes")
+        field.tap()
+        field.typeText(note)
+        XCTAssertFalse(button(app, labels: ["Append", "Anhängen"]).isEnabled, "“Append” is enabled on a page with footnotes")
+        snapshot(app, "86-refused")
+        // Kept like any note, once typing pauses for half a second.
+        Thread.sleep(forTimeInterval: 2)
+        app.terminate()
+
+        app = launchScriptPage(page)
+        field = openAppendNote(app)
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", note), object: field)
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 10), .completed, "The note isn't kept: “\(field.value ?? "")”")
+        XCTAssertTrue(notice.waitForExistence(timeout: 15), "The sheet doesn't say again that the page has footnotes")
+        button(app, labels: ["Cancel", "Abbrechen"]).tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 5), "Cancel doesn't close the sheet")
+    }
+
+    /// Opens a page the script makes anew each run, by its id, and waits for the engine sync ("Saved").
+    private func launchScriptPage(_ page: String) -> XCUIApplication {
+        let app = launchApp(extraEnvironment: ["DOCMOST_DEBUG_PAGE": page])
+        waitForSync(app)
+        return app
     }
 
     /// Opens "Append Note" from the page's menu; returns its text field.
