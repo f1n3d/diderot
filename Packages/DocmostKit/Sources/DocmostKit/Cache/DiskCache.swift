@@ -10,6 +10,22 @@ public actor DiskCache {
         /// From the first unlock after a restart on: what the app must still write when it goes to the background
         /// and the device locks, such as unsent changes.
         case afterFirstUnlock
+
+        /// For a file as it is written.
+        var writingOption: Data.WritingOptions {
+            switch self {
+            case .whileUnlocked: .completeFileProtection
+            case .afterFirstUnlock: .completeFileProtectionUntilFirstUserAuthentication
+            }
+        }
+
+        /// The same for a file that is there already.
+        var fileProtection: FileProtectionType {
+            switch self {
+            case .whileUnlocked: .complete
+            case .afterFirstUnlock: .completeUntilFirstUserAuthentication
+            }
+        }
     }
 
     public nonisolated let directory: URL
@@ -66,6 +82,41 @@ public actor DiskCache {
         try? store(data, at: fileURL(for: key, kind: "bin"))
     }
 
+    /// The raw entry as a file, nil without one: to read it in place (an image source, a PDF) instead of into memory.
+    /// The file can go at any time (`prune`, `remove`), as for every reader of a cache.
+    public func dataFile(key: String) -> URL? {
+        let url = fileURL(for: key, kind: "bin")
+        return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
+    }
+
+    /// Takes `file` (a download) as the raw entry by moving it in, so nothing of it passes through memory, and returns
+    /// where it is now. It gets the cache's protection before it moves: no file is here without it. A file that can't
+    /// be taken stays where it was.
+    @discardableResult
+    public func storeFile(at file: URL, key: String) throws -> URL {
+        let url = fileURL(for: key, kind: "bin")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try protect(file)
+        if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+            _ = try FileManager.default.replaceItemAt(url, withItemAt: file)
+        } else {
+            try FileManager.default.moveItem(at: file, to: url)
+        }
+        return url
+    }
+
+    /// Gives a file that is there already the cache's protection. Only a device has file protection: a Mac (the
+    /// package's tests, the simulator's files) has nothing to set, and some refuse the attempt (GitHub's runners:
+    /// "Invalid argument").
+    private func protect(_ file: URL) throws {
+        let attributes: [FileAttributeKey: Any] = [.protectionKey: protection.fileProtection]
+        #if os(macOS) || targetEnvironment(simulator)
+        try? FileManager.default.setAttributes(attributes, ofItemAtPath: file.path(percentEncoded: false))
+        #else
+        try FileManager.default.setAttributes(attributes, ofItemAtPath: file.path(percentEncoded: false))
+        #endif
+    }
+
     // MARK: - Maintenance
 
     public func remove(key: String) {
@@ -107,11 +158,7 @@ public actor DiskCache {
 
     private func store(_ data: Data, at url: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let protection: Data.WritingOptions = switch self.protection {
-        case .whileUnlocked: .completeFileProtection
-        case .afterFirstUnlock: .completeFileProtectionUntilFirstUserAuthentication
-        }
-        try data.write(to: url, options: [.atomic, protection])
+        try data.write(to: url, options: [.atomic, protection.writingOption])
     }
 
     private func fileURL(for key: String, kind: String) -> URL {

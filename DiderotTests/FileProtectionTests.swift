@@ -21,6 +21,10 @@ struct FileProtectionTests {
         defer { try? FileManager.default.removeItem(at: cache.directory) }
         await cache.writeData(Data("x".utf8), key: "page")
         #expect(try protection(of: onlyFile(in: cache.directory)) == .complete)
+        // A download the cache takes as a file gets the same, whatever it was written with.
+        let downloaded = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try Data("y".utf8).write(to: downloaded, options: .noFileProtection)
+        #expect(try protection(of: await cache.storeFile(at: downloaded, key: "file")) == .complete)
 
         let server = URL(string: "https://protection-test.example.com")!
         let download = try TempFile.write(Data("x".utf8), server: server, folder: ["attachments", UUID().uuidString], name: "a.pdf")

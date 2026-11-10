@@ -19,6 +19,8 @@ public actor APIClient {
     public let userAgent: String
 
     private let session: URLSession
+    /// The session's delegate: writes the downloads that go to a file (`downloadFile`).
+    private let transfers = FileTransfers()
     private let decoder = JSONDecoding.makeDecoder()
     private let encoder = JSONDecoding.makeEncoder()
     private let logger: (@Sendable (APIRequestLog) -> Void)?
@@ -45,7 +47,28 @@ public actor APIClient {
         configuration.httpCookieStorage = nil
         configuration.waitsForConnectivity = false
         configuration.timeoutIntervalForRequest = 30
-        self.session = URLSession(configuration: configuration)
+        self.session = URLSession(configuration: configuration, delegate: transfers, delegateQueue: nil)
+    }
+
+    deinit {
+        // A session keeps its delegate until it is invalidated; requests still running end first.
+        session.finishTasksAndInvalidate()
+        // What a download left that nobody took (its caller was cancelled before moving it) goes with the client, so a
+        // sign-out leaves nothing of that server here.
+        try? FileManager.default.removeItem(at: downloads)
+    }
+
+    /// Where downloads are written while they load, until whoever asked for one moves it (`downloadFile`): a folder
+    /// per client in here.
+    public static let downloadsDirectory = FileManager.default.temporaryDirectory.appending(path: "docmost-downloads", directoryHint: .isDirectory)
+
+    /// This client's folder in `downloadsDirectory`; it goes with the client.
+    private let downloads = APIClient.downloadsDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+
+    /// Removes the downloads of clients that ended without removing theirs: the app was ended while one ran. For the
+    /// app's start, before a client downloads.
+    public static func removeAbandonedDownloads() {
+        try? FileManager.default.removeItem(at: downloadsDirectory)
     }
 
     /// Server clock minus device clock, from the latest API response's `Date` header (to the second); 0 before one.
@@ -80,6 +103,23 @@ public actor APIClient {
         applyHeaders(to: &request, requiresAuth: Origin(url) == Origin(baseURL))
         // File names are user content and logs can be exported, so log only the folder (`/api/files/<id>`).
         return try await execute(request, path: url.deletingLastPathComponent().path, readsClock: false)
+    }
+
+    /// Downloads a file (an attachment, an image, a PDF) into a file of its own in `downloadsDirectory`, by
+    /// `fetchFile`'s rules, written as it arrives: nothing of it is held in memory. The caller moves the file to its
+    /// place or removes it, before it lets go of the client; a download that fails or is cancelled leaves none. With
+    /// `maxBytes`, a larger file is refused with `APIError.tooLarge`: as soon as the answer names its size, so nothing
+    /// of it loads, or once more than that has arrived.
+    public func downloadFile(at url: URL, maxBytes: Int64? = nil) async throws -> (file: URL, response: HTTPURLResponse) {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        applyHeaders(to: &request, requiresAuth: Origin(url) == Origin(baseURL))
+        return try await download(request, path: url.deletingLastPathComponent().path, readsClock: false, maxBytes: maxBytes)
+    }
+
+    /// Sends an endpoint whose answer is a file (a page export) and downloads it as `downloadFile` does.
+    public func download<Response>(_ endpoint: Endpoint<Response>, maxBytes: Int64? = nil) async throws -> (file: URL, response: HTTPURLResponse) {
+        try await download(request(for: endpoint), path: endpoint.path, readsClock: true, maxBytes: maxBytes)
     }
 
     /// Uploads a file to a page as `multipart/form-data`. `files/upload` answers without an envelope (`res.send`).
@@ -139,6 +179,10 @@ public actor APIClient {
     // MARK: - Internal
 
     private func perform<Response>(_ endpoint: Endpoint<Response>) async throws -> (Data, HTTPURLResponse) {
+        try await execute(request(for: endpoint), path: endpoint.path)
+    }
+
+    private func request<Response>(for endpoint: Endpoint<Response>) throws -> URLRequest {
         var request = URLRequest(url: apiURL(endpoint.path))
         request.httpMethod = "POST"
         if let timeout = endpoint.timeout { request.timeoutInterval = timeout }
@@ -152,7 +196,7 @@ public actor APIClient {
         } catch {
             throw APIError.decoding("Request body: \(error)")
         }
-        return try await execute(request, path: endpoint.path)
+        return request
     }
 
     private func applyHeaders(to request: inout URLRequest, requiresAuth: Bool) {
@@ -171,6 +215,72 @@ public actor APIClient {
         _ request: URLRequest, path: String, readsClock: Bool = true,
         send: ((URLSessionTaskDelegate?) async throws -> (Data, URLResponse))? = nil
     ) async throws -> (Data, HTTPURLResponse) {
+        try await execute(request, path: path, readsClock: readsClock, errorBody: { $0 }, discard: { _ in }) { delegate in
+            if let send {
+                try await send(delegate)
+            } else {
+                try await self.session.data(for: request, delegate: delegate)
+            }
+        }
+    }
+
+    /// A request whose answer goes to a file (`downloadFile`): the same checks, and the file goes whenever one fails.
+    private func download(_ request: URLRequest, path: String, readsClock: Bool, maxBytes: Int64?) async throws -> (file: URL, response: HTTPURLResponse) {
+        let file = downloads.appending(path: UUID().uuidString)
+        return try await execute(request, path: path, readsClock: readsClock, errorBody: Self.errorBody(inFile:), discard: Self.discard) { refusal in
+            do {
+                // `execute` decides which requests follow no redirect, and hands a delegate for those.
+                return (file, try await self.transfer(request, to: file, maxBytes: maxBytes, refusesRedirects: refusal != nil))
+            } catch {
+                Self.discard(file)
+                throw error
+            }
+        }
+    }
+
+    private static func discard(_ file: URL) {
+        try? FileManager.default.removeItem(at: file)
+    }
+
+    /// Loads `request`'s answer into `file` as it arrives (`FileTransfers`) and returns the answer's head. URLSession's
+    /// own file download leaves its temporary file behind whenever it is cancelled, with no way to find it (tried on
+    /// November 10, 2026), and reading the answer byte by byte (`bytes(for:)`) is far too slow.
+    private func transfer(_ request: URLRequest, to file: URL, maxBytes: Int64?, refusesRedirects: Bool) async throws -> URLResponse {
+        try FileManager.default.createDirectory(at: downloads, withIntermediateDirectories: true)
+        // Readable only while the device is unlocked, like the places downloads move to, but still writable while it
+        // is open: the device may lock while a long download runs.
+        let attributes: [FileAttributeKey: Any] = [.protectionKey: FileProtectionType.completeUnlessOpen]
+        guard FileManager.default.createFile(atPath: file.path(percentEncoded: false), contents: nil, attributes: attributes) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        let handle = try FileHandle(forWritingTo: file)
+        let task = session.dataTask(with: request)
+        let transfer = FileTransfers.Transfer(handle: handle, maxBytes: maxBytes, refusesRedirects: refusesRedirects)
+        transfers.add(transfer, for: task)
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                transfer.wait(continuation)
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    /// The start of a downloaded error answer, enough for the server's message (`APIError.from`).
+    private static func errorBody(inFile file: URL) -> Data {
+        guard let handle = try? FileHandle(forReadingFrom: file) else { return Data() }
+        defer { try? handle.close() }
+        return (try? handle.read(upToCount: FileTransfers.errorBodyBytes)) ?? Data()
+    }
+
+    /// One request and the checks of its answer, whatever holds the answer's body: `Data`, or a downloaded file.
+    /// `errorBody` reads the server's message from it, `discard` removes it when a check fails.
+    private func execute<Body>(
+        _ request: URLRequest, path: String, readsClock: Bool,
+        errorBody: (Body) -> Data, discard: (Body) -> Void,
+        send: (URLSessionTaskDelegate?) async throws -> (Body, URLResponse)
+    ) async throws -> (Body, HTTPURLResponse) {
         let started = ContinuousClock.now
         let method = request.httpMethod ?? "GET"
         // Requests to the server don't follow redirects: Docmost sends none, and URLSession would send a request's body
@@ -179,29 +289,29 @@ public actor APIClient {
         let toServer = request.url.map { Origin($0) == Origin(baseURL) } == true
         let delegate = toServer ? RedirectRefusal() : nil
         do {
-            let (data, response): (Data, URLResponse)
-            if let send {
-                (data, response) = try await send(delegate)
-            } else {
-                (data, response) = try await session.data(for: request, delegate: delegate)
+            let (body, response) = try await send(delegate)
+            do {
+                guard let http = response as? HTTPURLResponse else {
+                    throw APIError.invalidResponse
+                }
+                log(method: method, path: path, status: http.statusCode, started: started, error: nil)
+                if readsClock, let date = http.value(forHTTPHeaderField: "Date").flatMap({ try? Date($0, strategy: .http) }) {
+                    clockOffset.withLock { $0 = date.timeIntervalSinceNow }
+                }
+                if (300..<400).contains(http.statusCode), let location = http.value(forHTTPHeaderField: "Location") {
+                    throw APIError.server(status: http.statusCode, message: String(localized: "The server redirects to \(location).", bundle: .main))
+                }
+                guard (200..<300).contains(http.statusCode) else {
+                    // Docmost's rules only for the server's answers: a file a page links from another host answered a 401 in
+                    // its shape (any NestJS API's), and the reader was signed out. Its message isn't the server's to show.
+                    guard toServer else { throw http.statusCode == 429 ? APIError.throttled : APIError.server(status: http.statusCode, message: nil) }
+                    throw APIError.from(status: http.statusCode, data: errorBody(body))
+                }
+                return (body, http)
+            } catch {
+                discard(body)
+                throw error
             }
-            guard let http = response as? HTTPURLResponse else {
-                throw APIError.invalidResponse
-            }
-            log(method: method, path: path, status: http.statusCode, started: started, error: nil)
-            if readsClock, let date = http.value(forHTTPHeaderField: "Date").flatMap({ try? Date($0, strategy: .http) }) {
-                clockOffset.withLock { $0 = date.timeIntervalSinceNow }
-            }
-            if (300..<400).contains(http.statusCode), let location = http.value(forHTTPHeaderField: "Location") {
-                throw APIError.server(status: http.statusCode, message: String(localized: "The server redirects to \(location).", bundle: .main))
-            }
-            guard (200..<300).contains(http.statusCode) else {
-                // Docmost's rules only for the server's answers: a file a page links from another host answered a 401 in
-                // its shape (any NestJS API's), and the reader was signed out. Its message isn't the server's to show.
-                guard toServer else { throw http.statusCode == 429 ? APIError.throttled : APIError.server(status: http.statusCode, message: nil) }
-                throw APIError.from(status: http.statusCode, data: data)
-            }
-            return (data, http)
         } catch let error as APIError {
             throw error
         } catch _ where Task.isCancelled {
@@ -252,6 +362,127 @@ private final class RedirectRefusal: NSObject, URLSessionTaskDelegate {
         _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
     ) async -> URLRequest? {
         nil
+    }
+}
+
+/// The session's delegate, for the downloads that go to a file (`APIClient.transfer`): it writes each one's data to
+/// its file as it arrives and ends one that is larger than asked for, when the answer names its size or once more has
+/// arrived. Every other request of the session has no transfer here and passes untouched.
+private final class FileTransfers: NSObject, URLSessionDataDelegate, Sendable {
+    /// How much of an error's answer is kept: enough for the server's message.
+    static let errorBodyBytes = 1 << 16
+
+    /// One download. Its writing state is touched only on the session's delegate queue, one call at a time; whoever
+    /// waits for it and its end meet under the lock, in either order.
+    final class Transfer: @unchecked Sendable {
+        fileprivate let handle: FileHandle
+        fileprivate let maxBytes: Int64?
+        fileprivate let refusesRedirects: Bool
+        fileprivate var written: Int64 = 0
+        /// An error's answer reached `errorBodyBytes`: nothing more of it is kept.
+        fileprivate var isCut = false
+        fileprivate var response: URLResponse?
+        /// Why the transfer ended its task itself (too large, a write that failed), instead of the task's own error.
+        fileprivate var failure: (any Error)?
+        private let ending = Mutex<(result: Result<URLResponse, any Error>?, waiting: CheckedContinuation<URLResponse, any Error>?)>((nil, nil))
+
+        init(handle: FileHandle, maxBytes: Int64?, refusesRedirects: Bool) {
+            self.handle = handle
+            self.maxBytes = maxBytes
+            self.refusesRedirects = refusesRedirects
+        }
+
+        /// Resumes `continuation` with the transfer's end, at once if it ended already (a task cancelled before it ran).
+        func wait(_ continuation: CheckedContinuation<URLResponse, any Error>) {
+            let result = ending.withLock { ending in
+                if ending.result == nil { ending.waiting = continuation }
+                return ending.result
+            }
+            if let result { continuation.resume(with: result) }
+        }
+
+        fileprivate func end(_ result: Result<URLResponse, any Error>) {
+            let waiting = ending.withLock { ending in
+                ending.result = result
+                defer { ending.waiting = nil }
+                return ending.waiting
+            }
+            waiting?.resume(with: result)
+        }
+
+        /// The file's answer, not an error's: only that counts against `maxBytes`.
+        fileprivate var isFile: Bool {
+            (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
+        }
+    }
+
+    private let transfers = Mutex<[Int: Transfer]>([:])
+
+    /// Before the task runs.
+    func add(_ transfer: Transfer, for task: URLSessionTask) {
+        transfers.withLock { $0[task.taskIdentifier] = transfer }
+    }
+
+    private func transfer(for task: URLSessionTask) -> Transfer? {
+        transfers.withLock { $0[task.taskIdentifier] }
+    }
+
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
+    ) async -> URLRequest? {
+        transfer(for: task)?.refusesRedirects == true ? nil : request
+    }
+
+    /// With a completion handler, not `async`: that one would run off the delegate queue, where the transfer's state
+    /// belongs.
+    func urlSession(
+        _ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+        completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
+    ) {
+        guard let transfer = transfer(for: dataTask) else { return completionHandler(.allow) }
+        transfer.response = response
+        // A larger file than asked for ends here, before any of it loads.
+        if let maxBytes = transfer.maxBytes, transfer.isFile, response.expectedContentLength > maxBytes {
+            transfer.failure = APIError.tooLarge(limit: maxBytes)
+            return completionHandler(.cancel)
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard let transfer = transfer(for: dataTask), transfer.failure == nil, !transfer.isCut else { return }
+        let arrived = transfer.written + Int64(data.count)
+        if transfer.isFile {
+            // Its size wasn't named, or named too small.
+            if let maxBytes = transfer.maxBytes, arrived > maxBytes {
+                transfer.failure = APIError.tooLarge(limit: maxBytes)
+                return dataTask.cancel()
+            }
+        } else if arrived > Self.errorBodyBytes {
+            // An error's answer: its start has the message, the rest isn't kept, whatever size its pieces come in.
+            transfer.isCut = true
+            return
+        }
+        do {
+            try transfer.handle.write(contentsOf: data)
+            transfer.written = arrived
+        } catch {
+            // A full disk, or the device locked for long: the download ends with that, not half a file.
+            transfer.failure = error
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        guard let transfer = transfers.withLock({ $0.removeValue(forKey: task.taskIdentifier) }) else { return }
+        try? transfer.handle.close()
+        if let failure = transfer.failure ?? error {
+            transfer.end(.failure(failure))
+        } else if let response = transfer.response {
+            transfer.end(.success(response))
+        } else {
+            transfer.end(.failure(APIError.invalidResponse))
+        }
     }
 }
 

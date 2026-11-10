@@ -5430,6 +5430,17 @@
         }
       }
     },
+    "The file is larger than %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datei ist größer als %@."
+          }
+        }
+      }
+    },
     "The link is applied to the selected text.": {
       "localizations": {
         "de": {

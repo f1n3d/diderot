@@ -64,6 +64,35 @@ struct DiskCacheTests {
         #expect(await cache.read(String.self, key: "counts") == "not a dictionary", "left as it was")
     }
 
+    /// A download becomes the entry by moving in, without passing through memory, and reads as a file or as data.
+    @Test func takesAFileAsTheEntry() async throws {
+        let cache = makeCache()
+        defer { try? FileManager.default.removeItem(at: cache.directory.deletingLastPathComponent().deletingLastPathComponent()) }
+        func download(_ text: String) throws -> URL {
+            let file = FileManager.default.temporaryDirectory.appending(path: "download-\(UUID().uuidString).tmp")
+            try Data(text.utf8).write(to: file)
+            return file
+        }
+        #expect(await cache.dataFile(key: "image/a") == nil)
+
+        let first = try download("first")
+        let stored = try await cache.storeFile(at: first, key: "image/a")
+        #expect(!FileManager.default.fileExists(atPath: first.path(percentEncoded: false)), "moved, not copied")
+        #expect(await cache.dataFile(key: "image/a") == stored)
+        #expect(try Data(contentsOf: stored) == Data("first".utf8))
+        #expect(await cache.readData(key: "image/a") == Data("first".utf8))
+
+        // A newer download replaces it in the same place; data written the old way is replaced as well.
+        #expect(try await cache.storeFile(at: download("second"), key: "image/a") == stored)
+        #expect(await cache.readData(key: "image/a") == Data("second".utf8))
+        await cache.writeData(Data("third".utf8), key: "image/a")
+        #expect(try Data(contentsOf: stored) == Data("third".utf8))
+        #expect(await cache.totalSize() == 5)
+
+        await cache.remove(key: "image/a")
+        #expect(await cache.dataFile(key: "image/a") == nil)
+    }
+
     @Test func pruneRemovesOldAndOversizedEntries() async {
         let cache = makeCache()
         await cache.writeData(Data(repeating: 1, count: 1000), key: "big")

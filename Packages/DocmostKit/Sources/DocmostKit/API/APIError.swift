@@ -17,6 +17,8 @@ public enum APIError: Error, Sendable, Equatable {
     case decoding(String)
     /// Envelope without `data` although a payload was expected.
     case unexpectedPayload
+    /// A download larger than the `limit` in bytes it was asked for with (`APIClient.downloadFile`).
+    case tooLarge(limit: Int64)
 
     /// Errors after which the user must sign in again.
     public var isSessionExpired: Bool {
@@ -44,6 +46,9 @@ public enum APIError: Error, Sendable, Equatable {
         case .server(let status, let message): return message ?? String(localized: "Server error (\(status)).", bundle: .main)
         case .decoding(let detail): return String(localized: "Could not read the server response (\(detail)).", bundle: .main)
         case .unexpectedPayload: return String(localized: "The server returned an empty response.", bundle: .main)
+        case .tooLarge(let limit):
+            let size = ByteCountFormatter.string(fromByteCount: limit, countStyle: .file)
+            return String(localized: "The file is larger than \(size).", bundle: .main)
         }
     }
 
