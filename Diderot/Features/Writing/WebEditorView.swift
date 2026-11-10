@@ -16,7 +16,16 @@ struct WebEditorView: View {
     private let storeID: UUID
     /// Made once: built in `init`, a page and its store came anew on every pass of the page view while the editor showed.
     @State private var parts = Once<Parts>()
-    @State private var isReady = false
+    @State private var phase = Phase.loading
+    /// Counts "Try Again": each one loads the editor anew.
+    @State private var attempt = 0
+
+    /// What the sheet shows: the spinner, the editor, or why it didn't load.
+    private enum Phase {
+        case loading
+        case ready
+        case failed(any Error)
+    }
 
     private struct Parts {
         let dataStore: WKWebsiteDataStore
@@ -47,7 +56,13 @@ struct WebEditorView: View {
         NavigationStack {
             WebView(webPage)
                 .opacity(isReady ? 1 : 0)
-                .overlay { if !isReady { ProgressView("Loading editor…") } }
+                .overlay {
+                    switch phase {
+                    case .loading: ProgressView("Loading editor…")
+                    case .ready: EmptyView()
+                    case .failed(let error): ErrorStateView(error: error) { attempt += 1 }
+                    }
+                }
                 .navigationTitle(page.displayTitle)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -57,9 +72,16 @@ struct WebEditorView: View {
                         }
                     }
                 }
-                .task {
+                .task(id: attempt) {
                     limit.openOutside = { [openURL] in openURL($0) }
-                    try? await load()
+                    phase = .loading
+                    do {
+                        try await load()
+                        phase = .ready
+                    } catch {
+                        // A closed editor's load fails as it likes: its sheet is gone.
+                        if !Task.isCancelled { phase = .failed(error) }
+                    }
                 }
         }
         .onAppear { WebEditorStores.editorOpened(storeID) }
@@ -76,43 +98,71 @@ struct WebEditorView: View {
         }
     }
 
+    private var isReady: Bool {
+        if case .ready = phase { true } else { false }
+    }
+
     private func load() async throws {
         if let cookie = HTTPCookie.docmostAuth(token: token, serverURL: serverURL) {
             await dataStore.httpCookieStore.setCookie(cookie)
         }
-        // The web client's page view crashes while its user cache `localStorage.currentUser` is empty (first load);
-        // the home page fills it, once it has asked the server who's signed in.
-        webPage.load(URLRequest(url: serverURL))
-        if try await loaded() {
-            _ = try? await webPage.callJavaScript(Self.userCachedScript)
-        }
-        // Closing the editor cancels this task, also mid-wait; don't open the page then.
-        try Task.checkCancellation()
-        webPage.load(URLRequest(url: ContentLinkRouter.webPageURL(server: serverURL, slugId: page.slugId ?? page.id)))
-        // Hide the shell once the app has rendered it (best effort; the classes come from Mantine AppShell).
-        if try await loaded() {
-            _ = try? await webPage.callJavaScript(Self.trimShellScript)
-        }
-        isReady = true
+        try await Self.open(ContentLinkRouter.webPageURL(server: serverURL, slugId: page.slugId ?? page.id), home: serverURL, in: webPage)
     }
 
-    /// Waits for the page's load to end: `false` if it failed (the web view shows why). Page-wide events, not the
-    /// load's: those stop the load when this task is cancelled, and then callJavaScript never returns (`WebIslandView`).
-    private func loaded() async throws -> Bool {
+    /// A load the editor's limit stopped (`WebNavigationLimit`): the server sent it to another address, such as a
+    /// sign-in in front of it, where the editor doesn't go.
+    struct RedirectedAway: LocalizedError, Equatable {
+        /// Scheme, host and port: the same host on another port or scheme is another address too.
+        let address: String
+
+        var errorDescription: String? {
+            String(localized: "The server redirects to \(address). The web editor opens only the server's own pages; use “Open in Browser” instead.")
+        }
+    }
+
+    /// Why a load failed, in words for the sheet. WebKit calls a load that a navigation decider stopped after a
+    /// redirect "Frame load interrupted" (`WebKitErrorFrameLoadInterruptedByPolicyChange`, with the address it was
+    /// sent to; seen on iOS 27.0 on November 10, 2026).
+    nonisolated static func reason(_ error: any Error) -> any Error {
+        let failure = error as NSError
+        if failure.domain == "WebKitErrorDomain", failure.code == 102,
+           let url = failure.userInfo[NSURLErrorFailingURLErrorKey] as? URL, let scheme = url.scheme, let host = url.host() {
+            return RedirectedAway(address: "\(scheme)://\(host)" + (url.port.map { ":\($0)" } ?? ""))
+        }
+        return error
+    }
+
+    /// Loads the server's home page and then the page into the editor's web page. Throws why a load failed (offline,
+    /// the server unreachable or redirecting elsewhere): the sheet says so, as WebKit draws nothing for a load that
+    /// never began.
+    static func open(_ pageURL: URL, home: URL, in webPage: WebPage) async throws {
+        // The web client's page view crashes while its user cache `localStorage.currentUser` is empty (first load);
+        // the home page fills it, once it has asked the server who's signed in.
+        webPage.load(URLRequest(url: home))
+        try await loaded(webPage)
+        _ = try? await webPage.callJavaScript(userCachedScript)
+        // Closing the editor cancels this task, also mid-wait; don't open the page then.
+        try Task.checkCancellation()
+        webPage.load(URLRequest(url: pageURL))
+        try await loaded(webPage)
+        // Hide the shell once the app has rendered it (best effort; the classes come from Mantine AppShell).
+        _ = try? await webPage.callJavaScript(trimShellScript)
+    }
+
+    /// Waits for the page's load to end and throws why it failed. Page-wide events, not the load's: those stop the
+    /// load when this task is cancelled, and then callJavaScript never returns (`WebIslandView`).
+    private static func loaded(_ webPage: WebPage) async throws {
         while true {
             do {
                 for try await event in webPage.navigations {
-                    if case .finished = event { return true }
+                    if case .finished = event { return }
                 }
-                try Task.checkCancellation()
-                return false
-            } catch WebPage.NavigationError.failedProvisionalNavigation(let error)
-                        where (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled {
+                throw WebPage.NavigationError.pageClosed
+            } catch WebPage.NavigationError.failedProvisionalNavigation(let error) {
                 // Replaced by the next load (a redirect): that one's end counts.
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                return false
+                if (error as NSError).domain == NSURLErrorDomain, (error as NSError).code == NSURLErrorCancelled { continue }
+                // The reason itself, which has the words ("The Internet connection appears to be offline.").
+                throw reason(error)
             }
         }
     }
