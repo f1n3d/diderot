@@ -182,8 +182,8 @@ private struct MediaViewerPage: View {
     @Environment(\.renderContext) private var context
     @State private var image: UIImage?
     @State private var markup: String?
-    @State private var failed = false
-    @State private var loadsFromOtherServer = false
+    @State private var standIn = MediaStandIn.loading
+    @State private var gate = MediaGate()
 
     private var title: String { media.title ?? (media.isDiagram ? String(localized: "Diagram") : String(localized: "Image")) }
 
@@ -193,42 +193,41 @@ private struct MediaViewerPage: View {
                 ZoomableImage(image: image, label: title, close: close)
             } else if let markup {
                 ZoomableDiagram(markup: markup, label: title, close: close)
-            } else if let url = context.mediaURL(media.src), !context.loadsByItself(url), !loadsFromOtherServer {
-                OtherServerCard(icon: media.isDiagram ? "pencil.and.outline" : "photo", title: title, url: url) { loadsFromOtherServer = true }
-                    .padding()
-            } else if failed {
-                Label(media.isDiagram ? "Diagram could not be loaded." : "Image unavailable", systemImage: "photo.badge.exclamationmark")
-                    .foregroundStyle(.secondary)
             } else {
-                ProgressView()
+                MediaStandInCard(standIn: standIn, icon: media.isDiagram ? "pencil.and.outline" : "photo", title: title,
+                                 failure: media.isDiagram ? String(localized: "Diagram could not be loaded.") : String(localized: "Image unavailable"),
+                                 gate: $gate)
+                    .padding()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: loadsFromOtherServer) { await load() }
+        .task(id: gate) { await load() }
     }
 
     private func load() async {
-        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src),
-              context.loadsByItself(url) || loadsFromOtherServer else { return }
-        failed = false
+        guard image == nil, markup == nil else { return }
+        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return standIn = .failed(reason: nil) }
+        if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
+        if gate.stillWaits(standIn) { return }
+        standIn = .loading
         do {
-            let source = try await loader.file(for: url)
+            let source = try await loader.file(for: url, maxBytes: gate.maxBytes)
             if media.isDiagram {
                 markup = DiagramView.svg(in: try await MediaLoader.read(source))
             } else {
                 // As sharp as the loader decodes at all (`MediaLoader.maxPixels`): the viewer zooms to 4×.
                 image = await MediaLoader.decode(file: source, targetPixelWidth: 16_384)
             }
-            failed = markup == nil && image == nil
+            guard markup != nil || image != nil else { throw MediaUnreadable() }
             // Shared as the web downloads it: the file with its name. Copied off the main thread, which it held up.
-            if !failed, let server = context.baseURL {
+            if let server = context.baseURL {
                 let folder = ["attachments", url.deletingLastPathComponent().lastPathComponent], name = url.lastPathComponent
                 if let file = await Task.detached(operation: { try? TempFile.copy(source, server: server, folder: folder, name: name) }).value {
                     loaded(file)
                 }
             }
         } catch {
-            if !Task.isCancelled { failed = true }
+            if let failed = MediaGate.standIn(after: error) { standIn = failed }
         }
     }
 }

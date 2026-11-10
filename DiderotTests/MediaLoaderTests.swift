@@ -174,6 +174,23 @@ struct MediaLoaderTests {
         await #expect(throws: APIError.server(status: 500, message: nil)) { _ = try await loader(cache: cache).file(for: image) }
     }
 
+    /// A file larger than a view lets load by itself is refused, unless it is on the device already: loaded in this
+    /// session after a tap, or saved from an earlier one.
+    @Test func aFileOverTheLimitIsRefusedUnlessItIsOnTheDevice() async throws {
+        let cache = cache()
+        defer { try? FileManager.default.removeItem(at: cache.directory.deletingLastPathComponent().deletingLastPathComponent()) }
+        let loader = loader(cache: cache), image = image
+        await #expect(throws: APIError.tooLarge(limit: 3)) { _ = try await loader.file(for: image, maxBytes: 3) }
+        #expect(await cache.totalSize() == 0)
+
+        // After a tap it loads whole, and shows again within the limit without another request.
+        let file = try await loader.file(for: image)
+        #expect(try await loader.file(for: image, maxBytes: 3) == file)
+        #expect(requests == 2)
+        // Another launch: the server refuses it again, the saved copy shows.
+        #expect(try await self.loader(cache: cache).file(for: image, maxBytes: 3) == file)
+    }
+
     /// One large PDF pushed most of the offline cache out (review R50): it stays for the session, outside the cache.
     @Test func aFileTooLargeForTheCacheStaysForTheSession() async throws {
         let cache = cache()
