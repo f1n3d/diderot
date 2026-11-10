@@ -62,8 +62,19 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notes,knowledge base,documentation,self-hosted,editor,team,pages,markdown
 
-**What's New in This Version** (4000 at most; version 1.2.1, with 1.2.0's below it for those who skip that one)
+**What's New in This Version** (4000 at most; version 1.2.2, with 1.2.1's and 1.2.0's below it for those who skip them)
 
+> • Large files take far less memory: opening an attachment, exporting a page, and pages with large PDFs or many photos
+> • A PDF, image or diagram that didn't load says why and loads again on a tap
+> • A PDF, image or diagram over 25 MB waits for a tap instead of loading by itself
+> • Return at the start of a line, then a tap into the new line above it, no longer empties the text below
+> • "Edit in Web Editor" says why the editor didn't load and offers to try again
+> • A file deleted on the server stops showing in the app
+> • Scrolling past photos no longer downloads all of them
+> • On an iPad, the pointer hides under the presentation's laser pointer
+> • More reliable: formulas and diagrams no longer stay cut off, errors read plainly, and many rare problems are fixed
+>
+> New in 1.2.1:
 > • "Append Note" adds no note to a page with footnotes anymore: Docmost would put it after them, where the page can't take it. It says so at once and keeps what you typed
 >
 > New in 1.2.0:
@@ -80,17 +91,6 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Attachments and database files from another website name it before you open them
 > • Search results and the template list keep their place when you come back
 > • Editing a comment keeps its line breaks
-
-**What's New in 1.2.2** (not submitted yet: 1.2.1 goes to App Review first, with the text above, which `submit.py` reads. This takes its place, above 1.2.1's and 1.2.0's lists, once 1.2.1 is submitted or skipped)
-
-> • Large files take far less memory: opening an attachment, exporting a page, and pages with large PDFs or many photos
-> • A PDF, image or diagram that didn't load says why and loads again on a tap
-> • A PDF, image or diagram over 25 MB waits for a tap instead of loading by itself
-> • "Edit in Web Editor" says why the editor didn't load and offers to try again
-> • A file deleted on the server stops showing in the app
-> • Scrolling past photos no longer downloads all of them
-> • On an iPad, the pointer hides under the presentation's laser pointer
-> • More reliable: formulas and diagrams no longer stay cut off, errors read plainly, and many rare problems are fixed
 
 ## Deutsch
 
@@ -136,8 +136,19 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notizen,wissensdatenbank,dokumentation,selbst gehostet,editor,team,seiten,markdown
 
-**Neu in dieser Version** (höchstens 4000; Version 1.2.1, darunter die von 1.2.0 für alle, die sie überspringen)
+**Neu in dieser Version** (höchstens 4000; Version 1.2.2, darunter die von 1.2.1 und 1.2.0 für alle, die sie überspringen)
 
+> • Große Dateien brauchen weit weniger Speicher: einen Anhang öffnen, eine Seite exportieren, Seiten mit großen PDFs oder vielen Fotos
+> • Ein PDF, Bild oder Diagramm, das nicht geladen wurde, sagt warum und lädt auf Tipp erneut
+> • Ein PDF, Bild oder Diagramm über 25 MB wartet auf einen Tipp, statt von selbst zu laden
+> • Return am Anfang einer Zeile und danach ein Tipp in die neue Zeile darüber leeren den Text darunter nicht mehr
+> • „Im Web-Editor bearbeiten“ sagt, warum der Editor nicht geladen wurde, und bietet einen neuen Versuch an
+> • Eine auf dem Server gelöschte Datei erscheint in der App nicht mehr
+> • Beim Scrollen an Fotos vorbei werden nicht mehr alle heruntergeladen
+> • Auf dem iPad verschwindet der Zeiger unter dem Laserpointer der Präsentation
+> • Zuverlässiger: Formeln und Diagramme bleiben nicht mehr abgeschnitten, Fehler lesen sich verständlich, und viele seltene Probleme sind behoben
+>
+> Neu in 1.2.1:
 > • „Notiz anhängen“ fügt einer Seite mit Fußnoten keine Notiz mehr an: Docmost würde sie hinter die Fußnoten setzen, wo die Seite sie nicht aufnehmen kann. Die App sagt das sofort und behält, was du getippt hast
 >
 > Neu in 1.2.0:
@@ -154,17 +165,6 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Anhänge und Datenbank-Dateien von einer anderen Website nennen sie, bevor du sie öffnest
 > • Suchergebnisse und die Vorlagenliste behalten ihre Stelle, wenn du zurückkommst
 > • Beim Bearbeiten eines Kommentars bleiben seine Zeilenumbrüche
-
-**Neu in 1.2.2** (noch nicht eingereicht: zuerst geht 1.2.1 an App Review, mit dem Text oben, den `submit.py` liest. Dieser tritt an seine Stelle, über die Listen von 1.2.1 und 1.2.0, sobald 1.2.1 eingereicht oder übersprungen ist)
-
-> • Große Dateien brauchen weit weniger Speicher: einen Anhang öffnen, eine Seite exportieren, Seiten mit großen PDFs oder vielen Fotos
-> • Ein PDF, Bild oder Diagramm, das nicht geladen wurde, sagt warum und lädt auf Tipp erneut
-> • Ein PDF, Bild oder Diagramm über 25 MB wartet auf einen Tipp, statt von selbst zu laden
-> • „Im Web-Editor bearbeiten“ sagt, warum der Editor nicht geladen wurde, und bietet einen neuen Versuch an
-> • Eine auf dem Server gelöschte Datei erscheint in der App nicht mehr
-> • Beim Scrollen an Fotos vorbei werden nicht mehr alle heruntergeladen
-> • Auf dem iPad verschwindet der Zeiger unter dem Laserpointer der Präsentation
-> • Zuverlässiger: Formeln und Diagramme bleiben nicht mehr abgeschnitten, Fehler lesen sich verständlich, und viele seltene Probleme sind behoben
 
 ## App Review
 
