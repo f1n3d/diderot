@@ -96,13 +96,25 @@ public actor DiskCache {
     public func storeFile(at file: URL, key: String) throws -> URL {
         let url = fileURL(for: key, kind: "bin")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try FileManager.default.setAttributes([.protectionKey: protection.fileProtection], ofItemAtPath: file.path(percentEncoded: false))
+        try protect(file)
         if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
             _ = try FileManager.default.replaceItemAt(url, withItemAt: file)
         } else {
             try FileManager.default.moveItem(at: file, to: url)
         }
         return url
+    }
+
+    /// Gives a file that is there already the cache's protection. Only a device has file protection: a Mac (the
+    /// package's tests, the simulator's files) has nothing to set, and some refuse the attempt (GitHub's runners:
+    /// "Invalid argument").
+    private func protect(_ file: URL) throws {
+        let attributes: [FileAttributeKey: Any] = [.protectionKey: protection.fileProtection]
+        #if os(macOS) || targetEnvironment(simulator)
+        try? FileManager.default.setAttributes(attributes, ofItemAtPath: file.path(percentEncoded: false))
+        #else
+        try FileManager.default.setAttributes(attributes, ofItemAtPath: file.path(percentEncoded: false))
+        #endif
     }
 
     // MARK: - Maintenance
