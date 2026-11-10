@@ -2,13 +2,16 @@
 # Runs the UI tests (taps in the native editor) against the dev instance, then checks via the API what reached
 # the server. Screenshots of the runs end up in Tools/.cache/uitests-attachments/.
 #
-#   Tools/run-uitests.sh <pageId>                        # iPhone 18 Pro simulator; modifies the page!
-#   DEVICE="iPad Pro 11-inch (M5)" Tools/run-uitests.sh <pageId>
-#   UDID=<device UDID> Tools/run-uitests.sh <pageId>     # on the connected iPhone (server <mac>.local:$PORT)
-#   ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests and their checks
-#   SHOTS_DIR=Tools/.cache/shots Tools/run-uitests.sh <pageId>                                 # screenshots as files too
-#   AREA=schnell Tools/run-uitests.sh <pageId>   # one app area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
-#   PORT=3001 Tools/run-uitests.sh <pageId>      # against the Docmost 0.97 dev instance (~/Repositories/docmost-dev-097)
+#   Tools/run-uitests.sh                        # iPhone 18 Pro simulator
+#   DEVICE="iPad Pro 11-inch (M5)" Tools/run-uitests.sh
+#   UDID=<device UDID> Tools/run-uitests.sh     # on the connected iPhone (server <mac>.local:$PORT)
+#   ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh   # selected tests and their checks
+#   SHOTS_DIR=Tools/.cache/shots Tools/run-uitests.sh                                 # screenshots as files too
+#   AREA=schnell Tools/run-uitests.sh   # one app area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
+#   PORT=3001 Tools/run-uitests.sh      # against the Docmost 0.97 dev instance (~/Repositories/docmost-dev-097)
+#
+# Each run makes its test page anew: "Editor-Test" at the root of the space "demo" (DOCMOST_UITEST_PAGE_TITLE,
+# DOCMOST_UITEST_SPACE_SLUG). A page of that title there from an earlier run is deleted for good, with its subpages.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # What a run leaves is this user's only: the result bundle (XCTest writes every typed text into its activities, the
@@ -17,7 +20,9 @@ cd "$(dirname "$0")/.."
 umask 077
 mkdir -p Tools/.cache && chmod 700 Tools/.cache
 
-PAGE="${1:?pageId missing}"
+[ $# -eq 0 ] || { echo "run-uitests.sh takes no page ID any more: it makes the test page anew (see its head)" >&2; exit 1; }
+SPACE_SLUG="${DOCMOST_UITEST_SPACE_SLUG:-demo}"
+PAGE_TITLE="${DOCMOST_UITEST_PAGE_TITLE:-Editor-Test}"
 DEVICE="${DEVICE:-iPhone 18 Pro}"
 DERIVED="Tools/.cache/DerivedData"
 RESULTS="Tools/.cache/uitests.xcresult"
@@ -58,6 +63,32 @@ docmost_097() {
     "$SERVER_VERSION" 2>/dev/null
 }
 
+# The test page, new each run. Resetting one page's content instead left every run's content in the page's Yjs state:
+# on November 9, 2026 it held 366 KB for 5 KB of content, the app took about 3 s to open it, and once the first open
+# after a server start didn't sync within 60 s. The earlier run's page goes for good, with its subpages, comments and
+# files; a new page comes last at the root, where the tree's drag test expects it.
+PAGE=$(python3 - "$SPACE_SLUG" "$PAGE_TITLE" <<'PY'
+import sys
+from dev_api import session
+slug, title = sys.argv[1], sys.argv[2]
+call = session().call
+space = call("spaces/info", {"spaceId": slug})["id"]
+# Every root page, however many: one of that title left behind would be found in its place by the tests that search.
+old, cursor = [], None
+while True:
+    pages = call("pages/sidebar-pages", {"spaceId": space, "limit": 100, **({"cursor": cursor} if cursor else {})})
+    old += [page["id"] for page in pages["items"] if page.get("title") == title]
+    cursor = pages["meta"].get("nextCursor") if pages["meta"].get("hasNextPage") else None
+    if not cursor:
+        break
+for page in old:
+    call("pages/delete", {"pageId": page, "permanentlyDelete": True})
+print(call("pages/create", {"spaceId": space, "title": title})["id"])
+PY
+) && [ -n "$PAGE" ] || { echo "Could not make the test page '$PAGE_TITLE' in the space '$SPACE_SLUG'" >&2; exit 1; }
+echo "Test page: $PAGE"
+export TEST_RUNNER_DOCMOST_UITEST_SPACE_SLUG="$SPACE_SLUG" TEST_RUNNER_DOCMOST_UITEST_PAGE_TITLE="$PAGE_TITLE"
+
 # Two child pages of the test page for the sub-pages sort test (test70; Docmost offers the order from two pages on),
 # created in the order B, A so that sorting by title changes it.
 if docmost_097; then
@@ -67,51 +98,30 @@ from dev_api import session
 page = sys.argv[1]
 call = session().call
 space = call("pages/info", {"pageId": page})["spaceId"]
-titles = {p.get("title") for p in call("pages/sidebar-pages", {"pageId": page, "limit": 100})["items"]}
 for title in ["Sortiert B", "Sortiert A"]:
-    if title not in titles:
-        call("pages/create", {"spaceId": space, "parentPageId": page, "title": title})
+    call("pages/create", {"spaceId": space, "parentPageId": page, "title": title})
 PY
 fi
 
 # Pages below the test page for the tree's drop zones (EditorUITests test79): "Baum-Ziel<stamp>" with the subpage
-# "Baum-Kind<stamp>", then "Baum-Quelle<stamp>". Leftovers of earlier runs go first.
+# "Baum-Kind<stamp>", then "Baum-Quelle<stamp>".
 python3 - "$STAMP" "$PAGE" <<'PY' || echo "Could not create the pages for the tree drop test"
-import re, sys
+import sys
 from dev_api import session
 stamp, page = sys.argv[1], sys.argv[2]
 call = session().call
 space = call("pages/info", {"pageId": page})["spaceId"]
-for old in call("pages/sidebar-pages", {"pageId": page, "limit": 100})["items"]:
-    if re.fullmatch(r"Baum-(Ziel|Quelle)\d+", old.get("title") or ""):
-        call("pages/delete", {"pageId": old["id"], "permanentlyDelete": True})
 target = call("pages/create", {"spaceId": space, "parentPageId": page, "title": "Baum-Ziel" + stamp})
 call("pages/create", {"spaceId": space, "parentPageId": target["id"], "title": "Baum-Kind" + stamp})
 call("pages/create", {"spaceId": space, "parentPageId": page, "title": "Baum-Quelle" + stamp})
 PY
 
-# Reset the test page to known content (through Yjs, so the editor sees it too). JSON, since Docmost's Markdown import
-# adds an empty task item after the first paragraph.
-echo "Resetting the test page …"
+# The test page's content (through Yjs, so the editor sees it too). JSON, since Docmost's Markdown import adds an empty
+# task item after the first paragraph.
 python3 -c 'import json, sys; print(json.dumps({"pageId": sys.argv[1], "operation": "replace", "format": "json", "content": json.load(open(sys.argv[2]))}))' \
   "$PAGE" Tools/editor-test-page.json \
   | api pages/update - > /dev/null \
-  || { echo "Could not reset the test page" >&2; exit 1; }
-
-# Remove the admin's comments on the test page from earlier runs (test33 creates some).
-python3 - "$PAGE" <<'PY' || echo "Could not remove old comments from the test page"
-import sys
-from dev_api import ApiError, session
-page = sys.argv[1]
-call = session().call
-me = call("users/me", {})["user"]["id"]
-for comment in call("comments", {"pageId": page, "limit": 100})["items"]:
-    if comment.get("creatorId") == me:
-        try:
-            call("comments/delete", {"commentId": comment["id"]})
-        except ApiError:
-            pass  # reply already deleted along with its parent comment
-PY
+  || { echo "Could not fill the test page" >&2; exit 1; }
 
 # Two mentions of the admin for the bell tests (HomeUITests: test18 opens one, test31 swipes one away),
 # posted by "Test-Kollegin" as comments on the test page, and her reply to one of them (EditorUITests test33).
@@ -797,36 +807,5 @@ first = items[0] if items else {}
 sys.exit(0 if report([("EditorUITests/test11_TreeDragToTop", "Tree: test page is the first root page (" + str(first.get("title")) + ")",
                        first.get("id") == sys.argv[1])]) else 1)
 ' "$PAGE" || CHECKS_FAILED=1
-
-# Move the test page back to the end of the root level so the drag test stays repeatable.
-if POSITION=$(api pages/sidebar-pages spaceId="$SPACE_ID" limit:=100 | python3 -c '
-import json, sys, random
-items = [p for p in json.load(sys.stdin)["items"] if p["id"] != sys.argv[1]]
-digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-last = items[-1]["position"] if items else None
-def integer_length(head):
-    return ord(head) - ord("a") + 2 if "a" <= head <= "z" else ord("Z") - ord(head) + 2
-def increment(integer):
-    head, digs = integer[0], list(integer[1:])
-    for i in range(len(digs) - 1, -1, -1):
-        d = digits.index(digs[i]) + 1
-        if d == len(digits):
-            digs[i] = "0"
-        else:
-            digs[i] = digits[d]
-            return head + "".join(digs)
-    if head == "Z": return "a0"
-    nxt = chr(ord(head) + 1)
-    if nxt > "a": digs.append("0")
-    else: digs.pop()
-    return nxt + "".join(digs)
-key = "a0" if last is None else increment(last[:integer_length(last[0])])
-key += "".join(random.choice(digits[1:]) for _ in range(max(0, 5 - len(key))))
-print(key)
-' "$PAGE") && api pages/move pageId="$PAGE" position="$POSITION" parentPageId:=null > /dev/null; then
-  echo "Test page moved to the end"
-else
-  echo "Could not move the test page to the end" >&2
-fi
 
 exit $(( TEST_FAILED || CHECKS_FAILED ))
