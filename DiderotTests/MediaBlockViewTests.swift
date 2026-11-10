@@ -233,9 +233,10 @@ struct MediaBlockViewTests {
         window.rootViewController = host
         window.isHidden = false
         defer { window.isHidden = true }
+        // The messages are in what a tap on the failed file reads out, with the reason and what the tap does.
         let expected = [String(localized: "Mermaid diagram"), String(localized: "Show source"),
                         String(localized: "Diagram could not be loaded."), String(localized: "Image unavailable")]
-        #expect(await poll { Set(labels(in: window)).isSuperset(of: expected) }, "\(labels(in: window))")
+        #expect(await poll { expected.allSatisfy { text in labels(in: window).contains { $0.contains(text) } } }, "\(labels(in: window))")
     }
 
     /// A tap to load a file from another server holds for that file only: another file in its place (a block above
@@ -266,6 +267,89 @@ struct MediaBlockViewTests {
 
         host.rootView = try media("https://two.example.net/b")
         #expect(await poll { asks("two.example.net") }, "asks again for another file")
+    }
+
+    /// A file that failed to load says so with the reason and loads again on a tap: an image stayed "unavailable" and
+    /// a PDF or diagram "could not be loaded" until the page was left and opened again (code review S3f).
+    @Test(arguments: ["pdf", "drawio", "image"])
+    func aTapLoadsAFailedFileAgain(type: String) async throws {
+        let server = URL(string: "https://retry-\(type).docmost.invalid")!
+        let host = try #require(server.host())
+        OfflineURLProtocol.state.withLock { $0[host] = (isOffline: true, requests: 0) }
+        let window = try show(type, src: "/api/files/a/file", server: server, protocolClass: OfflineURLProtocol.self)
+        defer { window.isHidden = true }
+        let again = String(localized: "Tap to try again.", bundle: .main)
+        #expect(await poll { labels(in: window).contains { $0.contains(again) } }, "says what a tap does")
+        #expect(labels(in: window).contains { $0.contains(URLError(.notConnectedToInternet).localizedDescription) }, "says why")
+
+        // Back online (the file takes its time): the tap loads again.
+        let failed = OfflineURLProtocol.state.withLock { state in
+            state[host]?.isOffline = false
+            return state[host]?.requests ?? 0
+        }
+        #expect(await tap(again, in: window) { OfflineURLProtocol.state.withLock { $0[host]?.requests ?? 0 } > failed }, "loads again")
+        #expect(await poll { spinner(in: window) })
+    }
+
+    /// A file over 25 MB doesn't load by itself when the page shows it: the server names its size, nothing of it
+    /// loads, and the card waits for a tap (decided on November 10, 2026).
+    @Test(arguments: ["pdf", "drawio", "image"])
+    func aLargeFileWaitsForATap(type: String) async throws {
+        let server = URL(string: "https://large-\(type).docmost.invalid")!
+        LargeURLProtocol.requests.withLock { $0[server.host()!] = nil }
+        let window = try show(type, src: "/api/files/a/file", server: server, protocolClass: LargeURLProtocol.self)
+        defer { window.isHidden = true }
+        let tap = MediaStandIn.largeDetail(size: nil)
+        #expect(await poll { labels(in: window).contains { $0.contains(tap) } }, "waits for a tap")
+        #expect(!spinner(in: window))
+
+        let asked = LargeURLProtocol.requests.withLock { $0[server.host()!] ?? 0 }
+        #expect(await self.tap(tap, in: window) { LargeURLProtocol.requests.withLock { $0[server.host()!] ?? 0 } > asked }, "loads after the tap")
+        #expect(await poll { !labels(in: window).contains { $0.contains(tap) } }, "and asks no more")
+    }
+
+    /// What stands in after a failed load: a tap card for a file over the limit, the reason for a failure, nothing
+    /// for a file that isn't what the view shows, and no failure at all for a cancelled load.
+    @Test func standInsAfterAFailedLoad() async {
+        #expect(MediaGate.standIn(after: APIError.tooLarge(limit: 25_000_000)) == .large)
+        #expect(MediaGate.standIn(after: MediaUnreadable()) == .failed(reason: nil))
+        let offline = APIError.network(URLError(.notConnectedToInternet))
+        #expect(MediaGate.standIn(after: offline) == .failed(reason: offline.userMessage))
+        #expect(MediaGate.standIn(after: CancellationError()) == nil)
+        // A server's message without a period doesn't run into the next sentence.
+        let again = String(localized: "Tap to try again.", bundle: .main)
+        #expect(MediaStandIn.failureDetail("PDF could not be loaded.", reason: "Invalid file id") == "PDF could not be loaded. Invalid file id. \(again)")
+        #expect(MediaStandIn.failureDetail("PDF could not be loaded.", reason: nil) == "PDF could not be loaded. \(again)")
+        // The taps are the load's id: each one loads again, and a tap for a large file lifts the limit.
+        var gate = MediaGate()
+        #expect(gate.maxBytes == MediaLoader.maxAutomaticBytes)
+        gate.loadsLargeFile = true
+        #expect(gate.maxBytes == nil && gate != MediaGate())
+    }
+
+    /// Taps the element whose label holds `text` until `done`. Again where needed: SwiftUI may build the view anew
+    /// while other tests' windows come and go, and a tap on an element of the view before reaches nothing.
+    private func tap(_ text: String, in window: UIWindow, until done: () -> Bool) async -> Bool {
+        await poll {
+            if done() { return true }
+            _ = element(in: window) { $0.contains(text) }?.accessibilityActivate()
+            return false
+        }
+    }
+
+    /// A media block of `type` in a window, its requests answered by `protocolClass`.
+    private func show(_ type: String, src: String, server: URL, protocolClass: AnyClass) throws -> UIWindow {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [protocolClass]
+        let loader = MediaLoader(client: APIClient(baseURL: server, configuration: configuration))
+        let context = RenderContext(baseURL: server, client: nil, mediaLoader: loader, token: nil, pageId: nil)
+        let doc = PMNode(type: "doc", content: [PMNode(type: type, attrs: ["src": .string(src)])])
+        let view = BlockView(block: try #require(ContentParser.parse(doc).blocks.first)).environment(\.renderContext, context)
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: view)
+        window.isHidden = false
+        return window
     }
 
     /// An image's aspect ratio from the page sizes its placeholder only where it can: 0, a negative or a tiny ratio
@@ -370,6 +454,47 @@ private nonisolated final class OnceURLProtocol: URLProtocol, @unchecked Sendabl
         }
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+/// Fails the requests to a server as a device offline does while the test says so, then never answers (the file
+/// takes its time). Counts the requests per server.
+private nonisolated final class OfflineURLProtocol: URLProtocol, @unchecked Sendable {
+    static let state = Mutex<[String: (isOffline: Bool, requests: Int)]>([:])
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let host = request.url?.host() else { return }
+        let isOffline = Self.state.withLock { state in
+            state[host, default: (true, 0)].requests += 1
+            return state[host]?.isOffline ?? true
+        }
+        if isOffline { client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet)) }
+    }
+
+    override func stopLoading() {}
+}
+
+/// Answers as for a file of 30 MB, of which one byte comes. (URLSession hands a stub's answer on only once the stub
+/// has finished, so the stub can't leave the file loading; against a real server the refusal comes with the answer's
+/// head, tried on November 10, 2026.)
+private nonisolated final class LargeURLProtocol: URLProtocol, @unchecked Sendable {
+    static let requests = Mutex<[String: Int]>([:])
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url, let host = url.host() else { return }
+        Self.requests.withLock { $0[host, default: 0] += 1 }
+        let head = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Length": "30000000"])!
+        client?.urlProtocol(self, didReceive: head, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data([0]))
         client?.urlProtocolDidFinishLoading(self)
     }
 

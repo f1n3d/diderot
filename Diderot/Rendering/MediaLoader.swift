@@ -15,9 +15,16 @@ actor MediaLoader {
     /// Loaded from the network in this session, and where: the copy is current, so showing it again (another width
     /// after a rotation, the viewer, the page once more) reads it instead of loading again.
     private var loaded: [URL: URL] = [:]
-    private var downloads: [URL: Download] = [:]
+    private var downloads: [Request: Download] = [:]
     /// The files too large for the offline cache, which go with the loader.
     private let sessionFolder: URL
+
+    /// What a download is for: a file, and whether it may be of any size. A view that waits for a file within the
+    /// limit must not get the answer of one that may be larger, nor the other way round.
+    private struct Request: Hashable {
+        let url: URL
+        let maxBytes: Int64?
+    }
 
     /// A download and the views waiting for it. It stops when the last of them leaves.
     private struct Download {
@@ -29,6 +36,10 @@ actor MediaLoader {
     /// Largest file the offline cache keeps: a larger one would push most of the rest out of its 300 MB
     /// (`DiskCache.prune` removes the oldest first).
     static let maxCachedBytes = 50_000_000
+
+    /// Largest file that loads by itself when a page shows it; a larger one waits for a tap (`MediaStandIn.large`):
+    /// scrolling past a PDF of some hundred MB shouldn't download it.
+    nonisolated static let maxAutomaticBytes: Int64 = 25_000_000
 
     init(client: APIClient, cache: DiskCache? = nil, maxCachedBytes: Int = MediaLoader.maxCachedBytes) {
         self.client = client
@@ -46,24 +57,25 @@ actor MediaLoader {
 
     /// The file at `url`, on this device: from the network once per session, and the offline copy when that fails,
     /// unless the server says the file is gone. Whoever waits can stop waiting (its task is cancelled); the download
-    /// goes on for the others and stops with the last.
-    func file(for url: URL) async throws -> URL {
+    /// goes on for the others and stops with the last. With `maxBytes`, a larger file that isn't on the device yet is
+    /// refused with `APIError.tooLarge`, before any of it loads if the server names its size.
+    func file(for url: URL, maxBytes: Int64? = nil) async throws -> URL {
         // A file on the device is where it is.
         if url.isFileURL { return url }
         if let file = loaded[url], FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) { return file }
-        let waiter = UUID()
+        let waiter = UUID(), request = Request(url: url, maxBytes: maxBytes)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                wait(continuation, as: waiter, for: url)
+                wait(continuation, as: waiter, for: request)
             }
         } onCancel: {
-            Task { await self.leave(waiter, for: url) }
+            Task { await self.leave(waiter, for: request) }
         }
     }
 
     /// The file's content, for what is read whole (a diagram's SVG).
-    func data(for url: URL) async throws -> Data {
-        try await Self.read(try await file(for: url))
+    func data(for url: URL, maxBytes: Int64? = nil) async throws -> Data {
+        try await Self.read(try await file(for: url, maxBytes: maxBytes))
     }
 
     /// Reads a file whole, off the main thread. Not mapped: the files are readable only while the device is
@@ -72,44 +84,45 @@ actor MediaLoader {
         try Data(contentsOf: file)
     }
 
-    private func wait(_ continuation: CheckedContinuation<URL, any Error>, as waiter: UUID, for url: URL) {
+    private func wait(_ continuation: CheckedContinuation<URL, any Error>, as waiter: UUID, for request: Request) {
         // Cancelled before it began to wait: `leave` found nobody.
         if Task.isCancelled { return continuation.resume(throwing: CancellationError()) }
-        if downloads[url] == nil {
+        if downloads[request] == nil {
             var download = Download()
             let id = download.id
             download.task = Task {
                 let result: Result<URL, any Error>
                 do {
-                    result = .success(try await self.load(url))
+                    result = .success(try await self.load(request))
                 } catch {
                     result = .failure(error)
                 }
-                self.finish(id, for: url, with: result)
+                self.finish(id, for: request, with: result)
             }
-            downloads[url] = download
+            downloads[request] = download
         }
-        downloads[url]?.waiters[waiter] = continuation
+        downloads[request]?.waiters[waiter] = continuation
     }
 
-    private func leave(_ waiter: UUID, for url: URL) {
-        guard let continuation = downloads[url]?.waiters.removeValue(forKey: waiter) else { return }
+    private func leave(_ waiter: UUID, for request: Request) {
+        guard let continuation = downloads[request]?.waiters.removeValue(forKey: waiter) else { return }
         continuation.resume(throwing: CancellationError())
-        if downloads[url]?.waiters.isEmpty == true {
-            downloads.removeValue(forKey: url)?.task?.cancel()
+        if downloads[request]?.waiters.isEmpty == true {
+            downloads.removeValue(forKey: request)?.task?.cancel()
         }
     }
 
-    /// `id`: a download that was stopped ends later, when another for the same address may wait already.
-    private func finish(_ id: UUID, for url: URL, with result: Result<URL, any Error>) {
-        guard downloads[url]?.id == id, let download = downloads.removeValue(forKey: url) else { return }
+    /// `id`: a download that was stopped ends later, when another for the same file may wait already.
+    private func finish(_ id: UUID, for request: Request, with result: Result<URL, any Error>) {
+        guard downloads[request]?.id == id, let download = downloads.removeValue(forKey: request) else { return }
         for continuation in download.waiters.values { continuation.resume(with: result) }
     }
 
-    private func load(_ url: URL) async throws -> URL {
+    private func load(_ request: Request) async throws -> URL {
+        let url = request.url
         let key = "image/\(url.absoluteString)"
         do {
-            let (download, _) = try await client.downloadFile(at: url)
+            let (download, _) = try await client.downloadFile(at: url, maxBytes: request.maxBytes)
             let file = try await keep(download, key: key)
             loaded[url] = file
             return file
@@ -121,6 +134,7 @@ actor MediaLoader {
                 await cache?.remove(key: key)
                 throw error
             }
+            // Also for a file over the limit: one that is on the device already shows.
             if let saved = await cache?.dataFile(key: key) { return saved }
             throw error
         }
@@ -145,7 +159,7 @@ actor MediaLoader {
     // MARK: - Images
 
     /// The image at `url`, decoded for a width of `targetWidth` points.
-    func image(for url: URL, targetWidth: CGFloat, scale: CGFloat) async throws -> UIImage {
+    func image(for url: URL, targetWidth: CGFloat, scale: CGFloat, maxBytes: Int64? = nil) async throws -> UIImage {
         let pixelWidth = Self.pixelWidth(for: targetWidth, scale: scale)
         // 256 px buckets, so slightly different layout widths share a cache entry.
         let bucket = ((pixelWidth + 255) / 256) * 256
@@ -153,9 +167,9 @@ actor MediaLoader {
         if let cached = memory.object(forKey: key) {
             return cached
         }
-        let file = try await file(for: url)
+        let file = try await file(for: url, maxBytes: maxBytes)
         guard let image = await Self.decode(file: file, targetPixelWidth: bucket) else {
-            throw APIError.decoding("image")
+            throw MediaUnreadable()
         }
         memory.setObject(image, forKey: key, cost: Int(image.size.width * image.size.height * image.scale * image.scale * 4))
         return image

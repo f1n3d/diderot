@@ -39,9 +39,8 @@ struct DiagramView: View {
     let media: MediaBlock
     @Environment(\.renderContext) private var context
     @State private var markup: String?
-    @State private var loadedSrc: String?
-    @State private var failed = false
-    @State private var loadsFromOtherServer = false
+    @State private var standIn = MediaStandIn.loading
+    @State private var gate = MediaGate()
 
     var body: some View {
         Group {
@@ -49,33 +48,26 @@ struct DiagramView: View {
                 WebIslandView(html: IslandHTML.svg(markup), minHeight: 80)
                     .accessibilityLabel(media.name ?? String(localized: "Diagram"))
                     .opensFullScreen(ViewerMedia(src: media.src, title: media.name, isDiagram: true))
-            } else if let url = context.mediaURL(media.src), !context.loadsByItself(url), !loadsFromOtherServer {
-                OtherServerCard(icon: "pencil.and.outline", title: media.name ?? media.kind.title, url: url) { loadsFromOtherServer = true }
-            } else if failed {
-                PlaceholderCard(icon: "pencil.and.outline", title: media.name ?? media.kind.title,
-                                detail: String(localized: "Diagram could not be loaded."))
             } else {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                MediaStandInCard(standIn: standIn, icon: "pencil.and.outline", title: media.name ?? media.kind.title,
+                                 failure: String(localized: "Diagram could not be loaded."), size: media.size, gate: $gate)
             }
         }
-        .task(id: "\(media.src ?? "")|\(loadsFromOtherServer)") { await load() }
+        .task(id: gate) { await load() }
     }
 
     private func load() async {
         // Back in view (scrolling, returning to the page): keep the diagram instead of reloading.
-        guard markup == nil || loadedSrc != media.src else { return }
-        failed = false
-        // A new file that fails shows the error, not the previous file.
-        func fail() { markup = nil; failed = true }
-        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return fail() }
-        guard context.loadsByItself(url) || loadsFromOtherServer else { return }
+        guard markup == nil else { return }
+        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return standIn = .failed(reason: nil) }
+        if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
+        standIn = .loading
         do {
-            guard let svg = Self.svg(in: try await loader.data(for: url)) else { return fail() }
+            guard let svg = Self.svg(in: try await loader.data(for: url, maxBytes: gate.maxBytes)) else { throw MediaUnreadable() }
             markup = svg
-            loadedSrc = media.src
         } catch {
             // Scrolling past or opening another page cancels the download; it starts again on return.
-            if !Task.isCancelled { fail() }
+            if let failed = MediaGate.standIn(after: error) { standIn = failed }
         }
     }
 
@@ -148,10 +140,9 @@ struct PDFBlockView: View {
     @Environment(\.renderContext) private var context
     @Environment(\.presentFromPage) private var presentFromPage
     @State private var document: PDFDocument?
-    @State private var loadedSrc: String?
-    @State private var failed = false
+    @State private var standIn = MediaStandIn.loading
+    @State private var gate = MediaGate()
     @State private var showsFullScreen = false
-    @State private var loadsFromOtherServer = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -167,15 +158,12 @@ struct PDFBlockView: View {
                     Spacer()
                     Button("Open") { openFullScreen() }.font(.caption)
                 }
-            } else if let url = context.mediaURL(media.src), !context.loadsByItself(url), !loadsFromOtherServer {
-                OtherServerCard(icon: "doc.richtext", title: media.name ?? "PDF", url: url) { loadsFromOtherServer = true }
-            } else if failed {
-                PlaceholderCard(icon: "doc.richtext", title: media.name ?? "PDF", detail: String(localized: "PDF could not be loaded."))
             } else {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                MediaStandInCard(standIn: standIn, icon: "doc.richtext", title: media.name ?? "PDF",
+                                 failure: String(localized: "PDF could not be loaded."), size: media.size, gate: $gate)
             }
         }
-        .task(id: "\(media.src ?? "")|\(loadsFromOtherServer)") { await load() }
+        .task(id: gate) { await load() }
         .linkSheet(isPresented: $showsFullScreen) {
             if let document { PDFFullScreen(document: document, name: media.name ?? "PDF") }
         }
@@ -195,19 +183,18 @@ struct PDFBlockView: View {
 
     private func load() async {
         // Back in view: keep the PDF at its current page instead of reloading.
-        guard document == nil || loadedSrc != media.src else { return }
-        failed = false
-        // A new file that fails shows the error, not the previous file.
-        func fail() { document = nil; failed = true }
-        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return fail() }
-        guard context.loadsByItself(url) || loadsFromOtherServer else { return }
+        guard document == nil else { return }
+        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return standIn = .failed(reason: nil) }
+        if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
+        standIn = .loading
         do {
             // From its file, opened off the main thread: a large PDF took the app's memory and held the page up.
-            let file = try await loader.file(for: url)
-            if let pdf = await MediaLoader.pdf(at: file) { document = pdf; loadedSrc = media.src } else { fail() }
+            let file = try await loader.file(for: url, maxBytes: gate.maxBytes)
+            guard let pdf = await MediaLoader.pdf(at: file) else { throw MediaUnreadable() }
+            document = pdf
         } catch {
             // Scrolling past or opening another page cancels the download; it starts again on return.
-            if !Task.isCancelled { fail() }
+            if let failed = MediaGate.standIn(after: error) { standIn = failed }
         }
     }
 }

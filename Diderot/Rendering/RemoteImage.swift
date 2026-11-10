@@ -7,9 +7,9 @@ struct ContentImageView: View {
     @Environment(\.renderContext) private var context
     @Environment(\.displayScale) private var displayScale
     @State private var loaded: UIImage?
-    @State private var failed = false
+    @State private var standIn = MediaStandIn.loading
+    @State private var gate = MediaGate()
     @State private var availableWidth: CGFloat = 0
-    @State private var loadsFromOtherServer = false
 
     private var url: URL? { context.mediaURL(image.src) }
 
@@ -22,7 +22,7 @@ struct ContentImageView: View {
         }
         .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
-        .task(id: TaskKey(url: url, width: targetWidth, allowed: loadsFromOtherServer)) { await load() }
+        .task(id: TaskKey(url: url, width: targetWidth, gate: gate)) { await load() }
     }
 
     @ViewBuilder
@@ -34,26 +34,38 @@ struct ContentImageView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .accessibilityLabel(image.alt ?? String(localized: "Image"))
                 .opensFullScreen(ViewerMedia(src: image.src, title: image.alt, isDiagram: false))
-        } else if let url, !context.loadsByItself(url), !loadsFromOtherServer {
-            OtherServerCard(icon: "photo", title: image.alt ?? String(localized: "Image"), url: url) { loadsFromOtherServer = true }
         } else {
-            placeholder
+            switch standIn {
+            case .loading:
+                placeholder { ProgressView() }
+            case .failed(let reason):
+                Button { gate.attempt += 1 } label: {
+                    placeholder {
+                        VStack(spacing: 4) {
+                            Label("Image unavailable", systemImage: "photo.badge.exclamationmark")
+                            if let reason { Text(reason) }
+                            Text("Tap to try again.")
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(8)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(Text("Loads it again"))
+            case .otherServer, .large:
+                MediaStandInCard(standIn: standIn, icon: "photo", title: image.alt ?? String(localized: "Image"),
+                                 failure: String(localized: "Image unavailable"), gate: $gate)
+            }
         }
     }
 
-    private var placeholder: some View {
+    private func placeholder(@ViewBuilder _ label: () -> some View) -> some View {
         RoundedRectangle(cornerRadius: 6)
             .fill(Color(.secondarySystemFill))
             .aspectRatio(image.aspectRatio ?? 16 / 9, contentMode: .fit)
-            .overlay {
-                if failed {
-                    Label("Image unavailable", systemImage: "photo.badge.exclamationmark")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ProgressView()
-                }
-            }
+            .overlay { label() }
     }
 
     /// Width from the attribute (points or percent), capped at the available width.
@@ -70,19 +82,20 @@ struct ContentImageView: View {
     private struct TaskKey: Equatable {
         let url: URL?
         let width: CGFloat?
-        let allowed: Bool
+        let gate: MediaGate
     }
 
     private func load() async {
-        guard let url, let loader = context.mediaLoader, let width = targetWidth,
-              context.loadsByItself(url) || loadsFromOtherServer else { return }
-        failed = false
+        guard let url, let loader = context.mediaLoader else { return }
+        if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
+        guard let width = targetWidth else { return }
+        // Another width (a rotation) keeps the image it has until the new one is there.
+        if loaded == nil { standIn = .loading }
         do {
-            loaded = try await loader.image(for: url, targetWidth: width, scale: displayScale)
+            loaded = try await loader.image(for: url, targetWidth: width, scale: displayScale, maxBytes: gate.maxBytes)
         } catch {
-            // Scrolled past, or loading for another width: no failure, and the newer load's spinner stays.
-            guard !Task.isCancelled else { return }
-            failed = true
+            guard let failed = MediaGate.standIn(after: error) else { return }
+            standIn = failed
             // File names are user content and logs can be exported, so only the folder, as the client logs it.
             AppLog.ui.debug("Image failed: \(url.deletingLastPathComponent().path, privacy: .public) – \(error.userMessage, privacy: .public)")
         }
