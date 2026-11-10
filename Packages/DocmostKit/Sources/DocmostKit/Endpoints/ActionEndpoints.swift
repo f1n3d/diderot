@@ -36,7 +36,7 @@ extension Endpoints.Pages {
         public let includeAttachments: Bool
     }
 
-    /// File or ZIP (subpages/attachments) without envelope, named in `Content-Disposition`; use `APIClient.sendRaw`.
+    /// File or ZIP (subpages/attachments) without envelope, named in `Content-Disposition`; use `APIClient.download`.
     public static func export(pageId: String, format: ExportFormat, includeChildren: Bool = false, includeAttachments: Bool = false) -> Endpoint<NoContent> {
         .post("pages/export", body: ExportBody(
             pageId: pageId, format: format, includeChildren: includeChildren, includeAttachments: includeAttachments

@@ -502,8 +502,9 @@ struct BaseFileEditor: View {
         guard downloading.insert(file.id).inserted else { return }
         defer { downloading.remove(file.id) }
         do {
-            let data = try await session.perform(on: ready) { try await $0.fetchFile(at: url).0 }
-            previewURL = try TempFile.write(data, server: baseURL, folder: ["attachments", file.id], name: file.name)
+            previewURL = try await session.perform(on: ready) {
+                try await TempFile.download(url, with: $0, server: baseURL, folder: ["attachments", file.id], name: file.name)
+            }
         } catch {
             model.toast = error.userMessage
         }

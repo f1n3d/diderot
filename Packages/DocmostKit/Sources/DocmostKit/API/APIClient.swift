@@ -90,30 +90,22 @@ public actor APIClient {
         return try decode(Response.self, from: data, unwrapsEnvelope: true)
     }
 
-    /// Returns raw data and response, e.g. for Set-Cookie headers or files.
+    /// Returns raw data and response, e.g. for Set-Cookie headers.
     public func sendRaw<Response>(_ endpoint: Endpoint<Response>) async throws -> (Data, HTTPURLResponse) {
         try await perform(endpoint)
     }
 
-    /// Downloads an API file (image, attachment) with the bearer token; files on other hosts, which page content may
-    /// link, load without it.
-    public func fetchFile(at url: URL) async throws -> (Data, HTTPURLResponse) {
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        applyHeaders(to: &request, requiresAuth: Origin(url) == Origin(baseURL))
-        // File names are user content and logs can be exported, so log only the folder (`/api/files/<id>`).
-        return try await execute(request, path: url.deletingLastPathComponent().path, readsClock: false)
-    }
-
-    /// Downloads a file (an attachment, an image, a PDF) into a file of its own in `downloadsDirectory`, by
-    /// `fetchFile`'s rules, written as it arrives: nothing of it is held in memory. The caller moves the file to its
-    /// place or removes it, before it lets go of the client; a download that fails or is cancelled leaves none. With
-    /// `maxBytes`, a larger file is refused with `APIError.tooLarge`: as soon as the answer names its size, so nothing
-    /// of it loads, or once more than that has arrived.
+    /// Downloads a file (an attachment, an image, a PDF) into a file of its own in `downloadsDirectory`, written as it
+    /// arrives: nothing of it is held in memory. The bearer token goes only to the server; files on other hosts, which
+    /// page content may link, load without it. The caller moves the file to its place or removes it, before it lets go
+    /// of the client; a download that fails or is cancelled leaves none. With `maxBytes`, a larger file is refused with
+    /// `APIError.tooLarge`: as soon as the answer names its size, so nothing of it loads, or once more than that has
+    /// arrived.
     public func downloadFile(at url: URL, maxBytes: Int64? = nil) async throws -> (file: URL, response: HTTPURLResponse) {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         applyHeaders(to: &request, requiresAuth: Origin(url) == Origin(baseURL))
+        // File names are user content and logs can be exported, so log only the folder (`/api/files/<id>`).
         return try await download(request, path: url.deletingLastPathComponent().path, readsClock: false, maxBytes: maxBytes)
     }
 

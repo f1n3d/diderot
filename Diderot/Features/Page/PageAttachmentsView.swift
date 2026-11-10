@@ -100,8 +100,9 @@ struct PageAttachmentsView: View {
         errorMessage = nil
         defer { opening = nil }
         do {
-            let data = try await session.perform(on: ready) { try await $0.fetchFile(at: url).0 }
-            preview = try TempFile.write(data, server: server, folder: ["attachments", attachment.id], name: attachment.fileName)
+            preview = try await session.perform(on: ready) {
+                try await TempFile.download(url, with: $0, server: server, folder: ["attachments", attachment.id], name: attachment.fileName)
+            }
         } catch {
             errorMessage = error.userMessage
         }

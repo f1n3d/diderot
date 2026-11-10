@@ -1,32 +1,49 @@
 import Foundation
 import DocmostKit
 
-/// Writes downloads (attachments, database files, page exports) to the temporary directory for Quick Look or sharing.
+/// Keeps downloads (attachments, database files, page exports) in the temporary directory for Quick Look or sharing.
 /// Each server has its own folder, also for staged uploads (`UploadFile`): removing one server's files leaves another's
 /// open previews and running uploads alone.
 nonisolated enum TempFile {
-    /// `folder` parts and `name` come from page content or the server, so each must stay one path component.
-    static func write(_ data: Data, server: URL, folder: [String], name: String) throws -> URL {
-        let directory = folder.reduce(directory(server: server)) { $0.appending(component: safeName($1), directoryHint: .isDirectory) }
-        let file = directory.appending(component: safeName(name))
-        // `standardized` is lexical; `standardizedFileURL` drops `/private` only from existing paths: fails on devices.
-        guard file.standardized.deletingLastPathComponent() == directory.standardized else { throw CocoaError(.fileWriteInvalidFileName) }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        // Readable only while the device is unlocked, like the offline cache.
-        try data.write(to: file, options: [.atomic, .completeFileProtection])
-        return file
+    /// Downloads the file at `url` with `client` straight to its place in the server's folder, under `name`, for Quick
+    /// Look or sharing: nothing of it passes through memory (an attachment of some hundred MB took the app's).
+    static func download(_ url: URL, with client: APIClient, server: URL, folder: [String], name: String) async throws -> URL {
+        try take(try await client.downloadFile(at: url).file, server: server, folder: folder, name: name)
+    }
+
+    /// Takes a download as the file for Quick Look or sharing by moving it to its place. A download that can't be
+    /// taken is removed.
+    static func take(_ download: URL, server: URL, folder: [String], name: String) throws -> URL {
+        do {
+            let file = try place(server: server, folder: folder, name: name)
+            try protect(download)
+            try? FileManager.default.removeItem(at: file)
+            try FileManager.default.moveItem(at: download, to: file)
+            return file
+        } catch {
+            try? FileManager.default.removeItem(at: download)
+            throw error
+        }
     }
 
     /// A copy of `source` (a file of the offline cache) under its own name, for sharing; a copy on the same volume
     /// takes no room of its own.
     static func copy(_ source: URL, server: URL, folder: [String], name: String) throws -> URL {
-        let directory = folder.reduce(directory(server: server)) { $0.appending(component: safeName($1), directoryHint: .isDirectory) }
-        let file = directory.appending(component: safeName(name))
-        guard file.standardized.deletingLastPathComponent() == directory.standardized else { throw CocoaError(.fileWriteInvalidFileName) }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = try place(server: server, folder: folder, name: name)
         try? FileManager.default.removeItem(at: file)
         try FileManager.default.copyItem(at: source, to: file)
         try protect(file)
+        return file
+    }
+
+    /// Where a file of that name goes, its folder made. `folder` parts and `name` come from page content or the
+    /// server, so each must stay one path component.
+    private static func place(server: URL, folder: [String], name: String) throws -> URL {
+        let directory = folder.reduce(directory(server: server)) { $0.appending(component: safeName($1), directoryHint: .isDirectory) }
+        let file = directory.appending(component: safeName(name))
+        // `standardized` is lexical; `standardizedFileURL` drops `/private` only from existing paths: fails on devices.
+        guard file.standardized.deletingLastPathComponent() == directory.standardized else { throw CocoaError(.fileWriteInvalidFileName) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return file
     }
 

@@ -302,10 +302,8 @@ struct AttachmentBlockView: View {
         errorMessage = nil
         defer { isDownloading = false }
         do {
-            let data = try await context.perform { try await $0.fetchFile(at: url).0 }
-            let file = try TempFile.write(
-                data, server: server, folder: ["attachments", media.attachmentId ?? UUID().uuidString], name: media.name ?? url.lastPathComponent
-            )
+            let folder = ["attachments", media.attachmentId ?? UUID().uuidString], name = media.name ?? url.lastPathComponent
+            let file = try await context.perform { try await TempFile.download(url, with: $0, server: server, folder: folder, name: name) }
             // From the page where it can (`blockPresentations`): a block above, from a collaborator, makes this view anew,
             // and the preview closed.
             if let presentFromPage { presentFromPage(.quickLook(file)) } else { localURL = file }

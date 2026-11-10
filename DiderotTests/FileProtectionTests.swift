@@ -27,7 +27,9 @@ struct FileProtectionTests {
         #expect(try protection(of: await cache.storeFile(at: downloaded, key: "file")) == .complete)
 
         let server = URL(string: "https://protection-test.example.com")!
-        let download = try TempFile.write(Data("x".utf8), server: server, folder: ["attachments", UUID().uuidString], name: "a.pdf")
+        let arrived = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try Data("x".utf8).write(to: arrived, options: .noFileProtection)
+        let download = try TempFile.take(arrived, server: server, folder: ["attachments", UUID().uuidString], name: "a.pdf")
         defer { try? FileManager.default.removeItem(at: download.deletingLastPathComponent()) }
         #expect(try protection(of: download) == .complete)
     }
