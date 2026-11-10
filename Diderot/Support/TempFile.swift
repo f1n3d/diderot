@@ -71,11 +71,12 @@ nonisolated enum TempFile {
             .appending(component: safeName(StoredAccounts.key(for: server)), directoryHint: .isDirectory)
     }
 
-    /// Deletes the server's downloads; with `uploads` (signing out, removing the server) also its staged uploads, which a
+    /// Deletes the server's downloads and its media outside the offline cache; with `uploads` (signing out, removing the server) also its staged uploads, which a
     /// running upload reads. The folders of versions before per-server ones go too, as their server isn't known.
     static func removeAll(server: URL, uploads: Bool) {
         let directory = directory(server: server)
-        let folders = uploads ? [directory] : ["attachments", "exports"].map { directory.appending(component: $0) }
+        // "media": the files too large for the offline cache (`sessionMedia`); what shows them loads them again.
+        let folders = uploads ? [directory] : ["attachments", "exports", "media"].map { directory.appending(component: $0) }
         let unsorted = ["attachments", "exports", "uploads"].map { FileManager.default.temporaryDirectory.appending(component: $0) }
         for folder in folders + unsorted {
             try? FileManager.default.removeItem(at: folder)

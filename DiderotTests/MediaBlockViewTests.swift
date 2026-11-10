@@ -20,7 +20,7 @@ struct MediaBlockViewTests {
 
     init() { _ = Self.accessibilityOn }
 
-    @Test(arguments: ["pdf", "drawio"])
+    @Test(arguments: ["pdf", "drawio", "image"])
     func showsTheSpinnerWhileLoading(type: String) async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [SlowURLProtocol.self]

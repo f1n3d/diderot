@@ -80,6 +80,8 @@ struct ContentImageView: View {
         do {
             loaded = try await loader.image(for: url, targetWidth: width, scale: displayScale)
         } catch {
+            // Scrolled past, or loading for another width: no failure, and the newer load's spinner stays.
+            guard !Task.isCancelled else { return }
             failed = true
             // File names are user content and logs can be exported, so only the folder, as `fetchFile` logs it.
             AppLog.ui.debug("Image failed: \(url.deletingLastPathComponent().path, privacy: .public) – \(error.userMessage, privacy: .public)")

@@ -214,7 +214,7 @@ private struct MediaViewerPage: View {
         do {
             let source = try await loader.file(for: url)
             if media.isDiagram {
-                markup = DiagramView.svg(in: try await loader.data(for: url))
+                markup = DiagramView.svg(in: try await MediaLoader.read(source))
             } else {
                 // As sharp as the loader decodes at all (`MediaLoader.maxPixels`): the viewer zooms to 4×.
                 image = await MediaLoader.decode(file: source, targetPixelWidth: 16_384)

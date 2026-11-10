@@ -61,9 +61,15 @@ actor MediaLoader {
         }
     }
 
-    /// The file's content, for what is read whole (a diagram's SVG), read off the main thread.
+    /// The file's content, for what is read whole (a diagram's SVG).
     func data(for url: URL) async throws -> Data {
-        try Data(contentsOf: try await file(for: url), options: .mappedIfSafe)
+        try await Self.read(try await file(for: url))
+    }
+
+    /// Reads a file whole, off the main thread. Not mapped: the files are readable only while the device is
+    /// unlocked, and a mapping touched after it locked would end the app.
+    @concurrent static func read(_ file: URL) async throws -> Data {
+        try Data(contentsOf: file)
     }
 
     private func wait(_ continuation: CheckedContinuation<URL, any Error>, as waiter: UUID, for url: URL) {
