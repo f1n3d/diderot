@@ -84,7 +84,7 @@ struct TempFileTests {
 }
 
 /// Answers with a file, or as Docmost does for one it doesn't have (a path with "gone").
-private nonisolated final class AttachmentServer: URLProtocol {
+private nonisolated final class AttachmentServer: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
