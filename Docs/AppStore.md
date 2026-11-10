@@ -80,6 +80,15 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Attachments and database files from another website name it before you open them
 > • Search results and the template list keep their place when you come back
 > • Editing a comment keeps its line breaks
+
+**What's New in 1.2.2** (not submitted yet: 1.2.1 goes to App Review first, with the text above, which `submit.py` reads. This takes its place, above 1.2.1's and 1.2.0's lists, once 1.2.1 is submitted or skipped)
+
+> • Large files take far less memory: opening an attachment, exporting a page, and pages with large PDFs or many photos
+> • A PDF, image or diagram that didn't load says why and loads again on a tap
+> • A PDF, image or diagram over 25 MB waits for a tap instead of loading by itself
+> • "Edit in Web Editor" says why the editor didn't load and offers to try again
+> • A file deleted on the server stops showing in the app
+> • Scrolling past photos no longer downloads all of them
 > • On an iPad, the pointer hides under the presentation's laser pointer
 > • More reliable: formulas and diagrams no longer stay cut off, errors read plainly, and many rare problems are fixed
 
@@ -145,6 +154,15 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Anhänge und Datenbank-Dateien von einer anderen Website nennen sie, bevor du sie öffnest
 > • Suchergebnisse und die Vorlagenliste behalten ihre Stelle, wenn du zurückkommst
 > • Beim Bearbeiten eines Kommentars bleiben seine Zeilenumbrüche
+
+**Neu in 1.2.2** (noch nicht eingereicht: zuerst geht 1.2.1 an App Review, mit dem Text oben, den `submit.py` liest. Dieser tritt an seine Stelle, über die Listen von 1.2.1 und 1.2.0, sobald 1.2.1 eingereicht oder übersprungen ist)
+
+> • Große Dateien brauchen weit weniger Speicher: einen Anhang öffnen, eine Seite exportieren, Seiten mit großen PDFs oder vielen Fotos
+> • Ein PDF, Bild oder Diagramm, das nicht geladen wurde, sagt warum und lädt auf Tipp erneut
+> • Ein PDF, Bild oder Diagramm über 25 MB wartet auf einen Tipp, statt von selbst zu laden
+> • „Im Web-Editor bearbeiten“ sagt, warum der Editor nicht geladen wurde, und bietet einen neuen Versuch an
+> • Eine auf dem Server gelöschte Datei erscheint in der App nicht mehr
+> • Beim Scrollen an Fotos vorbei werden nicht mehr alle heruntergeladen
 > • Auf dem iPad verschwindet der Zeiger unter dem Laserpointer der Präsentation
 > • Zuverlässiger: Formeln und Diagramme bleiben nicht mehr abgeschnitten, Fehler lesen sich verständlich, und viele seltene Probleme sind behoben
 
