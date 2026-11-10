@@ -5490,6 +5490,16 @@
         }
       }
     },
+    "The server redirects to %@. The web editor opens only the server's own pages; use “Open in Browser” instead.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server leitet auf %@ um. Der Web-Editor öffnet nur die Seiten des Servers selbst; nutze stattdessen „Im Browser öffnen“."
+          }
+        }
+      }
+    },
     "The server refused the live connection. The page is read-only.": {
       "localizations": {
         "de": {
