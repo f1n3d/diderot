@@ -145,17 +145,18 @@ DOCMOST_DEBUG_BROWSER_LOGIN=1 RESET_KEYCHAIN=1 Tools/run-sim.sh   # test the bro
 DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_FOCUS=3#1 DOCMOST_DEBUG_TYPE=" (bearbeitet)" Tools/run-sim.sh
 DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_EDIT="Neuer Absatz" Tools/run-sim.sh
 
-# UI tests with real taps in the document view (simulator, or UDID=<udid> for an iPhone). The page is reset before and
-# checked through the API afterwards; screenshots go to Tools/.cache/uitests-attachments/. The server switch test signs
-# in to the dev instance under a second address (127.0.0.1, or the Mac's LAN address: DOCMOST_UITEST_ALT_SERVER).
+# UI tests with real taps in the document view (simulator, or UDID=<udid> for an iPhone). The script makes the test page
+# "Editor-Test" in the space "demo" anew each run (an earlier run's goes for good) and checks it through the API
+# afterwards; screenshots go to Tools/.cache/uitests-attachments/. The server switch test signs in to the dev instance
+# under a second address (127.0.0.1, or the Mac's LAN address: DOCMOST_UITEST_ALT_SERVER).
 # For the bell tests the script first creates two mentions of the admin (Tools/seed-notifications.py), for the database
 # tests the test database and a page embedding it (Tools/seed-bases.py), for the two-client test the page "Fixture:
 # Zwei Clients" (a PDF between two paragraphs). It also stands in for a colleague: a test writes a page update into the
 # folder DOCMOST_UITEST_COLLEAGUE, and the script sends it as another client.
-Tools/run-uitests.sh <pageId>
-ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh <pageId>   # selected tests and their API checks
-AREA=schnell Tools/run-uitests.sh <pageId>   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
-PORT=3001 Tools/run-uitests.sh <pageId>      # against a second dev instance with a newer Docmost (tests of its content skip on older servers)
+Tools/run-uitests.sh
+ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh   # selected tests and their API checks
+AREA=schnell Tools/run-uitests.sh   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
+PORT=3001 Tools/run-uitests.sh      # against a second dev instance with a newer Docmost (tests of its content skip on older servers)
 
 # Check the editor engine against Docmost's format, type-check it and rebuild it
 Tools/build-engine.sh
