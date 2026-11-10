@@ -61,6 +61,7 @@ struct DiagramView: View {
         guard markup == nil else { return }
         guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return standIn = .failed(reason: nil) }
         if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
+        if gate.stillWaits(standIn) { return }
         standIn = .loading
         do {
             guard let svg = Self.svg(in: try await loader.data(for: url, maxBytes: gate.maxBytes)) else { throw MediaUnreadable() }
@@ -186,6 +187,7 @@ struct PDFBlockView: View {
         guard document == nil else { return }
         guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return standIn = .failed(reason: nil) }
         if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
+        if gate.stillWaits(standIn) { return }
         standIn = .loading
         do {
             // From its file, opened off the main thread: a large PDF took the app's memory and held the page up.

@@ -41,18 +41,26 @@ struct ContentImageView: View {
             case .failed(let reason):
                 Button { gate.attempt += 1 } label: {
                     placeholder {
-                        VStack(spacing: 4) {
-                            Label("Image unavailable", systemImage: "photo.badge.exclamationmark")
-                            if let reason { Text(reason) }
-                            Text("Tap to try again.")
+                        // As much as the image's place has room for: a small one (an icon, a narrow column) has
+                        // none for three lines.
+                        ViewThatFits {
+                            VStack(spacing: 4) {
+                                Label("Image unavailable", systemImage: "photo.badge.exclamationmark")
+                                if let reason { Text(reason) }
+                                Text("Tap to try again.")
+                            }
+                            .multilineTextAlignment(.center)
+                            .padding(8)
+                            Label("Image unavailable", systemImage: "photo.badge.exclamationmark").padding(4)
+                            Image(systemName: "photo.badge.exclamationmark")
                         }
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(8)
                     }
                 }
                 .buttonStyle(.plain)
+                // All of it for VoiceOver, whatever fits.
+                .accessibilityLabel(MediaStandIn.failureDetail(String(localized: "Image unavailable"), reason: reason))
                 .accessibilityHint(Text("Loads it again"))
             case .otherServer, .large:
                 MediaStandInCard(standIn: standIn, icon: "photo", title: image.alt ?? String(localized: "Image"),
@@ -88,6 +96,7 @@ struct ContentImageView: View {
     private func load() async {
         guard let url, let loader = context.mediaLoader else { return }
         if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
+        if gate.stillWaits(standIn) { return }
         guard let width = targetWidth else { return }
         // Another width (a rotation) keeps the image it has until the new one is there.
         if loaded == nil { standIn = .loading }

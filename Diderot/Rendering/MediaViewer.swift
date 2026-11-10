@@ -208,6 +208,7 @@ private struct MediaViewerPage: View {
         guard image == nil, markup == nil else { return }
         guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return standIn = .failed(reason: nil) }
         if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
+        if gate.stillWaits(standIn) { return }
         standIn = .loading
         do {
             let source = try await loader.file(for: url, maxBytes: gate.maxBytes)

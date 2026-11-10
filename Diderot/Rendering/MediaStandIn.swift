@@ -43,6 +43,12 @@ struct MediaGate: Hashable {
         context.loadsByItself(url) || loadsFromOtherServer ? nil : .otherServer(url)
     }
 
+    /// Whether a file still waits for a tap this gate hasn't taken. Its view coming back into view doesn't ask the
+    /// server again: it would name the same size, behind a spinner each time.
+    func stillWaits(_ standIn: MediaStandIn) -> Bool {
+        standIn == .large && !loadsLargeFile
+    }
+
     /// What stands in after a load failed; nil for one that was cancelled (scrolled past, another width): no failure,
     /// and the next load's spinner stays.
     static func standIn(after error: any Error) -> MediaStandIn? {

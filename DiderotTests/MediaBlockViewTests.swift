@@ -303,7 +303,12 @@ struct MediaBlockViewTests {
         #expect(await poll { labels(in: window).contains { $0.contains(tap) } }, "waits for a tap")
         #expect(!spinner(in: window))
 
+        // Coming back into view (the page shown again) doesn't ask the server again.
         let asked = LargeURLProtocol.requests.withLock { $0[server.host()!] ?? 0 }
+        window.isHidden = true
+        window.isHidden = false
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(LargeURLProtocol.requests.withLock { $0[server.host()!] ?? 0 } == asked)
         #expect(await self.tap(tap, in: window) { LargeURLProtocol.requests.withLock { $0[server.host()!] ?? 0 } > asked }, "loads after the tap")
         #expect(await poll { !labels(in: window).contains { $0.contains(tap) } }, "and asks no more")
     }
@@ -320,6 +325,9 @@ struct MediaBlockViewTests {
         let again = String(localized: "Tap to try again.", bundle: .main)
         #expect(MediaStandIn.failureDetail("PDF could not be loaded.", reason: "Invalid file id") == "PDF could not be loaded. Invalid file id. \(again)")
         #expect(MediaStandIn.failureDetail("PDF could not be loaded.", reason: nil) == "PDF could not be loaded. \(again)")
+        // A large file waits until its tap, and no longer after it.
+        #expect(MediaGate().stillWaits(.large) && !MediaGate().stillWaits(.failed(reason: nil)))
+        #expect(!MediaGate(loadsLargeFile: true).stillWaits(.large))
         // The taps are the load's id: each one loads again, and a tap for a large file lifts the limit.
         var gate = MediaGate()
         #expect(gate.maxBytes == MediaLoader.maxAutomaticBytes)
