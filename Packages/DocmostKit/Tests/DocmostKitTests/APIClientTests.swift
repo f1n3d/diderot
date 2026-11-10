@@ -62,8 +62,8 @@ struct APIClientTests {
         #expect(abs(client.serverClockOffset - 3600) < 2)
 
         MockURLProtocol.respond(with: .init(headers: ["Date": Date.now.addingTimeInterval(-7200).formatted(.http)], body: Data("file".utf8)))
-        _ = try await client.fetchFile(at: URL(string: "https://elsewhere.example/a.png")!)
-        _ = try await client.fetchFile(at: client.apiURL("files/a/b.png"))
+        _ = try await TestSupport.downloaded(at: URL(string: "https://elsewhere.example/a.png")!, with: client)
+        _ = try await TestSupport.downloaded(at: client.apiURL("files/a/b.png"), with: client)
         #expect(abs(client.serverClockOffset - 3600) < 2, "A file's Date header set the offset")
     }
 
@@ -136,7 +136,7 @@ struct APIClientTests {
     @Test func filesOnOtherHostsFollowRedirects() async throws {
         let image = URL(string: "https://cdn.example/image.png")!, moved = URL(string: "https://cdn2.example/image.png")!
         MockURLProtocol.respond(with: .init(status: 302, body: Data("png".utf8), redirect: moved))
-        let (data, response) = try await TestSupport.mockClient().fetchFile(at: image)
+        let (data, response) = try await TestSupport.downloaded(at: image, with: TestSupport.mockClient())
         #expect(data == Data("png".utf8))
         #expect(response.url == moved)
         #expect(MockURLProtocol.recordedRequests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil })
@@ -185,9 +185,9 @@ struct APIClientTests {
         #expect(client.apiURL("/users/me").absoluteString == "https://wiki.example.com/api/users/me")
     }
 
-    @Test func fetchFileSendsNoTokenToForeignHost() async throws {
+    @Test func aFileOnAnotherHostGetsNoToken() async throws {
         MockURLProtocol.respond(with: .init())
-        _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "https://attacker.example/x.png")!)
+        _ = try await TestSupport.downloaded(at: URL(string: "https://attacker.example/x.png")!, with: TestSupport.mockClient(token: "abc"))
         let request = try #require(MockURLProtocol.recordedRequests.first)
         #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
     }
@@ -198,33 +198,33 @@ struct APIClientTests {
         let body = Data(#"{"statusCode":401,"message":"Unauthorized"}"#.utf8)
         MockURLProtocol.respond(with: .init(status: 401, body: body))
         await #expect(throws: APIError.server(status: 401, message: nil)) {
-            _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "https://elsewhere.example/a.pdf")!)
+            _ = try await TestSupport.downloaded(at: URL(string: "https://elsewhere.example/a.pdf")!, with: TestSupport.mockClient(token: "abc"))
         }
         MockURLProtocol.respond(with: .init(status: 401, body: body))
         await #expect(throws: APIError.unauthorized(message: "Unauthorized")) {
-            _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "http://localhost:3000/api/files/abc/a.pdf")!)
+            _ = try await TestSupport.downloaded(at: URL(string: "http://localhost:3000/api/files/abc/a.pdf")!, with: TestSupport.mockClient(token: "abc"))
         }
         // Too many requests stays that, from anywhere.
         MockURLProtocol.respond(with: .init(status: 429))
         await #expect(throws: APIError.throttled) {
-            _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "https://elsewhere.example/a.pdf")!)
+            _ = try await TestSupport.downloaded(at: URL(string: "https://elsewhere.example/a.pdf")!, with: TestSupport.mockClient(token: "abc"))
         }
     }
 
-    @Test func fetchFileSendsTokenToOwnServer() async throws {
+    @Test func aFileOnTheServerGetsTheToken() async throws {
         MockURLProtocol.respond(with: .init())
-        _ = try await TestSupport.mockClient(token: "abc").fetchFile(at: URL(string: "http://localhost:3000/api/files/abc/cat.png")!)
+        _ = try await TestSupport.downloaded(at: URL(string: "http://localhost:3000/api/files/abc/cat.png")!, with: TestSupport.mockClient(token: "abc"))
         // Same origin: a missing port is the scheme's default, scheme and host ignore case.
         let wiki = TestSupport.mockClient(token: "abc", baseURL: URL(string: "https://wiki.example.com")!)
-        _ = try await wiki.fetchFile(at: URL(string: "HTTPS://Wiki.Example.com:443/api/files/abc/cat.png")!)
+        _ = try await TestSupport.downloaded(at: URL(string: "HTTPS://Wiki.Example.com:443/api/files/abc/cat.png")!, with: wiki)
         #expect(MockURLProtocol.recordedRequests.map { $0.value(forHTTPHeaderField: "Authorization") } == ["Bearer abc", "Bearer abc"])
     }
 
-    @Test func fetchFileLogsFolderWithoutFileName() async throws {
+    @Test func aFilesLogHasTheFolderWithoutItsName() async throws {
         MockURLProtocol.respond(with: .init())
         let paths = Mutex<[String]>([])
         let client = TestSupport.mockClient(logger: { entry in paths.withLock { $0.append(entry.path) } })
-        _ = try await client.fetchFile(at: URL(string: "http://localhost:3000/api/files/abc/secret-name.pdf")!)
+        _ = try await TestSupport.downloaded(at: URL(string: "http://localhost:3000/api/files/abc/secret-name.pdf")!, with: client)
         #expect(paths.withLock { $0 } == ["/api/files/abc"])
     }
 

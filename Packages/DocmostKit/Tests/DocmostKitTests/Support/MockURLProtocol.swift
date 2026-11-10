@@ -95,6 +95,13 @@ enum TestSupport {
         return APIClient(baseURL: baseURL, token: token, userAgent: "DocmostKitTests/1.0", configuration: configuration, logger: logger)
     }
 
+    /// Downloads the file at `url` with `client` and returns what it holds; the file goes.
+    static func downloaded(at url: URL, with client: APIClient) async throws -> (Data, HTTPURLResponse) {
+        let (file, response) = try await client.downloadFile(at: url)
+        defer { try? FileManager.default.removeItem(at: file) }
+        return (try Data(contentsOf: file), response)
+    }
+
     static func fixture(_ name: String) throws -> Data {
         guard let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures") else {
             throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: "Fixtures/\(name).json"])

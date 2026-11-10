@@ -24,7 +24,7 @@ struct LiveUploadTests {
         #expect(node.string("attachmentId") == attachment.id)
 
         let url = try #require(LiveEnvironment.url).appending(path: String(attachment.fileURLPath.dropFirst()))
-        let (data, response) = try await client.fetchFile(at: url)
+        let (data, response) = try await TestSupport.downloaded(at: url, with: client)
         #expect(response.statusCode == 200)
         #expect(data.count == Self.pixel.count)
         // Also deleted here so a failing delete fails the test; the deferred one ignores errors.
