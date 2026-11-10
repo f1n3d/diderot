@@ -109,7 +109,9 @@ struct MediaBlockViewTests {
 
     /// Audio and video play with the Ring/Silent switch on, as in Safari (code review R53): the default category
     /// (`.soloAmbient`) muted them. The player sets `.playback`, which the switch doesn't mute, before it can start.
-    @Test(arguments: ["video", "audio"])
+    /// One case after the other: they share the app's audio session, and one's reset fell between the other's player
+    /// and its check (seen on November 10, 2026).
+    @Test(.serialized, arguments: ["video", "audio"])
     func mediaPlaysWithTheSilentSwitchOn(type: String) async throws {
         try AVAudioSession.sharedInstance().setCategory(.soloAmbient)
         let server = URL(string: "https://silent-switch.docmost.invalid")!
