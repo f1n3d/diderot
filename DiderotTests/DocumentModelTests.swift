@@ -280,6 +280,8 @@ struct DocumentModelTests {
         }
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins")]))
         let model = try Self.model(engine)
+        let clock = TestClock()
+        model.dependencies.clock = clock
         let line = try #require(model.node(at: [0]))
         model.activate(NodeRef(path: [0], node: line), node: line)
         engine.whileInserting = {
@@ -293,8 +295,7 @@ struct DocumentModelTests {
         model.activeTextChanged()
         while engine.enters.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         engine.sendDocument()
-        // Past the 400 ms a save waits for.
-        try await Task.sleep(for: .milliseconds(700))
+        await clock.advance(by: .milliseconds(400))
 
         #expect(engine.enters.map(\.node.plainText) == [""])
         #expect(engine.saved.isEmpty)

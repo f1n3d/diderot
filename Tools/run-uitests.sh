@@ -378,9 +378,9 @@ checks = [
     (E + "test1_TapParagraphTypeAndBold", "Paragraph: Fett" + stamp + " bold", has("Fett" + stamp, "bold")),
     (E + "test1_TapParagraphTypeAndBold", "Paragraph: cursor at the end (paragraph ends with Fett" + stamp + ")", block_text("Erster Absatz").endswith("Fett" + stamp)),
     (E + "test2_AddParagraphTypeAndBold", "New paragraph: Neu" + stamp, has("Neu" + stamp)),
-    (E + "test87_ReturnAtLineStartKeepsText", "Return at the start of a line: it keeps Zeile" + stamp + ", an empty line above it",
-     block_text("Zeile" + stamp) == "Zeile" + stamp and first_index("Zeile" + stamp) not in (0, 999)
-     and block_text_of(doc["content"][first_index("Zeile" + stamp) - 1]) == ""),
+    (E + "test87_ReturnAtLineStartKeepsText", "Return at the start of a line: it keeps Vorn" + stamp + ", an empty line above it",
+     block_text("Vorn" + stamp) == "Vorn" + stamp and first_index("Vorn" + stamp) not in (0, 999)
+     and block_text_of(doc["content"][first_index("Vorn" + stamp) - 1]) == ""),
     (E + "test2_AddParagraphTypeAndBold", "New paragraph: NeuFett" + stamp + " bold", has("NeuFett" + stamp, "bold")),
     (E + "test2_AddParagraphTypeAndBold", "New paragraph: Taste" + stamp + " bold from Cmd-B", has("Taste" + stamp, "bold")),
     (E + "test3_TapListItemAndType", "List item: Liste" + stamp, has("Liste" + stamp)),

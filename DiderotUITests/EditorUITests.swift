@@ -246,7 +246,7 @@ import XCTest
         editor.typeText("\n")
         editor = activeEditor(app, "No editor after Return")
         Thread.sleep(forTimeInterval: 0.6)
-        editor.typeText("Zeile\(stamp)")
+        editor.typeText("Vorn\(stamp)")
         Thread.sleep(forTimeInterval: 1)
         // The caret to the line's start, then Return there.
         editor.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0)).tap()
@@ -254,14 +254,14 @@ import XCTest
         editor.typeText("\n")
         editor = activeEditor(app, "No editor after Return at the line's start")
         Thread.sleep(forTimeInterval: 1)
-        XCTAssertEqual(editor.value as? String, "Zeile\(stamp)", "Return at the start didn't keep the text in the line below")
-        // Past the 400 ms a save waits for, then a tap into the empty line above.
+        XCTAssertEqual(editor.value as? String, "Vorn\(stamp)", "Return at the start didn't keep the text in the line below")
+        // Past the 400 ms a save waits for, then a tap into the middle of the empty line above, as tall as this one.
         let line = editor.frame
-        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: line.midX, dy: line.minY - 14)).tap()
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: line.midX, dy: line.minY - line.height / 2)).tap()
         Thread.sleep(forTimeInterval: 1.5)
         snapshot(app, "87-tapped-above")
-        XCTAssertNotEqual(activeEditor(app).value as? String, "Zeile\(stamp)", "The tap didn't reach the empty line above")
-        let shown = app.staticTexts.matching(NSPredicate(format: "label == %@", "Zeile\(stamp)")).firstMatch
+        XCTAssertNotEqual(activeEditor(app).value as? String, "Vorn\(stamp)", "The tap didn't reach the empty line above")
+        let shown = app.staticTexts.matching(NSPredicate(format: "label == %@", "Vorn\(stamp)")).firstMatch
         XCTAssertTrue(shown.waitForExistence(timeout: 3), "The line's text vanished after the tap above")
         finishEditing(app)
         XCTAssertTrue(shown.waitForExistence(timeout: 3), "The line's text vanished after editing ended")
