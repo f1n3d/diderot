@@ -1862,7 +1862,7 @@ final class DocumentModel {
         // A toggle's title stays whole (web parity); any other line keeps the text before the cursor, and the text after
         // it goes to the new line.
         let keepsAll = active.type == "detailsSummary"
-        activeText = keepsAll ? before + after : before
+        session.adopt(keepsAll ? before + after : before)
         session.cancelCommit()
 
         let beforeInlines = Self.inlines(from: before, base: activeFont)
@@ -1912,7 +1912,7 @@ final class DocumentModel {
             lines[lines.count - 1] = AttributedString(last[..<cut])
             caretInLast = nil
         }
-        activeText = lines[0]
+        session.adopt(lines[0])
         session.cancelCommit()
 
         let firstInlines = Self.inlines(from: lines[0], base: activeFont)

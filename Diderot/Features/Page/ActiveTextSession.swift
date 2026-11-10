@@ -76,7 +76,16 @@ final class ActiveTextSession {
         }
     }
 
-    /// Whether the text's change is input: not when it is the text the app just set itself (`show`).
+    /// Sets the editor's text as the app's own, not input (`textChangeIsInput`): the line a key keeps, which goes to the
+    /// engine with the key itself. Taken as input, the change (reported after the key's save was cancelled) saved the
+    /// line once more, 400 ms later, by its id: after Return at a line's start, UniqueID gives that id to the block with
+    /// the text, as on the web, and the late save emptied it.
+    func adopt(_ text: AttributedString) {
+        self.text = text
+        adoptedText = text
+    }
+
+    /// Whether the text's change is input: not when it is the text the app just set itself (`show`, `adopt`).
     func textChangeIsInput() -> Bool {
         guard let adopted = adoptedText else { return true }
         adoptedText = nil
