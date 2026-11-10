@@ -1,7 +1,7 @@
 import SwiftUI
 import DocmostKit
 
-/// Image from page content: reserves space from its attributes, loads via `ImageLoader`.
+/// Image from page content: reserves space from its attributes, loads via `MediaLoader`.
 struct ContentImageView: View {
     let image: ImageBlock
     @Environment(\.renderContext) private var context
@@ -74,7 +74,7 @@ struct ContentImageView: View {
     }
 
     private func load() async {
-        guard let url, let loader = context.imageLoader, let width = targetWidth,
+        guard let url, let loader = context.mediaLoader, let width = targetWidth,
               context.loadsByItself(url) || loadsFromOtherServer else { return }
         failed = false
         do {

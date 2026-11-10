@@ -2,10 +2,10 @@ import SwiftUI
 import DocmostKit
 
 /// What block views need to render: server URL for relative links and media, their requests (`send`, `perform`),
-/// image loader, token for media cookies, current page.
+/// media loader, token for media cookies, current page.
 struct RenderContext: Sendable {
     let baseURL: URL?
-    let imageLoader: ImageLoader?
+    let mediaLoader: MediaLoader?
     let token: String?
     let pageId: String?
     private let requests: Requests?
@@ -18,15 +18,15 @@ struct RenderContext: Sendable {
         case client(APIClient)
     }
 
-    init(baseURL: URL?, client: APIClient?, imageLoader: ImageLoader?, token: String?, pageId: String?) {
+    init(baseURL: URL?, client: APIClient?, mediaLoader: MediaLoader?, token: String?, pageId: String?) {
         self.baseURL = baseURL
-        self.imageLoader = imageLoader
+        self.mediaLoader = mediaLoader
         self.token = token
         self.pageId = pageId
         requests = client.map(Requests.client)
     }
 
-    static let empty = RenderContext(baseURL: nil, client: nil, imageLoader: nil, token: nil, pageId: nil)
+    static let empty = RenderContext(baseURL: nil, client: nil, mediaLoader: nil, token: nil, pageId: nil)
 
     /// Whether requests can go out: signed in.
     var canRequest: Bool { requests != nil }
@@ -103,7 +103,7 @@ struct OtherServerCard: View {
 extension RenderContext {
     init(session: AppSession, pageId: String?) {
         baseURL = session.server?.url
-        imageLoader = session.ready?.imageLoader
+        mediaLoader = session.ready?.mediaLoader
         token = session.ready?.token
         self.pageId = pageId
         requests = session.ready.map { .session(session, $0) }

@@ -208,22 +208,22 @@ private struct MediaViewerPage: View {
     }
 
     private func load() async {
-        guard let loader = context.imageLoader, let url = context.mediaURL(media.src),
+        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src),
               context.loadsByItself(url) || loadsFromOtherServer else { return }
         failed = false
         do {
-            let data = try await loader.data(for: url)
+            let source = try await loader.file(for: url)
             if media.isDiagram {
-                markup = DiagramView.svg(in: data)
+                markup = DiagramView.svg(in: try await loader.data(for: url))
             } else {
-                // As sharp as the loader decodes at all (`ImageLoader.maxPixels`): the viewer zooms to 4×.
-                image = await ImageLoader.decode(data, targetPixelWidth: 16_384)
+                // As sharp as the loader decodes at all (`MediaLoader.maxPixels`): the viewer zooms to 4×.
+                image = await MediaLoader.decode(file: source, targetPixelWidth: 16_384)
             }
             failed = markup == nil && image == nil
-            // Shared as the web downloads it: the file with its name. Written off the main thread, which it held up.
+            // Shared as the web downloads it: the file with its name. Copied off the main thread, which it held up.
             if !failed, let server = context.baseURL {
                 let folder = ["attachments", url.deletingLastPathComponent().lastPathComponent], name = url.lastPathComponent
-                if let file = await Task.detached(operation: { try? TempFile.write(data, server: server, folder: folder, name: name) }).value {
+                if let file = await Task.detached(operation: { try? TempFile.copy(source, server: server, folder: folder, name: name) }).value {
                     loaded(file)
                 }
             }

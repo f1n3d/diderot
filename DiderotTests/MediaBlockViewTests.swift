@@ -26,7 +26,7 @@ struct MediaBlockViewTests {
         configuration.protocolClasses = [SlowURLProtocol.self]
         let server = URL(string: "https://wiki.example.com")!
         let client = APIClient(baseURL: server, configuration: configuration)
-        let context = RenderContext(baseURL: server, client: client, imageLoader: ImageLoader(client: client), token: nil, pageId: nil)
+        let context = RenderContext(baseURL: server, client: client, mediaLoader: MediaLoader(client: client), token: nil, pageId: nil)
         func media(_ file: String) throws -> some View {
             let doc = PMNode(type: "doc", content: [PMNode(type: type, attrs: ["src": .string("/api/files/\(file)")])])
             return BlockView(block: try #require(ContentParser.parse(doc).blocks.first)).environment(\.renderContext, context)
@@ -60,7 +60,7 @@ struct MediaBlockViewTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [OnceURLProtocol.self]
         let client = APIClient(baseURL: server, configuration: configuration)
-        let context = RenderContext(baseURL: server, client: client, imageLoader: ImageLoader(client: client), token: nil, pageId: "p")
+        let context = RenderContext(baseURL: server, client: client, mediaLoader: MediaLoader(client: client), token: nil, pageId: "p")
         let file = URL.temporaryDirectory.appending(path: "\(type).caf")
         if type == "video" {
             let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 8000, channels: 1))
@@ -113,7 +113,7 @@ struct MediaBlockViewTests {
     func mediaPlaysWithTheSilentSwitchOn(type: String) async throws {
         try AVAudioSession.sharedInstance().setCategory(.soloAmbient)
         let server = URL(string: "https://silent-switch.docmost.invalid")!
-        let context = RenderContext(baseURL: server, client: nil, imageLoader: nil, token: nil, pageId: nil)
+        let context = RenderContext(baseURL: server, client: nil, mediaLoader: nil, token: nil, pageId: nil)
         let file = URL.temporaryDirectory.appending(path: "silent-switch-\(type).caf")
         let block = try #require(ContentParser.parse(PMNode(type: "doc", content: [PMNode(type: type, attrs: ["src": .string(file.absoluteString)])])).blocks.first)
         let host = UIHostingController(rootView: BlockView(block: block).environment(\.renderContext, context))
@@ -135,7 +135,7 @@ struct MediaBlockViewTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [OnceURLProtocol.self]
         let client = APIClient(baseURL: server, configuration: configuration)
-        let context = RenderContext(baseURL: server, client: client, imageLoader: ImageLoader(client: client), token: nil, pageId: "p")
+        let context = RenderContext(baseURL: server, client: client, mediaLoader: MediaLoader(client: client), token: nil, pageId: "p")
         func reference(_ id: String?) -> some View {
             TransclusionReferenceView(sourcePageId: "s", transclusionId: id).environment(\.renderContext, context)
         }
@@ -161,7 +161,7 @@ struct MediaBlockViewTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [SelfReferenceURLProtocol.self]
         let client = APIClient(baseURL: server, configuration: configuration)
-        let context = RenderContext(baseURL: server, client: client, imageLoader: ImageLoader(client: client), token: nil, pageId: "p")
+        let context = RenderContext(baseURL: server, client: client, mediaLoader: MediaLoader(client: client), token: nil, pageId: "p")
         let host = UIHostingController(rootView: TransclusionReferenceView(sourcePageId: "s", transclusionId: "t").environment(\.renderContext, context))
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let window = UIWindow(windowScene: scene)
@@ -220,8 +220,8 @@ struct MediaBlockViewTests {
         configuration.protocolClasses = [SlowURLProtocol.self]
         let server = URL(string: "https://wiki.example.com")!
         // The diagram's and the image's files fail offline.
-        let loader = ImageLoader(client: APIClient(baseURL: server, configuration: configuration))
-        let context = RenderContext(baseURL: server, client: nil, imageLoader: loader, token: nil, pageId: nil)
+        let loader = MediaLoader(client: APIClient(baseURL: server, configuration: configuration))
+        let context = RenderContext(baseURL: server, client: nil, mediaLoader: loader, token: nil, pageId: nil)
         let doc = PMNode(type: "doc", content: [
             PMNode(type: "codeBlock", attrs: ["language": .string("mermaid")], content: [PMNode(type: "text", text: "graph TD; A-->B")]),
             PMNode(type: "drawio", attrs: ["src": .string("/api/files/offline"), "title": .string("Architecture")]),
@@ -246,8 +246,8 @@ struct MediaBlockViewTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [SlowURLProtocol.self]
         let server = URL(string: "https://wiki.example.com")!
-        let loader = ImageLoader(client: APIClient(baseURL: server, configuration: configuration))
-        let context = RenderContext(baseURL: server, client: nil, imageLoader: loader, token: nil, pageId: nil)
+        let loader = MediaLoader(client: APIClient(baseURL: server, configuration: configuration))
+        let context = RenderContext(baseURL: server, client: nil, mediaLoader: loader, token: nil, pageId: nil)
         func media(_ src: String) throws -> some View {
             let doc = PMNode(type: "doc", content: [PMNode(type: type, attrs: ["src": .string(src)])])
             return BlockView(block: try #require(ContentParser.parse(doc).blocks.first)).environment(\.renderContext, context)

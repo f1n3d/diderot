@@ -67,7 +67,7 @@ struct DiagramView: View {
         failed = false
         // A new file that fails shows the error, not the previous file.
         func fail() { markup = nil; failed = true }
-        guard let loader = context.imageLoader, let url = context.mediaURL(media.src) else { return fail() }
+        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return fail() }
         guard context.loadsByItself(url) || loadsFromOtherServer else { return }
         do {
             guard let svg = Self.svg(in: try await loader.data(for: url)) else { return fail() }
@@ -199,11 +199,12 @@ struct PDFBlockView: View {
         failed = false
         // A new file that fails shows the error, not the previous file.
         func fail() { document = nil; failed = true }
-        guard let loader = context.imageLoader, let url = context.mediaURL(media.src) else { return fail() }
+        guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return fail() }
         guard context.loadsByItself(url) || loadsFromOtherServer else { return }
         do {
-            let data = try await loader.data(for: url)
-            if let pdf = PDFDocument(data: data) { document = pdf; loadedSrc = media.src } else { fail() }
+            // From its file, opened off the main thread: a large PDF took the app's memory and held the page up.
+            let file = try await loader.file(for: url)
+            if let pdf = await MediaLoader.pdf(at: file) { document = pdf; loadedSrc = media.src } else { fail() }
         } catch {
             // Scrolling past or opening another page cancels the download; it starts again on return.
             if !Task.isCancelled { fail() }
