@@ -27,6 +27,7 @@ struct TempFileTests {
         let again = try download()
         #expect(try TempFile.take(again, server: server, folder: ["attachments", id], name: "a/b.pdf").lastPathComponent == "a-b.pdf")
         #expect(!FileManager.default.fileExists(atPath: again.path(percentEncoded: false)))
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false)).count == names.count)
         #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false)).sorted() == names.sorted())
     }
 

@@ -17,8 +17,13 @@ nonisolated enum TempFile {
         do {
             let file = try place(server: server, folder: folder, name: name)
             try protect(download)
-            try? FileManager.default.removeItem(at: file)
-            try FileManager.default.moveItem(at: download, to: file)
+            // In one step where a file of that name is there (the same attachment opened before, its preview maybe
+            // still showing): a move that fails leaves that one.
+            if FileManager.default.fileExists(atPath: file.path(percentEncoded: false)) {
+                _ = try FileManager.default.replaceItemAt(file, withItemAt: download)
+            } else {
+                try FileManager.default.moveItem(at: download, to: file)
+            }
             return file
         } catch {
             try? FileManager.default.removeItem(at: download)
