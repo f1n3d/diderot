@@ -271,6 +271,35 @@ struct DocumentModelTests {
         #expect(model.active?.ref == NodeRef(path: [1], id: "c"))
     }
 
+    /// Return at a line's start: the empty line the editor keeps goes with the key, not in a save of its own. The editor
+    /// reports that change while Return is out; taken as input, it was saved 400 ms later by the line's id, which UniqueID
+    /// gives the block with the text (as on the web), and emptied it.
+    @Test(.timeLimit(.minutes(1))) func returnAtLineStartDoesNotEmptyTheText() async throws {
+        func paragraph(_ id: String, _ text: String?) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.map { [PMNode(type: "text", text: $0)] })
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Eins")]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        engine.whileInserting = {
+            // The editor reports the kept (empty) line while the engine works, as SwiftUI's `onChange` does.
+            model.activeTextChanged()
+            engine.document = PMNode(type: "doc", content: [paragraph("b", nil), paragraph("a", "Eins")])
+        }
+
+        model.activeText.insert(AttributedString("\n"), at: model.activeText.startIndex)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(after: model.activeText.startIndex))
+        model.activeTextChanged()
+        while engine.enters.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        engine.sendDocument()
+        // Past the 400 ms a save waits for.
+        try await Task.sleep(for: .milliseconds(700))
+
+        #expect(engine.enters.map(\.node.plainText) == [""])
+        #expect(engine.saved.isEmpty)
+    }
+
     /// "/" and the toolbar offer what the engine says the line can turn into, in the menus' order: none for a toggle's
     /// title or a footnote's text, a heading for an item's only line (Engine/tools/conversions-check.ts has the rules).
     /// Until the engine has answered, everything but in a toggle's title or a footnote's text, and it refuses what

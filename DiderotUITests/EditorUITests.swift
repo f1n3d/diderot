@@ -237,6 +237,36 @@ import XCTest
         finishEditing(app)
     }
 
+    /// Return at a line's start puts an empty line above it, and a tap there keeps the text below. The line kept its text
+    /// only until the tap: a late save of the empty line emptied the block with the text, which UniqueID gives the
+    /// line's id.
+    func test87_ReturnAtLineStartKeepsText() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Letzter Absatz")
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor after Return")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.typeText("Zeile\(stamp)")
+        Thread.sleep(forTimeInterval: 1)
+        // The caret to the line's start, then Return there.
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0)).tap()
+        Thread.sleep(forTimeInterval: 1)
+        editor.typeText("\n")
+        editor = activeEditor(app, "No editor after Return at the line's start")
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(editor.value as? String, "Zeile\(stamp)", "Return at the start didn't keep the text in the line below")
+        // Past the 400 ms a save waits for, then a tap into the empty line above.
+        let line = editor.frame
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: line.midX, dy: line.minY - 14)).tap()
+        Thread.sleep(forTimeInterval: 1.5)
+        snapshot(app, "87-tapped-above")
+        XCTAssertNotEqual(activeEditor(app).value as? String, "Zeile\(stamp)", "The tap didn't reach the empty line above")
+        let shown = app.staticTexts.matching(NSPredicate(format: "label == %@", "Zeile\(stamp)")).firstMatch
+        XCTAssertTrue(shown.waitForExistence(timeout: 3), "The line's text vanished after the tap above")
+        finishEditing(app)
+        XCTAssertTrue(shown.waitForExistence(timeout: 3), "The line's text vanished after editing ended")
+    }
+
     /// New page via the space's FAB: opens in the editor, title focused; then types into its first block, sets the
     /// icon via the emoji keyboard and moves the page to the trash.
     func test6_CreatePageFromSpace() {
