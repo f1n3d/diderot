@@ -148,6 +148,7 @@ final class AppSession {
             launchRestore = Task {
                 // Before a client downloads: what the last run's left when the app was ended mid-download.
                 APIClient.removeAbandonedDownloads()
+                TempFile.removeSessionMedia()
                 endSignInsOfAnEarlierInstall()
                 await restore()
                 // Once per launch: a window opened later (iPad) would remove the cookie of an editor open in another.
@@ -222,7 +223,7 @@ final class AppSession {
                     let entitlements = await cache.read(Entitlements.self, key: CacheKey.entitlements) ?? .community
                     let version = await cache.read(String.self, key: CacheKey.serverVersion)
                     state = .ready(ReadySession(
-                        server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,
+                        server: server, client: client, mediaLoader: MediaLoader(client: client, cache: cache), cache: cache,
                         unsentChanges: environment.makeUnsentStore(server.url, cachedUser.user.id),
                         token: stored.token, currentUser: cachedUser, entitlements: entitlements,
                         serverVersion: Self.reportedVersion(version), restoredOffline: true
@@ -646,7 +647,7 @@ final class AppSession {
         reloadAccounts()
         Task.detached(priority: .utility) { await cache.prune() }
         state = .ready(ReadySession(
-            server: server, client: client, imageLoader: ImageLoader(client: client, cache: cache), cache: cache,
+            server: server, client: client, mediaLoader: MediaLoader(client: client, cache: cache), cache: cache,
             unsentChanges: environment.makeUnsentStore(server.url, currentUser.user.id),
             token: token, currentUser: currentUser, entitlements: resolvedEntitlements,
             serverVersion: Self.reportedVersion(serverVersion)

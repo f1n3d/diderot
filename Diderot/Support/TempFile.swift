@@ -17,6 +17,53 @@ nonisolated enum TempFile {
         return file
     }
 
+    /// A copy of `source` (a file of the offline cache) under its own name, for sharing; a copy on the same volume
+    /// takes no room of its own.
+    static func copy(_ source: URL, server: URL, folder: [String], name: String) throws -> URL {
+        let directory = folder.reduce(directory(server: server)) { $0.appending(component: safeName($1), directoryHint: .isDirectory) }
+        let file = directory.appending(component: safeName(name))
+        guard file.standardized.deletingLastPathComponent() == directory.standardized else { throw CocoaError(.fileWriteInvalidFileName) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: file)
+        try FileManager.default.copyItem(at: source, to: file)
+        try protect(file)
+        return file
+    }
+
+    /// The folder of one media loader's files that are too large for the offline cache (`MediaLoader`), in the
+    /// server's folder: signing out removes it with the rest.
+    static func sessionMedia(server: URL) -> URL {
+        directory(server: server).appending(component: "media", directoryHint: .isDirectory).appending(component: UUID().uuidString, directoryHint: .isDirectory)
+    }
+
+    /// Moves a download into `folder` under a name of its own, readable only while the device is unlocked.
+    static func move(_ download: URL, into folder: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try protect(download)
+        let file = folder.appending(component: UUID().uuidString)
+        try FileManager.default.moveItem(at: download, to: file)
+        return file
+    }
+
+    /// Removes what media loaders of an earlier run left (the app was ended): for the app's start.
+    static func removeSessionMedia() {
+        let servers = FileManager.default.temporaryDirectory.appending(component: "servers", directoryHint: .isDirectory)
+        for server in (try? FileManager.default.contentsOfDirectory(at: servers, includingPropertiesForKeys: nil)) ?? [] {
+            try? FileManager.default.removeItem(at: server.appending(component: "media", directoryHint: .isDirectory))
+        }
+    }
+
+    /// Readable only while the device is unlocked, like the offline cache. Only a device has file protection: the
+    /// simulator's files are the Mac's, where some refuse the attempt (as `DiskCache.storeFile` found on GitHub's runners).
+    private static func protect(_ file: URL) throws {
+        let attributes: [FileAttributeKey: Any] = [.protectionKey: FileProtectionType.complete]
+        #if targetEnvironment(simulator)
+        try? FileManager.default.setAttributes(attributes, ofItemAtPath: file.path(percentEncoded: false))
+        #else
+        try FileManager.default.setAttributes(attributes, ofItemAtPath: file.path(percentEncoded: false))
+        #endif
+    }
+
     /// The server's folder, `tmp/servers/<server>`.
     static func directory(server: URL) -> URL {
         FileManager.default.temporaryDirectory
@@ -24,11 +71,12 @@ nonisolated enum TempFile {
             .appending(component: safeName(StoredAccounts.key(for: server)), directoryHint: .isDirectory)
     }
 
-    /// Deletes the server's downloads; with `uploads` (signing out, removing the server) also its staged uploads, which a
+    /// Deletes the server's downloads and its media outside the offline cache; with `uploads` (signing out, removing the server) also its staged uploads, which a
     /// running upload reads. The folders of versions before per-server ones go too, as their server isn't known.
     static func removeAll(server: URL, uploads: Bool) {
         let directory = directory(server: server)
-        let folders = uploads ? [directory] : ["attachments", "exports"].map { directory.appending(component: $0) }
+        // "media": the files too large for the offline cache (`sessionMedia`); what shows them loads them again.
+        let folders = uploads ? [directory] : ["attachments", "exports", "media"].map { directory.appending(component: $0) }
         let unsorted = ["attachments", "exports", "uploads"].map { FileManager.default.temporaryDirectory.appending(component: $0) }
         for folder in folders + unsorted {
             try? FileManager.default.removeItem(at: folder)

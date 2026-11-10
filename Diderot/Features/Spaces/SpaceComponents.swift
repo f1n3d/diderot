@@ -61,7 +61,7 @@ struct RemoteThumbnail<ClipShape: Shape, Placeholder: View>: View {
                 if loaded == url, image != nil { return }
                 image = nil
                 guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
-                image = await ImageLoader.decode(data, targetPixelWidth: Int((size * displayScale).rounded(.up)))
+                image = await MediaLoader.decode(data, targetPixelWidth: Int((size * displayScale).rounded(.up)))
                 loaded = url
             }
         } else {

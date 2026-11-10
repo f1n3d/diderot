@@ -27,7 +27,12 @@ struct TempFileTests {
         let downloads = try [
             TempFile.write(Data("x".utf8), server: server, folder: ["attachments", UUID().uuidString], name: "a.pdf"),
             TempFile.write(Data("x".utf8), server: server, folder: ["exports"], name: "b.md"),
+            // A file too large for the offline cache, in a media loader's folder; its copy for sharing.
+            TempFile.move(TempFile.write(Data("x".utf8), server: server, folder: ["attachments"], name: "c.pdf"), into: TempFile.sessionMedia(server: server)),
         ]
+        let shared = try TempFile.copy(downloads[2], server: server, folder: ["attachments", "shared"], name: "c/../d.pdf")
+        #expect(shared.lastPathComponent == "c-..-d.pdf")
+        #expect(try Data(contentsOf: shared) == Data("x".utf8))
         let upload = try UploadFile.camera(Data("x".utf8), server: server)
         let othersDownload = try TempFile.write(Data("x".utf8), server: other, folder: ["exports"], name: "c.md")
         let othersUpload = try UploadFile.camera(Data("x".utf8), server: other)

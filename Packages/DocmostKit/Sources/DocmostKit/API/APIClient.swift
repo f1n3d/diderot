@@ -14,7 +14,7 @@ public struct APIRequestLog: Sendable {
 /// Its own `URLSession` stores no cookies: the server prefers an `authToken` cookie over the bearer header, so a
 /// stale cookie would override a valid token.
 public actor APIClient {
-    public let baseURL: URL
+    public nonisolated let baseURL: URL
     public private(set) var token: String?
     public let userAgent: String
 

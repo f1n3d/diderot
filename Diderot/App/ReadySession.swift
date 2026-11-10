@@ -13,7 +13,7 @@ struct ServerInfo: Hashable, Sendable {
 struct ReadySession: Sendable {
     let server: ServerInfo
     let client: APIClient
-    let imageLoader: ImageLoader
+    let mediaLoader: MediaLoader
     /// Offline cache for this server's lists, pages and images.
     let cache: DiskCache
     /// This user's changes the server hasn't confirmed yet (`UnsentChanges`).

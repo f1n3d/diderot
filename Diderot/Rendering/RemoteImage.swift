@@ -1,7 +1,7 @@
 import SwiftUI
 import DocmostKit
 
-/// Image from page content: reserves space from its attributes, loads via `ImageLoader`.
+/// Image from page content: reserves space from its attributes, loads via `MediaLoader`.
 struct ContentImageView: View {
     let image: ImageBlock
     @Environment(\.renderContext) private var context
@@ -74,12 +74,14 @@ struct ContentImageView: View {
     }
 
     private func load() async {
-        guard let url, let loader = context.imageLoader, let width = targetWidth,
+        guard let url, let loader = context.mediaLoader, let width = targetWidth,
               context.loadsByItself(url) || loadsFromOtherServer else { return }
         failed = false
         do {
             loaded = try await loader.image(for: url, targetWidth: width, scale: displayScale)
         } catch {
+            // Scrolled past, or loading for another width: no failure, and the newer load's spinner stays.
+            guard !Task.isCancelled else { return }
             failed = true
             // File names are user content and logs can be exported, so only the folder, as `fetchFile` logs it.
             AppLog.ui.debug("Image failed: \(url.deletingLastPathComponent().path, privacy: .public) – \(error.userMessage, privacy: .public)")
