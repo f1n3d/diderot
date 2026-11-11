@@ -108,10 +108,27 @@ extension AppSessionRaceTests {
             let listPath = try #require(await engine.placeBlocks([list], at: nil, position: .after, expected: nil).path)
             #expect(await engine.splitContainer(after: .path(listPath + [0], type: "listItem")) == .applied)
 
-            // "Delete" on an item's only line takes the item along, and its list with the last one; Backspace turns an
-            // empty code block into a paragraph.
+            // Two bullet lists next to each other join, as on the web: the split list is whole again.
+            #expect(await block(at: listPath, in: engine)?.children.map(\.plainText) == ["i1", "i2", "i3"], "the split lists didn't join")
+
+            // A list item goes a level in and out again, as Tab and Shift-Tab on the web; a list's first item can't go in.
+            let third = BlockTarget.id("i3", path: listPath + [2, 0])
+            #expect(await engine.itemLevels(.id("i1", path: listPath + [0, 0])) == ItemLevels(indent: false, outdent: true))
+            #expect(await engine.itemLevels(third) == ItemLevels(indent: true, outdent: true))
+            #expect(await engine.moveItemLevel(third, inward: true) == .applied)
+            #expect(await block(at: listPath + [1, 1, 0, 0], in: engine)?.plainText == "i3", "the item wasn't nested")
+            #expect(await engine.moveItemLevel(.id("i3", path: listPath + [1, 1, 0, 0]), inward: false) == .applied)
+            #expect(await block(at: listPath, in: engine)?.children.map(\.plainText) == ["i1", "i2", "i3"])
+
+            // "Delete" on an item's only line takes the item along; Backspace turns an empty code block into a paragraph.
             #expect(await engine.deleteBlock(.path(listPath + [0, 0], type: "paragraph")) == .applied)
-            #expect(await block(at: listPath, in: engine)?.children.map(\.plainText) == ["i2", "i3"], "the emptied item or its list stayed")
+            #expect(await block(at: listPath, in: engine)?.children.map(\.plainText) == ["i2", "i3"], "the emptied item stayed")
+
+            // A list put after a list of its kind joins it, and `inside` finds its first line where it is then.
+            let more = PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [paragraph("i4", "i4")])])
+            let joined = await engine.placeBlocks([more], at: .path(listPath, type: "bulletList"), position: .after, expected: nil, inside: [0, 0])
+            #expect(joined.result == .applied && joined.path == listPath + [2, 0], "the new list's line isn't where the engine says: \(String(describing: joined.path))")
+            #expect(await block(at: listPath, in: engine)?.children.map(\.plainText) == ["i2", "i3", "i4"])
             let codePath = try #require(await engine.placeBlocks([PMNode(type: "codeBlock")], at: nil, position: .after, expected: nil).path)
             let codeTarget = BlockTarget.path(codePath, type: "codeBlock")
             #expect(await engine.backspacePlans(codeTarget) == BackspacePlans(empty: .plain, text: .nothing))

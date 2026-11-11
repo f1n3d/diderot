@@ -4,7 +4,8 @@
 import { Extension, Mark, Node, mergeAttributes, type Attribute, type JSONContent, type NodeConfig } from "@tiptap/core";
 import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { Fragment, type Node as PMNode, type Slice } from "@tiptap/pm/model";
-import { ReplaceAroundStep, ReplaceStep } from "@tiptap/pm/transform";
+import { ReplaceAroundStep, ReplaceStep, canJoin } from "@tiptap/pm/transform";
+import { isChangeOrigin } from "@tiptap/extension-collaboration";
 import { CodeBlock as TiptapCodeBlock } from "@tiptap/extension-code-block";
 import { Highlight as TiptapHighlight } from "@tiptap/extension-highlight";
 import { Link as TiptapLink } from "@tiptap/extension-link";
@@ -349,6 +350,62 @@ export const Indent = Extension.create({
       },
     }),
   ],
+});
+
+const joiningLists = new Set(["bulletList", "orderedList"]);
+
+/**
+ * Joins the bullet lists, and the numbered lists, that the changes of `transactions` left next to each other, in `tr`,
+ * a transaction on the document after them: where a changed range ends up, each boundary between two blocks of the same
+ * of these kinds goes. The rule of ProseMirror's `autoJoin` (prosemirror-commands), which Docmost's client runs after
+ * every change; see FORMAT.md. True when any joined.
+ */
+export function joinLists(transactions: readonly Transaction[], tr: Transaction): boolean {
+  // The changed ranges, each as it lies in the document after all the changes.
+  const ranges: number[] = [];
+  for (const made of transactions) {
+    for (const map of made.mapping.maps) {
+      for (let i = 0; i < ranges.length; i++) ranges[i] = map.map(ranges[i]);
+      map.forEach((_from, _to, from, to) => ranges.push(from, to));
+    }
+  }
+  const joints = new Set<number>();
+  for (let i = 0; i < ranges.length; i += 2) {
+    const from = ranges[i], to = ranges[i + 1];
+    const $from = tr.doc.resolve(from), depth = $from.sharedDepth(to), parent = $from.node(depth);
+    for (let index = $from.indexAfter(depth), pos = $from.after(depth + 1); pos <= to; index++) {
+      const after = parent.maybeChild(index);
+      if (!after) break;
+      if (index > 0 && parent.child(index - 1).type === after.type && joiningLists.has(after.type.name)) joints.add(pos);
+      pos += after.nodeSize;
+    }
+  }
+  let joined = false;
+  // From the end, so the positions before a join stay as they are.
+  for (const pos of [...joints].sort((a, b) => b - a)) {
+    if (!canJoin(tr.doc, pos)) continue;
+    tr.join(pos);
+    joined = true;
+  }
+  return joined;
+}
+
+/** The plugin that joins lists after the engine's own changes (`joinLists`), not after a collaborator's. */
+export function listJoiner() {
+  return new Plugin({
+    key: new PluginKey("autoJoiner"),
+    appendTransaction: (transactions, _, state) => {
+      if (!transactions.some((tr) => tr.docChanged) || transactions.some(isChangeOrigin)) return null;
+      const tr = state.tr;
+      return joinLists(transactions, tr) ? tr : null;
+    },
+  });
+}
+
+/** Bullet and numbered lists that come to lie next to each other become one, as on the web; see FORMAT.md. */
+export const ListJoiner = Extension.create({
+  name: "autoJoiner",
+  addProseMirrorPlugins: () => [listJoiner()],
 });
 
 /** Where the blocks end: before the footnotes section, if there is one. */

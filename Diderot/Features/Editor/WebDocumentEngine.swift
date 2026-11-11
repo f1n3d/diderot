@@ -44,12 +44,19 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Inserts blocks before or after `target` (without one, at the end of the page), or puts them in its place
     /// (`expected` as above), and says where the first of them is (`placeBlocks` in Engine/src/engine.ts): the cursor goes
     /// from there. Counted in the page's copy, which lags behind a collaborator's blocks above, it went into another block.
-    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+    /// With `inside`, the path is that of the text block at that path within the first of them, as it is afterwards: a
+    /// list put next to one of its kind joins it, as on the web, and its first line is then a line of that list.
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?, inside: [Int]?) async
         -> (result: EngineResult, path: [Int]?)
     func deleteBlock(_ target: BlockTarget) async -> EngineResult
     func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult
     /// Splits a list, quote or callout after `child`: the children below go into a new one of the same kind right after.
     func splitContainer(after child: BlockTarget) async -> EngineResult
+    /// Moves the list item around the block at `target` one level in (`inward`) or out, as Tab and Shift-Tab do on the
+    /// web (`itemLevelSteps` in Engine/src/steps.ts). The block keeps its id, so its editing goes on where it lands.
+    func moveItemLevel(_ target: BlockTarget, inward: Bool) async -> EngineResult
+    /// Whether the list item around the block at `target` can go a level in and out; nil without an engine or the block.
+    func itemLevels(_ target: BlockTarget) async -> ItemLevels?
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult
     /// Runs a table command (`TableCommand` in Engine/src/tables.ts) on a cell: `cell` (its row and its index in the row)
     /// of the table at `target`, or the cell of the block at `target` (`tableAround`). With the path of the cell for the
@@ -102,6 +109,12 @@ protocol DocumentEngine: AnyObject, Observable {
 }
 
 extension DocumentEngine {
+    /// `placeBlocks` with the path of the first new block.
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+        -> (result: EngineResult, path: [Int]?) {
+        await placeBlocks(nodes, at: target, position: position, expected: expected, inside: nil)
+    }
+
     func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode? = nil) async -> EngineResult {
         await replaceBlock(target, with: node, base: base, expected: nil)
     }
@@ -256,6 +269,12 @@ enum BackspacePlan: Equatable, Sendable, Decodable {
         default: self = .nothing
         }
     }
+}
+
+/// Whether a list item can go a level in (not a list's first item) and out (`itemLevels` in Engine/src/engine.ts).
+struct ItemLevels: Equatable, Sendable, Decodable {
+    var indent: Bool
+    var outdent: Bool
 }
 
 /// What Backspace at a block's start does when it's empty, and when it holds text.
@@ -491,13 +510,13 @@ final class WebDocumentEngine: DocumentEngine {
                    ["target": target?.jsObject ?? NSNull(), "json": nodes.map(Self.jsObject), "position": position.rawValue])
     }
 
-    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?, inside: [Int]?) async
         -> (result: EngineResult, path: [Int]?) {
         guard let page else { return (.unavailable, nil) }
         do {
-            let answer = try await page.callJavaScript("return window.DocmostEngine.placeBlocks(target, json, position, expected);", arguments: [
+            let answer = try await page.callJavaScript("return window.DocmostEngine.placeBlocks(target, json, position, expected, inside);", arguments: [
                 "target": target?.jsObject ?? NSNull(), "json": nodes.map(Self.jsObject), "position": position.rawValue,
-                "expected": expected.map { Self.jsObject($0) } ?? NSNull(),
+                "expected": expected.map { Self.jsObject($0) } ?? NSNull(), "inside": inside ?? NSNull(),
             ])
             if let path = answer as? [Int] { return (.applied, path) }
             return (answer as? Bool == false ? .refused : .unavailable, nil)
@@ -513,6 +532,17 @@ final class WebDocumentEngine: DocumentEngine {
 
     func splitContainer(after child: BlockTarget) async -> EngineResult {
         await call("return window.DocmostEngine.splitContainer(target);", ["target": child.jsObject])
+    }
+
+    func moveItemLevel(_ target: BlockTarget, inward: Bool) async -> EngineResult {
+        await call("return window.DocmostEngine.moveItemLevel(target, inward);", ["target": target.jsObject, "inward": inward])
+    }
+
+    func itemLevels(_ target: BlockTarget) async -> ItemLevels? {
+        let result: KeyAnswer<ItemLevels> = await key("return JSON.stringify(window.DocmostEngine.itemLevels(target));",
+                                                      ["target": target.jsObject])
+        if case .value(let levels) = result { return levels }
+        return nil
     }
 
     func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult {

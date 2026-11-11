@@ -207,6 +207,18 @@ expect("an empty item after a nested list", "bulletList(Eins/bulletList(y))",
   backspace(page(list(item(paragraph("a", "Eins"), list(item(paragraph("y", "y")))), item(paragraph("b")))), [0, 1, 0]));
 expect("a block that's gone", "refused", run(page(paragraph("a", "Eins")), backspaceEdit(schema, page(paragraph("a", "Eins")), { id: "x" }, paragraph("x"))?.edit));
 
+// A quote's first line leaves the quote, as on the web; an empty callout goes whole; a toggle's title dissolves the toggle.
+expect("a quote's first line with text", "Vor Eins blockquote(Zwei) @1:0", backspace(page(paragraph("v", "Vor"), quote(paragraph("a", "Eins"), paragraph("b", "Zwei"))), [1, 0]));
+expect("a quote's only line: the quote goes", "Vor Eins Nach @1:0", backspace(page(paragraph("v", "Vor"), quote(paragraph("a", "Eins")), paragraph("n", "Nach")), [1, 0]));
+expect("a quote's only line, empty", "Vor ∅ Nach @1:0", backspace(page(paragraph("v", "Vor"), quote(paragraph("a")), paragraph("n", "Nach")), [1, 0]));
+expect("a quote's second line joins the first", "Vor blockquote(EinsZwei) @1.0:4", backspace(page(paragraph("v", "Vor"), quote(paragraph("a", "Eins"), paragraph("b", "Zwei"))), [1, 1]));
+expect("an empty callout goes", "Vor Nach", backspace(page(paragraph("v", "Vor"), callout(paragraph("a")), paragraph("n", "Nach")), [1, 0]));
+expect("a callout's first line with text", "nothing", backspace(page(paragraph("v", "Vor"), callout(paragraph("a", "Eins"))), [1, 0]));
+expect("a callout's empty first line with more below", "nothing", backspace(page(paragraph("v", "Vor"), callout(paragraph("a"), paragraph("b", "Zwei"))), [1, 0]));
+expect("a toggle's title dissolves the toggle", "Vor Titel Eins Zwei Nach @1:0",
+  backspace(page(paragraph("v", "Vor"), toggle(true, "Titel", paragraph("a", "Eins"), paragraph("b", "Zwei")), paragraph("n", "Nach")), [1, 0]));
+expect("…an empty title too", "∅ Eins @0:0", backspace(page(toggle(false, "", paragraph("a", "Eins"))), [0, 0]));
+
 // An empty code block becomes a paragraph where it is, as on the web; with code, the key is the text view's.
 expect("an empty code block", "Vor ∅ Nach @1:0", backspace(page(paragraph("v", "Vor"), code(), paragraph("n", "Nach")), [1]));
 expect("the page's only block, an empty code block", "∅ @0:0", backspace(page(code()), [0]));

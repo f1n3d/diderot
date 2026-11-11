@@ -2131,6 +2131,152 @@ import XCTest
         snapshot(app, "91-numbered-dragged")
     }
 
+    /// A list item goes a level in and out with the toolbar's two buttons, as Tab and Shift-Tab do on the web: the line
+    /// stays the one being edited, with the keyboard up, and a nested list's first item can't go further in. The script
+    /// checks that "EbeneC<stamp>!" is nested under "EbeneB<stamp>".
+    func test92_IndentAndOutdentListItems() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "bullet", pick: "block-bulletList")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        for word in ["EbeneA", "EbeneB"] {
+            editor.typeText("\(word)\(stamp)\n")
+            Thread.sleep(forTimeInterval: 1.2)
+            editor = activeEditor(app, "No editor in the next item")
+        }
+        editor.typeText("EbeneC\(stamp)")
+        Thread.sleep(forTimeInterval: 1.2)
+        let hides = keyboardHides(app)
+        tapToolbarButton(app, "editor-indent")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after indenting")
+        XCTAssertEqual(editor.value as? String, "EbeneC\(stamp)", "The line lost its text when its item went in")
+        XCTAssertFalse(app.buttons["editor-indent"].isEnabled, "A nested list's first item is offered to go further in")
+        editor.typeText("!")
+        snapshot(app, "92-indented")
+        // Out again and back in: both ways keep the line.
+        tapToolbarButton(app, "editor-outdent")
+        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertTrue(app.buttons["editor-indent"].isEnabled, "The item can't go in again after going out")
+        tapToolbarButton(app, "editor-indent")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after going out and in")
+        XCTAssertEqual(editor.value as? String, "EbeneC\(stamp)!", "The line lost its text going out and in")
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid when an item changed its level")
+        finishEditing(app)
+    }
+
+    /// Backspace at a block's start as on the web: a quote's first line leaves the quote, an empty callout goes whole
+    /// (the cursor lands in the text before it), and a toggle's title dissolves the toggle. All three did nothing. The
+    /// script checks that "Gehoben<stamp>!" and "Aufgeloest<stamp>" are paragraphs of the page.
+    func test93_BackspaceLeavesQuoteCalloutAndToggle() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "zit", pick: "block-quote")
+        var editor = activeEditor(app, "Quote doesn't become editable")
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Gehoben\(stamp)")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0)).tap()
+        Thread.sleep(forTimeInterval: 1.2)
+        var hides = keyboardHides(app)
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after Backspace at the quote's start")
+        XCTAssertEqual(editor.value as? String, "Gehoben\(stamp)", "The line lost its text leaving the quote")
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid on Backspace at the quote's start")
+
+        // An empty callout below it: Backspace removes it, and the cursor is at the end of the line before.
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -2, dy: 0)).tap()
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        slash(app, "callout", pick: "block-callout")
+        editor = activeEditor(app, "Callout doesn't become editable")
+        Thread.sleep(forTimeInterval: 1.2)
+        hides = keyboardHides(app)
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after Backspace in the empty callout")
+        XCTAssertEqual(editor.value as? String, "Gehoben\(stamp)", "The cursor isn't in the line before the callout")
+        editor.typeText("!")
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid on Backspace in the empty callout")
+        snapshot(app, "93-callout-gone")
+
+        // A toggle below it: Backspace at its title's start dissolves it.
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        slash(app, "toggle", pick: "block-toggle")
+        editor = activeEditor(app, "Toggle doesn't become editable")
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Aufgeloest\(stamp)")
+        Thread.sleep(forTimeInterval: 0.6)
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0)).tap()
+        Thread.sleep(forTimeInterval: 1.2)
+        hides = keyboardHides(app)
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after Backspace at the toggle title's start")
+        XCTAssertEqual(editor.value as? String, "Aufgeloest\(stamp)", "The title lost its text when its toggle dissolved")
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid on Backspace at the toggle title's start")
+        snapshot(app, "93-toggle-dissolved")
+        finishEditing(app)
+    }
+
+    /// Markdown marks typed at a paragraph's start turn the line into its block, as the web's input rules do: "- ",
+    /// "# ", "1. ", "[] ", "> ", "---" and "``` ". The first and the last are typed in one go with their text: the line
+    /// stays the one being edited, so no letter is lost. The script checks each block.
+    func test94_MarkdownMarksTurnLines() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        var editor = activeEditor(app)
+        let hides = keyboardHides(app)
+        editor.typeText("- Mdliste\(stamp)")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor in the list a mark made")
+        XCTAssertEqual(editor.value as? String, "Mdliste\(stamp)", "Letters typed right after the mark were lost, or the mark stayed")
+        XCTAssertTrue(app.buttons["editor-indent"].exists, "“- ” didn't make a list item of the line")
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid when a mark turned the line")
+        snapshot(app, "94-list")
+        /// Leaves the list or quote with two Returns, then types the mark and, a moment later, the text.
+        func line(_ mark: String, _ word: String, returns: Int) {
+            for _ in 0..<returns {
+                editor.typeText("\n")
+                Thread.sleep(forTimeInterval: 1.2)
+                editor = activeEditor(app, "No editor after Return")
+            }
+            editor.typeText(mark)
+            Thread.sleep(forTimeInterval: 1.5)
+            editor = activeEditor(app, "No editor after the mark “\(mark)”")
+            editor.typeText("\(word)\(stamp)")
+            Thread.sleep(forTimeInterval: 0.8)
+        }
+        line("# ", "Mdkopf", returns: 2)
+        XCTAssertEqual(editor.value as? String, "Mdkopf\(stamp)", "“# ” left its mark in the line")
+        line("1. ", "Mdzahl", returns: 1)
+        line("[] ", "Mdhaken", returns: 2)
+        line("> ", "Mdzitat", returns: 2)
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid when a mark turned a line into a heading, list or quote")
+        snapshot(app, "94-blocks")
+        // The divider takes the line's place, as "/divider" does: the cursor goes on in a new line below it.
+        line("---", "Mdnach", returns: 2)
+        snapshot(app, "94-divider")
+        // A code block, in one go too: it has no id, and the line is followed to where the engine puts it.
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor after Return")
+        let hidesBeforeCode = keyboardHides(app)
+        editor.typeText("``` Mdcode\(stamp)")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor in the code block a mark made")
+        XCTAssertEqual(editor.value as? String, "Mdcode\(stamp)", "Letters typed right after “``` ” were lost, or the mark stayed")
+        XCTAssertTrue(app.buttons["swift"].waitForExistence(timeout: 5), "“``` ” didn't make a code block of the line")
+        XCTAssertEqual(keyboardHides(app), hidesBeforeCode, "The keyboard hid when a mark turned a line into a code block")
+        snapshot(app, "94-code")
+        finishEditing(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.

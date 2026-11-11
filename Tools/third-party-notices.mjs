@@ -1,6 +1,6 @@
 // Writes the license notices of the third-party code the app ships: THIRD_PARTY_NOTICES.md for the repository and
 // Diderot/Resources/ThirdPartyNotices.json for the app's Licenses page. It covers the packages esbuild bundles into
-// the editor engine (from Engine/node_modules), and KaTeX and Mermaid in Diderot/Resources/Islands with the packages
+// the editor engine and into the syntax colors of code blocks (from Engine/node_modules), and KaTeX and Mermaid in Diderot/Resources/Islands with the packages
 // Mermaid bundles, which npm installs into Tools/.cache/islands for their license texts (Tools/islands.mjs).
 //
 //   node Tools/third-party-notices.mjs      (after `corepack pnpm install` in Engine/)
@@ -66,15 +66,35 @@ const result = await build({
   define: { "process.env.NODE_ENV": '"production"' },
   logLevel: "warning",
 });
-const packageDirs = new Set();
-for (const output of Object.values(result.metafile.outputs)) {
-  for (const [file, input] of Object.entries(output.inputs)) {
-    // The package a file belongs to: up to its name after the last node_modules.
-    const match = /^(.*node_modules\/(?:@[^/]+\/)?[^/]+)\//.exec(file);
-    if (match && input.bytesInOutput > 0) packageDirs.add(path.resolve(engine, match[1]));
+/** The packages esbuild put into a bundle, from its metafile. */
+function bundledPackages(metafile) {
+  const packageDirs = new Set();
+  for (const output of Object.values(metafile.outputs)) {
+    for (const [file, input] of Object.entries(output.inputs)) {
+      // The package a file belongs to: up to its name after the last node_modules.
+      const match = /^(.*node_modules\/(?:@[^/]+\/)?[^/]+)\//.exec(file);
+      if (match && input.bytesInOutput > 0) packageDirs.add(path.resolve(engine, match[1]));
+    }
   }
+  return [...packageDirs].map((dir) => describe(dir));
 }
-const enginePackages = [...packageDirs].map((dir) => describe(dir));
+const enginePackages = bundledPackages(result.metafile);
+
+// The syntax colors of code blocks: the packages esbuild puts into highlight.js, built as in Engine/build.mjs too.
+const highlight = await build({
+  entryPoints: [path.join(engine, "src/highlight.ts")],
+  bundle: true,
+  format: "iife",
+  platform: "neutral",
+  mainFields: ["module", "main"],
+  target: ["safari26"],
+  minify: true,
+  write: false,
+  metafile: true,
+  absWorkingDir: engine,
+  logLevel: "warning",
+});
+const highlightPackages = bundledPackages(highlight.metafile);
 
 // Mermaid's bundle contains its dependencies as Mermaid's own build put them in, at the versions of Mermaid's lockfile
 // then: npm installs them for their license texts, and they are listed without the versions npm resolves today.
@@ -98,6 +118,7 @@ const island = (name) => ({
 const sections = [
   { title: "Diderot", note: "The app itself.", entries: grouped([{ name: "Diderot", version: "", license: "MIT", text: fs.readFileSync(path.join(root, "LICENSE"), "utf8").trim() }]) },
   { title: "Editor engine", note: "Bundled into Diderot/Resources/Engine/engine.js.", entries: grouped(enginePackages) },
+  { title: "Syntax colors", note: "Bundled into Diderot/Resources/Engine/highlight.js, for code blocks.", entries: grouped(highlightPackages) },
   { title: "KaTeX", note: "Diderot/Resources/Islands/katex.min.js, katex.min.css and the KaTeX fonts.", entries: grouped([island("katex")]) },
   { title: "Mermaid", note: "Diderot/Resources/Islands/mermaid.min.js, with the packages it bundles.", entries: grouped([island("mermaid"), ...mermaidDependencies]) },
 ];

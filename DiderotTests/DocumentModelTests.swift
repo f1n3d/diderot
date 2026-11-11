@@ -2061,6 +2061,132 @@ struct DocumentModelTests {
         #expect(engine.moved.map(\.position) == [.before, .after, .before])
     }
 
+    /// Indenting a list item goes to the engine with the line's input saved first, and the line stays the block being
+    /// edited at its new place: it keeps its id, and the page follows it (`followMovedBlocks`), so the keyboard and the
+    /// text stay. The toolbar offers the step only in a list item.
+    @Test(.timeLimit(.minutes(1))) func indentingAnItemKeepsEditingItsLine() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list([("a", "Eins"), ("b", "Zwei")])]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0, 1, 0]))
+        model.activate(NodeRef(path: [0, 1, 0], node: line), node: line)
+        #expect(model.isInListItem)
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        let typed = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Zwei!")])
+        let first = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
+        let nested = PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [typed])])
+        engine.whileInserting = {
+            // The save of the input comes first; the move then nests the item.
+            guard !engine.itemLevelMoves.isEmpty else { return }
+            engine.document = PMNode(type: "doc", content: [PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [first, nested])])])
+        }
+
+        await model.moveActiveItemLevel(inward: true)
+        #expect(engine.saved.last?.plainText == "Zwei!")
+        #expect(engine.itemLevelMoves.map(\.target) == [.id("b", path: [0, 1, 0])])
+        #expect(engine.itemLevelMoves.map(\.inward) == [true])
+        #expect(model.active?.ref == NodeRef(path: [0, 0, 1, 0, 0], id: "b"))
+        #expect(String(model.activeText.characters) == "Zwei!")
+        #expect(model.isInListItem)
+
+        // Outside a list item there is nothing to move.
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p"], content: [PMNode(type: "text", text: "Text")])
+        engine.sendDocument(PMNode(type: "doc", content: [paragraph]))
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        #expect(!model.isInListItem)
+        await model.moveActiveItemLevel(inward: true)
+        #expect(engine.itemLevelMoves.count == 1)
+    }
+
+    /// A Markdown mark typed at a paragraph's start turns the line into its block, as the web's input rules do: the mark
+    /// goes, the engine turns the line, and the line stays the block being edited (it keeps its id), so what is typed
+    /// next lands in it. A heading takes the line's type along, and so does a code block, which has no id: the line is
+    /// where the engine puts the cursor. Deleting text down to a mark turns nothing.
+    @Test(.timeLimit(.minutes(1)), arguments: [("- ", "bulletList"), ("# ", "heading1"), ("``` ", "codeBlock")])
+    func markdownMarkTurnsTheLineWhileItIsEdited(mark: String, kind: String) async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        func type(_ text: String) {
+            model.activeText.append(AttributedString(text))
+            model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+            model.activeTextChanged()
+        }
+        let turned = switch kind {
+        case "bulletList": Self.list([("a", nil)])
+        case "codeBlock": PMNode(type: "codeBlock")
+        default: PMNode(type: "heading", attrs: ["id": "a", "level": 1])
+        }
+        let path = kind == "bulletList" ? [0, 0, 0] : [0]
+        let turnedType = ["bulletList": "paragraph", "heading1": "heading", "codeBlock": "codeBlock"][kind]
+        engine.convertResult = .moved(EngineCursor(path: path, offset: 0))
+        engine.whileInserting = {
+            // A letter typed while the engine saves the line, and one while it turns it.
+            type(engine.converted.isEmpty ? "M" : "d")
+            guard !engine.converted.isEmpty else { return }
+            engine.document = PMNode(type: "doc", content: [turned])
+        }
+
+        for character in mark { type(String(character)) }
+        #expect(String(model.activeText.characters).isEmpty, "the mark stays in the line")
+        while engine.converted.isEmpty || model.active?.ref.path != path || model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.converted.map(\.kind) == [kind])
+        #expect(engine.saved.first?.plainText == "")
+        #expect(model.active?.ref == NodeRef(path: path, id: kind == "codeBlock" ? nil : "a"))
+        #expect(model.active?.type == turnedType)
+        #expect(String(model.activeText.characters) == "Md", "letters typed while the line turned were lost")
+        // The engine's document comes once more as an event: what was typed since isn't in it yet, and stays.
+        engine.whileInserting = nil
+        engine.sendDocument()
+        #expect(String(model.activeText.characters) == "Md", "the document event took the typed letters")
+
+        // Typing goes on in the same line, saved as what it is now.
+        type("x")
+        await model.flush()
+        #expect(engine.saved.last?.plainText == "Mdx")
+        #expect(engine.saved.last?.type == turnedType)
+        // It starts from the line as the engine turned it, empty: from the line with "Md" in it, the engine took those
+        // letters for deleted by someone else.
+        #expect(engine.bases.last??.plainText == "")
+        #expect(engine.bases.last??.type == turnedType)
+
+        // Deleting the "x" of "- x" leaves "- " behind: nothing was typed, nothing turns.
+        let dashed = PMNode(type: "paragraph", attrs: ["id": "d"], content: [PMNode(type: "text", text: "- x")])
+        engine.sendDocument(PMNode(type: "doc", content: [dashed]))
+        model.activate(NodeRef(path: [0], node: dashed), node: dashed)
+        model.activeText.removeSubrange(model.activeText.characters.index(before: model.activeText.endIndex)..<model.activeText.endIndex)
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        model.activeTextChanged()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(engine.converted.count == 1)
+        #expect(String(model.activeText.characters) == "- ")
+    }
+
+    /// A mark the engine doesn't turn the line for comes back: the line is what was typed, and it isn't taken for a
+    /// mark a second time.
+    @Test(.timeLimit(.minutes(1))) func refusedMarkComesBack() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        engine.convertResult = .refused
+        for character in "- " {
+            model.activeText.append(AttributedString(String(character)))
+            model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+            model.activeTextChanged()
+        }
+        while engine.converted.isEmpty || model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(String(model.activeText.characters) == "- ")
+        // The editor reports the text the app set, as SwiftUI does.
+        model.activeTextChanged()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(engine.converted.count == 1)
+        #expect(model.errorMessage == String(localized: "The change could not be applied."))
+        await model.flush()
+        #expect(engine.saved.last?.plainText == "- ")
+    }
+
     /// "Duplicate" in a list item copies the item: its first line copied alone became a second line of the same item.
     /// Another line of the item is copied as that line.
     @Test(.timeLimit(.minutes(1))) func duplicateInAnItemCopiesTheItem() async throws {
@@ -2598,7 +2724,7 @@ final class FakeDocumentEngine: DocumentEngine {
     }
     /// As `insertBlocks` or `replaceBlock(_:withNodes:expected:)`, with the first block's path where this document puts
     /// it, as the engine finds its target before it inserts (before `whileInserting`).
-    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?) async
+    func placeBlocks(_ nodes: [PMNode], at target: BlockTarget?, position: BlockPlace.Position, expected: PMNode?, inside: [Int]?) async
         -> (result: EngineResult, path: [Int]?) {
         var placed: [Int]?
         if let target {
@@ -2613,12 +2739,22 @@ final class FakeDocumentEngine: DocumentEngine {
         case (.before, _): await insertBlocks(nodes, relativeTo: target, position: .before)
         case (.after, _): await insertBlocks(nodes, relativeTo: target, position: .after)
         }
-        return (result, result.isApplied ? placed : nil)
+        return (result, result.isApplied ? placed.map { $0 + (inside ?? []) } : nil)
     }
     func deleteBlock(_ target: BlockTarget) async -> EngineResult {
         deleted.append(target)
         return .applied
     }
+    /// The list items moved a level in or out, as the model sent them, and what the engine says about the active one.
+    private(set) var itemLevelMoves: [(target: BlockTarget, inward: Bool)] = []
+    var itemLevelResult = EngineResult.applied
+    func moveItemLevel(_ target: BlockTarget, inward: Bool) async -> EngineResult {
+        itemLevelMoves.append((target, inward))
+        whileInserting?()
+        return itemLevelResult
+    }
+    var levels: ItemLevels?
+    func itemLevels(_ target: BlockTarget) async -> ItemLevels? { levels }
     /// The moves, as the model sent them.
     private(set) var moved: [(target: BlockTarget, destination: BlockTarget, position: BlockInsertPosition)] = []
     func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult {
