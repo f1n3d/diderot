@@ -3,8 +3,9 @@
 // not at all. As separate calls, a refused last step left the text twice or the list split, without a word.
 import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode, type Mark } from "@tiptap/pm/model";
-import type { Transaction } from "@tiptap/pm/state";
-import { ReplaceStep, Transform } from "@tiptap/pm/transform";
+import { liftListItem, sinkListItem } from "@tiptap/pm/schema-list";
+import { EditorState, Selection, type Transaction } from "@tiptap/pm/state";
+import { ReplaceStep, Transform, type Step as DocumentStep } from "@tiptap/pm/transform";
 import { tabIds, withTabIds } from "./extensions";
 import { endSlot, holds, slotAt } from "./fits";
 import { checkAttributes, checkBlocks, unchanged } from "./guards";
@@ -23,6 +24,8 @@ export type Step =
   | { op: "insert"; target: Target | null; json: JSONContent[]; position?: "before" | "after" }
   | { op: "delete"; target: Target; expected?: JSONContent | null }
   | { op: "remove"; target: Target }
+  | { op: "indent"; target: Target }
+  | { op: "outdent"; target: Target }
   | { op: "move"; target: Target; destination: Target; position: "before" | "after" }
   | { op: "split"; target: Target }
   | { op: "setAttributes"; target: Target; attrs: Record<string, unknown> };
@@ -109,6 +112,13 @@ function applyStep(tr: Transaction, step: Step): boolean {
       tr.delete(range.from, range.to);
       return true;
     }
+    case "indent":
+    case "outdent": {
+      const level = itemLevelSteps(tr.doc, step.target, step.op === "indent");
+      if (!level) return false;
+      level.forEach((made) => tr.step(made));
+      return true;
+    }
     case "move": {
       // Before or after another block. A list's item moves on its own, as the web's handle takes each item: among
       // items it stays one, elsewhere it comes in a list of its kind, and the list it leaves empty goes. A block that
@@ -176,6 +186,28 @@ function applyStep(tr: Transaction, step: Step): boolean {
       return true;
     }
   }
+}
+
+/**
+ * What moves the list item around the block at `target` one level in (`inward`) or out, as Tab and Shift-Tab do on the
+ * web: ProseMirror's `sinkListItem` and `liftListItem`, which Tiptap's list items bind to those keys, run with the cursor
+ * in the block. In, the item becomes the last item of a nested list in the item before it (not a list's first item).
+ * Out, it goes one level up and takes the items below it along as its own; at the top level its blocks leave the list,
+ * which splits around them. The app had no way to make a nested list. Undefined where the web's key does nothing, and
+ * outside an item.
+ */
+export function itemLevelSteps(doc: PMNode, target: Target, inward: boolean): DocumentStep[] | undefined {
+  const found = locate(doc, target);
+  if (!found) return undefined;
+  const $block = doc.resolve(found.pos);
+  let depth = $block.depth;
+  while (depth > 0 && !items.has($block.node(depth).type.name)) depth--;
+  if (depth === 0) return undefined;
+  const item = $block.node(depth).type;
+  const state = EditorState.create({ doc, selection: Selection.near(doc.resolve(found.pos + 1)) });
+  let made: Transaction | undefined;
+  const applies = (inward ? sinkListItem(item) : liftListItem(item))(state, (tr) => { made = tr; });
+  return applies && made ? made.steps : undefined;
 }
 
 /** A step that puts blocks on the page. */

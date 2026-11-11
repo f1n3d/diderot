@@ -53,6 +53,14 @@ struct EditorToolbar: View {
             iconButton("Table", "tablecells", id: "editor-table") { mode = .table }
         }
         iconButton("Insert block", "plus", id: "editor-insert", active: model.showsPlusMenu) { model.togglePlusMenu() }
+        // In a list item, as Shift-Tab and Tab on the web: the item one level out or in.
+        if model.isInListItem {
+            let levels = model.activeItemLevels
+            iconButton("Outdent", "decrease.indent", id: "editor-outdent") { Task { await model.moveActiveItemLevel(inward: false) } }
+                .disabled(levels?.outdent != true)
+            iconButton("Indent", "increase.indent", id: "editor-indent") { Task { await model.moveActiveItemLevel(inward: true) } }
+                .disabled(levels?.indent != true)
+        }
         divider
         Group {
             iconButton("Bold", "bold", id: "format-bold", active: hasIntent(.stronglyEmphasized)) { toggleIntent(.stronglyEmphasized) }

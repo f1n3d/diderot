@@ -250,6 +250,17 @@ web address or email address followed by a space, that word gets a link mark (`m
 
 TipTap's table extension (prosemirror-tables) repairs tables after changes, for example by adding missing cells.
 
+### Lists next to each other
+
+Docmost's client joins bullet lists, and numbered lists, that a change leaves next to each other into one (its
+`AutoJoiner`, with the rule of ProseMirror's `autoJoin`): where a changed range ends up, each boundary between two
+blocks of the same of these two kinds goes, the first list keeping its attributes. So two lists with a paragraph
+between them are one once the paragraph is deleted, and a list inserted after a list of its kind becomes that list's
+last items. Checklists stay apart. The plugin is the client's, not among the server's extensions `spec/` records, so
+the engine adds it to its editor on its own (`ListJoiner`). Unlike the client's, the engine's joins only after its own
+changes, not after a collaborator's or after undo and redo: two clients that both join what a third one left would each
+move the items, and the page would hold them twice.
+
 ## Left out
 
 The engine never types, pastes, clicks or selects: the app does that natively and sends whole blocks. So everything

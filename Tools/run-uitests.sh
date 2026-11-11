@@ -282,7 +282,7 @@ E=EditorUITests
 case "${AREA:-}" in
   "") ;;
   schnell) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test5_ReturnAndBackspace,$E/test6_CreatePageFromSpace,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test42_EditAfterReturningToPage,HomeUITests/test19_SearchTabShowsHomeThenResults,HomeUITests/test50_TrashConfirmationAtRow,BaseUITests/test22_BasePageFromTree,BaseUITests/test25_BaseKanbanColumnsAndCard" ;;
-  editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test87_ReturnAtLineStartKeepsText,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test88_TrashDeletesListItem,$E/test90_BackspaceLeavesCodeAndList,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly" ;;
+  editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test87_ReturnAtLineStartKeepsText,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test88_TrashDeletesListItem,$E/test90_BackspaceLeavesCodeAndList,$E/test92_IndentAndOutdentListItems,$E/test93_BackspaceLeavesQuoteCalloutAndToggle,$E/test94_MarkdownMarksTurnLines,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly" ;;
   bloecke) ONLY="$E/test7_DragBlock,$E/test91_ListItemsMoveAndDuplicateAlone,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test89_BlockMenuDeletesListAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink,$E/test84_PreviewStaysOpenWhenABlockComesInAbove" ;;
   seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test33_Comments,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test85_AppendNoteKeptAcrossLaunches,$E/test86_AppendNoteRefusedOnAPageWithFootnotes,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
@@ -370,6 +370,12 @@ def page_mentions(node):
         found += page_mentions(child)
     return found
 pasted = next((b for b in doc.get("content", []) if ("Verweis" + stamp) in block_text_of(b)), {})
+# The items of all top-level bullet lists: bullet lists next to each other join, so a test finds its items, not its list.
+bullet_items = [i for b in doc.get("content", []) if b.get("type") == "bulletList" for i in b.get("content", [])]
+def top_index(kind, text):
+    return next((n for n, b in enumerate(doc.get("content", [])) if b.get("type") == kind and block_text_of(b) == text), -1)
+def block_at(n):
+    return doc["content"][n] if 0 <= n < len(doc.get("content", [])) else {}
 E = "EditorUITests/"
 checks = [
     (E + "test1_TapParagraphTypeAndBold", "Paragraph: Tipp" + stamp, has("Tipp" + stamp)),
@@ -395,7 +401,7 @@ checks = [
     (E + "test68_CalloutGrowsWithItsText", "Callout: long text Hinweis" + stamp + " in a callout", any(b.get("type") == "callout" and ("Hinweis" + stamp) in block_text_of(b) for b in doc.get("content", []))),
     (E + "test43_ReturnInToggleTitle", "Toggle: Return after the title Titel" + stamp + " continues in its content with Zeile" + stamp, [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "details" and ("Titel" + stamp) in block_text_of(b)] == [["Titel" + stamp, "Zeile" + stamp]]),
     (E + "test45_CollapseToggle", "Toggle: Zu" + stamp + " with Versteckt" + stamp + " collapsed in the app is stored closed (open: false)", [((b.get("attrs") or {}).get("open"), [block_text_of(c) for c in b.get("content", [])]) for b in doc.get("content", []) if b.get("type") == "details" and ("Zu" + stamp) in block_text_of(b)] == [(False, ["Zu" + stamp, "Versteckt" + stamp])]),
-    (E + "test44_BackspaceJoinsListItems", "List: Backspace at the start of Unten" + stamp + " joins it into Oben" + stamp + ", one item left", [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "bulletList" and ("Oben" + stamp) in block_text_of(b)] == [["Oben" + stamp + "Unten" + stamp]]),
+    (E + "test44_BackspaceJoinsListItems", "List: Backspace at the start of Unten" + stamp + " joins it into Oben" + stamp + ", one item left", [block_text_of(i) for i in bullet_items if ("Oben" + stamp) in block_text_of(i) or ("Unten" + stamp) in block_text_of(i)] == ["Oben" + stamp + "Unten" + stamp]),
     (E + "test88_TrashDeletesListItem", "Trash in a checklist item: Weg" + stamp + " went with its item, Bleibt" + stamp + " alone in the list",
      [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "taskList" and ("Bleibt" + stamp) in block_text_of(b)] == [["Bleibt" + stamp]]),
     (E + "test89_BlockMenuDeletesListAndCode", "Block menu: the checklist with Ganz" + stamp + " and the code block Code" + stamp + " are gone",
@@ -404,6 +410,26 @@ checks = [
      [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "taskList" and ("Erster" + stamp) in block_text_of(b)] == [["Zweiter" + stamp, "Erster" + stamp, "Erster" + stamp]]),
     (E + "test91_ListItemsMoveAndDuplicateAlone", "Numbered items: Zwei" + stamp + " dragged above Eins" + stamp + ", one list",
      [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "orderedList" and ("Eins" + stamp) in block_text_of(b)] == [["Zwei" + stamp, "Eins" + stamp]]),
+    (E + "test92_IndentAndOutdentListItems", "Indent: EbeneC" + stamp + "! is the one item of a list nested under EbeneB" + stamp + ", EbeneA" + stamp + " an item of its own",
+     [[c.get("type") for c in i.get("content", [])] + [block_text_of(c) for c in i.get("content", [])] for i in bullet_items if ("EbeneB" + stamp) in block_text_of(i)]
+     == [["paragraph", "bulletList", "EbeneB" + stamp, "EbeneC" + stamp + "!"]]
+     and any(block_text_of(i) == "EbeneA" + stamp for i in bullet_items)),
+    (E + "test93_BackspaceLeavesQuoteCalloutAndToggle", "Backspace: Gehoben" + stamp + "! left its quote, and the callout below it is gone",
+     top_index("paragraph", "Gehoben" + stamp + "!") >= 0 and not any(b.get("type") == "blockquote" and ("Gehoben" + stamp) in block_text_of(b) for b in doc.get("content", []))
+     and block_at(top_index("paragraph", "Gehoben" + stamp + "!") + 1).get("type") != "callout"),
+    (E + "test93_BackspaceLeavesQuoteCalloutAndToggle", "Backspace: the toggle of Aufgeloest" + stamp + " dissolved into a paragraph",
+     top_index("paragraph", "Aufgeloest" + stamp) >= 0 and not any(b.get("type") == "details" and ("Aufgeloest" + stamp) in block_text_of(b) for b in doc.get("content", []))),
+    (E + "test94_MarkdownMarksTurnLines", "Markdown: a bullet item Mdliste" + stamp + ", typed in one go with its mark",
+     any(block_text_of(i) == "Mdliste" + stamp for i in bullet_items)),
+    (E + "test94_MarkdownMarksTurnLines", "Markdown: heading 1 Mdkopf" + stamp + ", numbered item Mdzahl" + stamp + ", checklist item Mdhaken" + stamp + ", quote Mdzitat" + stamp,
+     any(b.get("type") == "heading" and (b.get("attrs") or {}).get("level") == 1 and block_text_of(b) == "Mdkopf" + stamp for b in doc.get("content", []))
+     and any(b.get("type") == "orderedList" and any(block_text_of(i) == "Mdzahl" + stamp for i in b.get("content", [])) for b in doc.get("content", []))
+     and any(b.get("type") == "taskList" and any(block_text_of(i) == "Mdhaken" + stamp for i in b.get("content", [])) for b in doc.get("content", []))
+     and any(b.get("type") == "blockquote" and block_text_of(b) == "Mdzitat" + stamp for b in doc.get("content", []))),
+    (E + "test94_MarkdownMarksTurnLines", "Markdown: a code block Mdcode" + stamp + ", typed in one go with its mark",
+     any(b.get("type") == "codeBlock" and block_text_of(b) == "Mdcode" + stamp for b in doc.get("content", []))),
+    (E + "test94_MarkdownMarksTurnLines", "Markdown: a divider right before Mdnach" + stamp,
+     top_index("paragraph", "Mdnach" + stamp) > 0 and block_at(top_index("paragraph", "Mdnach" + stamp) - 1).get("type") == "horizontalRule"),
     (E + "test90_BackspaceLeavesCodeAndList", "Backspace: the empty code block became the paragraph Text" + stamp,
      any(b.get("type") == "paragraph" and block_text_of(b) == "Text" + stamp for b in doc.get("content", []))),
     (E + "test90_BackspaceLeavesCodeAndList", "Backspace: Raus" + stamp + " left the list as a paragraph, and the list went with it",

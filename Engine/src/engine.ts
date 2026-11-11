@@ -4,15 +4,17 @@ import { Editor, getSchema, type JSONContent } from "@tiptap/core";
 import Collaboration from "@tiptap/extension-collaboration";
 import { type HocuspocusProvider, type HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import { Node as PMNode } from "@tiptap/pm/model";
+import type { Transaction } from "@tiptap/pm/state";
 import * as Y from "yjs";
 import { connection } from "./connection";
 import { fits, type Place } from "./fits";
 import { bindingChanges } from "./guards";
 import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, type Kind } from "./conversions";
 import { backspaceEdit, backspacePlan, enterEdit, enterLinesEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
+import { ListJoiner } from "./extensions";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
-import { applyPlacement, applySteps, pathOf, unsetComment, type Placement, type Step, type Target } from "./steps";
+import { applyPlacement, applySteps, itemLevelSteps, locate, pathOf, unsetComment, type Placement, type Step, type Target } from "./steps";
 import { runTableCommand, tableAround, type TableCommand } from "./tables";
 
 declare global {
@@ -167,9 +169,39 @@ class DocmostEngine {
     return this.transact((editor) => {
       const tr = editor.state.tr;
       if (!applySteps(tr, steps)) return false;
-      editor.view.dispatch(tr);
+      this.dispatch(editor, tr);
       return true;
     });
+  }
+
+  /**
+   * Dispatches `tr` and returns where a position of its document lies afterwards. The editor's plugins change the
+   * document once more behind `tr`: lists that come to lie next to each other join (src/extensions.ts), so a path
+   * counted in `tr.doc` can be another block's by then, and the cursor went there.
+   */
+  private dispatch(editor: Editor, tr: Transaction): (pos: number) => number {
+    let appended: readonly Transaction[] = [];
+    const listen = (event: { transaction: Transaction; appendedTransactions: Transaction[] }) => {
+      if (event.transaction === tr) appended = event.appendedTransactions;
+    };
+    editor.on("transaction", listen);
+    try {
+      editor.view.dispatch(tr);
+    } finally {
+      editor.off("transaction", listen);
+    }
+    return (pos) => appended.reduce((mapped, next) => next.mapping.map(mapped, 1), pos);
+  }
+
+  /**
+   * The path, in the document now, of the text block that was at `path` in `before`, the document a transaction left:
+   * `after` maps its positions (`dispatch`). The path itself where there is no such block.
+   */
+  private textBlockNow(editor: Editor, before: PMNode, path: number[], after: (pos: number) => number): number[] {
+    const found = locate(before, { path });
+    if (!found?.node.isTextblock) return path;
+    const $inside = editor.state.doc.resolve(after(found.pos + 1));
+    return Array.from({ length: $inside.depth }, (_, depth) => $inside.index(depth));
   }
 
   /**
@@ -190,10 +222,12 @@ class DocmostEngine {
   /**
    * Inserts blocks before or after a block, or at the end of the page without one (as `insertBlocks`), or puts them in
    * place of one ("replace", with `expected` as in `replaceBlockWith`), and returns the path of the first of them, for
-   * the cursor (`applyPlacement`). False when refused.
+   * the cursor (`applyPlacement`). With `inside`, the path of the text block at that path within the first of them, as
+   * it is afterwards: a list put next to one of its kind joins it, and its first line is then a line of that list.
+   * False when refused.
    */
   placeBlocks(target: Target | null, json: JSONContent[], position: "before" | "after" | "replace",
-    expected?: JSONContent | null): number[] | false | null {
+    expected?: JSONContent | null, inside?: number[] | null): number[] | false | null {
     if (position === "replace" && !target) return false;
     const step: Placement = position === "replace" ? { op: "replace", target: target!, json, expected } : { op: "insert", target, json, position };
     let path: number[] | undefined;
@@ -201,7 +235,10 @@ class DocmostEngine {
       const tr = editor.state.tr;
       path = applyPlacement(tr, step);
       if (!path) return false;
-      editor.view.dispatch(tr);
+      const first = locate(tr.doc, { path });
+      const after = this.dispatch(editor, tr);
+      if (inside) path = this.textBlockNow(editor, tr.doc, [...path, ...inside], after);
+      else if (first) path = pathOf(editor.state.doc, after(first.pos));
       return true;
     });
     return applied ? path! : applied;
@@ -216,6 +253,20 @@ class DocmostEngine {
    * (`move` in src/steps.ts). */
   moveBlock(target: Target, destination: Target, position: "before" | "after"): boolean | null {
     return this.batch([{ op: "move", target, destination, position }]);
+  }
+
+  /** Moves the list item around the block at `target` one level in (`inward`) or out, as Tab and Shift-Tab do on the web
+   * (`itemLevelSteps` in src/steps.ts). */
+  moveItemLevel(target: Target, inward: boolean): boolean | null {
+    return this.batch([{ op: inward ? "indent" : "outdent", target }]);
+  }
+
+  /** Whether the list item around the block at `target` can go a level in and out; null when the block is gone. */
+  itemLevels(target: Target): { indent: boolean; outdent: boolean } | null {
+    if (!this.editor || this.failed) return null;
+    const doc = this.editor.state.doc;
+    if (!locate(doc, target)) return null;
+    return { indent: !!itemLevelSteps(doc, target, true), outdent: !!itemLevelSteps(doc, target, false) };
   }
 
   /** Splits a list, quote or callout after one of its children: the children below go into a new one of the same kind
@@ -240,9 +291,9 @@ class DocmostEngine {
       if (!found) return false;
       const result = runTableCommand(editor.state, found.pos, found.cell, command);
       if (!result) return false;
-      if (result.tr?.docChanged) editor.view.dispatch(result.tr);
+      const after = result.tr?.docChanged ? this.dispatch(editor, result.tr) : (pos: number) => pos;
       // The table stays where it was; only its content changes.
-      focus = result.focus ? [...pathOf(editor.state.doc, found.pos), ...result.focus] : [];
+      focus = result.focus ? [...pathOf(editor.state.doc, after(found.pos)), ...result.focus] : [];
       return true;
     });
     return applied ? focus : applied;
@@ -278,8 +329,9 @@ class DocmostEngine {
       if (!found) return false;
       const tr = editor.state.tr;
       if (!applySteps(tr, found.edit.steps)) return false;
-      editor.view.dispatch(tr);
-      outcome = { kind: found.plan.kind, cursor: found.edit.cursor };
+      const after = this.dispatch(editor, tr);
+      const cursor = found.edit.cursor && { ...found.edit.cursor, path: this.textBlockNow(editor, tr.doc, found.edit.cursor.path, after) };
+      outcome = { kind: found.plan.kind, cursor };
       return true;
     });
     return applied === null ? null : outcome ?? false;
@@ -323,13 +375,20 @@ class DocmostEngine {
     });
   }
 
-  /** Applies an edit's steps and returns its cursor; an edit without steps changes nothing. */
+  /** Applies an edit's steps and returns its cursor, where its line is afterwards (`textBlockNow`); an edit without
+   * steps changes nothing. */
   private applyEdit(build: (editor: Editor) => KeyEdit | undefined): Cursor | false | null {
     let cursor: Cursor | undefined;
-    const applied = this.applyBuilt((editor) => {
+    const applied = this.transact((editor) => {
       const edit = build(editor);
-      cursor = edit?.cursor;
-      return edit?.steps;
+      if (!edit) return false;
+      cursor = edit.cursor;
+      if (edit.steps.length === 0) return true;
+      const tr = editor.state.tr;
+      if (!applySteps(tr, edit.steps)) return false;
+      const after = this.dispatch(editor, tr);
+      cursor = { ...edit.cursor, path: this.textBlockNow(editor, tr.doc, edit.cursor.path, after) };
+      return true;
     });
     return applied && cursor ? cursor : applied === null ? null : false;
   }
@@ -342,7 +401,7 @@ class DocmostEngine {
       if (steps.length === 0) return true;
       const tr = editor.state.tr;
       if (!applySteps(tr, steps)) return false;
-      editor.view.dispatch(tr);
+      this.dispatch(editor, tr);
       return true;
     });
   }
@@ -423,7 +482,8 @@ class DocmostEngine {
         ...editorOptions,
         element: this.host,
         editable: true,
-        extensions: [...schemaExtensions, Collaboration.configure({ document: ydoc, provider: synced })],
+        // After the server's list, as the web client has its own: lists that come to lie next to each other join.
+        extensions: [...schemaExtensions, ListJoiner, Collaboration.configure({ document: ydoc, provider: synced })],
         onUpdate: () => this.documents.change(documentDelay),
       });
     } catch (error) {

@@ -170,6 +170,9 @@ final class DocumentModel {
     /// blocks): its editor would vanish and the keyboard hide and show again. One that ends without placing it ends
     /// editing then, if the block is gone (`typingSwitchEnded`).
     @ObservationIgnored private var typingSwitches = 0
+    /// The active text's length when it last changed: a Markdown mark turns its line only when it was just typed, not
+    /// when deleting what follows leaves one behind (`applyTypedShortcut`).
+    @ObservationIgnored private var typedCount = 0
     /// Return or Backspace is switching blocks; meanwhile the old editor briefly shows the line break as a second line.
     var isSwitchingByTyping: Bool { typingSwitches > 0 }
     @ObservationIgnored private var adoptsChange = false
@@ -400,6 +403,7 @@ final class DocumentModel {
         activatedByTyping = typingSwitches > 0
         active = Active(ref: ref, type: node.type, attrs: node.attrs, itemPath: itemPath)
         session.show(node, as: node.type == "codeBlock" ? AttributedString(node.plainText) : Self.editorText(from: node.children))
+        typedCount = activeText.characters.count
         // The page's one editor keeps its selection from block to block; the old indices don't fit this text.
         activeSelection = AttributedTextSelection(insertionPoint: activeText.endIndex)
         slashQuery = nil
@@ -497,6 +501,8 @@ final class DocumentModel {
     func activeTextChanged() {
         guard let active, active.type != "codeBlock" else { return }
         let characters = activeText.characters
+        let grew = characters.count > typedCount
+        typedCount = characters.count
         if let newline = characters.firstIndex(of: "\n") {
             // Return with the slash menu open picks the first enabled item (web parity); the line break is dropped.
             if slashQuery != nil, let first = insertMatches.first(where: isEnabled) {
@@ -519,7 +525,82 @@ final class DocumentModel {
         updateSlashQuery()
         updateMentionQuery()
         guard session.textChangeIsInput() else { return }
+        if grew, applyTypedShortcut(in: active) { return }
         session.scheduleCommit()
+    }
+
+    /// A Markdown mark just typed at a paragraph's start ("- ", "1. ", "[] ", "# ", "> ", "``` ", "---") turns the line
+    /// into its block, as the web's input rules do: the mark goes, and the line becomes what "/" would make of it, where
+    /// the engine says it can (`conversionTemplates`). Not in a list item, where a list kind would switch the whole
+    /// list (the web nests a list there). False when there is no mark, or nothing to turn into: the text stays as typed.
+    private func applyTypedShortcut(in active: Active) -> Bool {
+        // Not while the keyboard composes text (Japanese input, dictation): the line would change under it.
+        guard active.type == "paragraph", active.itemPath == nil, editorTextView?.markedTextRange == nil,
+              case .insertionPoint(let cursor) = activeSelection.indices(in: activeText),
+              let found = TriggerParser.shortcut(in: activeText, cursor: cursor)
+        else { return false }
+        switch found.shortcut {
+        case .block(let template):
+            guard conversionTemplates.contains(template) else { return false }
+        case .divider:
+            // Where "/divider" takes an empty line's place: the mark is all the line holds.
+            guard activeText.characters.count == found.length, [.topLevel, .container].contains(insertLocation(of: active)),
+                  activeAnswers?.inPlaceOfBlock.contains("horizontalRule") ?? true
+            else { return false }
+        }
+        let end = activeText.characters.index(activeText.startIndex, offsetBy: found.length)
+        let mark = AttributedString(activeText[activeText.startIndex..<end])
+        activeText.removeSubrange(activeText.startIndex..<end)
+        activeSelection = AttributedTextSelection(insertionPoint: activeText.startIndex)
+        typedCount = activeText.characters.count
+        // Saved like typing: the engine turns the line it has, without the mark.
+        session.scheduleCommit()
+        slashQuery = nil
+        slashOffset = nil
+        switch found.shortcut {
+        case .block(let template):
+            Task { await convertWhileTyping(active, to: template, mark: mark) }
+        case .divider:
+            performBlock(.block(.divider), placement: .replaceOrAfter(active.ref))
+        }
+        return true
+    }
+
+    /// Turns the line being edited into `template` while it stays the block being edited: after a Markdown mark typed at
+    /// its start (`mark`), typing goes on at once, and what is typed before the engine has answered stays (a conversion
+    /// from the toolbar ends editing and starts it again in the new block, which drops such letters). The line is where
+    /// the engine puts the cursor, the new block's first line: there the page takes its new place and type, also a code
+    /// block's, which has no id to follow. Refused, the mark comes back: the line is what was typed.
+    private func convertWhileTyping(_ active: Active, to template: BlockTemplate, mark: AttributedString) async {
+        guard let engine else { return }
+        typingSwitches += 1
+        defer { typingSwitchEnded() }
+        // Its input goes first: the engine turns the line it has.
+        await flush()
+        let result = await engine.convert(active.ref.target, to: template.rawValue)
+        guard case .moved(let cursor) = result else {
+            if result == .refused { report(.refused) }
+            guard self.active?.ref.identity == active.ref.identity else { return }
+            activeText.insert(mark, at: activeText.startIndex)
+            typedCount = activeText.characters.count
+            session.scheduleCommit()
+            return
+        }
+        report(.applied)
+        guard let latest = await engine.currentDocument() else { return }
+        adopt(latest)
+        // The line as the engine holds it, not as the page shows it with the letters typed meanwhile over it: taken as
+        // the base, those letters looked deleted by someone else to the next save, and went.
+        guard let current = self.active, current.ref.identity == active.ref.identity,
+              let node = node(at: cursor.path, in: engineDocument), PMNode.editableTextTypes.contains(node.type) || node.type == "codeBlock"
+        else { return }
+        let typedSince = session.overrides[current.ref.identity] != nil
+        session.cancelCommit()
+        session.overrides[current.ref.identity] = nil
+        self.active = Active(ref: NodeRef(path: cursor.path, node: node), type: node.type, attrs: node.attrs, itemPath: enclosingItemPath(cursor.path))
+        // What the engine holds is what the next save starts from; letters typed meanwhile go out as the new type.
+        session.base = node
+        if typedSince { session.scheduleCommit() }
     }
 
     /// Called after every `activeSelection` change. The "/" and "@" lists follow the cursor: moved away from their query
@@ -609,6 +690,8 @@ final class DocumentModel {
         var backspace: BackspacePlans?
         /// What it can turn into where it is: `BlockTemplate` raw values, and "syncedBlock".
         var conversions: Set<String>?
+        /// Whether its list item can go a level in and out (the toolbar's indent buttons); nil outside a list item.
+        var itemLevels: ItemLevels?
     }
 
     /// A card or inline database in place of a paragraph, with the paragraph's text before and after it, or not
@@ -636,7 +719,7 @@ final class DocumentModel {
             answers = nil
             return
         }
-        let ref = active.ref, isParagraph = active.type == "paragraph", table = activeTablePosition
+        let ref = active.ref, isParagraph = active.type == "paragraph", table = activeTablePosition, inItem = active.itemPath != nil
         let top = [ref.path[0]]
         let topTarget = node(at: top).map { NodeRef(path: top, node: $0).target } ?? .path(top)
         answersTask = Task { [weak self] in
@@ -670,6 +753,7 @@ final class DocumentModel {
             }
             answers.backspace = await engine.backspacePlans(ref.target)
             answers.conversions = await engine.conversions(ref.target)
+            if inItem { answers.itemLevels = await engine.itemLevels(ref.target) }
             guard !Task.isCancelled, self.active?.ref.identity == ref.identity else { return }
             self.answers = answers
         }
@@ -1450,10 +1534,14 @@ final class DocumentModel {
         // Where the cursor goes, from the first new block where the engine put it (`placeBlocks`): into it, or into the
         // block after the new ones.
         var focusTarget: (path: ([Int]) -> [Int], cursor: CursorRequest)?
+        // A text block inside the first new block is found by the engine, as it is afterwards (`placeBlocks`): a list
+        // put next to one of its kind joins it, and its first line is no longer at the new block's path.
+        var inside: [Int]?
         let afterThem = { (first: [Int]) in Self.sibling(of: first, offset: nodes.count) }
         switch focus {
         case .inside(let relative):
-            focusTarget = ({ $0 + relative }, .end)
+            inside = relative
+            focusTarget = ({ $0 }, .end)
         case .after:
             if let next, next.type != "footnotes" {
                 if PMNode.editableTextTypes.contains(next.type) { focusTarget = (afterThem, .start) }
@@ -1476,7 +1564,7 @@ final class DocumentModel {
             // Otherwise it stays active until the new block takes focus (the keyboard stays up).
         }
         let position: BlockPlace.Position = replace ? .replace : before && anchor != nil ? .before : .after
-        let (applied, placed) = await engine.placeBlocks(blocks, at: anchor?.target, position: position, expected: replacedBlock)
+        let (applied, placed) = await engine.placeBlocks(blocks, at: anchor?.target, position: position, expected: replacedBlock, inside: inside)
         if report(applied), let focusTarget, let placed {
             await focusAfterOperation(focusTarget.path(placed), focusTarget.cursor)
         }
@@ -2094,6 +2182,27 @@ final class DocumentModel {
         case .refused: report(.refused)
         case .unavailable: break
         }
+    }
+
+    /// The active block is in a list item: the toolbar offers to indent and outdent the item.
+    var isInListItem: Bool { active?.itemPath != nil }
+
+    /// Whether the active block's list item can go a level in and out, as the engine says; nil before it answered, when
+    /// the toolbar offers neither: a tap then ended in a refusal where the step doesn't apply.
+    var activeItemLevels: ItemLevels? { activeAnswers?.itemLevels }
+
+    /// Moves the active block's list item one level in or out, as Tab and Shift-Tab do on the web (`moveItemLevel`,
+    /// Engine/src/steps.ts). The block keeps its id and stays the one being edited: the page follows it to its new place
+    /// (`followMovedBlocks`), with the keyboard and the cursor as they are.
+    func moveActiveItemLevel(inward: Bool) async {
+        guard let engine, let active, active.itemPath != nil else { return }
+        // Its input goes first: the engine moves the item it has.
+        await flush()
+        // A block without an id (code in an item) is found only by its place, which changes: its editing ends.
+        if active.ref.id == nil { deactivate() }
+        guard report(await engine.moveItemLevel(active.ref.target, inward: inward)) else { return }
+        // Its new place shows now, not with the next document event: the buttons are for the item where it is.
+        if let latest = await engine.currentDocument() { adopt(latest) }
     }
 
     func toggleTask(itemPath: [Int]) async {

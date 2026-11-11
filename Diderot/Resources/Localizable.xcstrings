@@ -2501,6 +2501,16 @@
         }
       }
     },
+    "Indent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einrücken"
+          }
+        }
+      }
+    },
     "Info": {
       "localizations": {
         "de": {
@@ -3847,6 +3857,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sonstige"
+          }
+        }
+      }
+    },
+    "Outdent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausrücken"
           }
         }
       }
