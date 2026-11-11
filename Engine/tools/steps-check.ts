@@ -145,6 +145,27 @@ expect("an item to where no list fits: refused", "tabs(tab(T, tabPanel(P))) task
   run(page({ type: "tabs", content: [{ type: "tab", attrs: { id: "t" }, content: [{ type: "tabLabel", content: [{ type: "text", text: "T" }] }, { type: "tabPanel", content: [paragraph("p", "P")] }] }] }, tasks(task("a", "A"))),
     move([1, 0], [0, 0], "after")));
 
+// A list item one level in or out (`indent`, `outdent`), as Tab and Shift-Tab on the web. The line keeps its id, so the
+// app goes on editing it where it lands.
+const level = (id: string, op: "indent" | "outdent"): Step[] => [{ op, target: { id } }];
+const bullets = () => list(item(paragraph("a", "A")), item(paragraph("b", "B")), item(paragraph("c", "C")));
+expect("indenting an item: the last of a nested list in the item before", "Vor bulletList(A/bulletList(B), C) Nach", run(around(bullets()), level("b", "indent")));
+expect("…and the next one joins that nested list", "Vor bulletList(A/bulletList(B, C)) Nach",
+  run(around(bullets()), [...level("b", "indent"), ...level("c", "indent")]));
+expect("a list's first item: refused", "Vor bulletList(A, B, C) Nach", run(around(bullets()), level("a", "indent")));
+expect("outdenting a nested item with items below it: they go along as its own", "bulletList(A/bulletList(B), C/bulletList(D))",
+  run(page(list(item(paragraph("a", "A"), list(item(paragraph("b", "B")), item(paragraph("c", "C")), item(paragraph("d", "D")))))), level("c", "outdent")));
+expect("outdenting a top-level item: its line leaves the list, which splits", "Vor bulletList(A) B bulletList(C) Nach",
+  run(around(bullets()), level("b", "outdent")));
+expect("indenting a checklist item", "Vor taskList(taskItem(A, taskList(taskItem(B)))) Nach",
+  run(around(tasks(task("a", "A"), task("b", "B"))), level("b", "indent")));
+expect("…and back", "Vor taskList(taskItem(A), taskItem(B)) Nach",
+  run(around(tasks(task("a", "A"), task("b", "B"))), [...level("b", "indent"), ...level("b", "outdent")]));
+expect("a numbered item", "Vor orderedList(A/orderedList(B)) Nach",
+  run(around({ type: "orderedList", attrs: { start: 1 }, content: [item(paragraph("a", "A")), item(paragraph("b", "B"))] }), level("b", "indent")));
+expect("a line outside a list: refused", "Vor Nach", run(around(), level("v", "indent")));
+expect("a line that is gone: refused", "Vor Nach", run(around(), level("gone", "outdent")));
+
 // A refused step refuses the steps before it too.
 const two = page(paragraph("1", "One"), paragraph("2", "Two"));
 expect("a block that is gone", "One Two", run(two, [{ op: "delete", target: { id: "1" } }, { op: "delete", target: { id: "gone" } }]));

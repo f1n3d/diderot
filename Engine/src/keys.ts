@@ -3,9 +3,10 @@
 // edits from its copy of the page and read the engine's document for the blocks to send, and a Return's save and its
 // new line went as two transactions.
 //
-// The rules are the app's, which follow the web where it lifts a line out of a list, quote, callout or toggle, where
-// Backspace takes a first item's line out of its list, and where it turns an empty code block into a paragraph. Where
-// the app differs from the web, it keeps its own: a heading split mid-text continues in a paragraph, a new line takes no
+// The rules are the app's, which follow the web where it lifts a line out of a list, quote, callout or toggle, and in
+// what Backspace does at a block's start: it takes a first item's line out of its list and a quote's first line out of
+// the quote, turns an empty code block into a paragraph, removes an empty callout and dissolves a toggle from its title.
+// Where the app differs from the web, it keeps its own: a heading split mid-text continues in a paragraph, a new line takes no
 // attributes, Backspace after an image or a divider never removes it.
 import type { JSONContent } from "@tiptap/core";
 import { Fragment, Node as PMNode, type Schema } from "@tiptap/pm/model";
@@ -21,8 +22,9 @@ export type KeyEdit = { steps: Step[]; cursor: Cursor };
 
 /**
  * What Backspace at a block's start does: joins it with the text block at `path`, removes it (an empty line after an
- * image, a table, a divider …; the app puts the cursor in the text before, which it knows), leaves the list (a first
- * item's only line, with its text), becomes a plain paragraph (an empty code block) or nothing.
+ * image, a table, a divider …, or an empty callout with its line; the app puts the cursor in the text before, which it
+ * knows), leaves the list or quote (a first item's only line or a quote's first line, with its text), becomes a plain
+ * paragraph (an empty code block, or a toggle's title, whose toggle goes) or nothing.
  */
 export type BackspacePlan = { kind: "join"; path: number[] } | { kind: "remove" } | { kind: "leave" } | { kind: "plain" } | { kind: "none" };
 
@@ -179,6 +181,9 @@ export function backspacePlan(doc: PMNode, target: Target, empty: boolean): Back
   // An empty code block becomes a paragraph, as on the web; Backspace had no way to get rid of one. With code, the key
   // is the text view's, which has nothing to delete there.
   if (found.node.type.name === "codeBlock") return { kind: empty ? "plain" : "none" };
+  // A toggle's title dissolves the toggle, as on the web (Docmost's `unsetDetails`): the title goes on as a paragraph,
+  // and the content follows it. The key did nothing there, and a toggle could only be deleted whole.
+  if (found.node.type.name === "detailsSummary") return { kind: "plain" };
   const path = pathOf(doc, found.pos);
   const $pos = doc.resolve(found.pos);
   const parent = $pos.parent, index = $pos.index();
@@ -194,7 +199,13 @@ export function backspacePlan(doc: PMNode, target: Target, empty: boolean): Back
     if (!previousItem || previousItem.childCount === 0) return { kind: "leave" };
     previousPath = [...previous(itemPath), previousItem.childCount - 1];
   } else {
-    if (index === 0) return { kind: "none" };
+    if (index === 0) {
+      // A quote's first line leaves the quote, as on the web (ProseMirror lifts it), and an empty callout goes whole, as
+      // Docmost's Backspace has it: a callout keeps the key otherwise, and so does a toggle's content.
+      if (parent.type.name === "blockquote") return { kind: "leave" };
+      if (parent.type.name === "callout" && parent.childCount === 1 && empty) return { kind: "remove" };
+      return { kind: "none" };
+    }
     previousPath = previous(path);
   }
   if (joinable.has(nodeAt(doc, previousPath)?.type.name ?? "")) return { kind: "join", path: previousPath };
@@ -219,17 +230,27 @@ export function backspaceEdit(schema: Schema, doc: PMNode, target: Target, json:
   const plan = backspacePlan(doc, target, typed.content.size === 0);
   if (!plan || plan.kind === "none") return null;
   const path = pathOf(doc, found.pos);
+  const $pos = doc.resolve(found.pos);
   if (plan.kind === "plain") {
-    return { edit: { steps: [{ op: "replace", target: { path, type: found.node.type.name }, json: [paragraph] }], cursor: { path, offset: 0 } }, plan };
+    if (found.node.type.name !== "detailsSummary") {
+      return { edit: { steps: [{ op: "replace", target: { path, type: found.node.type.name }, json: [paragraph] }], cursor: { path, offset: 0 } }, plan };
+    }
+    // The toggle's place takes its title as a paragraph, with what was typed, and its content's blocks after it.
+    const toggle = $pos.parent, togglePath = path.slice(0, -1);
+    const blocks: JSONContent[] = [schema.nodes.paragraph.create(null, typed.content).toJSON()];
+    if (toggle.childCount > 1) toggle.child(1).forEach((block) => blocks.push(block.toJSON()));
+    return { edit: { steps: [{ op: "replace", target: { path: togglePath, type: toggle.type.name }, json: blocks }], cursor: { path: togglePath, offset: 0 } }, plan };
   }
   if (plan.kind === "leave") {
-    // The line goes along as it is, with what was typed; an empty one as a new paragraph, as Return leaves a list.
-    const lifted = lift(doc, path, 2, true, typed.content.size === 0 ? paragraph : typed.toJSON());
+    // The line goes along as it is, with what was typed; an empty one as a new paragraph, as Return leaves a list. An
+    // item goes with its only line; a quote's first line goes alone.
+    const item = items.has($pos.parent.type.name);
+    const lifted = lift(doc, path, item ? 2 : 1, item, typed.content.size === 0 ? paragraph : typed.toJSON());
     return lifted ? { edit: lifted, plan } : null;
   }
-  // The block, or its item if that holds only it.
-  const $pos = doc.resolve(found.pos);
-  const removal: Step = items.has($pos.parent.type.name) && $pos.parent.childCount === 1
+  // The block, or what holds only it: its item, or the empty callout.
+  const whole = $pos.parent.childCount === 1 && (items.has($pos.parent.type.name) || $pos.parent.type.name === "callout");
+  const removal: Step = whole
     ? { op: "delete", target: { path: path.slice(0, -1), type: $pos.parent.type.name } }
     : { op: "delete", target: { path, type: found.node.type.name } };
   if (plan.kind === "remove") return { edit: { steps: [removal], cursor: null }, plan };

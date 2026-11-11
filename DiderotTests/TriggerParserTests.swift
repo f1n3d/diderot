@@ -29,6 +29,25 @@ struct TriggerParserTests {
         #expect(TriggerParser.mention(in: longer, cursor: longer.endIndex) == nil)
     }
 
+    /// The Markdown marks of the web's input rules, at a line's start and up to the cursor only.
+    @Test func markdownMarksAtALinesStart() {
+        func shortcut(_ text: String, cursor: Int? = nil) -> TriggerParser.Shortcut? {
+            let text = AttributedString(text)
+            let index = cursor.map { text.characters.index(text.startIndex, offsetBy: $0) } ?? text.endIndex
+            return TriggerParser.shortcut(in: text, cursor: index)?.shortcut
+        }
+        #expect(shortcut("# ") == .block(.heading1) && shortcut("## ") == .block(.heading2) && shortcut("### ") == .block(.heading3))
+        #expect(shortcut("- ") == .block(.bulletList) && shortcut("* ") == .block(.bulletList) && shortcut("+ ") == .block(.bulletList))
+        #expect(shortcut("1. ") == .block(.orderedList) && shortcut("12. ") == .block(.orderedList))
+        #expect(shortcut("[] ") == .block(.taskList) && shortcut("[ ] ") == .block(.taskList))
+        #expect(shortcut("> ") == .block(.quote) && shortcut("``` ") == .block(.codeBlock))
+        #expect(shortcut("---") == .divider && shortcut("—-") == .divider)
+        // With text after the cursor the mark still counts; with text before it, or without its space, it doesn't.
+        #expect(shortcut("- Rest", cursor: 2) == .block(.bulletList))
+        #expect(shortcut("a - ") == nil && shortcut("-") == nil && shortcut("#### ") == nil && shortcut(". ") == nil && shortcut("1.") == nil)
+        #expect(TriggerParser.shortcut(in: AttributedString("12. "), cursor: AttributedString("12. ").endIndex)?.length == 4)
+    }
+
     /// Mark and query are typed text: an atom between them and the cursor would be lost with the pick, and a user
     /// mention shows as "@label".
     @Test func onlyTypedTextCounts() {
