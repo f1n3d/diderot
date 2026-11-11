@@ -236,10 +236,11 @@ enum KeyResult: Equatable {
 }
 
 /// What Backspace at a block's start does (`BackspacePlan` in Engine/src/keys.ts): joins it with the text block at a
-/// path, removes it (an empty line after an image, a table …), leaves the list (an empty first item), or nothing.
+/// path, removes it (an empty line after an image, a table …), leaves the list (a first item's only line, with its
+/// text), becomes a plain paragraph (an empty code block), or nothing.
 enum BackspacePlan: Equatable, Sendable, Decodable {
     case join([Int])
-    case remove, leave, nothing
+    case remove, leave, plain, nothing
 
     private enum CodingKeys: String, CodingKey {
         case kind, path
@@ -251,6 +252,7 @@ enum BackspacePlan: Equatable, Sendable, Decodable {
         case "join": self = .join(try container.decode([Int].self, forKey: .path))
         case "remove": self = .remove
         case "leave": self = .leave
+        case "plain": self = .plain
         default: self = .nothing
         }
     }
@@ -576,6 +578,7 @@ final class WebDocumentEngine: DocumentEngine {
             case "join": .join(outcome.cursor?.path ?? [])
             case "remove": .remove
             case "leave": .leave
+            case "plain": .plain
             default: .nothing
             }
             return .done(plan, cursor: outcome.cursor)

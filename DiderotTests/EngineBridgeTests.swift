@@ -108,6 +108,17 @@ extension AppSessionRaceTests {
             let listPath = try #require(await engine.placeBlocks([list], at: nil, position: .after, expected: nil).path)
             #expect(await engine.splitContainer(after: .path(listPath + [0], type: "listItem")) == .applied)
 
+            // "Delete" on an item's only line takes the item along, and its list with the last one; Backspace turns an
+            // empty code block into a paragraph.
+            #expect(await engine.deleteBlock(.path(listPath + [0, 0], type: "paragraph")) == .applied)
+            #expect(await block(at: listPath, in: engine)?.children.map(\.plainText) == ["i2", "i3"], "the emptied item or its list stayed")
+            let codePath = try #require(await engine.placeBlocks([PMNode(type: "codeBlock")], at: nil, position: .after, expected: nil).path)
+            let codeTarget = BlockTarget.path(codePath, type: "codeBlock")
+            #expect(await engine.backspacePlans(codeTarget) == BackspacePlans(empty: .plain, text: .nothing))
+            #expect(await engine.backspace(codeTarget, holding: PMNode(type: "codeBlock"), base: nil)
+                    == .done(.plain, cursor: EngineCursor(path: codePath, offset: 0)))
+            #expect(await block(at: codePath, in: engine)?.type == "paragraph")
+
             // A synced block, an embedded one and a comment's mark: each call's arguments find what they name.
             let source = PMNode(type: "transclusionSource", attrs: ["id": "s1"], content: [paragraph(nil, "Synchron")])
             let sourcePath = try #require(await engine.placeBlocks([source], at: nil, position: .after, expected: nil).path)

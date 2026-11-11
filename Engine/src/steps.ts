@@ -4,7 +4,7 @@
 import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode, type Mark } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
-import { ReplaceStep } from "@tiptap/pm/transform";
+import { ReplaceStep, Transform } from "@tiptap/pm/transform";
 import { tabIds, withTabIds } from "./extensions";
 import { endSlot, holds, slotAt } from "./fits";
 import { checkAttributes, checkBlocks, unchanged } from "./guards";
@@ -22,9 +22,27 @@ export type Step =
   | { op: "replace"; target: Target; json: JSONContent[]; base?: JSONContent | null; expected?: JSONContent | null }
   | { op: "insert"; target: Target | null; json: JSONContent[]; position?: "before" | "after" }
   | { op: "delete"; target: Target; expected?: JSONContent | null }
+  | { op: "remove"; target: Target }
   | { op: "move"; target: Target; destination: Target; position: "before" | "after" }
   | { op: "split"; target: Target }
   | { op: "setAttributes"; target: Target; attrs: Record<string, unknown> };
+
+/** A list's items. */
+export const items = new Set(["listItem", "taskItem"]);
+const lists = new Set(["bulletList", "orderedList", "taskList"]);
+/** What goes with the only block it holds when the user deletes that block or moves it away (`remove`, `move`). */
+const goesWithItsOnlyBlock = new Set([...items, ...lists, "blockquote"]);
+
+/**
+ * The range of the block `found` with each item, list or quote around it that holds only it: without the block, an
+ * item or a list would stay with an empty line, as neither can be empty.
+ */
+function withEmptiedContainers(doc: PMNode, found: { node: PMNode; pos: number }): { from: number; to: number } {
+  const $pos = doc.resolve(found.pos);
+  let depth = $pos.depth;
+  while (depth > 0 && $pos.node(depth).childCount === 1 && goesWithItsOnlyBlock.has($pos.node(depth).type.name)) depth--;
+  return depth === $pos.depth ? { from: found.pos, to: found.pos + found.node.nodeSize } : { from: $pos.before(depth + 1), to: $pos.after(depth + 1) };
+}
 
 /**
  * Adds the steps to `tr` in order. False as soon as one is refused (the block is gone, has another type, changed since,
@@ -80,20 +98,63 @@ function applyStep(tr: Transaction, step: Step): boolean {
       tr.delete(found.pos, found.pos + found.node.nodeSize);
       return true;
     }
+    case "remove": {
+      // The user's "Delete" on a block: an item that holds only it goes with it, and so does a list with its last item
+      // or a quote with its only block. Deleted alone (`delete`), an item's line came back empty, as an item can't be
+      // without one: the trash emptied a checklist's item and left its checkbox. A callout or a table cell stays, with
+      // an empty line; an item's first line with more below it stays too, empty.
+      const found = locate(tr.doc, step.target);
+      if (!found) return false;
+      const range = withEmptiedContainers(tr.doc, found);
+      tr.delete(range.from, range.to);
+      return true;
+    }
     case "move": {
-      // Before or after another block on the same level.
+      // Before or after another block. A list's item moves on its own, as the web's handle takes each item: among
+      // items it stays one, elsewhere it comes in a list of its kind, and the list it leaves empty goes. A block that
+      // is no item goes between a list's items by splitting the list around it.
       const source = locate(tr.doc, step.target);
       const dest = locate(tr.doc, step.destination);
       if (!source || !dest || source.pos === dest.pos) return false;
-      const start = tr.steps.length;
-      tr.delete(source.pos, source.pos + source.node.nodeSize);
+      // Worked out apart from `tr`, which takes the steps only if the page differs afterwards: an item dropped onto the
+      // block next to its list's end is where it was, and Undo got a step that did nothing.
+      const work = new Transform(tr.doc);
+      const from = work.doc.resolve(source.pos).parent;
+      const range = withEmptiedContainers(work.doc, source);
+      work.delete(range.from, range.to);
       const raw = step.position === "before" ? dest.pos : dest.pos + dest.node.nodeSize;
       // Through the deletion only: `raw` is a position in the document the steps before left.
-      const pos = tr.mapping.slice(start).map(raw, step.position === "before" ? -1 : 1);
+      let pos = work.mapping.map(raw, step.position === "before" ? -1 : 1);
       // Only where the block fits, as an insert. ProseMirror fitted it in otherwise: a destination a collaborator moved
       // into a synced block, a table cell or a footnote since got its container split around the block, or lost it.
-      if (!holds(slotAt(tr.doc, pos, "before"), [source.node])) return false;
-      tr.insert(pos, source.node);
+      let node = source.node;
+      const wrapped = items.has(node.type.name) && !holds(slotAt(work.doc, pos, "before"), [node]);
+      if (wrapped) node = from.type.create(null, node);
+      if (!holds(slotAt(work.doc, pos, "before"), [node])) {
+        // Between a list's items, where it holds no such block: before the list at its start, after it at its end, and
+        // in between the list splits there.
+        const $pos = work.doc.resolve(pos);
+        if (!lists.has($pos.parent.type.name) || !holds(slotAt(work.doc, $pos.before(), "before"), [node])) return false;
+        if ($pos.index() === 0) {
+          pos = $pos.before();
+        } else if ($pos.index() === $pos.parent.childCount) {
+          pos = $pos.after();
+        } else {
+          // A numbered list's second half counts on from where the first ends.
+          const list = $pos.parent;
+          const counted = list.type.name === "orderedList" ? [{ type: list.type, attrs: { ...list.attrs, start: (list.attrs.start ?? 1) + $pos.index() } }] : undefined;
+          work.split(pos, 1, counted);
+          pos += 1;
+        }
+      }
+      work.insert(pos, node);
+      if (wrapped) {
+        // Next to a list of its kind, the item is one of that list's: dropped right after its own list, it stays there.
+        const end = pos + node.nodeSize;
+        if (work.doc.resolve(end).nodeAfter?.type === node.type) work.join(end);
+        if (work.doc.resolve(pos).nodeBefore?.type === node.type) work.join(pos);
+      }
+      if (!work.doc.eq(tr.doc)) work.steps.forEach((moved) => tr.step(moved));
       return true;
     }
     case "split": {

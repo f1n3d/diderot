@@ -33,6 +33,8 @@ struct TabsFrame<Strip: View, Content: View>: View {
             content
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Below the strip, where the block's "…" is: a list or code block there keeps no room for it.
+                .environment(\.showsBlockActions, false)
         }
         .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(.separator)))

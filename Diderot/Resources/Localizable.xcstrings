@@ -353,22 +353,6 @@
         }
       }
     },
-    "%lld of %lld done": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld von %lld erledigt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld of %2$lld done"
-          }
-        }
-      }
-    },
     "%lld replies": {
       "localizations": {
         "de": {
@@ -999,16 +983,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Änderungen, die du auf diesem Server gemacht hast, sind noch nicht dort angekommen. Entfernst du den Server, werden sie auf diesem Gerät gelöscht."
-          }
-        }
-      }
-    },
-    "Checklist": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checkliste"
           }
         }
       }
