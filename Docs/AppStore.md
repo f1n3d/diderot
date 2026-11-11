@@ -92,6 +92,18 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Search results and the template list keep their place when you come back
 > • Editing a comment keeps its line breaks
 
+**What's New in 1.2.3** (not submitted yet: 1.2.2 waits for App Review, with the text above, which `submit.py` reads. This takes its place, above the lists of 1.2.2, 1.2.1 and 1.2.0, once 1.2.3 is submitted)
+
+> • Lists as on the web: each item of a bullet list, numbered list or checklist is dragged, arranged and duplicated on its own
+> • List items go a level in and out with two new buttons above the keyboard
+> • Markdown marks turn a line as you type: "- " a list, "1. " a numbered list, "[] " a checklist, "# " a heading, "> " a quote, "``` " a code block, "---" a divider
+> • Code blocks show in syntax colors
+> • Checklists and toggles show as plain rows, without a card
+> • The trash in a list item removes the item instead of emptying it
+> • Backspace as on the web: it turns an empty code block into text, takes a list's first item and a quote's first line out, removes an empty callout and dissolves a toggle from its title
+> • Lists and code blocks have a "…" to duplicate or delete the whole block
+> • Bullet lists, and numbered lists, that come to lie next to each other become one
+
 ## Deutsch
 
 **Untertitel** (höchstens 30 Zeichen)
@@ -165,6 +177,18 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Anhänge und Datenbank-Dateien von einer anderen Website nennen sie, bevor du sie öffnest
 > • Suchergebnisse und die Vorlagenliste behalten ihre Stelle, wenn du zurückkommst
 > • Beim Bearbeiten eines Kommentars bleiben seine Zeilenumbrüche
+
+**Neu in 1.2.3** (noch nicht eingereicht: 1.2.2 wartet auf App Review, mit dem Text oben, den `submit.py` liest. Dieser tritt an seine Stelle, über die Listen von 1.2.2, 1.2.1 und 1.2.0, sobald 1.2.3 eingereicht wird)
+
+> • Listen wie im Web: Jeder Punkt einer Aufzählung, nummerierten Liste oder Checkliste lässt sich einzeln ziehen, anordnen und duplizieren
+> • Listenpunkte rücken mit zwei neuen Knöpfen über der Tastatur ein und aus
+> • Markdown-Kürzel wandeln eine Zeile beim Tippen um: „- “ in eine Liste, „1. “ in eine nummerierte Liste, „[] “ in eine Checkliste, „# “ in eine Überschrift, „> “ in ein Zitat, „``` “ in einen Codeblock, „---“ in einen Trenner
+> • Codeblöcke erscheinen in Syntaxfarben
+> • Checklisten und Toggles erscheinen als schlichte Zeilen, ohne Karte
+> • Der Papierkorb in einem Listenpunkt entfernt den Punkt, statt ihn nur zu leeren
+> • Backspace wie im Web: Es macht aus einem leeren Codeblock Text, nimmt den ersten Listenpunkt und die erste Zeile eines Zitats heraus, entfernt einen leeren Callout und löst einen Toggle von seinem Titel aus auf
+> • Listen und Codeblöcke haben ein „…“ zum Duplizieren oder Löschen des ganzen Blocks
+> • Aufzählungen und nummerierte Listen, die nebeneinander zu liegen kommen, werden zu einer
 
 ## App Review
 
