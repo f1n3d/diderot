@@ -448,9 +448,8 @@ struct ToggleNodeView: View {
                 .environment(\.showsBlockActions, false)
             }
         }
-        .padding(12)
+        // No card around it, as on the web: the arrow and the indented content show what belongs to it.
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         // Editable pages follow the stored state, also a collaborator's; read-only pages keep their own (web parity).
         .onChange(of: model.isEditable ? node.bool("open") ?? false : nil) { _, open in
             if let open { withAnimation(.snappy) { isExpanded = open } }
@@ -475,9 +474,9 @@ struct CodeNodeView: View {
     private var isActive: Bool { model.active?.ref == ref }
     private var code: String { isActive ? model.activeCode : node.plainText }
 
-    /// Code as in the reader, with find matches highlighted.
-    private var displayedCode: AttributedString {
-        var text = AttributedString(code.isEmpty ? " " : code)
+    /// Code as in the reader, in its syntax colors (`colored`), with find matches highlighted.
+    private func displayed(_ colored: AttributedString) -> AttributedString {
+        var text = code.isEmpty ? AttributedString(" ") : colored
         if let find { FindMatcher.highlight(&text, find: find, ref: ref) }
         return text
     }
@@ -560,9 +559,12 @@ struct CodeNodeView: View {
                         }
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(.tertiary)
-                        Text(displayedCode)
-                            .font(.system(.callout, design: .monospaced))
-                            .fixedSize(horizontal: true, vertical: false)
+                        // Colored when it isn't being edited: the page's one editor shows its text in one color.
+                        HighlightedCode(code: code, language: node.string("language")) { colored in
+                            Text(displayed(colored))
+                                .font(.system(.callout, design: .monospaced))
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
                     }
                     .padding(12)
                 }

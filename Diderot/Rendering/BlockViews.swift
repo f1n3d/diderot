@@ -268,11 +268,13 @@ struct CodeBlockView: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: true) {
-            Text(code)
-                .font(.system(.callout, design: .monospaced))
-                .fixedSize(horizontal: true, vertical: false)
-                .textSelection(.enabled)
-                .padding(12)
+            HighlightedCode(code: code, language: language) { text in
+                Text(text)
+                    .font(.system(.callout, design: .monospaced))
+                    .fixedSize(horizontal: true, vertical: false)
+                    .textSelection(.enabled)
+                    .padding(12)
+            }
         }
         // Only a wider one scrolls: a swipe over a narrow one turns the presentation's slide.
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)

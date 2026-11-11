@@ -41,7 +41,8 @@ jobs:
 
       - name: Engine checks
         # The engine's own extensions must match Docmost's document format (Engine/FORMAT.md), the sources and the check
-        # tools must type-check (esbuild only strips types), and the committed engine.js must be the build of Engine/src.
+        # tools must type-check (esbuild only strips types), and the committed engine.js and highlight.js must be the
+        # build of Engine/src.
         # Corepack takes pnpm's version from Engine/package.json.
         working-directory: Engine
         env:
@@ -51,7 +52,7 @@ jobs:
           corepack pnpm run check
           corepack pnpm run typecheck
           node build.mjs
-          git diff --exit-code -- ../Diderot/Resources/Engine/engine.js
+          git diff --exit-code -- ../Diderot/Resources/Engine
 
       - name: Project checks
         # Tools/check-project.sh: translations, project.yml against the Xcode project, shellcheck. The tools in the versions
