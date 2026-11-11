@@ -92,6 +92,14 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Search results and the template list keep their place when you come back
 > • Editing a comment keeps its line breaks
 
+**What's New in 1.2.3** (not submitted yet: 1.2.2 waits for App Review, with the text above, which `submit.py` reads. This takes its place, above the lists of 1.2.2, 1.2.1 and 1.2.0, once 1.2.3 is submitted)
+
+> • Lists as on the web: each item of a bullet list, numbered list or checklist is dragged, arranged and duplicated on its own
+> • Checklists show as plain rows of checkboxes
+> • The trash in a list item removes the item instead of emptying it
+> • Backspace in an empty code block turns it into text, and at the start of a list's first item it takes the line out of the list
+> • Lists and code blocks have a "…" to duplicate or delete the whole block
+
 ## Deutsch
 
 **Untertitel** (höchstens 30 Zeichen)
@@ -165,6 +173,14 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Anhänge und Datenbank-Dateien von einer anderen Website nennen sie, bevor du sie öffnest
 > • Suchergebnisse und die Vorlagenliste behalten ihre Stelle, wenn du zurückkommst
 > • Beim Bearbeiten eines Kommentars bleiben seine Zeilenumbrüche
+
+**Neu in 1.2.3** (noch nicht eingereicht: 1.2.2 wartet auf App Review, mit dem Text oben, den `submit.py` liest. Dieser tritt an seine Stelle, über die Listen von 1.2.2, 1.2.1 und 1.2.0, sobald 1.2.3 eingereicht wird)
+
+> • Listen wie im Web: Jeder Punkt einer Aufzählung, nummerierten Liste oder Checkliste lässt sich einzeln ziehen, anordnen und duplizieren
+> • Checklisten erscheinen als schlichte Zeilen mit Kästchen
+> • Der Papierkorb in einem Listenpunkt entfernt den Punkt, statt ihn nur zu leeren
+> • Backspace in einem leeren Codeblock macht daraus Text, am Anfang des ersten Listenpunkts nimmt es die Zeile aus der Liste
+> • Listen und Codeblöcke haben ein „…“ zum Duplizieren oder Löschen des ganzen Blocks
 
 ## App Review
 
