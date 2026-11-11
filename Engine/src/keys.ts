@@ -3,14 +3,15 @@
 // edits from its copy of the page and read the engine's document for the blocks to send, and a Return's save and its
 // new line went as two transactions.
 //
-// The rules are the app's, which follow the web where it lifts a line out of a list, quote, callout or toggle. Where the
-// app differs from the web, it keeps its own: a heading split mid-text continues in a paragraph, a new line takes no
+// The rules are the app's, which follow the web where it lifts a line out of a list, quote, callout or toggle, where
+// Backspace takes a first item's line out of its list, and where it turns an empty code block into a paragraph. Where
+// the app differs from the web, it keeps its own: a heading split mid-text continues in a paragraph, a new line takes no
 // attributes, Backspace after an image or a divider never removes it.
 import type { JSONContent } from "@tiptap/core";
 import { Fragment, Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 import { difference, rebase } from "./rebase";
-import { applySteps, locate, pathOf, type Step, type Target } from "./steps";
+import { applySteps, items, locate, pathOf, type Step, type Target } from "./steps";
 
 /** Where the cursor goes: the text block at `path`, `offset` into its content (ProseMirror's count). */
 export type Cursor = { path: number[]; offset: number };
@@ -20,12 +21,11 @@ export type KeyEdit = { steps: Step[]; cursor: Cursor };
 
 /**
  * What Backspace at a block's start does: joins it with the text block at `path`, removes it (an empty line after an
- * image, a table, a divider …; the app puts the cursor in the text before, which it knows), leaves the list (an empty
- * first item) or nothing.
+ * image, a table, a divider …; the app puts the cursor in the text before, which it knows), leaves the list (a first
+ * item's only line, with its text), becomes a plain paragraph (an empty code block) or nothing.
  */
-export type BackspacePlan = { kind: "join"; path: number[] } | { kind: "remove" } | { kind: "leave" } | { kind: "none" };
+export type BackspacePlan = { kind: "join"; path: number[] } | { kind: "remove" } | { kind: "leave" } | { kind: "plain" } | { kind: "none" };
 
-const items = new Set(["listItem", "taskItem"]);
 /** Text blocks the app edits as text, which Backspace joins (`DocumentModel.editableTextTypes`). */
 const joinable = new Set(["paragraph", "heading", "detailsSummary"]);
 const paragraph: JSONContent = { type: "paragraph" };
@@ -176,6 +176,9 @@ export function enterLinesEdit(schema: Schema, doc: PMNode, target: Target, json
 export function backspacePlan(doc: PMNode, target: Target, empty: boolean): BackspacePlan | undefined {
   const found = locate(doc, target);
   if (!found) return undefined;
+  // An empty code block becomes a paragraph, as on the web; Backspace had no way to get rid of one. With code, the key
+  // is the text view's, which has nothing to delete there.
+  if (found.node.type.name === "codeBlock") return { kind: empty ? "plain" : "none" };
   const path = pathOf(doc, found.pos);
   const $pos = doc.resolve(found.pos);
   const parent = $pos.parent, index = $pos.index();
@@ -186,7 +189,9 @@ export function backspacePlan(doc: PMNode, target: Target, empty: boolean): Back
     if (parent.childCount !== 1) return { kind: "none" };
     const itemPath = path.slice(0, -1);
     const previousItem = itemPath[itemPath.length - 1] > 0 ? $pos.node(-1).child(itemPath[itemPath.length - 1] - 1) : undefined;
-    if (!previousItem || previousItem.childCount === 0) return { kind: empty ? "leave" : "none" };
+    // A first item leaves the list, with its text, as on the web: with text the key did nothing, and a checkbox or a
+    // bullet could only go through the block type.
+    if (!previousItem || previousItem.childCount === 0) return { kind: "leave" };
     previousPath = [...previous(itemPath), previousItem.childCount - 1];
   } else {
     if (index === 0) return { kind: "none" };
@@ -198,11 +203,12 @@ export function backspacePlan(doc: PMNode, target: Target, empty: boolean): Back
 
 /**
  * Backspace at the start of the text block at `target`, which holds `json` by now (its input goes with it): joins it with
- * the text block before, removes it, or leaves the list (`backspacePlan`). Decided and joined with the line as the engine
- * holds it (`lineNow`, from `base`): a collaborator's words in it go along, and a line they typed into isn't removed. Null
- * when it does nothing there, undefined when the block is gone or another type, or both changed the same text. The
- * cursor goes where the texts meet, or into the line that leaves the list; after a removal (cursor null) the app puts it
- * into the text before.
+ * the text block before, removes it, leaves the list, or turns from an empty code block into a paragraph
+ * (`backspacePlan`). Decided and joined with the line as the engine holds it (`lineNow`, from `base`): a collaborator's
+ * words in it go along, and a line or code block they typed into isn't removed or turned. Null when it does nothing
+ * there, undefined when the block is gone or another type, or both changed the same text. The cursor goes where the
+ * texts meet, into the line that leaves the list, or into the new paragraph; after a removal (cursor null) the app puts
+ * it into the text before.
  */
 export function backspaceEdit(schema: Schema, doc: PMNode, target: Target, json: JSONContent, base?: JSONContent | null):
   { edit: { steps: Step[]; cursor: Cursor | null }; plan: BackspacePlan } | null | undefined {
@@ -213,8 +219,12 @@ export function backspaceEdit(schema: Schema, doc: PMNode, target: Target, json:
   const plan = backspacePlan(doc, target, typed.content.size === 0);
   if (!plan || plan.kind === "none") return null;
   const path = pathOf(doc, found.pos);
+  if (plan.kind === "plain") {
+    return { edit: { steps: [{ op: "replace", target: { path, type: found.node.type.name }, json: [paragraph] }], cursor: { path, offset: 0 } }, plan };
+  }
   if (plan.kind === "leave") {
-    const lifted = lift(doc, path, 2, true, paragraph);
+    // The line goes along as it is, with what was typed; an empty one as a new paragraph, as Return leaves a list.
+    const lifted = lift(doc, path, 2, true, typed.content.size === 0 ? paragraph : typed.toJSON());
     return lifted ? { edit: lifted, plan } : null;
   }
   // The block, or its item if that holds only it.

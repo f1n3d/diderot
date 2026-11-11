@@ -1970,7 +1970,7 @@ struct DocumentModelTests {
         #expect(model.active?.ref.id == "b")
     }
 
-    /// Backspace in an empty first item leaves the list, as the engine decides (Engine/tools/keys-check.ts): the cursor
+    /// Backspace in a first item leaves the list, as the engine decides (Engine/tools/keys-check.ts): the cursor
     /// goes into the line it puts before the list, once the engine's document holds it.
     @Test(.timeLimit(.minutes(1))) func backspaceLeavingAListFocusesTheNewLine() async throws {
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list([("a", nil), ("b", "Zwei")])]))
@@ -1985,6 +1985,107 @@ struct DocumentModelTests {
         #expect(model.backspaceAtStart())
         while model.active?.ref.id != "n" { try await Task.sleep(for: .milliseconds(10)) }
         #expect(model.active?.ref == NodeRef(path: [0], id: "n"))
+    }
+
+    /// A first item with text leaves the list too, as on the web: the key goes to the engine with the text, where it
+    /// used to end at a plan of "nothing".
+    @Test(.timeLimit(.minutes(1))) func backspaceInAFirstItemWithTextGoesToTheEngine() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.list([("a", "Eins"), ("b", "Zwei")])]))
+        let model = try Self.model(engine)
+        let line = try #require(model.node(at: [0, 0, 0]))
+        model.activate(NodeRef(path: [0, 0, 0], node: line), node: line)
+        engine.backspaceResult = .done(.leave, cursor: EngineCursor(path: [0], offset: 0))
+        let typed = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins!")])
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [typed, Self.list([("b", "Zwei")])]) }
+
+        // Input not yet saved goes with the key.
+        model.activeText.append(AttributedString("!"))
+        model.activeTextChanged()
+        #expect(model.backspaceAtStart())
+        while model.active?.ref.path != [0] { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.backspaces.first?.node.plainText == "Eins!")
+        #expect(model.active?.ref == NodeRef(path: [0], id: "a"))
+
+        // The line stays the block being edited: its next save starts from what went with the key. From the block
+        // before that input, the engine took the "!" for a collaborator's.
+        engine.whileInserting = nil
+        model.activeText.append(AttributedString("?"))
+        model.activeTextChanged()
+        await model.flush()
+        #expect(engine.saved.last?.plainText == "Eins!?")
+        #expect(engine.bases.last??.plainText == "Eins!")
+    }
+
+    /// Backspace in an empty code block goes to the engine, which turns it into a paragraph, as on the web
+    /// (Engine/tools/keys-check.ts): the cursor goes into the paragraph. Backspace had no way to get rid of a code block.
+    /// The document with the paragraph can come before the key's answer: editing goes on meanwhile. A code block that
+    /// turned into another block used to end it (`followMovedBlocks`), and the keyboard hid until the paragraph had the
+    /// cursor.
+    @Test(.timeLimit(.minutes(1))) func backspaceInAnEmptyCodeBlockMakesItAParagraph() async throws {
+        let code = PMNode(type: "codeBlock")
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [code]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: code), node: code)
+        engine.backspaceResult = .done(.plain, cursor: EngineCursor(path: [0], offset: 0))
+        var editingEnded = false
+        engine.whileInserting = {
+            engine.sendDocument(PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "n"])]))
+            editingEnded = !model.hasActiveBlock
+        }
+
+        #expect(model.backspaceAtStart())
+        while model.active?.type != "paragraph" { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(!editingEnded, "Editing ended between the code block and the paragraph")
+        #expect(engine.backspaces.first?.node.type == "codeBlock")
+        #expect(engine.backspaces.first?.node.children.isEmpty == true)
+        #expect(model.active?.ref == NodeRef(path: [0], id: "n"))
+    }
+
+    /// A list's items are elements of their own, as the web's handle takes each item: "Arrange Blocks" lists them one
+    /// by one, and a move names the item, not its list (the engine moves it, Engine/tools/steps-check.ts).
+    @Test(.timeLimit(.minutes(1))) func listItemsAreElementsOfTheirOwn() async throws {
+        func line(_ id: String, _ text: String) -> PMNode { PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)]) }
+        let tasks = PMNode(type: "taskList", content: ["a", "b"].map { PMNode(type: "taskItem", attrs: ["checked": .bool(false)], content: [line($0, $0)]) })
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line("v", "Vor"), tasks, Self.list([("x", "X"), ("y", "Y")])]))
+        let model = try Self.model(engine)
+
+        #expect(model.elements.map(\.node.type) == ["paragraph", "taskItem", "taskItem", "listItem", "listItem"])
+        #expect(model.elements.map(\.ref.path) == [[0], [1, 0], [1, 1], [2, 0], [2, 1]])
+        // The second checklist item to the top, as the arrange sheet reports it; then the first by drag below the bullet
+        // list's last item, and a bullet item above the paragraph.
+        await model.moveBlocks(from: IndexSet(integer: 2), to: 0)
+        await model.moveBlock(identity: model.elements[1].ref.identity, relativeTo: model.elements[4].ref, before: false)
+        await model.moveBlock(identity: model.elements[3].ref.identity, relativeTo: model.elements[0].ref, before: true)
+        #expect(engine.moved.map(\.target) == [.path([1, 1], type: "taskItem"), .path([1, 0], type: "taskItem"), .path([2, 0], type: "listItem")])
+        #expect(engine.moved.map(\.destination) == [.id("v", path: [0]), .path([2, 1], type: "listItem"), .id("v", path: [0])])
+        #expect(engine.moved.map(\.position) == [.before, .after, .before])
+    }
+
+    /// "Duplicate" in a list item copies the item: its first line copied alone became a second line of the same item.
+    /// Another line of the item is copied as that line.
+    @Test(.timeLimit(.minutes(1))) func duplicateInAnItemCopiesTheItem() async throws {
+        func line(_ id: String, _ text: String) -> PMNode { PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)]) }
+        let item = PMNode(type: "taskItem", attrs: ["checked": .bool(true)], content: [line("a", "Eins"), line("b", "Zwei")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "taskList", content: [item])]))
+        let model = try Self.model(engine)
+
+        await model.duplicate(NodeRef(path: [0, 0, 0], node: item.children[0]))
+        await model.duplicate(NodeRef(path: [0, 0, 1], node: item.children[1]))
+        #expect(engine.inserted.map(\.node.type) == ["taskItem", "paragraph"])
+        #expect(engine.inserted.first?.node.plainText == "EinsZwei")
+        #expect(engine.inserted.first?.node.bool("checked") == true)
+        #expect(engine.inserted.map(\.target) == [.path([0, 0], type: "taskItem"), .id("b", path: [0, 0, 1])])
+    }
+
+    /// In a code block with code, Backspace at its start stays the text view's, which has nothing to delete there.
+    @Test func backspaceInACodeBlockWithCodeStaysTheTextViews() throws {
+        let code = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let x = 1")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [code]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: code), node: code)
+
+        #expect(!model.backspaceAtStart())
+        #expect(engine.backspaces.isEmpty)
     }
 
     /// "/Heading" in an item's only line goes to the engine as a conversion, which takes the line out of the list as the
@@ -2518,7 +2619,12 @@ final class FakeDocumentEngine: DocumentEngine {
         deleted.append(target)
         return .applied
     }
-    func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult { .applied }
+    /// The moves, as the model sent them.
+    private(set) var moved: [(target: BlockTarget, destination: BlockTarget, position: BlockInsertPosition)] = []
+    func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult {
+        moved.append((target, destination, position))
+        return .applied
+    }
     func splitContainer(after child: BlockTarget) async -> EngineResult {
         splitAfter.append(child)
         return .applied

@@ -276,6 +276,9 @@ private struct LongPressPlacesCaret: ViewModifier {
 
 // MARK: - Lists
 
+/// A bullet or numbered list. The items of a list on the page's top level are elements of their own
+/// (`DocumentModel.elements`): each moves by long-press and drag, as the web's handle takes each item. The "…" at the
+/// list's top right is the whole list's (`BlockDragModifier`).
 struct ListNodeView: View {
     let model: DocumentModel
     let node: PMNode
@@ -293,6 +296,9 @@ struct ListNodeView: View {
                         .accessibilityHidden(true)
                     NodeListView(model: model, nodes: item.node.children, parentPath: item.ref.path, spacing: 6)
                         .environment(\.listDepth, depth + 1)
+                        .movesAsElement(item, of: ref, model: model)
+                        // The first item's text ends before the list's "…".
+                        .clearOfBlockActions(applies: item.ref.path.last == 0)
                 }
             }
         }
@@ -307,25 +313,16 @@ struct ListNodeView: View {
     }
 }
 
+/// A checklist as on the web: a row per item, no card around them. Its items are elements of their own on the page's
+/// top level, and its "…" is the whole list's, as a bullet list's (`ListNodeView`).
 struct TaskListNodeView: View {
     let model: DocumentModel
     let node: PMNode
     let ref: NodeRef
     @Environment(\.listDepth) private var depth
 
-    private var doneCount: Int { node.children.filter { $0.bool("checked") == true }.count }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if ref.isTopLevel && node.children.count > 1 {
-                HStack {
-                    Label("Checklist", systemImage: "checklist")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Chip(text: String(localized: "\(doneCount) of \(node.children.count) done"))
-                }
-            }
             ForEach(NodeEntry.entries(node.children, parentPath: ref.path)) { item in
                 let checked = item.node.bool("checked") == true
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -342,14 +339,25 @@ struct TaskListNodeView: View {
                     NodeListView(model: model, nodes: item.node.children, parentPath: item.ref.path, spacing: 6)
                         .environment(\.listDepth, depth + 1)
                         .foregroundStyle(checked ? .secondary : .primary)
+                        .movesAsElement(item, of: ref, model: model)
+                        // The first item's text ends before the list's "…".
+                        .clearOfBlockActions(applies: item.ref.path.last == 0)
                 }
             }
         }
-        .padding(ref.isTopLevel && node.children.count > 1 ? 14 : 0)
-        .background {
-            if ref.isTopLevel && node.children.count > 1 {
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemBackground))
-            }
+    }
+}
+
+private extension View {
+    /// An item's blocks, beside its bullet, number or checkbox, move the item of a top-level list `list` by long-press
+    /// and drag and take drops (`BlockMoveModifier`). On them, not on the whole row: as a drag's source, the row gave its
+    /// frame to the text for accessibility, the list's "…" included, and a tap at the text's end met the "…".
+    @ViewBuilder
+    func movesAsElement(_ item: NodeEntry, of list: NodeRef, model: DocumentModel) -> some View {
+        if list.isTopLevel {
+            modifier(BlockMoveModifier(model: model, entry: item))
+        } else {
+            self
         }
     }
 }
@@ -436,6 +444,8 @@ struct ToggleNodeView: View {
                     NodeView(model: model, node: entry.node, ref: entry.ref)
                 }
                 .padding(.leading, 30)
+                // Below the title's row, where the toggle's "…" is: a list or code block there keeps no room for it.
+                .environment(\.showsBlockActions, false)
             }
         }
         .padding(12)
@@ -498,6 +508,8 @@ struct CodeNodeView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
             }
+            // "Copy" stays beside the block's "…", which a code block not being edited shows.
+            .clearOfBlockActions(inset: 12)
             .padding(.horizontal, 12)
             .padding(.top, 8)
             if isActive {

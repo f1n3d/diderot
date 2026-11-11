@@ -207,11 +207,13 @@ class DocmostEngine {
     return applied ? path! : applied;
   }
 
+  /** The user's "Delete" on a block: it goes, with the item, list or quote that holds only it (`remove` in src/steps.ts). */
   deleteBlock(target: Target): boolean | null {
-    return this.batch([{ op: "delete", target }]);
+    return this.batch([{ op: "remove", target }]);
   }
 
-  /** Moves a block before or after another block on the same level. */
+  /** Moves a block before or after another block; a list's item on its own, also into another list or out of lists
+   * (`move` in src/steps.ts). */
   moveBlock(target: Target, destination: Target, position: "before" | "after"): boolean | null {
     return this.batch([{ op: "move", target, destination, position }]);
   }
@@ -265,8 +267,8 @@ class DocmostEngine {
 
   /**
    * Backspace at the start of a text block that holds `json` by now, made from `base`: joins it with the text block
-   * before, removes it or leaves the list (`backspaceEdit`). Says which, with the cursor (none after a removal); "none"
-   * when it does nothing there.
+   * before, removes it, leaves the list or turns from an empty code block into a paragraph (`backspaceEdit`). Says
+   * which, with the cursor (none after a removal); "none" when it does nothing there.
    */
   backspace(target: Target, json: JSONContent, base?: JSONContent | null): { kind: BackspacePlan["kind"]; cursor: Cursor | null } | false | null {
     let outcome: { kind: BackspacePlan["kind"]; cursor: Cursor | null } | undefined;

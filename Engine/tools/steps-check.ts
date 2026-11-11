@@ -77,6 +77,74 @@ expect("a move after an insert", "Two Three X One", run(page(paragraph("1", "One
   { op: "move", target: { path: [0] }, destination: { path: [3] }, position: "after" },
 ]));
 
+// The user's "Delete" (`remove`): the block goes with the item that holds only it, the list with its last item and a
+// quote with its only block. Deleted alone, an item's line came back empty: ProseMirror fills what can't be empty.
+const remove = (path: number[]): Step[] => [{ op: "remove", target: { path, type: "paragraph" } }];
+const task = (id: string, text: string): JSONContent => ({ type: "taskItem", attrs: { checked: false }, content: [paragraph(id, text)] });
+const tasks = (...items: JSONContent[]): JSONContent => ({ type: "taskList", content: items });
+const around = (...content: JSONContent[]) => page(paragraph("v", "Vor"), ...content, paragraph("n", "Nach"));
+expect("a line deleted alone leaves its item", "Vor taskList(taskItem(A), taskItem(∅)) Nach",
+  run(around(tasks(task("a", "A"), task("b", "B"))), [{ op: "delete", target: { path: [1, 1, 0], type: "paragraph" } }]));
+expect("removing a checklist item's line", "Vor taskList(taskItem(A), taskItem(C)) Nach",
+  run(around(tasks(task("a", "A"), task("b", "B"), task("c", "C"))), remove([1, 1, 0])));
+expect("…the last item's: the checklist goes", "Vor Nach", run(around(tasks(task("a", "A"))), remove([1, 0, 0])));
+expect("…a bullet item's", "Vor bulletList(A) Nach", run(around(list(item(paragraph("a", "A")), item(paragraph("b", "B")))), remove([1, 1, 0])));
+expect("…a nested list's only item's: the nested list goes, its item stays", "Vor bulletList(A, B) Nach",
+  run(around(list(item(paragraph("a", "A"), list(item(paragraph("x", "X")))), item(paragraph("b", "B")))), remove([1, 0, 1, 0, 0])));
+expect("…an item's first line with more below: emptied, the item stays", "Vor bulletList(∅/bulletList(X)) Nach",
+  run(around(list(item(paragraph("a", "A"), list(item(paragraph("x", "X")))))), remove([1, 0, 0])));
+expect("…an item's second line", "Vor bulletList(A) Nach", run(around(list(item(paragraph("a", "A"), paragraph("b", "B")))), remove([1, 0, 1])));
+expect("removing a quote's only line: the quote goes", "Vor Nach", run(around({ type: "blockquote", content: [paragraph("q", "Q")] }), remove([1, 0])));
+expect("…one of its lines", "Vor blockquote(R) Nach",
+  run(around({ type: "blockquote", content: [paragraph("q", "Q"), paragraph("r", "R")] }), remove([1, 0])));
+expect("removing a callout's only line: the callout stays", "Vor callout(∅) Nach",
+  run(around({ type: "callout", attrs: { type: "info" }, content: [paragraph("c", "C")] }), remove([1, 0])));
+expect("removing a whole list", "Vor Nach", run(around(tasks(task("a", "A"), task("b", "B"))), [{ op: "remove", target: { path: [1], type: "taskList" } }]));
+expect("removing the page's only block", "∅", run(page(tasks(task("a", "A"))), remove([0, 0, 0])));
+expect("removing a block that is gone", "Vor Nach", run(around(), [{ op: "remove", target: { id: "gone" } }]));
+
+// A list's item moves on its own (`move`), as the web's handle takes each item: among items it stays one, elsewhere it
+// comes in a list of its kind, and the list it leaves empty goes. Another block splits a list it goes into.
+const move = (target: number[], destination: number[], position: "before" | "after"): Step[] => [{ op: "move", target: { path: target }, destination: { path: destination }, position }];
+const abc = () => tasks(task("a", "A"), task("b", "B"), task("c", "C"));
+expect("an item within its list", "Vor taskList(taskItem(B), taskItem(C), taskItem(A)) Nach", run(around(abc()), move([1, 0], [1, 2], "after")));
+expect("…up", "Vor taskList(taskItem(C), taskItem(A), taskItem(B)) Nach", run(around(abc()), move([1, 2], [1, 0], "before")));
+expect("an item into another checklist", "taskList(taskItem(A), taskItem(C)) Mitte taskList(taskItem(X), taskItem(B), taskItem(Y))",
+  run(page(abc(), paragraph("m", "Mitte"), tasks(task("x", "X"), task("y", "Y"))), move([0, 1], [2, 0], "after")));
+expect("a list's only item into another: its list goes", "Mitte taskList(taskItem(X), taskItem(A))",
+  run(page(tasks(task("a", "A")), paragraph("m", "Mitte"), tasks(task("x", "X"))), move([0, 0], [2, 0], "after")));
+expect("an item out of its list: in a list of its own", "taskList(taskItem(B)) Vor taskList(taskItem(A), taskItem(C)) Nach",
+  run(around(abc()), move([1, 1], [0], "before")));
+expect("…as the item it was, checked", [true],
+  ((tr) => (applySteps(tr, move([1, 0], [0], "before")) ? [tr.doc.child(0).child(0).attrs.checked] : []))(
+    EditorState.create({ schema, doc: around(tasks({ type: "taskItem", attrs: { checked: true }, content: [paragraph("a", "A")] }, task("b", "B"))) }).tr));
+expect("an item to right after its list: it stays the list's", "Vor taskList(taskItem(A), taskItem(C), taskItem(B)) Nach",
+  run(around(abc()), move([1, 1], [2], "before")));
+expect("…to right before it", "Vor taskList(taskItem(B), taskItem(A), taskItem(C)) Nach", run(around(abc()), move([1, 1], [0], "after")));
+expect("an item to where it is, the list's end from outside: no step, so nothing for Undo", [true, 0],
+  ((tr) => [applySteps(tr, move([1, 2], [2], "before")), tr.steps.length])(EditorState.create({ schema, doc: around(abc()) }).tr));
+expect("a bullet item out of its list: in a bullet list", "bulletList(B) Vor bulletList(A) Nach",
+  run(around(list(item(paragraph("a", "A")), item(paragraph("b", "B")))), move([1, 1], [0], "before")));
+expect("a checklist item next to a bullet list: a checklist of its own", "bulletList(X) taskList(taskItem(A)) Nach",
+  run(page(list(item(paragraph("x", "X"))), paragraph("n", "Nach"), tasks(task("a", "A"))), move([2, 0], [0], "after")));
+expect("a paragraph between a checklist's items: the list splits", "taskList(taskItem(A)) Vor taskList(taskItem(B), taskItem(C)) Nach",
+  run(around(abc()), move([0], [1, 0], "after")));
+expect("…before its first item: before the list", "Vor Nach taskList(taskItem(A), taskItem(B), taskItem(C))",
+  run(page(paragraph("v", "Vor"), abc(), paragraph("n", "Nach")), move([2], [1, 0], "before")));
+expect("…after its last item: after the list", "taskList(taskItem(A), taskItem(B), taskItem(C)) Vor Nach",
+  run(around(abc()), move([0], [1, 2], "after")));
+const numbered = (start: number, ...items: JSONContent[]): JSONContent => ({ type: "orderedList", attrs: { start }, content: items });
+const starts = (doc: PMNode) => { const found: number[] = []; doc.forEach((node) => { if (node.type.name === "orderedList") found.push(node.attrs.start); }); return found; };
+expect("a paragraph between a numbered list's items: its second half counts on", ["orderedList(A, B) Vor orderedList(C) Nach", [3, 5]],
+  ((tr) => (applySteps(tr, move([0], [1, 1], "after")) ? [describe(tr.doc), starts(tr.doc)] : []))(
+    EditorState.create({ schema, doc: around(numbered(3, item(paragraph("a", "A")), item(paragraph("b", "B")), item(paragraph("c", "C")))) }).tr));
+expect("a numbered item out of its list: a numbered list from 1", ["orderedList(B) Vor orderedList(A, C) Nach", [1, 3]],
+  ((tr) => (applySteps(tr, move([1, 1], [0], "before")) ? [describe(tr.doc), starts(tr.doc)] : []))(
+    EditorState.create({ schema, doc: around(numbered(3, item(paragraph("a", "A")), item(paragraph("b", "B")), item(paragraph("c", "C")))) }).tr));
+expect("an item to where no list fits: refused", "tabs(tab(T, tabPanel(P))) taskList(taskItem(A))",
+  run(page({ type: "tabs", content: [{ type: "tab", attrs: { id: "t" }, content: [{ type: "tabLabel", content: [{ type: "text", text: "T" }] }, { type: "tabPanel", content: [paragraph("p", "P")] }] }] }, tasks(task("a", "A"))),
+    move([1, 0], [0, 0], "after")));
+
 // A refused step refuses the steps before it too.
 const two = page(paragraph("1", "One"), paragraph("2", "Two"));
 expect("a block that is gone", "One Two", run(two, [{ op: "delete", target: { id: "1" } }, { op: "delete", target: { id: "gone" } }]));

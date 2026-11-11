@@ -742,6 +742,21 @@ import XCTest
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: (frame.minX + edge) / 2, dy: frame.midY)).tap()
     }
 
+    /// Opens the "…" of the block that shows `text` and picks Delete: the last "…" that starts above the text's middle
+    /// (other blocks have one too; a block's sits at its top right).
+    private func deleteThroughBlockMenu(_ app: XCUIApplication, blockContaining text: String) {
+        let block = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+        XCTAssertTrue(scrollTo(block, in: app), "Block “\(text)” not found")
+        let middle = block.frame.midY
+        guard let menu = app.buttons.matching(identifier: "block-actions").allElementsBoundByIndex
+            .filter({ $0.frame.minY < middle }).max(by: { $0.frame.minY < $1.frame.minY })
+        else { return XCTFail("No “…” at the block with “\(text)”") }
+        menu.tap()
+        let delete = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "The block's “…” doesn't offer Delete")
+        delete.tap()
+    }
+
     /// Waits until exactly `count` text blocks contain the fragment.
     private func waitForCount(_ app: XCUIApplication, of fragment: String, equals count: Int, timeout: TimeInterval = 10) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
@@ -981,7 +996,8 @@ import XCTest
         let tree = app.debugDescription
         let editorAt = tree.range(of: "'active-editor'")?.lowerBound
         let headingAt = tree.range(of: "label: 'Überschrift'")?.lowerBound
-        let nextAt = tree.range(of: "label: 'Checkliste'")?.lowerBound
+        // The checklist's first item; a checklist has no header of its own.
+        let nextAt = tree.range(of: "label: 'Aufgabe offen")?.lowerBound
         XCTAssertTrue(editorAt != nil && headingAt != nil && nextAt != nil, "Editor, heading or checklist missing")
         if let editorAt, let headingAt, let nextAt {
             XCTAssertTrue(headingAt < editorAt && editorAt < nextAt, "The editor isn't in reading order")
@@ -1990,6 +2006,166 @@ import XCTest
         snapshot(app, "44-list-join")
         finishEditing(app)
         XCTAssertTrue(app.staticTexts["Oben\(stamp)\(second)"].waitForExistence(timeout: 5), "Items aren't joined")
+    }
+
+    /// Checklist via "/todo" with two items: the toolbar's trash in the second removes the item with its checkbox, where
+    /// it used to empty the line and leave the box. The script checks that the list holds only "Bleibt<stamp>".
+    func test88_TrashDeletesListItem() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "todo", pick: "block-taskList")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Bleibt\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the second item")
+        editor.typeText("Weg\(stamp)")
+        Thread.sleep(forTimeInterval: 1.0)
+        tapToolbarButton(app, "editor-delete")
+        let confirm = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Delete confirmation missing")
+        confirm.tap()
+        XCTAssertTrue(editor.waitForNonExistence(timeout: 8), "Editing goes on after the item is deleted")
+        let kept = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Bleibt\(stamp)")).firstMatch
+        XCTAssertTrue(scrollTo(kept, in: app), "The first item is gone too")
+        Thread.sleep(forTimeInterval: 1.0)
+        snapshot(app, "88-item-deleted")
+        // The list is the page's last block: a checkbox below its first item is the deleted one's.
+        let boxes = app.buttons.matching(NSPredicate(format: "label IN %@", ["Not completed", "Offen", "Completed", "Erledigt"]))
+        XCTAssertFalse(boxes.allElementsBoundByIndex.contains { $0.frame.minY > kept.frame.maxY }, "The deleted item's checkbox stayed")
+    }
+
+    /// A checklist and a code block go as a whole through their "…", which lists and code blocks didn't have: the trash
+    /// of the keyboard toolbar deletes the line with the cursor. The script checks that neither is on the page.
+    func test89_BlockMenuDeletesListAndCode() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "todo", pick: "block-taskList")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Ganz\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the second item")
+        editor.typeText("Auch\(stamp)")
+        finishEditing(app)
+        XCTAssertTrue(waitForCount(app, of: "Ganz\(stamp)", equals: 1), "The checklist doesn't show")
+        Thread.sleep(forTimeInterval: 1.0)
+        snapshot(app, "89-checklist")
+        deleteThroughBlockMenu(app, blockContaining: "Ganz\(stamp)")
+        XCTAssertTrue(waitForCount(app, of: "Ganz\(stamp)", equals: 0), "“…” → Delete leaves the checklist")
+        XCTAssertTrue(waitForCount(app, of: "Auch\(stamp)", equals: 0), "“…” → Delete leaves the checklist's second item")
+
+        _ = appendParagraph(app)
+        slash(app, "code", pick: "block-codeBlock")
+        XCTAssertTrue(app.buttons["swift"].waitForExistence(timeout: 8), "Language bar missing")
+        let bar = app.buttons["swift"].frame
+        XCTAssertFalse(app.buttons.matching(identifier: "block-actions").allElementsBoundByIndex.contains { $0.frame.intersects(bar) },
+                       "A “…” covers the language bar of the code block being edited")
+        Thread.sleep(forTimeInterval: 0.6)
+        app.typeText("Code\(stamp)")
+        finishEditing(app)
+        XCTAssertTrue(waitForCount(app, of: "Code\(stamp)", equals: 1), "The code block doesn't show")
+        Thread.sleep(forTimeInterval: 1.0)
+        snapshot(app, "89-code")
+        deleteThroughBlockMenu(app, blockContaining: "Code\(stamp)")
+        XCTAssertTrue(waitForCount(app, of: "Code\(stamp)", equals: 0), "“…” → Delete leaves the code block")
+        snapshot(app, "89-deleted")
+    }
+
+    /// A list's items are elements of their own, as on the web: holding and dragging moves one item, not the list, and
+    /// "Duplicate" in an item copies the item (it used to add a second line to it). The script checks that the checklist
+    /// holds "Zweiter<stamp>", "Erster<stamp>" and its copy, in that order, and the numbered list "Zwei<stamp>" before
+    /// "Eins<stamp>".
+    func test91_ListItemsMoveAndDuplicateAlone() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "todo", pick: "block-taskList")
+        var editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Erster\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the second item")
+        editor.typeText("Zweiter\(stamp)")
+        finishEditing(app)
+        let first = app.staticTexts["Erster\(stamp)"].firstMatch, second = app.staticTexts["Zweiter\(stamp)"].firstMatch
+        XCTAssertTrue(scrollTo(first, in: app) && second.exists, "The checklist doesn't show")
+        Thread.sleep(forTimeInterval: 1.0)
+        snapshot(app, "91-checklist")
+        // Slowly and held a moment: the rows are a line apart, and a quick drag that short is dropped where it began.
+        second.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 1.2, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)), withVelocity: .slow, thenHoldForDuration: 1.0)
+        let moved = expectation(for: NSPredicate { _, _ in
+            first.exists && second.exists && second.frame.minY < first.frame.minY
+        }, evaluatedWith: nil)
+        wait(for: [moved], timeout: 10)
+        snapshot(app, "91-item-dragged")
+
+        _ = edit(app, blockContaining: "Erster\(stamp)")
+        tapToolbarButton(app, "editor-duplicate")
+        XCTAssertTrue(waitForCount(app, of: "Erster\(stamp)", equals: 2), "Duplicate doesn't copy the item")
+        if app.textViews["active-editor"].exists { finishEditing(app) }
+        // Each copy has a checkbox of its own: three below the dragged item's top, where the list is the page's last block.
+        let boxes = app.buttons.matching(NSPredicate(format: "label IN %@", ["Not completed", "Offen", "Completed", "Erledigt"]))
+        XCTAssertEqual(boxes.allElementsBoundByIndex.filter { $0.frame.midY > second.frame.minY }.count, 3, "The copy isn't an item of its own")
+        snapshot(app, "91-item-duplicated")
+
+        // A numbered list's items move the same way.
+        _ = appendParagraph(app)
+        slash(app, "numbered", pick: "block-orderedList")
+        editor = activeEditor(app)
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Eins\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the second numbered item")
+        editor.typeText("Zwei\(stamp)")
+        finishEditing(app)
+        let one = app.staticTexts["Eins\(stamp)"].firstMatch, two = app.staticTexts["Zwei\(stamp)"].firstMatch
+        XCTAssertTrue(scrollTo(one, in: app) && two.exists, "The numbered list doesn't show")
+        Thread.sleep(forTimeInterval: 1.0)
+        two.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 1.2, thenDragTo: one.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)), withVelocity: .slow, thenHoldForDuration: 1.0)
+        let renumbered = expectation(for: NSPredicate { _, _ in
+            one.exists && two.exists && two.frame.minY < one.frame.minY
+        }, evaluatedWith: nil)
+        wait(for: [renumbered], timeout: 10)
+        snapshot(app, "91-numbered-dragged")
+    }
+
+    /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
+    /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
+    /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.
+    func test90_BackspaceLeavesCodeAndList() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "code", pick: "block-codeBlock")
+        XCTAssertTrue(app.buttons["swift"].waitForExistence(timeout: 8), "Language bar missing")
+        var editor = activeEditor(app, "No editor in the code block")
+        Thread.sleep(forTimeInterval: 1.2)
+        var hides = keyboardHides(app)
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        XCTAssertTrue(app.buttons["swift"].waitForNonExistence(timeout: 5), "Backspace leaves the empty code block a code block")
+        editor = activeEditor(app, "No editor after Backspace in the empty code block")
+        Thread.sleep(forTimeInterval: 1.2)
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid on Backspace in the empty code block")
+        editor.typeText("Text\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor after Return")
+        slash(app, "bullet", pick: "block-bulletList")
+        editor = activeEditor(app, "No editor in the list")
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Raus\(stamp)")
+        Thread.sleep(forTimeInterval: 0.6)
+        // To the item's start with a tap left of its text (see test44).
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0)).tap()
+        Thread.sleep(forTimeInterval: 1.2)
+        hides = keyboardHides(app)
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after Backspace at the first item's start")
+        XCTAssertEqual(editor.value as? String, "Raus\(stamp)", "The line lost its text leaving the list")
+        snapshot(app, "90-left-list")
+        XCTAssertEqual(keyboardHides(app), hides, "The keyboard hid on Backspace at the first item's start")
+        finishEditing(app)
     }
 
     /// Toggle via "/toggle" with a line in its content: collapsing it while that line is edited ends editing and hides

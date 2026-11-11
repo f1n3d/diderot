@@ -5,6 +5,8 @@ import DocmostKit
 extension PMNode {
     /// Blocks the page edits as text; a code block it edits as code.
     static let editableTextTypes: Set<String> = ["paragraph", "heading", "detailsSummary"]
+    /// Lists, whose items on the page's top level are elements of their own (`DocumentModel.elements`).
+    static let listTypes: Set<String> = ["bulletList", "orderedList", "taskList"]
 
     /// Containers whose content is edited directly (unlike columns, synced blocks, etc.).
     static let inPlaceContainers: Set<String> = [

@@ -208,8 +208,13 @@ final class DocumentModel {
     var hasUnconfirmedChanges: Bool { connection.hasUnconfirmedChanges }
     var participants: [EngineParticipant] { engine?.participants ?? [] }
     var topLevel: [NodeEntry] { NodeEntry.entries(document.children, parentPath: []) }
-    /// Top-level blocks without the footnotes list (always last); the arrange sheet's row indices refer to this list.
+    /// Top-level blocks without the footnotes list (always last).
     var contentBlocks: [NodeEntry] { topLevel.filter { $0.node.type != "footnotes" } }
+    /// What a person moves, arranges and deletes one by one: the top-level blocks, a list as its items, as the web's
+    /// handle takes each item of a list. The arrange sheet's row indices refer to this list.
+    var elements: [NodeEntry] {
+        contentBlocks.flatMap { PMNode.listTypes.contains($0.node.type) ? NodeEntry.entries($0.node.children, parentPath: $0.ref.path) : [$0] }
+    }
 
     // MARK: - Engine
 
@@ -371,8 +376,10 @@ final class DocumentModel {
             }
         }
         // Without an id (code block, toggle title), another block type or none at the path means a collaborator
-        // added or removed a block before it; its input would replace that block, so editing ends unsaved.
-        if let active, active.ref.id == nil, node(at: active.ref.path)?.type != active.type, !editsTable {
+        // added or removed a block before it; its input would replace that block, so editing ends unsaved. Not while
+        // a key is on its way: Backspace turns an empty code block into a paragraph, which takes the cursor next
+        // (ending here hid the keyboard in between); the key's end asks again (`typingSwitchEnded`).
+        if let active, active.ref.id == nil, node(at: active.ref.path)?.type != active.type, !editsTable, typingSwitches == 0 {
             session.overrides[active.ref.identity] = nil
             session.cancelCommit()
             deactivate()
@@ -474,9 +481,10 @@ final class DocumentModel {
     }
 
     /// Backspace with the cursor at the text's start (`TextInputHooks`; the text doesn't change, so `activeTextChanged`
-    /// can't notice it): joins the block with the one before, as on the web. False leaves the key to the text view.
+    /// can't notice it): joins the block with the one before, as on the web, where an empty code block becomes a
+    /// paragraph (one with code keeps the key). False leaves the key to the text view.
     func backspaceAtStart() -> Bool {
-        guard let active, active.type != "codeBlock" else { return false }
+        guard let active, active.type != "codeBlock" || activeCode.isEmpty else { return false }
         Task {
             typingSwitches += 1
             defer { typingSwitchEnded() }
@@ -1977,11 +1985,13 @@ final class DocumentModel {
     }
 
     /// Backspace at a block's start: joins it with the text block before, removes it (an empty line after an image, a
-    /// table …), leaves the list (an empty first item) or does nothing, as the engine decides (`backspace`). A join or a
-    /// removal shows at once where the engine said it goes (`answers`), so text typed right after the key lands there.
+    /// table …), leaves the list (a first item), turns from an empty code block into a paragraph or does nothing, as the
+    /// engine decides (`backspace`). A join or a removal shows at once where the engine said it goes (`answers`), so text
+    /// typed right after the key lands there.
     private func joinBackward(_ active: Active) async {
         guard let engine else { return }
-        let typed = Self.inlines(from: activeText, base: activeFont)
+        // A code block comes here only empty (`backspaceAtStart`).
+        let typed = active.type == "codeBlock" ? [] : Self.inlines(from: activeText, base: activeFont)
         let plan = activeAnswers?.backspace.map { typed.isEmpty ? $0.empty : $0.text }
         if plan == .nothing { return }
         // Its input goes with it: into the text before, or away with the line. With the base it began from, so the engine
@@ -1991,10 +2001,14 @@ final class DocumentModel {
         session.cancelCommit()
         session.overrides[active.ref.identity] = nil
         let shown = plan.map { show($0, leaving: active, typed: typed) } ?? false
-        let result = await engine.backspace(active.ref.target, holding: PMNode(type: active.type, attrs: active.attrs, content: typed.isEmpty ? nil : typed),
-                                            base: base)
+        let held = PMNode(type: active.type, attrs: active.attrs, content: typed.isEmpty ? nil : typed)
+        let result = await engine.backspace(active.ref.target, holding: held, base: base)
         switch result {
         case .done(let done, let cursor):
+            // A line that leaves its list with text stays the block being edited (its id goes along): what went with
+            // the key is its base now, as after a save. With the base from before that input, the next save took the
+            // input for a collaborator's and could write it twice.
+            if done == .leave, !typed.isEmpty, self.active?.ref.id == active.ref.id, active.ref.id != nil { session.base = held }
             if shown {
                 // Otherwise than shown (the page changed meanwhile): its document shows what happened.
                 if case .join? = plan, done != plan { endEditingShownJoin() }
@@ -2003,7 +2017,7 @@ final class DocumentModel {
             switch done {
             case .join, .remove:
                 if let cursor { await focusAfterOperation(cursor) } else { show(done, leaving: active, typed: typed) }
-            case .leave:
+            case .leave, .plain:
                 if let cursor { await focusAfterOperation(cursor) }
             case .nothing:
                 session.scheduleCommit()
@@ -2043,7 +2057,7 @@ final class DocumentModel {
                 deactivate()
             }
             return true
-        case .leave, .nothing:
+        case .leave, .plain, .nothing:
             return false
         }
     }
@@ -2096,24 +2110,31 @@ final class DocumentModel {
     }
 
     func duplicate(_ ref: NodeRef) async {
+        // A list item's first line stands for its item: copied alone, it became a second line of the same item.
+        var ref = ref
+        if ref.path.last == 0, let around = enclosingItemPath(ref.path), around == Array(ref.path.dropLast()), let item = latestNode(at: around) {
+            ref = NodeRef(path: around, node: item)
+        }
         // Uses the latest text, even if the last input hasn't reached the engine yet.
         guard let engine, let node = latestNode(at: ref.path) else { return }
         if active != nil { deactivate() }
         report(await engine.insertBlock(node.strippingIds(), relativeTo: ref.target, position: .after))
     }
 
+    /// Moves an element of the arrange sheet (`elements`) to another row. A list's item moves on its own, and a block
+    /// moved between a list's items splits it, as the engine's `move` has it (Engine/src/steps.ts).
     func moveBlocks(from source: IndexSet, to destination: Int) async {
         guard let engine, let sourceIndex = source.first else { return }
-        let blocks = contentBlocks
+        let blocks = elements
         guard blocks.indices.contains(sourceIndex) else { return }
         let targetIndex = destination > sourceIndex ? destination - 1 : destination
         guard targetIndex != sourceIndex, blocks.indices.contains(targetIndex) else { return }
         report(await engine.moveBlock(blocks[sourceIndex].ref.target, to: blocks[targetIndex].ref.target, position: targetIndex > sourceIndex ? .after : .before))
     }
 
-    /// Moves a block (drag/drop) before or after another top-level block.
+    /// Moves an element (drag/drop, `elements`) before or after another.
     func moveBlock(identity: String, relativeTo destination: NodeRef, before: Bool) async {
-        guard let engine, let source = topLevel.first(where: { $0.ref.identity == identity }), source.ref != destination else { return }
+        guard let engine, let source = elements.first(where: { $0.ref.identity == identity }), source.ref != destination else { return }
         if active != nil { deactivate() }
         report(await engine.moveBlock(source.ref.target, to: destination.target, position: before ? .before : .after))
     }

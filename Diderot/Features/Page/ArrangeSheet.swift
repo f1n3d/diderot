@@ -1,7 +1,7 @@
 import SwiftUI
 import DocmostKit
 
-/// Reorder blocks by dragging, or delete them.
+/// Reorder blocks by dragging, or delete them; a list's items one by one (`DocumentModel.elements`).
 struct ArrangeSheet: View {
     let model: DocumentModel
     @Environment(\.dismiss) private var dismiss
@@ -9,12 +9,12 @@ struct ArrangeSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(model.contentBlocks) { entry in
+                ForEach(model.elements) { entry in
                     HStack(spacing: 10) {
-                        Image(systemName: symbol(for: entry.node))
+                        Image(systemName: symbol(for: kind(of: entry)))
                             .foregroundStyle(.secondary)
                             .frame(width: 22)
-                        Text(summary(for: entry.node))
+                        Text(summary(for: kind(of: entry)))
                             .lineLimit(2)
                     }
                 }
@@ -22,7 +22,7 @@ struct ArrangeSheet: View {
                     Task { await model.moveBlocks(from: source, to: destination) }
                 }
                 .onDelete { offsets in
-                    let blocks = model.contentBlocks
+                    let blocks = model.elements
                     for offset in offsets where blocks.indices.contains(offset) {
                         Task { await model.delete(blocks[offset].ref) }
                     }
@@ -35,6 +35,13 @@ struct ArrangeSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
+    }
+
+    /// The entry's block; a bullet or numbered list's item as a one-item list of its kind, which names it and gives it
+    /// its symbol (a checklist's item has its own).
+    private func kind(of entry: NodeEntry) -> PMNode {
+        guard entry.node.type == "listItem", let list = model.node(at: Array(entry.ref.path.dropLast())) else { return entry.node }
+        return PMNode(type: list.type, content: [entry.node])
     }
 
     private func summary(for node: PMNode) -> String {
@@ -63,7 +70,7 @@ struct ArrangeSheet: View {
         default:
             // Empty text blocks by their name in the insert menu, unknown ones as "Block".
             let templates: [String: BlockTemplate] = [
-                "paragraph": .paragraph, "bulletList": .bulletList, "orderedList": .orderedList, "taskList": .taskList,
+                "paragraph": .paragraph, "bulletList": .bulletList, "orderedList": .orderedList, "taskList": .taskList, "taskItem": .taskList,
                 "blockquote": .quote, "callout": .callout, "details": .toggle, "codeBlock": .codeBlock,
             ]
             return String(localized: templates[node.type]?.titleResource ?? "Block")
@@ -76,6 +83,7 @@ struct ArrangeSheet: View {
         case "bulletList": "list.bullet"
         case "orderedList": "list.number"
         case "taskList": "checklist"
+        case "taskItem": node.bool("checked") == true ? "checkmark.square" : "square"
         case "blockquote": "text.quote"
         case "codeBlock": "chevron.left.forwardslash.chevron.right"
         case "callout": "info.bubble"

@@ -2,8 +2,8 @@
 // a list, quote, callout or toggle, and where the cursor goes. Exits with 1 on any difference.
 //
 // Pages are written as their blocks: a text block as its text ("∅" when empty, a heading with "#", a toggle's title with
-// ">"), a list item as its blocks, another container as its type with its children in brackets. The cursor follows as
-// "@path:offset".
+// ">", a code block with "`"), a list item as its blocks, another container as its type with its children in brackets.
+// The cursor follows as "@path:offset".
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
@@ -33,12 +33,13 @@ const toggle = (open: boolean, title: string, ...content: JSONContent[]): JSONCo
   attrs: open ? { open: true } : {},
   content: [{ type: "detailsSummary", content: text(title) }, { type: "detailsContent", content }],
 });
+const code = (value = ""): JSONContent => ({ type: "codeBlock", ...(value ? { content: text(value) } : {}) });
 const image: JSONContent = { type: "image", attrs: { src: "/a.png" } };
 const page = (...content: JSONContent[]) => PMNode.fromJSON(schema, { type: "doc", content });
 
 function describe(node: PMNode): string {
   if (node.isTextblock) {
-    const prefix = node.type.name === "heading" ? "#" : node.type.name === "detailsSummary" ? ">" : "";
+    const prefix = node.type.name === "heading" ? "#" : node.type.name === "detailsSummary" ? ">" : node.type.name === "codeBlock" ? "`" : "";
     return prefix + (node.textContent || "∅");
   }
   if (node.isAtom) return node.type.name;
@@ -186,9 +187,18 @@ expect("the first block", "nothing", backspace(page(paragraph("a", "Eins")), [0]
 const two = page(paragraph("a", "Eins"), paragraph("b", "Zwei"));
 expect("joining what was typed", "EinsZwei! @0:4", run(two, backspaceEdit(schema, two, { id: "b" }, paragraph("b", "Zwei!"))?.edit));
 
-// An empty first item leaves the list; an empty line after an image, a table or a closed toggle goes; with text it stays.
+// A first item leaves the list, empty or with its text, as on the web; an empty line after an image, a table or a closed
+// toggle goes, and with text it stays.
 expect("an empty first item", "∅ bulletList(Zwei) @0:0", backspace(page(list(item(paragraph("a")), item(paragraph("b", "Zwei")))), [0, 0, 0]));
-expect("a first item with text", "nothing", backspace(page(list(item(paragraph("a", "Eins")))), [0, 0, 0]));
+expect("a first item with text", "Eins bulletList(Zwei) @0:0", backspace(page(list(item(paragraph("a", "Eins")), item(paragraph("b", "Zwei")))), [0, 0, 0]));
+expect("a list's only item with text: the list goes", "Eins @0:0", backspace(page(list(item(paragraph("a", "Eins")))), [0, 0, 0]));
+const checklist = page(paragraph("v", "Vor"), { type: "taskList", content: [task(paragraph("a", "Eins")), task(paragraph("b", "Zwei"))] });
+expect("a checklist's first item with text", "Vor Eins taskList(Zwei) @1:0", backspace(checklist, [1, 0, 0]));
+expect("…as the line it was, with its id", "a",
+  (backspaceEdit(schema, checklist, { path: [1, 0, 0], type: "paragraph" }, paragraph("a", "Eins"))?.edit.steps.find((step) => step.op === "insert")?.json[0].attrs?.id));
+expect("a nested list's first item with text: a line of the item around it", "bulletList(Eins/Unter/bulletList(Zwei)) @0.0.1:0",
+  backspace(page(list(item(paragraph("a", "Eins"), list(item(paragraph("u", "Unter")), item(paragraph("z", "Zwei")))))), [0, 0, 1, 0, 0]));
+expect("a first item holding more", "nothing", backspace(page(list(item(paragraph("a", "Eins"), paragraph("m", "mehr")))), [0, 0, 0]));
 expect("an empty line after an image", "image", backspace(page(image, paragraph("a")), [1]));
 expect("a line after an image", "nothing", backspace(page(image, paragraph("a", "Eins")), [1]));
 expect("an empty line after a closed toggle", "details(>Titel, detailsContent(Inhalt))",
@@ -196,6 +206,12 @@ expect("an empty line after a closed toggle", "details(>Titel, detailsContent(In
 expect("an empty item after a nested list", "bulletList(Eins/bulletList(y))",
   backspace(page(list(item(paragraph("a", "Eins"), list(item(paragraph("y", "y")))), item(paragraph("b")))), [0, 1, 0]));
 expect("a block that's gone", "refused", run(page(paragraph("a", "Eins")), backspaceEdit(schema, page(paragraph("a", "Eins")), { id: "x" }, paragraph("x"))?.edit));
+
+// An empty code block becomes a paragraph where it is, as on the web; with code, the key is the text view's.
+expect("an empty code block", "Vor ∅ Nach @1:0", backspace(page(paragraph("v", "Vor"), code(), paragraph("n", "Nach")), [1]));
+expect("the page's only block, an empty code block", "∅ @0:0", backspace(page(code()), [0]));
+expect("an empty code block in an item", "bulletList(Eins/∅) @0.0.1:0", backspace(page(list(item(paragraph("a", "Eins"), code()))), [0, 0, 1]));
+expect("a code block with code", "nothing", backspace(page(paragraph("v", "Vor"), code("let a = 1")), [1]));
 
 // A collaborator's words in the line since the app's input began (`base`): Backspace and Return decide with them, as the
 // engine holds the line, not with the app's copy, which lags behind their typing.
@@ -210,8 +226,11 @@ expect("…with the app's own input", "EinsZwei! und mehr @0:4",
 expect("a line a collaborator typed into joins, not as empty", "Einsneu @0:4",
   backspaced(page(paragraph("a", "Eins"), paragraph("b", "neu")), paragraph("b"), paragraph("b")));
 expect("…and isn't removed after an image", "nothing", backspaced(page(image, paragraph("b", "neu")), paragraph("b"), paragraph("b")));
-expect("…nor leaves the list as an empty first item", "nothing",
+expect("…and leaves the list with their words, as a first item with text does", "neu bulletList(Zwei) @0:0",
   backspaced(page(list(item(paragraph("b", "neu")), item(paragraph("c", "Zwei")))), paragraph("b"), paragraph("b")));
+const typedCode = page(paragraph("a", "Eins"), code("neu"));
+expect("a code block the app has empty and a collaborator typed into stays code", "nothing",
+  run(typedCode, ((result) => (result === null ? null : result?.edit))(backspaceEdit(schema, typedCode, { path: [1], type: "codeBlock" }, code(), code()))));
 expect("both typed at the same place: both stay", "EinsZwei?! @0:4",
   backspaced(page(paragraph("a", "Eins"), paragraph("b", "Zwei!")), paragraph("b", "Zwei?"), paragraph("b", "Zwei")));
 expect("both changed the same letter: refused", "refused",
@@ -231,8 +250,8 @@ expect("…before the cursor: their change stays in the line", "Vorher Eins Zwei
     enterEdit(schema, page(paragraph("a", "Vorher EinsZwei")), { id: "a" }, paragraph("a", "Eins"), text("Zwei"), paragraph("a", "EinsZwei"))));
 
 // What the app shows at once, before the engine has done it.
-const plans = page(paragraph("a", "Eins"), paragraph("e", "Zwei"), list(item(paragraph("b")), item(paragraph("c", "Drei"))), image, paragraph("d"));
-expect("plans", [["join", [0]], ["leave", "none"], ["join", [2, 0, 0]], ["remove", "none"]], [[1], [2, 0, 0], [2, 1, 0], [4]].map((path) => {
+const plans = page(paragraph("a", "Eins"), paragraph("e", "Zwei"), list(item(paragraph("b")), item(paragraph("c", "Drei"))), image, paragraph("d"), code());
+expect("plans", [["join", [0]], ["leave", "leave"], ["join", [2, 0, 0]], ["remove", "none"], ["plain", "none"]], [[1], [2, 0, 0], [2, 1, 0], [4], [5]].map((path) => {
   const empty = backspacePlan(plans, { path }, true)!, typed = backspacePlan(plans, { path }, false)!;
   return empty.kind === "join" ? [empty.kind, empty.path] : [empty.kind, typed.kind];
 }));
