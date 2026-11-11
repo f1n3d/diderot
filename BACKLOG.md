@@ -46,6 +46,10 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
   - Backspace does nothing at the start of a toggle's content and of a callout that holds text, as on the web.
   - "---" hides the keyboard for a moment: the divider takes the line's place as "/divider" does, which ends editing before the cursor is in the new line below (seen in test94, where the keyboard stays for every other mark).
   - A line turned by a Markdown mark stays the block being edited; turned from the toolbar or "/", editing ends and starts again in the new block (`convert`), and letters typed in between are dropped. `convert` could follow the line as `convertWhileTyping` does (review of November 11, 2026).
+- Syntax colors in code blocks (November 11, 2026, as on the web: lowlight with highlight.js in a JavaScript context of the app's own, `CodeHighlighter`). Left as it is:
+  - The code block being edited is one color: the page's one text editor shows a block's text plain, and coloring it while typing would mean writing colors into the editor's text on every key. The colors come back when editing leaves the block.
+  - ABAP has no colors: Docmost's client adds it from a package of its own (`highlightjs-sap-abap`); the app ships the common grammars and Docmost's other additions. Code over 60,000 characters stays plain, and without a language over 8,000, where every grammar would run to guess it.
+  - The colors are Docmost's (its code.css with Mantine's palette) and aren't checked for contrast on the app's code background in both appearances.
 - With two app windows (iPad Stage Manager, external display), the edited line can sit wrongly above the keyboard, because the keyboard's position isn't converted into the page's window (review finding F32, postponed on October 12, 2026).
 - Newer Docmost servers: if the server reports a version after 0.97, the app opens pages read-only (October 22, 2026; 0.97 since version 1.1).
   - It asks for the version when signing in and when the app starts, so it notices a server update during a session only afterwards.

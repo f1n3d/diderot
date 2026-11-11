@@ -35,8 +35,9 @@ private struct BlockActionsModifier: ViewModifier {
         return true
     }
 
-    /// A list's "…" sits beside its first line, which has no room above it as a card has: up by the button's padding.
-    private var lift: CGFloat { PMNode.listTypes.contains(entry.node.type) ? -6 : 0 }
+    /// The "…" of a list or toggle sits beside its first line, which has no room above it as a card has: up by the
+    /// button's padding.
+    private var lift: CGFloat { PMNode.listTypes.contains(entry.node.type) || entry.node.type == "details" ? -6 : 0 }
 
     func body(content: Content) -> some View {
         // By `engine`, which the page keeps: `isEditable` turns true after the first sync, and switching branches
