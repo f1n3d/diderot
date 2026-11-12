@@ -62,8 +62,12 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notes,knowledge base,documentation,self-hosted,editor,team,pages,markdown
 
-**What's New in This Version** (4000 at most; version 1.2.3, with 1.2.2's, 1.2.1's and 1.2.0's below it for those who skip them)
+**What's New in This Version** (4000 at most; version 1.2.4, with 1.2.3's, 1.2.2's, 1.2.1's and 1.2.0's below it for those who skip them)
 
+> • Back in the app after a while, a page goes back to "Saved" by itself: before, it stayed at "Connecting" until you typed
+> • A Markdown mark typed quickly with text right after it ("- Shopping") keeps every letter in its place
+>
+> New in 1.2.3:
 > • Lists as on the web: each item of a bullet list, numbered list or checklist is dragged, arranged and duplicated on its own
 > • List items go a level in and out with two new buttons above the keyboard
 > • Markdown marks turn a line as you type: "- " a list, "1. " a numbered list, "[] " a checklist, "# " a heading, "> " a quote, "``` " a code block, "---" a divider
@@ -147,8 +151,12 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notizen,wissensdatenbank,dokumentation,selbst gehostet,editor,team,seiten,markdown
 
-**Neu in dieser Version** (höchstens 4000; Version 1.2.3, darunter die von 1.2.2, 1.2.1 und 1.2.0 für alle, die sie überspringen)
+**Neu in dieser Version** (höchstens 4000; Version 1.2.4, darunter die von 1.2.3, 1.2.2, 1.2.1 und 1.2.0 für alle, die sie überspringen)
 
+> • Zurück in der App nach einer Weile geht eine Seite von selbst wieder auf „Gespeichert“: Bisher blieb sie bei „Verbinde“, bis man etwas tippte
+> • Ein zügig getipptes Markdown-Kürzel mit Text direkt dahinter („- Einkauf“) behält jeden Buchstaben an seiner Stelle
+>
+> Neu in 1.2.3:
 > • Listen wie im Web: Jeder Punkt einer Aufzählung, nummerierten Liste oder Checkliste lässt sich einzeln ziehen, anordnen und duplizieren
 > • Listenpunkte rücken mit zwei neuen Knöpfen über der Tastatur ein und aus
 > • Markdown-Kürzel wandeln eine Zeile beim Tippen um: „- “ in eine Liste, „1. “ in eine nummerierte Liste, „[] “ in eine Checkliste, „# “ in eine Überschrift, „> “ in ein Zitat, „``` “ in einen Codeblock, „---“ in einen Trenner
