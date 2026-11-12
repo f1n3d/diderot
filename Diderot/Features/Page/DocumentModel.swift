@@ -170,9 +170,9 @@ final class DocumentModel {
     /// blocks): its editor would vanish and the keyboard hide and show again. One that ends without placing it ends
     /// editing then, if the block is gone (`typingSwitchEnded`).
     @ObservationIgnored private var typingSwitches = 0
-    /// The active text's length when it last changed: a Markdown mark turns its line only when it was just typed, not
-    /// when deleting what follows leaves one behind (`applyTypedShortcut`).
-    @ObservationIgnored private var typedCount = 0
+    /// The active text when it last changed: a Markdown mark turns its line only when typing completed it, not when
+    /// deleting what follows leaves one behind (`applyTypedShortcut`).
+    @ObservationIgnored private var typedText = ""
     /// Return or Backspace is switching blocks; meanwhile the old editor briefly shows the line break as a second line.
     var isSwitchingByTyping: Bool { typingSwitches > 0 }
     @ObservationIgnored private var adoptsChange = false
@@ -403,7 +403,7 @@ final class DocumentModel {
         activatedByTyping = typingSwitches > 0
         active = Active(ref: ref, type: node.type, attrs: node.attrs, itemPath: itemPath)
         session.show(node, as: node.type == "codeBlock" ? AttributedString(node.plainText) : Self.editorText(from: node.children))
-        typedCount = activeText.characters.count
+        typedText = String(activeText.characters)
         // The page's one editor keeps its selection from block to block; the old indices don't fit this text.
         activeSelection = AttributedTextSelection(insertionPoint: activeText.endIndex)
         slashQuery = nil
@@ -501,8 +501,9 @@ final class DocumentModel {
     func activeTextChanged() {
         guard let active, active.type != "codeBlock" else { return }
         let characters = activeText.characters
-        let grew = characters.count > typedCount
-        typedCount = characters.count
+        let typedBefore = typedText
+        typedText = String(characters)
+        let grew = characters.count > typedBefore.count
         if let newline = characters.firstIndex(of: "\n") {
             // Return with the slash menu open picks the first enabled item (web parity); the line break is dropped.
             if slashQuery != nil, let first = insertMatches.first(where: isEnabled) {
@@ -525,7 +526,7 @@ final class DocumentModel {
         updateSlashQuery()
         updateMentionQuery()
         guard session.textChangeIsInput() else { return }
-        if grew, applyTypedShortcut(in: active) { return }
+        if grew, applyTypedShortcut(in: active, typedAfter: typedBefore) { return }
         session.scheduleCommit()
     }
 
@@ -533,11 +534,13 @@ final class DocumentModel {
     /// into its block, as the web's input rules do: the mark goes, and the line becomes what "/" would make of it, where
     /// the engine says it can (`conversionTemplates`). Not in a list item, where a list kind would switch the whole
     /// list (the web nests a list there). False when there is no mark, or nothing to turn into: the text stays as typed.
-    private func applyTypedShortcut(in active: Active) -> Bool {
+    /// `typedBefore` is the text before the change: the mark must be one its typing completed (`typedShortcut`).
+    private func applyTypedShortcut(in active: Active, typedAfter typedBefore: String) -> Bool {
+        let typedFrom = zip(typedBefore, activeText.characters).prefix { $0 == $1 }.count
         // Not while the keyboard composes text (Japanese input, dictation): the line would change under it.
         guard active.type == "paragraph", active.itemPath == nil, editorTextView?.markedTextRange == nil,
               case .insertionPoint(let cursor) = activeSelection.indices(in: activeText),
-              let found = TriggerParser.shortcut(in: activeText, cursor: cursor)
+              let found = TriggerParser.typedShortcut(in: activeText, typedFrom: typedFrom, cursor: cursor)
         else { return false }
         switch found.shortcut {
         case .block(let template):
@@ -550,20 +553,60 @@ final class DocumentModel {
         }
         let end = activeText.characters.index(activeText.startIndex, offsetBy: found.length)
         let mark = AttributedString(activeText[activeText.startIndex..<end])
-        activeText.removeSubrange(activeText.startIndex..<end)
-        activeSelection = AttributedTextSelection(insertionPoint: activeText.startIndex)
-        typedCount = activeText.characters.count
-        // Saved like typing: the engine turns the line it has, without the mark.
-        session.scheduleCommit()
         slashQuery = nil
         slashOffset = nil
-        switch found.shortcut {
+        // Pending like typing until then: editing that moves on first saves the line as typed.
+        session.scheduleCommit()
+        // Once SwiftUI's update is done (`turnLine`).
+        Task { await turnLine(active, by: found.shortcut, mark: mark) }
+        return true
+    }
+
+    /// Takes the mark typed at the line's start away and turns the line (`applyTypedShortcut`), after SwiftUI's update
+    /// that reported the mark: within it, the text view's change reached the editor's bindings only after the update and
+    /// in steps, so keys typed meanwhile went where the caret was in between ("iMdste…l" in test94). Not if the line
+    /// changed since in another way: editing moved on, the mark went, or text came after a divider's mark.
+    private func turnLine(_ active: Active, by shortcut: TriggerParser.Shortcut, mark: AttributedString) async {
+        guard self.active?.ref.identity == active.ref.identity, activeText.characters.starts(with: mark.characters) else { return }
+        if case .divider = shortcut, activeText.characters.count != mark.characters.count { return }
+        removeMark(length: mark.characters.count)
+        typedText = String(activeText.characters)
+        // Saved like typing: the engine turns the line it has, without the mark.
+        session.scheduleCommit()
+        switch shortcut {
         case .block(let template):
-            Task { await convertWhileTyping(active, to: template, mark: mark) }
+            await convertWhileTyping(active, to: template, mark: mark)
         case .divider:
             performBlock(.block(.divider), placement: .replaceOrAfter(active.ref))
         }
-        return true
+    }
+
+    /// Takes the mark of `length` characters at the line's start away, the caret staying after what follows it. Through
+    /// the editor's text view while it shows the line, so the caret stays where the keys go. Taken away on the page's
+    /// text, with the caret set there, both reached the text view only with SwiftUI's next update: a key before it
+    /// brought the mark back, or stood behind the caret, so the next one went in before it (test94, whose keys come
+    /// about 6 ms apart: "- Mdliste…", "dliste…M").
+    private func removeMark(length: Int) {
+        let start = activeText.startIndex
+        let end = activeText.characters.index(start, offsetBy: length)
+        let markLength = String(activeText[start..<end].characters).utf16.count
+        if let view = editorTextView, view.isFirstResponder, view.text == String(activeText.characters),
+           let markEnd = view.position(from: view.beginningOfDocument, offset: markLength),
+           let range = view.textRange(from: view.beginningOfDocument, to: markEnd) {
+            let selected = view.selectedRange
+            // Not for the text view's undo: the engine undoes the line's turn, and the text view's would bring the mark
+            // back into the turned line.
+            view.undoManager?.disableUndoRegistration()
+            view.replace(range, withText: "")
+            view.undoManager?.enableUndoRegistration()
+            // `replace` puts the caret where the mark was, as typing over it does: back after what was typed since. The
+            // editor's bindings take both from the text view at once.
+            view.selectedRange = NSRange(location: max(selected.location - markLength, 0), length: selected.length)
+            return
+        }
+        let caret = max(activeText.characters.distance(from: start, to: insertionIndex()) - length, 0)
+        activeText.removeSubrange(start..<end)
+        activeSelection = AttributedTextSelection(insertionPoint: activeText.characters.index(activeText.startIndex, offsetBy: caret))
     }
 
     /// Turns the line being edited into `template` while it stays the block being edited: after a Markdown mark typed at
@@ -582,7 +625,7 @@ final class DocumentModel {
             if result == .refused { report(.refused) }
             guard self.active?.ref.identity == active.ref.identity else { return }
             activeText.insert(mark, at: activeText.startIndex)
-            typedCount = activeText.characters.count
+            typedText = String(activeText.characters)
             session.scheduleCommit()
             return
         }

@@ -48,6 +48,24 @@ struct TriggerParserTests {
         #expect(TriggerParser.shortcut(in: AttributedString("12. "), cursor: AttributedString("12. ").endIndex)?.length == 4)
     }
 
+    /// A mark that a change's typing completed counts with the letters typed after it in the same change, as the text view
+    /// reports keys that come faster than the page takes them; one that was there before the change doesn't.
+    @Test func markCompletedByTheChange() {
+        func typed(_ text: String, from typedFrom: Int) -> (TriggerParser.Shortcut, Int)? {
+            let text = AttributedString(text)
+            return TriggerParser.typedShortcut(in: text, typedFrom: typedFrom, cursor: text.endIndex).map { ($0.shortcut, $0.length) }
+        }
+        #expect(typed("- ", from: 0)! == (.block(.bulletList), 2) && typed("- ", from: 1)! == (.block(.bulletList), 2))
+        #expect(typed("- M", from: 0)! == (.block(.bulletList), 2) && typed("- Md", from: 1)! == (.block(.bulletList), 2))
+        #expect(typed("``` M", from: 3)! == (.block(.codeBlock), 4) && typed("12. x", from: 0)! == (.block(.orderedList), 4))
+        #expect(typed("## ", from: 1)! == (.block(.heading2), 3) && typed("---", from: 2)! == (.divider, 3))
+        // There before the change (deleting what followed left it), or not at the line's start: nothing.
+        #expect(typed("- M", from: 2) == nil && typed("- ", from: 2) == nil && typed("a - M", from: 0) == nil && typed("", from: 0) == nil)
+        // More than a few letters with it: a paste or the app's own text, such as the date from "+".
+        #expect(typed("- Mdlis", from: 0)! == (.block(.bulletList), 2) && typed("- Mdlist", from: 0) == nil)
+        #expect(typed("12. November 2026", from: 0) == nil)
+    }
+
     /// Mark and query are typed text: an atom between them and the cursor would be lost with the pick, and a user
     /// mention shows as "@label".
     @Test func onlyTypedTextCounts() {

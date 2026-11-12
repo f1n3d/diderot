@@ -33,6 +33,27 @@ enum TriggerParser {
         return found.map { ($0, mark.count) }
     }
 
+    /// The Markdown mark at the line's start that a change's typing completed (it typed from offset `typedFrom` to
+    /// `cursor`), and its length: right before the cursor, or followed by letters typed in the same change, as when keys
+    /// come faster than the page's updates, which then see them as one change (XCUITest's come about 6 ms apart, a few
+    /// per update). Not followed by more than `typedAfterMark` characters: a longer insertion is a paste or the app's own
+    /// text, such as the date from "+", whose "12. November 2026" turned its line into a numbered list without its day. A
+    /// mark that was there before the change, left behind by deleting what followed it, turns nothing.
+    static func typedShortcut(in text: AttributedString, typedFrom: Int, cursor: AttributedString.Index) -> (shortcut: Shortcut, length: Int)? {
+        let typedTo = text.characters.distance(from: text.startIndex, to: cursor)
+        let longest = min(typedTo, 11)
+        guard typedFrom < longest else { return nil }
+        for length in (typedFrom + 1)...longest {
+            if let found = shortcut(in: text, cursor: text.characters.index(text.startIndex, offsetBy: length)) {
+                return typedTo - length <= typedAfterMark ? found : nil
+            }
+        }
+        return nil
+    }
+
+    /// The most letters typed after a mark in the change that completed it (`typedShortcut`).
+    static let typedAfterMark = 5
+
     /// The "/" menu's query and the mark's offset; 24 characters is above every command keyword.
     static func slash(in text: AttributedString, cursor: AttributedString.Index) -> (query: String, offset: Int)? {
         trigger("/", maxLength: 24, in: text, cursor: cursor)
