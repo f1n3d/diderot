@@ -114,110 +114,95 @@ import XCTest
         XCTAssertTrue(copy.waitForNonExistence(timeout: 5), "Menu doesn't close")
     }
 
+    /// Opens the page whose title begins with `title` from the list on the screen (Recently Updated, Favorites) and
+    /// waits until its title field shows `title`.
+    @discardableResult
+    private func openPage(_ app: XCUIApplication, _ title: String, from list: String = "Recently Updated") -> XCUIElement {
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "“\(title)” missing from \(list)")
+        row.tap()
+        let field = app.textFields["page-title"]
+        XCTAssertTrue(field.waitForExistence(timeout: 30), "“\(title)” doesn't open")
+        wait(for: [expectation(for: NSPredicate(format: "value == %@", title), evaluatedWith: field)], timeout: 15)
+        return field
+    }
+
+    /// Puts `title` in place of the page's title, all of it: a double tap selects the title, a single word, and the
+    /// typed text replaces it. Return (`save`) saves it; without, the field keeps its focus. A tap at the field's end
+    /// and a fixed pause used to place the caret for appending; on November 12, 2026 test51's title came out unsaved
+    /// that way, cause unknown.
+    private func retitle(_ field: XCUIElement, to title: String, save: Bool) {
+        field.tap()
+        let focused = NSPredicate { _, _ in (field.value(forKey: "hasKeyboardFocus") as? Bool) == true }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: focused, object: nil)], timeout: 5), .completed,
+                       "The title field takes no focus")
+        field.doubleTap()
+        field.typeText(title + (save ? "\n" : ""))
+        XCTAssertEqual(field.value as? String, title, "The title field shows another title than the one typed")
+    }
+
+    // The rename tests below each have a page of their own under "Fixtures", which `Tools/run-uitests.sh` names back
+    // every run: a test that fails halfway leaves only its own page renamed.
+
     /// Recently Updated reloads when shown again, like the web: a page renamed after opening it from the list shows
-    /// its new title after "Back". Renames "Datenbank-Einbettung" (Tools/seed-bases.py) and restores the title before
-    /// asserting, so a failure leaves no renamed page behind.
+    /// its new title after "Back".
     func test51_RecentlyUpdatedShowsRename() {
         let app = launchHome()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'All'")).firstMatch.tap()
-        let original = "Datenbank-Einbettung", suffix = " \(stamp)", renamed = original + suffix
-        // Opens the page from the list, edits the end of its title and goes back once the title is saved.
-        func editTitle(_ title: String, typing text: String, saved: String) {
-            let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", original)).firstMatch
-            XCTAssertTrue(row.waitForExistence(timeout: 20), "“\(original)” missing from Recently Updated")
-            row.tap()
-            let field = app.textFields["page-title"]
-            XCTAssertTrue(field.waitForExistence(timeout: 30), "“\(title)” doesn't open")
-            wait(for: [expectation(for: NSPredicate(format: "value == %@", title), evaluatedWith: field)], timeout: 15)
-            // Bottom right of the field puts the caret at the end of the title.
-            field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.9)).tap()
-            Thread.sleep(forTimeInterval: 0.8)
-            app.typeText(text + "\n")
-            XCTAssertTrue(app.navigationBars[saved].waitForExistence(timeout: 15), "Title “\(saved)” wasn't saved")
-            backButton(app).tap()
-        }
-        editTitle(original, typing: suffix, saved: renamed)
+        let renamed = "Umbenennen51x\(stamp)"
+        retitle(openPage(app, "Umbenennen51"), to: renamed, save: true)
+        XCTAssertTrue(app.navigationBars[renamed].waitForExistence(timeout: 15), "Title “\(renamed)” wasn't saved")
+        backButton(app).tap()
         let shown = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", renamed)).firstMatch.waitForExistence(timeout: 10)
         snapshot(app, "51-after-back")
-        editTitle(renamed, typing: String(repeating: XCUIKeyboardKey.delete.rawValue, count: suffix.count), saved: original)
         XCTAssertTrue(shown, "Recently Updated still shows the old title after “Back”")
     }
 
-    /// "Back" while the title is still being edited saves it, like the web's save on navigation. Renames
-    /// "Datenbank-Einbettung" like test51 and restores the title before asserting.
+    /// "Back" while the title is still being edited saves it, like the web's save on navigation.
     func test47_BackSavesTitle() {
         let app = launchHome()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'All'")).firstMatch.tap()
-        let original = "Datenbank-Einbettung", suffix = " \(stamp)", renamed = original + suffix
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", original)).firstMatch
-        let field = app.textFields["page-title"]
-        XCTAssertTrue(row.waitForExistence(timeout: 20), "“\(original)” missing from Recently Updated")
-        row.tap()
-        XCTAssertTrue(field.waitForExistence(timeout: 30), "“\(original)” doesn't open")
-        wait(for: [expectation(for: NSPredicate(format: "value == %@", original), evaluatedWith: field)], timeout: 15)
-        // Bottom right of the field puts the caret at the end of the title. No Return: the field keeps its focus.
-        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.9)).tap()
-        Thread.sleep(forTimeInterval: 0.8)
-        app.typeText(suffix)
+        let renamed = "Umbenennen47x\(stamp)"
+        // No Return: the field keeps its focus.
+        retitle(openPage(app, "Umbenennen47"), to: renamed, save: false)
         backButton(app).tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Umbenennen47")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "Recently Updated doesn't show after “Back”")
         row.tap()
         let saved = app.navigationBars[renamed].waitForExistence(timeout: 15)
         snapshot(app, "47-reopened")
-        if saved {
-            field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.9)).tap()
-            Thread.sleep(forTimeInterval: 0.8)
-            app.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: suffix.count) + "\n")
-            XCTAssertTrue(app.navigationBars[original].waitForExistence(timeout: 15), "Title “\(original)” wasn't restored")
-        }
         XCTAssertTrue(saved, "Title typed before “Back” wasn't saved")
     }
 
-    /// Favorites reload when shown again, like Recently Updated (test51). Adds "Datenbank-Einbettung" through its
-    /// page menu and renames it like test51; restores the title and removes the favorite before asserting.
+    /// Favorites reload when shown again, like Recently Updated (test51). Adds its page through the page menu, renames
+    /// it, and removes the favorite again before asserting (the script removes it at each run's start too).
     func test48_FavoritesShowRename() {
         let app = launchHome()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'All'")).firstMatch.tap()
-        let original = "Datenbank-Einbettung", suffix = " \(stamp)", renamed = original + suffix
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", original)).firstMatch
-        let field = app.textFields["page-title"]
-        // Opens the page from the list and waits for its title.
-        func open(_ title: String) {
-            XCTAssertTrue(row.waitForExistence(timeout: 20), "“\(original)” missing from the list")
-            row.tap()
-            XCTAssertTrue(field.waitForExistence(timeout: 30), "“\(title)” doesn't open")
-            wait(for: [expectation(for: NSPredicate(format: "value == %@", title), evaluatedWith: field)], timeout: 15)
-        }
-        // Edits the end of the title (bottom right of the field puts the caret there); Return saves it.
-        func edit(typing text: String, saved: String) {
-            field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.9)).tap()
-            Thread.sleep(forTimeInterval: 0.8)
-            app.typeText(text + "\n")
-            XCTAssertTrue(app.navigationBars[saved].waitForExistence(timeout: 15), "Title “\(saved)” wasn't saved")
-        }
+        let original = "Umbenennen48", renamed = "Umbenennen48x\(stamp)"
         func pageMenu(_ labels: [String]) {
             app.buttons["page-more"].tap()
             let item = button(app, labels: labels)
             XCTAssertTrue(item.waitForExistence(timeout: 5), "Page menu shows no “\(labels[0])”")
             item.tap()
         }
-        open(original)
+        openPage(app, original)
         pageMenu(["Add to Favorites", "Zu Favoriten hinzufügen"])
         backButton(app).tap()
         button(app, labels: ["Favorites", "Favoriten"]).tap()
-        open(original)
-        edit(typing: suffix, saved: renamed)
+        retitle(openPage(app, original, from: "Favorites"), to: renamed, save: true)
+        XCTAssertTrue(app.navigationBars[renamed].waitForExistence(timeout: 15), "Title “\(renamed)” wasn't saved")
         backButton(app).tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", original)).firstMatch
         let shown = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", renamed)).firstMatch.waitForExistence(timeout: 10)
         snapshot(app, "48-after-back")
-        open(renamed)
-        edit(typing: String(repeating: XCUIKeyboardKey.delete.rawValue, count: suffix.count), saved: original)
+        openPage(app, renamed, from: "Favorites")
         pageMenu(["Remove from Favorites", "Aus Favoriten entfernen"])
         backButton(app).tap()
         // Also waits for the removal to reach the server before the app ends.
         let removed = row.waitForNonExistence(timeout: 10)
         XCTAssertTrue(shown, "Favorites still show the old title after “Back”")
-        XCTAssertTrue(removed, "“\(original)” is still a favorite")
+        XCTAssertTrue(removed, "“\(renamed)” is still a favorite")
     }
 
     /// The trash confirmation shows at the tree row's "…" and at the long-pressed row in "Recent", not at a fixed spot
