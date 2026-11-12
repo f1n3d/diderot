@@ -156,10 +156,9 @@ Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the 
 ## Other
 
 - Inline comment, once on the iPhone (October 22, 2026, full UI run, test33): the comment was created and the app showed the marked passage as a link, but the mark never reached the server (not in the version history either). Three targeted repetitions on the iPhone (test33 alone, with test34/35, with test1 before) and two simulator runs were green; the store for unsent changes was empty. Cause open. If it happens again: check whether the engine refused the save ("The change could not be applied.") or the connection was briefly gone.
-- UI tests: three flaky spots, to investigate if they come back:
+- UI tests: two flaky spots, to investigate if they come back:
   - The check "New paragraph: Taste… bold from Cmd-B" (test2) sometimes misses ⌘B: the word stays selected but not bold. Rarer since pauses around ⌘B; once in four runs on October 21, 2026; on October 22, 2026, after many runs twice in a row, and green again after restarting the simulator. So rather the simulator's state than the app.
   - test35 sometimes took about 60 s longer ("App animations complete notification not received" when handing over the emoji).
-  - test47 lost two of seven Delete keys while restoring its title in the full run of November 9, 2026, so "Datenbank-Einbettung" kept part of its suffix, and test48 and test51, which expect the title, failed after it. The three passed when run again. If it comes back, the test could set the title back through the API.
 - Postponed in the code review of October 28, 2026:
   - The hidden editor engine's page has no content security policy (M47). It matters only if `engine.js` itself turned malicious; since October 31, 2026 CI checks that `engine.js` is built from its sources, which does almost as much.
 - Postponed in the code review of October 31, 2026:

@@ -236,6 +236,35 @@ APPEND_PAGE=${NOTE_PAGES%% *} FOOTNOTES_PAGE=${NOTE_PAGES##* }
 [ -n "$NOTE_PAGES" ] || echo "No pages for the Append Note tests"
 export TEST_RUNNER_DOCMOST_UITEST_APPEND_PAGE="$APPEND_PAGE" TEST_RUNNER_DOCMOST_UITEST_FOOTNOTES_PAGE="$FOOTNOTES_PAGE"
 
+# The pages of the rename tests (HomeUITests test47, test48, test51) under "Fixtures", one each, named back each run
+# (also after a run that renamed one to "Umbenennen47x<stamp>") and updated now, so they lead Recently Updated; test48's
+# favorite goes. They shared "Datenbank-Einbettung" before: a test that failed before restoring its title failed the
+# ones after it as well (November 9, 2026: test47, then test48 and test51).
+python3 - "$PAGE" <<'PY' || echo "No pages for the rename tests"
+import sys
+from dev_api import ApiError, session
+call = session().call
+space = call("pages/info", {"pageId": sys.argv[1]})["spaceId"]
+def children(parent=None):
+    return call("pages/sidebar-pages", {"spaceId": space, **({"pageId": parent} if parent else {}), "limit": 100})["items"]
+root = next((page for page in children() if page["title"] == "Fixtures"), None)
+if root is None:
+    sys.exit("No page \"Fixtures\" (Tools/seed-fixtures.py)")
+pages = children(root["id"])
+content = {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Zum Umbenennen."}]}]}
+for title in ("Umbenennen47", "Umbenennen48", "Umbenennen51"):
+    found = [page for page in pages if (page.get("title") or "").startswith(title)]
+    page = found[0] if found else call("pages/create", {"spaceId": space, "parentPageId": root["id"], "title": title})
+    for extra in found[1:]:
+        call("pages/delete", {"pageId": extra["id"], "permanentlyDelete": True})
+    call("pages/update", {"pageId": page["id"], "title": title, "content": content, "operation": "replace", "format": "json"})
+    if title == "Umbenennen48":
+        try:
+            call("favorites/remove", {"type": "page", "pageId": page["id"]})
+        except ApiError:
+            pass  # not a favorite
+PY
+
 # The colleague of two-client tests: a test that writes <name>.json into this folder, the body of a page update, gets
 # it sent as another client's change (the server applies it through Yjs, as it does the web editor's), then
 # <name>.done. It ends with its folder, which goes when the script ends.
