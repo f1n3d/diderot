@@ -110,6 +110,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
   - Since 1.2.0 the app opens such a page read-only, as binding it would drop what doesn't fit; 1.1.0 bound it. Docmost's web editor will likely drop the note at the next edit there.
   - Left: appending before the footnotes, once Docmost does, or by the app through the engine, which would need the note's Markdown in the app (see Pasting above). A page that already got a note after its footnotes still opens read-only.
   - To report to Docmost: steps (a page with a footnote, then `pages/update` with `operation: "append"`), expected (before the footnotes), the line above, and a possible fix: insert at `fragment.length - 1` when the last element is `footnotes`.
+- The engine counts as visible to WebKit only while its page view is in the window (`EngineHost`, November 12, 2026). Under the camera's full-screen cover, which keeps the page live for the photo, it is out of the window, so WebKit can suspend the engine between calls again as before the fix; after a long time at the camera the status may stay gray until the next edit. Rare, and no worse than before; hosting it at the window's root would cover it (code review of the fix).
 
 ## Presentation mode
 
@@ -196,4 +197,5 @@ From the code reviews of October 31 and November 6, 2026:
 - CI checks engine.js against its sources but not the islands' KaTeX and Mermaid, committed and never rebuilt (V54).
 - The server checks of deletions and undo check only that something is absent, so something that never reached the server passes (V55).
 - Two clients in the UI tests: the script sends a page update as another client when a test asks for it (`DOCMOST_UITEST_COLLEAGUE`), which test84 uses. Backspace or Return while a collaborator types in the same line (V2) would need their change to land within the app's lag of about 0.6 s; engine checks and unit tests act it out instead.
+- No test checks that `PageView` shows the engine's page (`EngineHost`): `EngineHostTests` checks the host alone, and the simulator doesn't stop suspended processes, so losing the wiring passes every test (code review of November 12, 2026). A debug value of the engine's `document.visibilityState` that a UI test reads would close it.
 - test76 presents a page without formulas or diagrams, which the presentation pages as web views (V56). Tried by hand on November 6, 2026 on "Fixture: Blocks": no trap, the formula rendered.

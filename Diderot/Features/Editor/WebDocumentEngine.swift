@@ -23,6 +23,9 @@ protocol DocumentEngine: AnyObject, Observable {
     /// After each save of changes the server hasn't confirmed (`saveUnsentChanges`, `close`, a failed engine): nil once
     /// the device keeps them, else why it can't (a full disk). They then live only in the engine, lost if the app ends.
     var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)? { get set }
+    /// The page the engine runs in, for the page view to show out of sight (`EngineHost`); nil while closed and for an
+    /// engine without one.
+    var webPage: WebPage? { get }
 
     func open(pageId: String) async throws
     /// Keeps changes the server hasn't confirmed (e.g. made offline); the page's next `open` sends them.
@@ -300,7 +303,8 @@ enum EngineStep: Equatable {
     case split(after: BlockTarget)
 }
 
-/// Bundled TipTap/Yjs editor (`Engine/`) in a hidden `WebPage`, connected to the collab server; mirrors the document.
+/// Bundled TipTap/Yjs editor (`Engine/`) in a `WebPage` the page view shows out of sight (`EngineHost`), connected to the
+/// collab server; mirrors the document.
 @MainActor
 @Observable
 final class WebDocumentEngine: DocumentEngine {
@@ -316,6 +320,7 @@ final class WebDocumentEngine: DocumentEngine {
     /// Scripts the engine's page runs before the engine: `EngineBridgeTests` stand in for the collab server with one.
     private let pageScripts: [String]
     private var page: WebPage?
+    var webPage: WebPage? { page }
     /// Watches for the open page's web process ending; stops with the page.
     private var processWatch: Task<Void, Never>?
     private var readyContinuation: CheckedContinuation<Void, Error>?

@@ -6,9 +6,10 @@
  * typing faster than one key per `documentDelay` held it back until they paused, and the app's copy, which paths and
  * adopting collaborators' changes rely on, grew stale meanwhile.
  *
- * The engine's page is never shown, and the system pauses it at times, timers and incoming changes alike (mostly up to
- * about 250 ms in the simulator, measured on November 1, 2026), so events come about 0.6 s apart while someone types,
- * at times more; the engine's own document stands still during such a pause too.
+ * The system can pause the engine's page, timers and incoming changes alike: between the app's calls whenever no view
+ * showed it, before the page view did (`EngineHost` in the app; mostly up to about 250 ms in the simulator, measured on
+ * November 1, 2026, when events came about 0.6 s apart while someone typed), and still once its page is off the screen
+ * or the app goes to the background. The engine's own document stands still during such a pause too.
  */
 export const documentDelay = 150;
 export const documentMaxWait = 400;
