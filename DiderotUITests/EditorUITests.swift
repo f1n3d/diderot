@@ -160,17 +160,19 @@ import XCTest
         bold.tap()
         editor.typeText(" Taste\(stamp)")
         editor.typeKey(.leftArrow, modifierFlags: [.shift, .option])
-        // A person pauses between selecting, ⌘B and "Done"; back to back, ⌘B was often lost.
-        Thread.sleep(forTimeInterval: 0.6)
-        editor.typeKey("b", modifierFlags: .command)
-        Thread.sleep(forTimeInterval: 0.6)
-        // While iOS hides and brings back the on-screen keyboard after a hardware key, a synthesized one can get lost
-        // on its way: the editor keeps the keyboard focus but never sees ⌘ or B (logged in the app, 1 of 8 runs under
-        // load). Only if nothing changed, ⌘B goes again.
-        if !bold.wait(for: \.isSelected, toEqual: true, timeout: 3) {
+        // ⌘B until the Bold button shows it, at most three times. While iOS hides and brings back the on-screen keyboard
+        // after a hardware key, a synthesized one can get lost on its way: the editor keeps the keyboard focus but never
+        // sees ⌘ or B (logged in the app, 1 of 8 runs under load). So each try waits for the keyboard to settle, after a
+        // pause as a person makes (back to back, ⌘B was often lost). Two tries, 0.6 s apart without that wait, still
+        // missed in the full runs of November 3 and 10, 2026, whose simulator stays up for an hour; 24 runs of this
+        // test alone, each on a simulator booted afresh, lost none (November 12, 2026).
+        for _ in 0..<3 where !bold.isSelected {
+            Thread.sleep(forTimeInterval: 0.6)
+            waitForKeyboard(app)
             editor.typeKey("b", modifierFlags: .command)
+            _ = bold.wait(for: \.isSelected, toEqual: true, timeout: 3)
         }
-        XCTAssertTrue(bold.wait(for: \.isSelected, toEqual: true, timeout: 3), "The Bold button doesn't show the bold from ⌘B")
+        XCTAssertTrue(bold.isSelected, "The Bold button doesn't show the bold from ⌘B")
         snapshot(app, "2-typed")
         finishEditing(app)
     }
