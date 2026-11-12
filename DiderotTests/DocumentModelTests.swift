@@ -1,5 +1,6 @@
 import SwiftUI
 import Testing
+import WebKit
 import DocmostKit
 @testable import Diderot
 
@@ -2597,6 +2598,7 @@ final class FakeDocumentEngine: DocumentEngine {
     var onFailure: (@MainActor (EngineFailure) -> Void)?
     var onTerminated: (@MainActor () -> Void)?
     var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)?
+    var webPage: WebPage? { nil }
     /// Why saving the unsent changes (`saveUnsentChanges`, `close`) fails, like a full disk; nil keeps them.
     var unsentChangesError: (any Error)?
     private(set) var opened: [String] = []

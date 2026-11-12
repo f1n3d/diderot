@@ -321,6 +321,10 @@ struct PageView: View {
 
     var body: some View {
         presentations
+        // The engine runs as a visible page while this page is on the screen (`EngineHost`).
+        .background {
+            if let page = model?.engine?.webPage { EngineHost(page: page) }
+        }
         .toast($toast)
         // Refreshes on every appearance, as the web does: coming back to a page deleted or unshared meanwhile shows that
         // instead of its old content, and a refresh cancelled by opening a subpage runs again.
