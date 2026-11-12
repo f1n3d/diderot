@@ -2129,7 +2129,6 @@ struct DocumentModelTests {
         }
 
         for character in mark { type(String(character)) }
-        #expect(String(model.activeText.characters).isEmpty, "the mark stays in the line")
         while engine.converted.isEmpty || model.active?.ref.path != path || model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.converted.map(\.kind) == [kind])
         #expect(engine.saved.first?.plainText == "")
@@ -2161,6 +2160,42 @@ struct DocumentModelTests {
         try await Task.sleep(for: .milliseconds(50))
         #expect(engine.converted.count == 1)
         #expect(String(model.activeText.characters) == "- ")
+    }
+
+    /// A mark and the letter after it in one change, as the text view reports keys that come faster than the page takes
+    /// them (XCUITest's): the line turns all the same, and the letter stays in it with the caret after it. The mark stayed
+    /// as text before ("- Mdliste…" in test94).
+    @Test(.timeLimit(.minutes(1)), arguments: ["- M", "``` M"])
+    func markWithTheNextLetterInOneChangeTurnsTheLine(typed: String) async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        let code = typed.hasPrefix("```")
+        engine.convertResult = .moved(EngineCursor(path: code ? [0] : [0, 0, 0], offset: 1))
+        engine.whileInserting = {
+            guard !engine.converted.isEmpty else { return }
+            engine.document = PMNode(type: "doc", content: [
+                code ? PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "M")]) : Self.list([("a", "M")]),
+            ])
+        }
+
+        model.activeText.append(AttributedString(typed))
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        model.activeTextChanged()
+        for _ in 0..<100 where engine.converted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(!engine.converted.isEmpty, "the mark stays in the line")
+        #expect(String(model.activeText.characters) == "M", "the letter went")
+        guard case .insertionPoint(let caret) = model.activeSelection.indices(in: model.activeText) else {
+            Issue.record("no caret")
+            return
+        }
+        #expect(caret == model.activeText.endIndex, "the caret isn't after the letter")
+        while model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.converted.map(\.kind) == [code ? "codeBlock" : "bulletList"])
+        #expect(engine.saved.first?.plainText == "M")
+        #expect(model.active?.ref.path == (code ? [0] : [0, 0, 0]))
+        #expect(String(model.activeText.characters) == "M")
     }
 
     /// A mark the engine doesn't turn the line for comes back: the line is what was typed, and it isn't taken for a
@@ -2834,8 +2869,11 @@ final class FakeDocumentEngine: DocumentEngine {
     func convert(_ target: BlockTarget, to kind: String) async -> KeyResult {
         converted.append((target, kind))
         whileInserting?()
+        await convertWaits?()
         return convertResult
     }
+    /// Awaited before `convert` answers, like a slow engine roundtrip.
+    var convertWaits: (() async -> Void)?
     /// What a line can turn into, as the engine would say; nothing said by default.
     var conversionKinds: Set<String>?
     func conversions(_ target: BlockTarget) async -> Set<String>? { conversionKinds }
