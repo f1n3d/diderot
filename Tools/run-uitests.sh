@@ -67,22 +67,32 @@ docmost_097() {
 # on November 9, 2026 it held 366 KB for 5 KB of content, the app took about 3 s to open it, and once the first open
 # after a server start didn't sync within 60 s. The earlier run's page goes for good, with its subpages, comments and
 # files; a new page comes last at the root, where the tree's drag test expects it.
+# Root pages that earlier runs left behind go too: a run that didn't end skips the clean-up after the checks, and with
+# them test11 can't see the test page and the tree's first row together (November 11, 2026). They are those of test6
+# ("Neue Seite <stamp>", untitled if it stopped before its title) and test78 ("Vorlage<stamp> Bereich|Global"). An
+# untitled one may also be someone's page not named yet: it goes only without subpages, and to the trash.
 PAGE=$(python3 - "$SPACE_SLUG" "$PAGE_TITLE" <<'PY'
-import sys
+import re, sys
 from dev_api import session
 slug, title = sys.argv[1], sys.argv[2]
 call = session().call
 space = call("spaces/info", {"spaceId": slug})["id"]
+left = re.compile(r"Neue Seite \d{6}|Vorlage\d{6} (Bereich|Global)")
 # Every root page, however many: one of that title left behind would be found in its place by the tests that search.
 old, cursor = [], None
 while True:
     pages = call("pages/sidebar-pages", {"spaceId": space, "limit": 100, **({"cursor": cursor} if cursor else {})})
-    old += [page["id"] for page in pages["items"] if page.get("title") == title]
+    old += [page for page in pages["items"] if page.get("title") == title or left.fullmatch(page.get("title") or "")
+            or (not page.get("title") and not page.get("hasChildren"))]
     cursor = pages["meta"].get("nextCursor") if pages["meta"].get("hasNextPage") else None
     if not cursor:
         break
 for page in old:
-    call("pages/delete", {"pageId": page, "permanentlyDelete": True})
+    untitled = not page.get("title")
+    if page.get("title") != title:
+        print(f"Left behind by an earlier run, {'moved to the trash' if untitled else 'deleted'}: \"{page.get('title') or ''}\"",
+              file=sys.stderr)
+    call("pages/delete", {"pageId": page["id"], "permanentlyDelete": not untitled})
 print(call("pages/create", {"spaceId": space, "title": title})["id"])
 PY
 ) && [ -n "$PAGE" ] || { echo "Could not make the test page '$PAGE_TITLE' in the space '$SPACE_SLUG'" >&2; exit 1; }
@@ -140,13 +150,25 @@ while IFS='=' read -r key value; do
 done < <(Tools/seed-bases.py "$PAGE" || echo "Could not create database test data" >&2)
 
 # Templates for EditorUITests test78 (Enterprise feature `templates`): "Vorlage<stamp> Bereich" of the test page's space
-# and "Vorlage<stamp> Global"; their IDs for the check and clean-up below. Without the license nothing is made.
+# and "Vorlage<stamp> Global"; their IDs for the check and clean-up below. Without the license nothing is made. Those
+# an earlier run left behind (it didn't end) go first: with two more pairs, test78's own lay off the screen (November
+# 11, 2026).
 TEMPLATES=$(python3 - "$STAMP" "$PAGE" <<'PY' || true
-import sys
+import re, sys
 from dev_api import session
 stamp, page = sys.argv[1], sys.argv[2]
 call = session().call
 space = call("pages/info", {"pageId": page})["spaceId"]
+left, cursor = [], None
+while True:
+    found = call("templates", {"limit": 100, **({"cursor": cursor} if cursor else {})})
+    left += [t for t in found["items"] if re.fullmatch(r"Vorlage\d{6} (Bereich|Global)", t.get("title") or "")]
+    cursor = found["meta"].get("nextCursor") if found["meta"].get("hasNextPage") else None
+    if not cursor:
+        break
+for template in left:
+    print(f"Template left behind by an earlier run, deleted: \"{template['title']}\"", file=sys.stderr)
+    call("templates/delete", {"templateId": template["id"]})
 content = {"type": "doc", "content": [
     {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Agenda" + stamp}]},
     {"type": "paragraph", "content": [{"type": "text", "text": "Aus der Vorlage"}]}]}
