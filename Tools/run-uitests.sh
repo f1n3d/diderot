@@ -246,7 +246,14 @@ from dev_api import ApiError, session
 call = session().call
 space = call("pages/info", {"pageId": sys.argv[1]})["spaceId"]
 def children(parent=None):
-    return call("pages/sidebar-pages", {"spaceId": space, **({"pageId": parent} if parent else {}), "limit": 100})["items"]
+    items, cursor = [], None
+    while True:
+        found = call("pages/sidebar-pages", {"spaceId": space, "limit": 100, **({"pageId": parent} if parent else {}),
+                                             **({"cursor": cursor} if cursor else {})})
+        items += found["items"]
+        cursor = found["meta"].get("nextCursor") if found["meta"].get("hasNextPage") else None
+        if not cursor:
+            return items
 root = next((page for page in children() if page["title"] == "Fixtures"), None)
 if root is None:
     sys.exit("No page \"Fixtures\" (Tools/seed-fixtures.py)")
