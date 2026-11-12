@@ -71,8 +71,9 @@ import DocmostKit
             while model.editorTextView == nil { try await Task.sleep(for: .milliseconds(10)) }
             view = try #require(model.editorTextView)
             try #require(view.window === window, "another test's editor has the focus")
-            engine.convertWaits = { [unowned self] in
-                while !turns { try? await Task.sleep(for: .milliseconds(10)) }
+            // Weak: a test that ends early leaves the engine waiting, which then ends with the editor.
+            engine.convertWaits = { [weak self] in
+                while let self, !self.turns { try? await Task.sleep(for: .milliseconds(10)) }
             }
         }
 

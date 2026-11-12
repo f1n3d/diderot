@@ -110,6 +110,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
   - Since 1.2.0 the app opens such a page read-only, as binding it would drop what doesn't fit; 1.1.0 bound it. Docmost's web editor will likely drop the note at the next edit there.
   - Left: appending before the footnotes, once Docmost does, or by the app through the engine, which would need the note's Markdown in the app (see Pasting above). A page that already got a note after its footnotes still opens read-only.
   - To report to Docmost: steps (a page with a footnote, then `pages/update` with `operation: "append"`), expected (before the footnotes), the line above, and a possible fix: insert at `fragment.length - 1` when the last element is `footnotes`.
+- A Markdown mark is taken away in the text view after SwiftUI's update, so keys typed meanwhile stay in order (November 12, 2026). Two places still write the line on the page's text while keys may be on their way, which XCUITest's pace showed for the marks: the mark put back when the engine refuses the turn, and other edits of the active text (a slash command picked, a mention inserted, a soft line break), whose text and caret reach the text view only with SwiftUI's next update. A key in between can land before the caret. Not seen at a person's pace; the same way through the text view would close it (code review of the mark fix).
 
 ## Presentation mode
 
