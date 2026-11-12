@@ -136,7 +136,8 @@ class DocmostEngine {
    * base64 Yjs update for the next `open` (a full state, which merges idempotently); undefined once the page is closed.
    */
   async unsentChanges(): Promise<string | undefined> {
-    // A deadline, not a count of timeouts: timers in a page that is never shown may run late.
+    // A deadline, not a count of timeouts: timers may run late in a page no view shows, as when the app goes to the
+    // background.
     const deadline = Date.now() + 2000;
     while (Date.now() < deadline && this.provider?.hasUnsyncedChanges && this.socket?.status === WebSocketStatus.Connected) {
       await new Promise((resolve) => setTimeout(resolve, 100));
