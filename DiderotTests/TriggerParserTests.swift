@@ -61,6 +61,9 @@ struct TriggerParserTests {
         #expect(typed("## ", from: 1)! == (.block(.heading2), 3) && typed("---", from: 2)! == (.divider, 3))
         // There before the change (deleting what followed left it), or not at the line's start: nothing.
         #expect(typed("- M", from: 2) == nil && typed("- ", from: 2) == nil && typed("a - M", from: 0) == nil && typed("", from: 0) == nil)
+        // More than a few letters with it: a paste or the app's own text, such as the date from "+".
+        #expect(typed("- Mdlis", from: 0)! == (.block(.bulletList), 2) && typed("- Mdlist", from: 0) == nil)
+        #expect(typed("12. November 2026", from: 0) == nil)
     }
 
     /// Mark and query are typed text: an atom between them and the cursor would be lost with the pick, and a user
