@@ -69,26 +69,30 @@ docmost_097() {
 # files; a new page comes last at the root, where the tree's drag test expects it.
 # Root pages that earlier runs left behind go too: a run that didn't end skips the clean-up after the checks, and with
 # them test11 can't see the test page and the tree's first row together (November 11, 2026). They are those of test6
-# ("Neue Seite <stamp>", untitled if it stopped before its title) and test78 ("Vorlage<stamp> Bereich|Global").
+# ("Neue Seite <stamp>", untitled if it stopped before its title) and test78 ("Vorlage<stamp> Bereich|Global"). An
+# untitled one may also be someone's page not named yet: it goes only without subpages, and to the trash.
 PAGE=$(python3 - "$SPACE_SLUG" "$PAGE_TITLE" <<'PY'
 import re, sys
 from dev_api import session
 slug, title = sys.argv[1], sys.argv[2]
 call = session().call
 space = call("spaces/info", {"spaceId": slug})["id"]
-left = re.compile(r"(Neue Seite \d{6}|Vorlage\d{6} (Bereich|Global))?")
+left = re.compile(r"Neue Seite \d{6}|Vorlage\d{6} (Bereich|Global)")
 # Every root page, however many: one of that title left behind would be found in its place by the tests that search.
 old, cursor = [], None
 while True:
     pages = call("pages/sidebar-pages", {"spaceId": space, "limit": 100, **({"cursor": cursor} if cursor else {})})
-    old += [page for page in pages["items"] if page.get("title") == title or left.fullmatch(page.get("title") or "")]
+    old += [page for page in pages["items"] if page.get("title") == title or left.fullmatch(page.get("title") or "")
+            or (not page.get("title") and not page.get("hasChildren"))]
     cursor = pages["meta"].get("nextCursor") if pages["meta"].get("hasNextPage") else None
     if not cursor:
         break
 for page in old:
+    untitled = not page.get("title")
     if page.get("title") != title:
-        print(f"Left behind by an earlier run, deleted: \"{page.get('title') or ''}\"", file=sys.stderr)
-    call("pages/delete", {"pageId": page["id"], "permanentlyDelete": True})
+        print(f"Left behind by an earlier run, {'moved to the trash' if untitled else 'deleted'}: \"{page.get('title') or ''}\"",
+              file=sys.stderr)
+    call("pages/delete", {"pageId": page["id"], "permanentlyDelete": not untitled})
 print(call("pages/create", {"spaceId": space, "title": title})["id"])
 PY
 ) && [ -n "$PAGE" ] || { echo "Could not make the test page '$PAGE_TITLE' in the space '$SPACE_SLUG'" >&2; exit 1; }
