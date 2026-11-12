@@ -368,6 +368,8 @@ import XCTest
         XCTAssertTrue(spaceTemplate.waitForExistence(timeout: 10), "“This Space” doesn't list the space's template")
         XCTAssertFalse(app.staticTexts["Vorlage\(stamp) Global"].exists, "“This Space” lists the global template")
         snapshot(app, "78-picker")
+        // Other templates can put this run's below the list's bottom, where a tap misses it.
+        XCTAssertTrue(scrollTo(spaceTemplate, in: app), "The space's template doesn't come into view")
         spaceTemplate.tap()
         XCTAssertTrue(app.staticTexts["Agenda\(stamp)"].waitForExistence(timeout: 10), "The preview doesn't show the content")
         app.buttons["template-use"].tap()
@@ -393,6 +395,7 @@ import XCTest
         all.tap()
         let use = app.buttons["template-use-Vorlage\(stamp) Global"]
         XCTAssertTrue(use.waitForExistence(timeout: 10), "“All Templates” lacks the global template")
+        XCTAssertTrue(scrollTo(use, in: app), "The global template doesn't come into view")
         use.tap()
         XCTAssertTrue(app.staticTexts["Agenda\(stamp)"].waitForExistence(timeout: 20), "The template doesn't fill the page")
         let filledTitle = element(app, "page-title"), globalTitle = "Vorlage\(stamp) Global"
