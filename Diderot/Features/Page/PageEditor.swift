@@ -78,6 +78,12 @@ struct ActiveTextEditor: View {
                         guard let model, view === model.editorTextView else { return false }
                         return model.backspaceAtStart()
                     }
+                    // The page's selection, which the comment sheet quotes, as the toolbar's Comment button does.
+                    TextInputHooks.commentsOnSelection = { [weak model] view in
+                        guard let model, view === model.editorTextView else { return false }
+                        return model.canCommentOnSelection
+                    }
+                    TextInputHooks.commentOnSelection = { [weak model] _ in model?.editsComment = true }
                 }
             }))
             .onAppear { if isActive { applyCursor() } }

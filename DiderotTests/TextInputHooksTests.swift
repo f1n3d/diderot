@@ -130,6 +130,35 @@ struct TextInputHooksTests {
         #expect(TextInputHooks.refusedActions.contains(NSSelectorFromString("_showTextFormattingOptions:")))
     }
 
+    /// "Comment" goes into the text view's selection menu, before Cut, Copy and Paste, when its page offers it: not
+    /// without the offer, not in a context menu without those entries, not in the menu bar. A class's own `buildMenu`
+    /// stays behind the hook.
+    @Test func commentGoesIntoTheSelectionMenu() {
+        let view = Self.view(OwnMenuTextView.self, cursorAt: 0)
+        TextInputHooks.install(on: view)
+        var offers = true
+        TextInputHooks.commentsOnSelection = { $0 === view && offers }
+        defer { TextInputHooks.commentsOnSelection = nil }
+
+        let menu = MenuBuilderStub(system: .context, menus: [.standardEdit])
+        view.buildMenu(with: menu)
+        #expect(view.ownMenuCalls == 1)
+        #expect(menu.insertedBeforeStandardEdit.flatMap(\.children).map(\.title) == [String(localized: "Comment")])
+
+        offers = false
+        let withoutOffer = MenuBuilderStub(system: .context, menus: [.standardEdit])
+        view.buildMenu(with: withoutOffer)
+        #expect(withoutOffer.insertedBeforeStandardEdit.isEmpty)
+
+        offers = true
+        let otherContextMenu = MenuBuilderStub(system: .context, menus: [])
+        view.buildMenu(with: otherContextMenu)
+        let menuBar = MenuBuilderStub(system: .main, menus: [.standardEdit])
+        view.buildMenu(with: menuBar)
+        #expect(otherContextMenu.insertedBeforeStandardEdit.isEmpty && menuBar.insertedBeforeStandardEdit.isEmpty)
+        #expect(view.ownMenuCalls == 4)
+    }
+
     /// Without an own answer, the text view answers as it would without the hook (the inherited implementation).
     @Test func otherActionsAnswerAsWithoutTheHook() {
         let plain = Self.view(UITextView.self, cursorAt: 0)
@@ -152,6 +181,57 @@ private class ObservedTextView: UITextView {}
 private class LateParentTextView: UITextView {}
 private class LateChildTextView: LateParentTextView {}
 private class InheritingActionsTextView: UITextView {}
+
+/// Counts its own `buildMenu`, which the hook keeps.
+private class OwnMenuTextView: UITextView {
+    var ownMenuCalls = 0
+
+    override func buildMenu(with builder: any UIMenuBuilder) {
+        ownMenuCalls += 1
+        super.buildMenu(with: builder)
+    }
+}
+
+/// A menu being built: which menus it has, and what goes before Cut, Copy and Paste.
+@MainActor
+private final class MenuBuilderStub: NSObject, UIMenuBuilder {
+    let system: UIMenuSystem
+    private let menus: Set<UIMenu.Identifier>
+    private(set) var insertedBeforeStandardEdit: [UIMenu] = []
+
+    init(system: UIMenuSystem, menus: Set<UIMenu.Identifier>) {
+        self.system = system
+        self.menus = menus
+    }
+
+    func menu(for identifier: UIMenu.Identifier) -> UIMenu? { menus.contains(identifier) ? UIMenu(identifier: identifier, children: []) : nil }
+    func insertSibling(_ siblingMenu: UIMenu, beforeMenu siblingIdentifier: UIMenu.Identifier) {
+        if siblingIdentifier == .standardEdit { insertedBeforeStandardEdit.append(siblingMenu) }
+    }
+
+    // The rest of the protocol, unused by the hook.
+    func action(for identifier: UIAction.Identifier) -> UIAction? { nil }
+    func __command(forAction action: Selector, propertyList: Any?) -> UICommand? { nil }
+    func replace(menu replacedIdentifier: UIMenu.Identifier, with replacementMenu: UIMenu) {}
+    func replaceChildren(ofMenu parentIdentifier: UIMenu.Identifier, from childrenBlock: ([UIMenuElement]) -> [UIMenuElement]) {}
+    func replace(menu replacedIdentifier: UIMenu.Identifier, with replacementElements: [UIMenuElement]) {}
+    func replace(action replacedIdentifier: UIAction.Identifier, with replacementElements: [UIMenuElement]) {}
+    func __replaceCommand(forAction replacedAction: Selector, propertyList replacedPropertyList: Any?, with replacementElements: [UIMenuElement]) {}
+    func insertElements(_ insertedElements: [UIMenuElement], beforeMenu siblingIdentifier: UIMenu.Identifier) {}
+    func insertElements(_ insertedElements: [UIMenuElement], afterMenu siblingIdentifier: UIMenu.Identifier) {}
+    func insertSibling(_ siblingMenu: UIMenu, afterMenu siblingIdentifier: UIMenu.Identifier) {}
+    func insertChild(_ childMenu: UIMenu, atStartOfMenu parentIdentifier: UIMenu.Identifier) {}
+    func insertElements(_ insertedElements: [UIMenuElement], beforeAction siblingIdentifier: UIAction.Identifier) {}
+    func insertElements(_ insertedElements: [UIMenuElement], afterAction siblingIdentifier: UIAction.Identifier) {}
+    func __insert(_ insertedElements: [UIMenuElement], beforeCommandForAction siblingAction: Selector, propertyList siblingPropertyList: Any?) {}
+    func __insert(_ insertedElements: [UIMenuElement], afterCommandForAction siblingAction: Selector, propertyList siblingPropertyList: Any?) {}
+    func insertElements(_ childElements: [UIMenuElement], atStartOfMenu parentIdentifier: UIMenu.Identifier) {}
+    func insertChild(_ childMenu: UIMenu, atEndOfMenu parentIdentifier: UIMenu.Identifier) {}
+    func insertElements(_ childElements: [UIMenuElement], atEndOfMenu parentIdentifier: UIMenu.Identifier) {}
+    func remove(menu removedIdentifier: UIMenu.Identifier) {}
+    func remove(action removedIdentifier: UIAction.Identifier) {}
+    func __removeCommand(forAction removedAction: Selector, propertyList removedPropertyList: Any?) {}
+}
 
 /// Offers every action: what the hook refuses shows against it.
 private class OwnActionsTextView: UITextView {

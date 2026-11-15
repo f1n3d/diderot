@@ -355,7 +355,6 @@ struct PageView: View {
         }
         .onAppear {
             isOnScreen = true
-            registerSelectionCommands()
             model?.resume()
         }
         // Back in the app: an editor that failed to open, or whose web process ended while opening, tries again.
@@ -376,7 +375,6 @@ struct PageView: View {
             isOnScreen = false
             // The page can leave while its title still has focus (no `onChange` then): save the edit, like the web.
             if titleFocused { commitTitle() }
-            if let model, EditorSelectionCommands.model === model { EditorSelectionCommands.model = nil }
             // The camera's full-screen cover is the page's own picker: the page stays live under it, for the photo.
             if showsCamera { model?.deactivate() } else { model?.leave() }
         }
@@ -828,7 +826,6 @@ struct PageView: View {
         // A page that loaded after it left the screen (e.g. offline, back online under a pushed page) connects when it
         // shows again (`onAppear`), not hidden.
         if isOnScreen {
-            registerSelectionCommands()
             created.resume()
         }
     }
@@ -868,12 +865,6 @@ struct PageView: View {
         }
         guard let entry = model.topLevel.first(where: { contains($0.node) }) else { return }
         revealsAnchor = entry.ref.anchorId
-    }
-
-    /// Routes "Comment" in the editor's selection menu (UIKit, see `AppDelegate`) to this page.
-    private func registerSelectionCommands() {
-        guard let model else { return }
-        EditorSelectionCommands.model = model
     }
 
     private func loadWebHTML() async {
