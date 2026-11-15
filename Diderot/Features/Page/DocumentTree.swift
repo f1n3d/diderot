@@ -125,6 +125,31 @@ extension PMNode {
         return result
     }
 
+    /// The text blocks ↑ and ↓ go through, in reading order: directly editable text and non-mermaid code, also in lists,
+    /// quotes, callouts, open toggles, tables, columns and synced blocks; a collapsed toggle by its title alone. Not
+    /// into tabs, whose other panels don't show.
+    func arrowTextBlocks() -> [NodeRef] {
+        var refs: [NodeRef] = []
+        func visit(_ node: PMNode, at nodePath: [Int]) {
+            for (index, child) in node.children.enumerated() {
+                let childPath = nodePath + [index]
+                if Self.editableTextTypes.contains(child.type) || (child.type == "codeBlock" && child.string("language") != "mermaid") {
+                    refs.append(NodeRef(path: childPath, node: child))
+                } else if child.type == "details", child.bool("open") != true {
+                    if let summary = child.children.first, summary.type == "detailsSummary" {
+                        refs.append(NodeRef(path: childPath + [0], node: summary))
+                    }
+                } else if Self.inPlaceContainers.contains(child.type) || Self.arrowContainers.contains(child.type) {
+                    visit(child, at: childPath)
+                }
+            }
+        }
+        visit(self, at: [])
+        return refs
+    }
+
+    private static let arrowContainers: Set<String> = ["columns", "column", "transclusionSource"]
+
     /// The document with blocks replaced by `overrides`, by their identity (`NodeRef.identity`).
     func applyingOverrides(_ overrides: [String: PMNode]) -> PMNode {
         func apply(to node: PMNode, path: [Int]) -> PMNode {

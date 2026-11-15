@@ -85,9 +85,9 @@ struct ActiveTextEditor: View {
                     }
                     TextInputHooks.commentOnSelection = { [weak model] _ in model?.editsComment = true }
                     // Only while a block is edited: otherwise the keys go on as without the editor.
-                    TextInputHooks.takesKeys = { [weak model] view in
-                        guard let model else { return false }
-                        return view === model.editorTextView && model.isEditable && model.active != nil
+                    TextInputHooks.takesKey = { [weak model] view, key in
+                        guard let model, view === model.editorTextView, model.isEditable, model.active != nil else { return false }
+                        return key.map { model.takesKey($0, in: view) } ?? true
                     }
                     TextInputHooks.onKey = { [weak model] view, action in
                         guard let model, view === model.editorTextView else { return }

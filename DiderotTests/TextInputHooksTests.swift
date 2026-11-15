@@ -165,8 +165,8 @@ struct TextInputHooksTests {
         let editor = Self.view(KeyTextView.self, cursorAt: 0)
         let other = Self.view(KeyTextView.self, cursorAt: 0)
         TextInputHooks.install(on: editor)
-        TextInputHooks.takesKeys = { $0 === editor }
-        defer { TextInputHooks.takesKeys = nil }
+        TextInputHooks.takesKey = { view, _ in view === editor }
+        defer { TextInputHooks.takesKey = nil }
 
         let commands = editor.keyCommands ?? []
         #expect(TextInputHooks.keyCommands.allSatisfy { ours in commands.contains { $0 === ours } })
