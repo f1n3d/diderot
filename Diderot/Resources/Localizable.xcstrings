@@ -5927,6 +5927,16 @@
         }
       }
     },
+    "Toggle title": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titel"
+          }
+        }
+      }
+    },
     "Too many requests. Please wait a moment and try again.": {
       "extractionState": "manual",
       "localizations": {
@@ -6327,6 +6337,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Antwort schreiben"
+          }
+        }
+      }
+    },
+    "Write anything. Enter “/” for commands": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreib etwas. Gib „/“ für Befehle ein"
+          }
+        }
+      }
+    },
+    "Write…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreiben …"
           }
         }
       }

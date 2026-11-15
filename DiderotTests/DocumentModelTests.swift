@@ -49,6 +49,31 @@ struct DocumentModelTests {
         #expect(engine.replacedWith.count == 1)
     }
 
+    /// An empty text block shows the web's placeholder (German, as the app's tests run): the hint at "/" in a paragraph,
+    /// the short one in a paragraph of a column, table cell, callout, quote or footnote, the level in a heading, none in
+    /// a code block.
+    @Test func emptyBlocksShowTheWebsPlaceholders() throws {
+        func shown(_ type: String, level: Int = 1, in parent: String?) -> String? {
+            DocumentModel.placeholder(type: type, level: level, parentType: parent).map { String(localized: $0) }
+        }
+        #expect(shown("paragraph", in: "doc") == "Schreib etwas. Gib „/“ für Befehle ein")
+        #expect(shown("paragraph", in: "listItem") == "Schreib etwas. Gib „/“ für Befehle ein")
+        for parent in ["column", "tableCell", "tableHeader", "callout", "blockquote", "footnote"] {
+            #expect(shown("paragraph", in: parent) == "Schreiben …", "in \(parent)")
+        }
+        #expect(shown("heading", level: 2, in: "doc") == "Überschrift 2")
+        #expect(shown("detailsSummary", in: "details") == "Titel")
+        #expect(shown("codeBlock", in: "doc") == nil)
+
+        // The active block's: a paragraph in a callout.
+        let paragraph = PMNode(type: "paragraph")
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "callout", content: [paragraph])]))
+        let model = try Self.model(engine)
+        #expect(model.activePlaceholder == nil)
+        model.activate(NodeRef(path: [0, 0], node: paragraph), node: paragraph)
+        #expect(model.activePlaceholder.map { String(localized: $0) } == "Schreiben …")
+    }
+
     /// Switching the list type with input pending: the input goes first, as typing sends it (with its base, so a
     /// collaborator's edit of the item stays), and the engine switches the list it has then (Engine/tools/
     /// conversions-check.ts). Nothing stays pending (it would hide a collaborator's later edit and overwrite it on leaving),

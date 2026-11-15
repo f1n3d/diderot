@@ -2307,6 +2307,26 @@ import XCTest
         finishEditing(app)
     }
 
+    /// An empty line shows the web's placeholder: the hint at "/" in a paragraph, "Heading 1" once "# " made a heading of
+    /// it; the first letter takes it away.
+    func test96_EmptyLineShowsPlaceholder() {
+        let app = launchPage()
+        var editor = appendParagraph(app)
+        let placeholder = app.staticTexts["editor-placeholder"]
+        XCTAssertTrue(placeholder.waitForExistence(timeout: 5), "No placeholder on the new empty line")
+        XCTAssertTrue(placeholder.label.contains("/"), "The placeholder doesn't point at “/”: \(placeholder.label)")
+        snapshot(app, "96-paragraph")
+        editor.typeText("# ")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor in the heading “# ” made")
+        XCTAssertTrue(placeholder.waitForExistence(timeout: 5), "No placeholder in the empty heading")
+        XCTAssertTrue(["Überschrift 1", "Heading 1"].contains(placeholder.label), "Wrong placeholder in a heading: \(placeholder.label)")
+        editor.typeText("Platzhalter\(stamp)")
+        XCTAssertTrue(placeholder.waitForNonExistence(timeout: 3), "The placeholder stays over typed text")
+        snapshot(app, "96-typed")
+        finishEditing(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.
