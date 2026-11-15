@@ -107,10 +107,19 @@ extension DocumentModel {
         switch action {
         case .lineUp, .lineDown:
             let up = action == .lineUp
-            return Self.caretOnEdgeLine(of: view, up: up) && neighbor(up: up) != nil
+            // Code is left only from its very start or end, as the web's code block does (`exitOnArrowDown`); text from
+            // its first or last line.
+            let onEdge = active?.type == "codeBlock" ? Self.caretAtEnd(of: view, up: up) : Self.caretOnEdgeLine(of: view, up: up)
+            return onEdge && !leavesCode && neighbor(up: up) != nil
         default:
             return true
         }
+    }
+
+    /// Whether the cursor, without a selection, is at the text view's start, or its end.
+    static func caretAtEnd(of view: UITextView, up: Bool) -> Bool {
+        guard let range = view.selectedTextRange, range.isEmpty else { return false }
+        return view.compare(range.start, to: up ? view.beginningOfDocument : view.endOfDocument) == .orderedSame
     }
 
     /// Whether the cursor, without a selection, is in the text view's first line, or its last: where ↑ or ↓ leaves the
@@ -126,27 +135,29 @@ extension DocumentModel {
     /// Where ↑ or ↓ goes from the active block.
     private enum Neighbor {
         case block(NodeRef)
-        /// ↓ at the page's end in code: a paragraph after it, as the web's arrow leaves code there.
+        /// ↓ at the end of code that ends the page: a paragraph after it, as the web's arrow leaves code there.
         case paragraphAfterCode
     }
 
     /// In a table the cell above or below, and out of the table at its first or last row; elsewhere the text block before
-    /// or after, in document order.
+    /// or after in reading order (`arrowTextBlocks`).
     private func neighbor(up: Bool) -> Neighbor? {
         guard let active else { return nil }
+        var from = active.ref.path
         if let position = activeTablePosition, let table = node(at: position.tablePath) {
             let row = position.row + (up ? -1 : 1)
-            guard table.children.indices.contains(row) else {
-                let found = up ? document.lastTextBlock(before: position.tablePath) : document.firstTextBlock(after: position.tablePath)
-                return found.map { .block($0) }
+            if table.children.indices.contains(row) {
+                let column = min(position.column, max(table.children[row].children.count - 1, 0))
+                return cellText(of: position.tablePath, row: row, column: column).map { .block($0) }
             }
-            let column = min(position.column, max(table.children[row].children.count - 1, 0))
-            return cellText(of: position.tablePath, row: row, column: column).map { .block($0) }
+            from = position.tablePath
         }
-        if let found = up ? document.lastTextBlock(before: active.ref.path) : document.firstTextBlock(after: active.ref.path) {
-            return .block(found)
-        }
-        return !up && active.type == "codeBlock" ? .paragraphAfterCode : nil
+        let blocks = document.arrowTextBlocks()
+        let found = up ? blocks.last { $0.path.precedes(from) } : blocks.first { from.precedes($0.path) && !$0.path.starts(with: from) }
+        if let found { return .block(found) }
+        // At the page's very end (before the footnotes, if any), as the web leaves code only there.
+        let following = document.children.dropFirst((active.ref.path.first ?? 0) + 1).filter { $0.type != "footnotes" }
+        return !up && active.type == "codeBlock" && active.ref.isTopLevel && following.isEmpty ? .paragraphAfterCode : nil
     }
 
     private func moveToNeighbor(up: Bool) {
@@ -156,7 +167,13 @@ extension DocumentModel {
             guard let node = node(at: ref.path) else { return }
             activate(ref, node: node, cursor: up ? .end : .start)
         case .paragraphAfterCode:
-            Task { await insertTemplate(.paragraph, placement: .replaceOrAfter(active.ref)) }
+            // One paragraph also when the key repeats before it is there.
+            guard !leavesCode else { return }
+            leavesCode = true
+            Task {
+                await insertTemplate(.paragraph, placement: .replaceOrAfter(active.ref))
+                leavesCode = false
+            }
         case nil:
             break
         }

@@ -174,6 +174,8 @@ final class DocumentModel {
     /// The active text when it last changed: a Markdown mark turns its line only when typing completed it, not when
     /// deleting what follows leaves one behind (`applyTypedShortcut`).
     @ObservationIgnored private var typedText = ""
+    /// A paragraph is being added after the code being left (↓, three Returns): a repeated key adds no second one.
+    @ObservationIgnored var leavesCode = false
     /// Return or Backspace is switching blocks; meanwhile the old editor briefly shows the line break as a second line.
     var isSwitchingByTyping: Bool { typingSwitches > 0 }
     @ObservationIgnored private var adoptsChange = false
@@ -2005,18 +2007,26 @@ final class DocumentModel {
     // MARK: Active text
 
     func activeCodeChanged() {
-        guard let active, active.type == "codeBlock", session.codeChangeIsInput() else { return }
+        guard let active, active.type == "codeBlock" else { return }
+        // Also for the app's own changes (a collaborator's lines adopted): the next Return compares with what shows.
         let before = typedText
         typedText = activeCode
+        guard session.codeChangeIsInput() else { return }
         // Three Returns at the code's end leave it, as on the web (TipTap's `exitOnTripleEnter`): the two empty lines and
         // the third Return go, and editing goes on in a paragraph after the block. From the change, not the key: the
         // on-screen keyboard's Return is no key press. Quick Returns can come as one change; pasted text isn't Returns.
         let added = activeCode.hasPrefix(before) ? activeCode.dropFirst(before.count) : ""
-        if !added.isEmpty, added.allSatisfy({ $0 == "\n" }), activeCode.hasSuffix("\n\n\n"), !before.hasSuffix("\n\n\n"),
-           insertionIndex() == activeText.endIndex {
+        if !added.isEmpty, added.allSatisfy({ $0 == "\n" }), activeCode.hasSuffix("\n\n\n"), insertionIndex() == activeText.endIndex,
+           !leavesCode {
             activeCode = String(activeCode.dropLast(3))
+            activeSelection = AttributedTextSelection(insertionPoint: activeText.endIndex)
+            typedText = activeCode
             session.scheduleCommit()
-            Task { await insertTemplate(.paragraph, placement: .replaceOrAfter(active.ref)) }
+            leavesCode = true
+            Task {
+                await insertTemplate(.paragraph, placement: .replaceOrAfter(active.ref))
+                leavesCode = false
+            }
             return
         }
         session.scheduleCommit()

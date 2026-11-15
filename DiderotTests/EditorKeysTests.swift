@@ -240,6 +240,11 @@ struct EditorKeysTests {
         // A selection stays with the text view.
         view.selectedRange = NSRange(location: 0, length: 4)
         #expect(!DocumentModel.caretOnEdgeLine(of: view, up: true))
+        // Code is left only from its very start or end.
+        view.selectedRange = NSRange(location: 14, length: 0)
+        #expect(DocumentModel.caretAtEnd(of: view, up: false) && !DocumentModel.caretAtEnd(of: view, up: true))
+        view.selectedRange = NSRange(location: 12, length: 0)
+        #expect(!DocumentModel.caretAtEnd(of: view, up: false))
     }
 
     /// Three Returns at a code block's end leave it, as on the web: the empty lines go, and a paragraph follows.
@@ -260,6 +265,8 @@ struct EditorKeysTests {
         while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.inserted.first?.node.type == "paragraph")
 
+        while model.leavesCode { try await Task.sleep(for: .milliseconds(10)) }
+
         // Quick Returns as one change leave it too; a pasted block that ends with empty lines doesn't.
         let other = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "a")])
         engine.document = PMNode(type: "doc", content: [code, other])
@@ -275,6 +282,16 @@ struct EditorKeysTests {
         model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
         model.activeCodeChanged()
         #expect(model.activeCode == "a")
-        while engine.inserted.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        while engine.inserted.count < 2 || model.leavesCode { try await Task.sleep(for: .milliseconds(10)) }
+
+        // Code that ends with empty lines already: a Return at its end leaves it, as the web's does.
+        model.deactivate()
+        model.activate(NodeRef(path: [1], node: other), node: other)
+        model.activeCode = "a\n\n\n"
+        model.activeCodeChanged()
+        model.activeCode += "\n"
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        model.activeCodeChanged()
+        #expect(model.activeCode == "a\n")
     }
 }

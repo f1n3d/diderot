@@ -125,39 +125,30 @@ extension PMNode {
         return result
     }
 
-    /// First directly editable text or non-mermaid code block after `path` and what it holds, in document order: in a
-    /// table its first cell, for a collapsed toggle its summary. The mirror of `lastTextBlock(before:)`, for ↓.
-    func firstTextBlock(after path: [Int]) -> NodeRef? {
-        var result: NodeRef?
-        /// Visits the children in document order; true once found.
-        func visit(_ node: PMNode, at nodePath: [Int]) -> Bool {
+    /// The text blocks ↑ and ↓ go through, in reading order: directly editable text and non-mermaid code, also in lists,
+    /// quotes, callouts, open toggles, tables, columns and synced blocks; a collapsed toggle by its title alone. Not
+    /// into tabs, whose other panels don't show.
+    func arrowTextBlocks() -> [NodeRef] {
+        var refs: [NodeRef] = []
+        func visit(_ node: PMNode, at nodePath: [Int]) {
             for (index, child) in node.children.enumerated() {
                 let childPath = nodePath + [index]
-                if childPath.count < path.count && path.starts(with: childPath) {
-                    // An ancestor: what comes after `path` in it; nothing for a collapsed toggle's title, whose content
-                    // doesn't show.
-                    let collapsed = child.type == "details" && child.bool("open") != true
-                    if !collapsed, visit(child, at: childPath) { return true }
-                    continue
-                }
-                guard path.precedes(childPath) else { continue }
                 if Self.editableTextTypes.contains(child.type) || (child.type == "codeBlock" && child.string("language") != "mermaid") {
-                    result = NodeRef(path: childPath, node: child)
-                    return true
+                    refs.append(NodeRef(path: childPath, node: child))
                 } else if child.type == "details", child.bool("open") != true {
                     if let summary = child.children.first, summary.type == "detailsSummary" {
-                        result = NodeRef(path: childPath + [0], node: summary)
-                        return true
+                        refs.append(NodeRef(path: childPath + [0], node: summary))
                     }
-                } else if Self.inPlaceContainers.contains(child.type) {
-                    if visit(child, at: childPath) { return true }
+                } else if Self.inPlaceContainers.contains(child.type) || Self.arrowContainers.contains(child.type) {
+                    visit(child, at: childPath)
                 }
             }
-            return false
         }
-        _ = visit(self, at: [])
-        return result
+        visit(self, at: [])
+        return refs
     }
+
+    private static let arrowContainers: Set<String> = ["columns", "column", "transclusionSource"]
 
     /// The document with blocks replaced by `overrides`, by their identity (`NodeRef.identity`).
     func applyingOverrides(_ overrides: [String: PMNode]) -> PMNode {
