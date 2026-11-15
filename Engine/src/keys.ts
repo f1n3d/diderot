@@ -33,6 +33,8 @@ export type BackspacePlan = { kind: "join"; path: number[] } | { kind: "remove" 
 /** Text blocks the app edits as text, which Backspace joins (`DocumentModel.editableTextTypes`). */
 const joinable = new Set(["paragraph", "heading", "detailsSummary"]);
 const paragraph: JSONContent = { type: "paragraph" };
+/** A new list item of `type` with `line`: a task starts open. */
+const newItem = (type: string, line: JSONContent): JSONContent => ({ type, ...(type === "taskItem" ? { attrs: { checked: false } } : {}), content: [line] });
 
 /**
  * The app's line `json` as the engine holds it by now: the app's input (`base` → `json`) applied onto what a
@@ -123,10 +125,8 @@ export function enterEdit(schema: Schema, doc: PMNode, target: Target, json: JSO
 
   if (items.has(parent.type.name)) {
     const itemPath = path.slice(0, -1);
-    const item: JSONContent = { type: parent.type.name, content: [line(after)] };
-    if (parent.type.name === "taskItem") item.attrs = { checked: false };
     return {
-      steps: [save, { op: "insert", target: { path: itemPath, type: parent.type.name }, json: [item], position: "after" }],
+      steps: [save, { op: "insert", target: { path: itemPath, type: parent.type.name }, json: [newItem(parent.type.name, line(after))], position: "after" }],
       cursor: { path: [...next(itemPath), 0], offset: 0 },
     };
   }
@@ -325,13 +325,12 @@ function toOuterList(doc: PMNode, line: number[]): KeyEdit | undefined {
   if (!item || !list || !outer || !items.has(item.type.name) || outer.type !== item.type) return undefined;
   const at = (path: number[]) => path[path.length - 1];
   if (at(line) !== item.childCount - 1 || at(itemPath) !== list.childCount - 1 || at(listPath) !== outer.childCount - 1) return undefined;
-  const added: JSONContent = { type: item.type.name, content: [paragraph] };
-  if (item.type.name === "taskItem") added.attrs = { checked: false };
   const gone = item.childCount > 1 ? { path: line, type: nodeAt(doc, line)!.type.name }
     : list.childCount > 1 ? { path: itemPath, type: item.type.name } : { path: listPath, type: list.type.name };
   return {
     // The new item goes after the one holding the list first, so the paths inside that one stay as they are.
-    steps: [{ op: "insert", target: { path: outerPath, type: outer.type.name }, json: [added], position: "after" }, { op: "delete", target: gone }],
+    steps: [{ op: "insert", target: { path: outerPath, type: outer.type.name }, json: [newItem(item.type.name, paragraph)], position: "after" },
+      { op: "delete", target: gone }],
     cursor: { path: [...next(outerPath), 0], offset: 0 },
   };
 }
@@ -347,8 +346,9 @@ function lastLineIn(doc: PMNode, before: number[], $line: ResolvedPos): number[]
   let node = nodeAt(doc, before), path = before;
   if (!node) return undefined;
   if (lists.has(node.type.name)) {
-    const kind = node.type.name === "taskList" ? "taskItem" : "listItem";
-    for (let depth = $line.depth; depth > 0; depth--) if ($line.node(depth).type.name === kind) return undefined;
+    // In an item of the list's kind, at any depth, the web moves the line into the list instead (not yet the app's).
+    const kind = node.firstChild?.type;
+    for (let depth = $line.depth; depth > 0; depth--) if ($line.node(depth).type === kind) return undefined;
     while (node && lists.has(node.type.name)) {
       const item: PMNode | null = node.lastChild;
       if (!item?.lastChild) return undefined;

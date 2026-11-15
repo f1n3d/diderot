@@ -107,7 +107,7 @@ function app(content: JSONContent[], path: number[], offset: number, key: "Enter
 
 // Why the app differs where it does.
 const heading = "kept: a heading split mid-text goes on in a paragraph (src/keys.ts)";
-const lifts = "open (BACKLOG): Backspace at an item's start lifts the item a level out on the web (Tiptap 3.25), the app joins it";
+const lifts = "open (BACKLOG): Backspace at an item's start lifts the item a level out on the web (Tiptap 3.25)";
 const quoteLifts = "open (BACKLOG): Backspace at a quote's later line lifts it out of the quote on the web (Tiptap's quote), the app joins it";
 const callouts = "open (BACKLOG): Return in a callout leaves it only from its last line on the web and keeps an empty one";
 const split = "open (BACKLOG): Return in an item with a nested list takes the list along into the new item on the web";
@@ -214,6 +214,7 @@ const cases: Case[] = [
   { name: "a line after a list in a column", page: [columns([list(item(p("A"))), p("Nach")], [p("x")]), end()], at: [0, 0, 1], key: B },
   { name: "a line after a list ending in an image", page: [list(item(p("A"), image)), p("Nach"), end()], at: [1], key: B, why: movesIn },
   { name: "a line in an item after its nested list", page: [list(item(p("A"), list(item(p("B"))), p("Nach"))), end()], at: [0, 0, 2], key: B, why: movesIn },
+  { name: "a line after a list in a toggle in an item", page: [list(item(p("A"), toggle(true, "T", list(item(p("B"))), p("Nach")))), end()], at: [0, 0, 1, 1, 1], key: B, why: movesIn },
   { name: "a line after a quote", page: [quote(p("Zitat")), p("Nach"), end()], at: [1], key: B, why: meet },
   { name: "an empty line after a quote", page: [quote(p("Zitat")), p(), end()], at: [1], key: B },
   { name: "a heading after a quote", page: [quote(p("Zitat")), h("Nach"), end()], at: [1], key: B, why: meet },
