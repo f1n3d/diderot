@@ -466,6 +466,28 @@ final class DocumentModel {
         }
     }
 
+    /// What the active text block shows while it is empty, as the web's placeholders do (Docmost's `Placeholder`): the
+    /// hint at "/" in a paragraph, "Heading 1" to "Heading 3" in a heading, "Toggle title" in a toggle's title. None in a
+    /// code block. On an empty line the "/" menu was easy to miss, above all on an iPhone.
+    var activePlaceholder: LocalizedStringResource? {
+        guard let active else { return nil }
+        return Self.placeholder(type: active.type, level: active.attrs?["level"]?.intValue ?? 1,
+                                parentType: node(at: Array(active.ref.path.dropLast()))?.type)
+    }
+
+    /// The web's placeholder of an empty text block of `type` in a block of `parentType`; a paragraph in a column, table
+    /// cell, callout, quote or footnote gets the short one there.
+    static func placeholder(type: String, level: Int, parentType: String?) -> LocalizedStringResource? {
+        switch type {
+        case "heading": "Heading \(level)"
+        case "detailsSummary": "Toggle title"
+        case "paragraph": shortPlaceholderParents.contains(parentType ?? "") ? "Write…" : "Write anything. Enter “/” for commands"
+        default: nil
+        }
+    }
+
+    private static let shortPlaceholderParents: Set<String> = ["column", "tableCell", "tableHeader", "callout", "blockquote", "footnote"]
+
     /// Path of the active block's nearest ancestor of the given type (e.g. a callout).
     func activeAncestorPath(ofType type: String) -> [Int]? {
         active.flatMap { document.ancestorPath(of: $0.ref.path, types: [type]) }

@@ -45,6 +45,7 @@ struct ActiveTextEditor: View {
     let ref: NodeRef
     let font: Font
     var isCode = false
+    @Environment(\.multilineTextAlignment) private var textAlignment
 
     private var isActive: Bool { model.active?.ref == ref }
 
@@ -93,6 +94,31 @@ struct ActiveTextEditor: View {
                 // The keyboard takes changed traits (autocorrection, capitalization) only after a reload.
                 DispatchQueue.main.async { FirstResponder.current?.reloadInputViews() }
             }
+            // Outside the editor's own modifiers, so its identifier stays on the text view alone.
+            .overlay(alignment: .topLeading) { placeholder }
+    }
+
+    /// The web's placeholder on an empty line (`DocumentModel.activePlaceholder`), where the first letter goes. One line:
+    /// the overlay doesn't take room, and a second line would lie over the block below.
+    @ViewBuilder private var placeholder: some View {
+        if isActive, !isCode, model.activeText.characters.isEmpty, let prompt = model.activePlaceholder {
+            Text(prompt)
+                .font(font)
+                .foregroundStyle(Color(uiColor: .placeholderText))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: frameAlignment)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("editor-placeholder")
+        }
+    }
+
+    /// Where a centered or right-aligned block's first letter goes.
+    private var frameAlignment: Alignment {
+        switch textAlignment {
+        case .center: .center
+        case .trailing: .trailing
+        default: .leading
+        }
     }
 
     private var text: Binding<AttributedString> {
