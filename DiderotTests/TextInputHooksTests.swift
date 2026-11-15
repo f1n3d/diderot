@@ -175,11 +175,12 @@ struct TextInputHooksTests {
         #expect(editor.responds(to: TextInputHooks.keySelector))
     }
 
-    /// While the editor takes the keys, its text view hands out the editor's undo manager, which steps the engine's
-    /// history for that text view and takes no registrations of the text view's own, also after its disable and enable
-    /// pairs. Otherwise the text view's own.
+    /// While the editor takes the keys, its text view hands out its editor undo manager, which steps the engine's history
+    /// for that text view and takes no registrations of the text view's own, also after its disable and enable pairs or
+    /// an enable without its disable. Otherwise the text view's own, and another text view of the class keeps its own.
     @Test func undoGoesThroughTheEditor() {
         let editor = Self.view(UndoTextView.self, cursorAt: 0)
+        let other = Self.view(UndoTextView.self, cursorAt: 0)
         TextInputHooks.install(on: editor)
         var takes = true
         var steps: [Bool] = []
@@ -188,17 +189,20 @@ struct TextInputHooksTests {
         defer { TextInputHooks.takesKey = nil; TextInputHooks.onUndo = nil }
 
         let manager = editor.undoManager
-        #expect(manager === TextInputHooks.undoManager)
+        #expect(manager is EditorUndoManager)
+        #expect(editor.undoManager === manager)
+        #expect(!(other.undoManager is EditorUndoManager))
         #expect(manager?.canUndo == true && manager?.canRedo == true)
         manager?.undo()
         manager?.redo()
         #expect(steps == [false, true])
         manager?.disableUndoRegistration()
         manager?.enableUndoRegistration()
+        manager?.enableUndoRegistration()
         #expect(manager?.isUndoRegistrationEnabled == false)
 
         takes = false
-        #expect(editor.undoManager !== TextInputHooks.undoManager)
+        #expect(!(editor.undoManager is EditorUndoManager))
     }
 
     /// Without an own answer, the text view answers as it would without the hook (the inherited implementation).

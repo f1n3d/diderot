@@ -109,8 +109,7 @@ enum TextInputHooks {
     static var onKey: ((UITextView, EditorKeyAction) -> Void)?
     /// Undo (false) or redo (true) from the system, for the text view that takes the editor's keys (`takesKey`).
     static var onUndo: ((UITextView, Bool) -> Void)?
-    /// The editor's undo manager, which the text view hands the system while a block is edited.
-    static let undoManager = EditorUndoManager { view, redo in onUndo?(view, redo) }
+    private static var undoManagerKey: UInt8 = 0
     /// What the key commands call, added to the text view's class: no responder in the chain would answer it.
     static let keySelector = NSSelectorFromString("docmostEditorKey:")
     /// `wantsPriorityOverSystemBehavior`: Tab, Shift-Tab and Shift-Return go to the editor, not to the text view's
@@ -164,8 +163,7 @@ enum TextInputHooks {
             var manager: UndoManager?
             MainActor.assumeIsolated {
                 if let view = object as? UITextView, takesKey?(view, nil) == true {
-                    undoManager.view = view
-                    manager = undoManager
+                    manager = editorUndoManager(of: view)
                 } else if let own {
                     manager = own(object, selector)
                 } else if let superclass = class_getSuperclass(cls), let implementation = class_getMethodImplementation(superclass, selector) {
@@ -178,6 +176,15 @@ enum TextInputHooks {
         if !class_addMethod(cls, selector, implementation, method_getTypeEncoding(method)) {
             own = unsafeBitCast(method_setImplementation(method, implementation), to: Function.self)
         }
+    }
+
+    /// The text view's editor undo manager, made once and kept by the text view: an undo goes to the text view it was
+    /// asked from.
+    static func editorUndoManager(of view: UITextView) -> EditorUndoManager {
+        if let manager = objc_getAssociatedObject(view, &undoManagerKey) as? EditorUndoManager { return manager }
+        let manager = EditorUndoManager(view: view) { view, redo in onUndo?(view, redo) }
+        objc_setAssociatedObject(view, &undoManagerKey, manager, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        return manager
     }
 
     /// The editor's key commands next to the text view's own, and the method they call. Only the page's editor performs
@@ -310,25 +317,30 @@ enum TextInputHooks {
 
 /// The page editor's undo, for ⌘Z, ⌘⇧Z, shaking and the three-finger swipes: the engine's Yjs history, as the toolbar's
 /// Undo and Redo and the web editor have it. The text view's own knew only what was typed in the active block since it
-/// became active: Return's split, a conversion or typing in another block stayed. It takes no registrations (its
-/// registration stays off; the text view's own disable and enable pairs keep it so), so the text view's typing builds
-/// no second history. Undo is always offered: the engine says when there is nothing to undo.
+/// became active: Return's split, a conversion or typing in another block stayed. It takes no registrations, so the
+/// text view's typing builds no second history. Undo is always offered: the engine says when there is nothing to undo.
 @MainActor
 final class EditorUndoManager: UndoManager {
-    /// The text view it was last handed out for.
-    weak var view: UITextView?
+    /// Weak: the text view keeps its manager.
+    private weak var view: UITextView?
     private let step: (UITextView, Bool) -> Void
 
-    init(step: @escaping (UITextView, Bool) -> Void) {
+    init(view: UITextView, step: @escaping (UITextView, Bool) -> Void) {
+        self.view = view
         self.step = step
         super.init()
-        disableUndoRegistration()
+        super.disableUndoRegistration()
     }
 
     override var canUndo: Bool { true }
     override var canRedo: Bool { true }
     override var undoActionName: String { "" }
     override var redoActionName: String { "" }
+
+    /// Registration stays off for good: the text view's disable and enable pairs, or an enable without its disable,
+    /// leave it so.
+    override func disableUndoRegistration() {}
+    override func enableUndoRegistration() {}
 
     override func undo() {
         if let view { step(view, false) }
