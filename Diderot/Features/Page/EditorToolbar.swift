@@ -1,10 +1,10 @@
 import SwiftUI
 import DocmostKit
 
-/// Editor keyboard toolbar. No pop-up menus (on device they hide behind the keyboard): "Block type" and, in a table,
-/// "Table" swap in a row of buttons, "+" opens the insert menu below the block (as "/" does).
+/// Editor keyboard toolbar. No pop-up menus (on device they hide behind the keyboard): "Block type", "Alignment" and, in
+/// a table, "Table" swap in a row of buttons, "+" opens the insert menu below the block (as "/" does).
 struct EditorToolbar: View {
-    private enum Mode { case main, blockType, table, tableFormat }
+    private enum Mode { case main, blockType, alignment, table, tableFormat }
 
     @Bindable var model: DocumentModel
     @State private var mode: Mode = .main
@@ -22,6 +22,7 @@ struct EditorToolbar: View {
                     switch mode {
                     case .main: mainRow
                     case .blockType: blockTypeRow
+                    case .alignment: alignmentRow
                     case .table: tableRow
                     case .tableFormat: tableFormatRow
                     }
@@ -81,6 +82,18 @@ struct EditorToolbar: View {
             iconButton("Line break", "return", id: "format-linebreak") { model.insertLineBreak() }
         }
         .disabled(isCode)
+        // After the formats, which are used more and stay on the first screen of an iPhone's toolbar.
+        if !model.isInListItem, let steps = model.activeIndentSteps {
+            // In a paragraph or heading, as Shift-Tab and Tab on the web (Docmost's Indent): a step out or in.
+            iconButton("Outdent", "decrease.indent", id: "editor-block-outdent") { Task { await model.indentActive(inward: false) } }
+                .disabled(!steps.outdent)
+            iconButton("Indent", "increase.indent", id: "editor-block-indent") { Task { await model.indentActive(inward: true) } }
+                .disabled(!steps.indent)
+        }
+        if model.alignsActiveBlock {
+            iconButton("Alignment", model.activeAlignment.symbol, id: "editor-alignment") { mode = .alignment }
+                .accessibilityValue(Text(model.activeAlignment.title))
+        }
         // Like "Comment" in the selection menu.
         if model.canComment {
             iconButton("Comment", "text.bubble", id: "format-comment") { model.editsComment = true }
@@ -122,6 +135,24 @@ struct EditorToolbar: View {
                 mode = .main
                 Task { await model.wrapActiveInSyncedBlock() }
             }
+        }
+    }
+
+    /// As the web's alignment menu: left, center, right. Justified text shows left-aligned in the app (BACKLOG), so it isn't
+    /// offered; a justified block shows none of the three as chosen.
+    @ViewBuilder
+    private var alignmentRow: some View {
+        iconButton("Back", "chevron.left", id: "editor-back") { mode = .main }
+        divider
+        alignButton(.left, "Align left")
+        alignButton(.center, "Align center")
+        alignButton(.right, "Align right")
+    }
+
+    private func alignButton(_ align: TextAlign, _ title: LocalizedStringResource) -> some View {
+        iconButton(title, align.symbol, id: "align-\(align.rawValue)", active: model.activeAlignment == align) {
+            mode = .main
+            Task { await model.alignActive(align) }
         }
     }
 
@@ -191,9 +222,9 @@ struct EditorToolbar: View {
             colorButton(color, active: shows && table.color == color)
         }
         divider
-        tableButton("Align left", "text.alignleft", id: "table-align-left", .align(.left, formatScope), active: shows && table.align == .left)
-        tableButton("Align center", "text.aligncenter", id: "table-align-center", .align(.center, formatScope), active: shows && table.align == .center)
-        tableButton("Align right", "text.alignright", id: "table-align-right", .align(.right, formatScope), active: shows && table.align == .right)
+        tableButton("Align left", TextAlign.left.symbol, id: "table-align-left", .align(.left, formatScope), active: shows && table.align == .left)
+        tableButton("Align center", TextAlign.center.symbol, id: "table-align-center", .align(.center, formatScope), active: shows && table.align == .center)
+        tableButton("Align right", TextAlign.right.symbol, id: "table-align-right", .align(.right, formatScope), active: shows && table.align == .right)
         divider
         tableButton("Clear", "eraser", id: "table-clear", .clear(formatScope))
     }
@@ -539,5 +570,27 @@ struct LinkSheet: View {
             }
         }
         dismiss()
+    }
+}
+
+extension TextAlign {
+    /// The toolbar's symbol; "Alignment" shows the block's own, justified included.
+    var symbol: String {
+        switch self {
+        case .left: "text.alignleft"
+        case .center: "text.aligncenter"
+        case .right: "text.alignright"
+        case .justify: "text.justify"
+        }
+    }
+
+    /// What VoiceOver reads as the value of "Alignment".
+    var title: LocalizedStringResource {
+        switch self {
+        case .left: "Left"
+        case .center: "Center"
+        case .right: "Right"
+        case .justify: "Justified"
+        }
     }
 }

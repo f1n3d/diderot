@@ -55,6 +55,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
     - block type, including "Synced block" like "Turn into" on the web
     - "+" for the insert list below the block
     - in a list item, outdent and indent: the item one level out or in, as Shift-Tab and Tab on the web
+    - in a paragraph or heading, outdent and indent: a step out or in, up to 8, as Shift-Tab and Tab on the web; and "Alignment": left, center or right, as the web's alignment menu (outside tables, which align their cells in "Table")
     - bold, italic, underline, strikethrough, inline code, highlight, link, code block
     - line break, undo and redo through the Yjs history like the web editor, duplicate, delete (the block with the cursor; in a list item's first line, the item: Delete takes it with its only line and the list with its last item, Duplicate copies it)
     - in a table, "Table" for the web's table and cell actions on the cell with the cursor: add, move and delete rows and columns, header row, column and cell, merge with the next cell or the one below and split again, sort a column A → Z or Z → A, delete the table, and a row of its own for colors, alignment and clearing the cell, its row or its column. They stay while the cursor moves with them.

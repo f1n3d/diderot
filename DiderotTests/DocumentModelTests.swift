@@ -74,6 +74,83 @@ struct DocumentModelTests {
         #expect(model.activePlaceholder.map { String(localized: $0) } == "Schreiben …")
     }
 
+    /// Paragraphs and headings align and indent as on the web (TipTap's TextAlign, Docmost's Indent): the toolbar sets
+    /// the block's attributes, indentation in steps from 0 to 8. A list item aligns but its buttons move the item, so
+    /// it doesn't indent; a table cell neither aligns (the table's row does) nor indents.
+    @Test func paragraphsAlignAndIndentAsOnTheWeb() async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p", "indent": 7], content: [PMNode(type: "text", text: "Hallo")])
+        let itemLine = PMNode(type: "paragraph", attrs: ["id": "i"], content: [PMNode(type: "text", text: "Punkt")])
+        let cellLine = PMNode(type: "paragraph", attrs: ["id": "c"], content: [PMNode(type: "text", text: "Zelle")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            paragraph,
+            PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [itemLine])]),
+            PMNode(type: "table", content: [PMNode(type: "tableRow", content: [PMNode(type: "tableCell", content: [cellLine])])]),
+        ]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        #expect(model.alignsActiveBlock)
+        #expect(model.activeAlignment == .left)
+
+        await model.alignActive(.center)
+        #expect(engine.attributeValues.last == ["textAlign": .string("center")])
+        #expect(model.activeAlignment == .center)
+        #expect(model.activeIndentSteps?.indent == true)
+        await model.indentActive(inward: true)
+        #expect(engine.attributeValues.last == ["indent": .number(8)])
+        #expect(model.activeIndentSteps?.indent == false)
+        await model.indentActive(inward: true)
+        #expect(engine.attributeValues.count == 2, "indented beyond 8 steps")
+        await model.indentActive(inward: false)
+        #expect(engine.attributeValues.last == ["indent": .number(7)])
+
+        model.activate(NodeRef(path: [1, 0, 0], node: itemLine), node: itemLine)
+        #expect(model.alignsActiveBlock)
+        #expect(model.activeIndentSteps == nil)
+        model.activate(NodeRef(path: [2, 0, 0, 0], node: cellLine), node: cellLine)
+        #expect(!model.alignsActiveBlock)
+        #expect(model.activeIndentSteps == nil)
+    }
+
+    /// Headings align and indent like paragraphs; a justified one reads as justified, which the toolbar doesn't offer.
+    /// Indentation steps from where the block shows (0 to 8), also where another client stored more or less. A list in
+    /// a table cell is in the table: neither aligns nor indents.
+    @Test func headingsAndOddValuesAlignAndIndentAsShown() async throws {
+        func heading(_ id: String, _ extra: [String: JSONValue]) -> PMNode {
+            var attrs: [String: JSONValue] = ["id": .string(id), "level": 2]
+            attrs.merge(extra) { $1 }
+            return PMNode(type: "heading", attrs: attrs, content: [PMNode(type: "text", text: id)])
+        }
+        let justified = heading("j", ["textAlign": "justify"]), deep = heading("d", ["indent": 10]), below = heading("b", ["indent": -2])
+        let cellItem = PMNode(type: "paragraph", attrs: ["id": "c"], content: [PMNode(type: "text", text: "Zelle")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            justified, deep, below,
+            PMNode(type: "table", content: [PMNode(type: "tableRow", content: [PMNode(type: "tableCell", content: [
+                PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [cellItem])]),
+            ])])]),
+        ]))
+        let model = try Self.model(engine)
+
+        model.activate(NodeRef(path: [0], node: justified), node: justified)
+        #expect(model.alignsActiveBlock)
+        #expect(model.activeAlignment == .justify)
+        await model.alignActive(.right)
+        #expect(engine.attributeValues.last == ["textAlign": .string("right")])
+
+        model.activate(NodeRef(path: [1], node: deep), node: deep)
+        #expect(model.activeIndentSteps?.indent == false)
+        await model.indentActive(inward: false)
+        #expect(engine.attributeValues.last == ["indent": .number(7)])
+
+        model.activate(NodeRef(path: [2], node: below), node: below)
+        #expect(model.activeIndentSteps?.outdent == false)
+        await model.indentActive(inward: true)
+        #expect(engine.attributeValues.last == ["indent": .number(1)])
+
+        model.activate(NodeRef(path: [3, 0, 0, 0, 0, 0], node: cellItem), node: cellItem)
+        #expect(!model.alignsActiveBlock)
+        #expect(model.activeIndentSteps == nil)
+    }
+
     /// Switching the list type with input pending: the input goes first, as typing sends it (with its base, so a
     /// collaborator's edit of the item stays), and the engine switches the list it has then (Engine/tools/
     /// conversions-check.ts). Nothing stays pending (it would hide a collaborator's later edit and overwrite it on leaving),
@@ -2665,8 +2742,9 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var batches: [[EngineStep]] = []
     /// What the next `batch` answers instead of applying, e.g. refused, as the engine refuses a block that changed.
     var nextBatchResult: EngineResult?
-    /// Targets of `setAttributes`, and what it answers.
+    /// Targets of `setAttributes`, the attributes it set, and what it answers.
     private(set) var attributeTargets: [BlockTarget] = []
+    private(set) var attributeValues: [[String: JSONValue]] = []
     var attributesResult = EngineResult.applied
     /// Table commands, with the table and the cell they ran on.
     private(set) var tableCommands: [(target: BlockTarget, cell: [Int], command: [String: JSONValue])] = []
@@ -2829,6 +2907,7 @@ final class FakeDocumentEngine: DocumentEngine {
     }
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult {
         attributeTargets.append(target)
+        attributeValues.append(attributes)
         return attributesResult
     }
     func tableCommand(_ target: BlockTarget, cell: [Int], command: [String: JSONValue]) async -> (result: EngineResult, focus: [Int]?) {
