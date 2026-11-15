@@ -99,6 +99,7 @@ private extension UIResponder {
 /// - Formats saving can't keep, refused (`refusedActions`), so the selection menu and the keyboard don't offer them.
 /// - "Comment" in the selection menu (`commentsOnSelection`, `commentOnSelection`).
 /// - The web editor's keys (`EditorKeyAction`) as key commands, ahead of the text view's own Tab and Return.
+/// - Undo and redo through the engine's history (`EditorUndoManager`, `onUndo`).
 @MainActor
 enum TextInputHooks {
     static var onBackspaceAtStart: ((UITextView) -> Bool)?
@@ -106,6 +107,10 @@ enum TextInputHooks {
     /// line (nil: asked for no particular key). Other text views of the class keep Tab, Return and the arrows as they are.
     static var takesKey: ((UITextView, EditorKeyAction?) -> Bool)?
     static var onKey: ((UITextView, EditorKeyAction) -> Void)?
+    /// Undo (false) or redo (true) from the system, for the text view that takes the editor's keys (`takesKey`).
+    static var onUndo: ((UITextView, Bool) -> Void)?
+    /// The editor's undo manager, which the text view hands the system while a block is edited.
+    static let undoManager = EditorUndoManager { view, redo in onUndo?(view, redo) }
     /// What the key commands call, added to the text view's class: no responder in the chain would answer it.
     static let keySelector = NSSelectorFromString("docmostEditorKey:")
     /// `wantsPriorityOverSystemBehavior`: Tab, Shift-Tab and Shift-Return go to the editor, not to the text view's
@@ -144,6 +149,35 @@ enum TextInputHooks {
         hookCanPerformAction(of: cls)
         hookBuildMenu(of: cls)
         hookKeyCommands(of: cls)
+        hookUndoManager(of: cls)
+    }
+
+    /// While a block is edited, the text view's undo manager is the editor's (`EditorUndoManager`): ⌘Z, ⌘⇧Z, shaking,
+    /// the three-finger swipes and the edit menu's Undo go through the engine's history. Otherwise the text view's own.
+    private static func hookUndoManager(of cls: AnyClass) {
+        let selector = #selector(getter: UIResponder.undoManager)
+        guard let method = class_getInstanceMethod(cls, selector) else { return }
+        typealias Function = @convention(c) (AnyObject, Selector) -> UndoManager?
+        /// The class's own implementation, if it had one; an inherited one is looked up at each call.
+        var own: Function?
+        let block: @convention(block) (AnyObject) -> UndoManager? = { object in
+            var manager: UndoManager?
+            MainActor.assumeIsolated {
+                if let view = object as? UITextView, takesKey?(view, nil) == true {
+                    undoManager.view = view
+                    manager = undoManager
+                } else if let own {
+                    manager = own(object, selector)
+                } else if let superclass = class_getSuperclass(cls), let implementation = class_getMethodImplementation(superclass, selector) {
+                    manager = unsafeBitCast(implementation, to: Function.self)(object, selector)
+                }
+            }
+            return manager
+        }
+        let implementation = imp_implementationWithBlock(block)
+        if !class_addMethod(cls, selector, implementation, method_getTypeEncoding(method)) {
+            own = unsafeBitCast(method_setImplementation(method, implementation), to: Function.self)
+        }
     }
 
     /// The editor's key commands next to the text view's own, and the method they call. Only the page's editor performs
@@ -271,5 +305,36 @@ enum TextInputHooks {
         if !class_addMethod(cls, selector, implementation, method_getTypeEncoding(method)) {
             own = unsafeBitCast(method_setImplementation(method, implementation), to: Function.self)
         }
+    }
+}
+
+/// The page editor's undo, for ⌘Z, ⌘⇧Z, shaking and the three-finger swipes: the engine's Yjs history, as the toolbar's
+/// Undo and Redo and the web editor have it. The text view's own knew only what was typed in the active block since it
+/// became active: Return's split, a conversion or typing in another block stayed. It takes no registrations (its
+/// registration stays off; the text view's own disable and enable pairs keep it so), so the text view's typing builds
+/// no second history. Undo is always offered: the engine says when there is nothing to undo.
+@MainActor
+final class EditorUndoManager: UndoManager {
+    /// The text view it was last handed out for.
+    weak var view: UITextView?
+    private let step: (UITextView, Bool) -> Void
+
+    init(step: @escaping (UITextView, Bool) -> Void) {
+        self.step = step
+        super.init()
+        disableUndoRegistration()
+    }
+
+    override var canUndo: Bool { true }
+    override var canRedo: Bool { true }
+    override var undoActionName: String { "" }
+    override var redoActionName: String { "" }
+
+    override func undo() {
+        if let view { step(view, false) }
+    }
+
+    override func redo() {
+        if let view { step(view, true) }
     }
 }

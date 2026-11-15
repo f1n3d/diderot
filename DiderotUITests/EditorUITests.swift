@@ -2460,6 +2460,27 @@ import XCTest
         waitForSync(app)
     }
 
+    /// ⌘Z goes through the engine's history, as the toolbar's Undo: it takes back a conversion, which the text view's own
+    /// undo never saw. The script checks that "Zurueck<stamp>" is a paragraph again after ⌘⌥2 made a heading of it.
+    func test101_SystemUndoThroughTheHistory() {
+        let app = launchPage()
+        var editor = appendParagraph(app)
+        editor.typeText("Zurueck\(stamp)")
+        Thread.sleep(forTimeInterval: 1.5)
+        waitForKeyboard(app)
+        editor.typeKey("2", modifierFlags: [.command, .option])
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor in the heading ⌘⌥2 made")
+        waitForKeyboard(app)
+        editor.typeKey("z", modifierFlags: .command)
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after ⌘Z")
+        XCTAssertEqual(editor.value as? String, "Zurueck\(stamp)", "⌘Z changed the text instead of the block's type")
+        snapshot(app, "101-undone")
+        finishEditing(app)
+        waitForSync(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.
