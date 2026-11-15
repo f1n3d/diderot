@@ -30,9 +30,9 @@ export type Step =
   | { op: "split"; target: Target }
   | { op: "setAttributes"; target: Target; attrs: Record<string, unknown> };
 
-/** A list's items. */
+/** A list's items, and the lists. */
 export const items = new Set(["listItem", "taskItem"]);
-const lists = new Set(["bulletList", "orderedList", "taskList"]);
+export const lists = new Set(["bulletList", "orderedList", "taskList"]);
 /** What goes with the only block it holds when the user deletes that block or moves it away (`remove`, `move`). */
 const goesWithItsOnlyBlock = new Set([...items, ...lists, "blockquote"]);
 

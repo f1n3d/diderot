@@ -2481,6 +2481,55 @@ import XCTest
         waitForSync(app)
     }
 
+    /// Return in an empty last item of a nested list makes it an item of the list around it, and Backspace at the start of
+    /// the line right after the list joins it with the list's last line, as on the web. They made a line without a bullet
+    /// in the item above and did nothing. The script checks that "Hoch<stamp>Dran<stamp>" is the item after "Aussen<stamp>",
+    /// whose nested list holds "Tiefer<stamp>".
+    func test102_NestedReturnAndBackspaceAfterList() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "bullet", pick: "block-bulletList")
+        var editor = activeEditor(app, "No editor in the list")
+        Thread.sleep(forTimeInterval: 0.8)
+        editor.typeText("Aussen\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the second item")
+        editor.typeText("Tiefer\(stamp)")
+        Thread.sleep(forTimeInterval: 1.2)
+        tapToolbarButton(app, "editor-indent")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after indenting")
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the new nested item")
+        // Empty, the nested list's last item: Return takes it a level up, where it's the outer list's second item, which
+        // can go in again. As a line of the item above, it would sit in that list's first item, which can't.
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after Return in the empty nested item")
+        let indent = app.buttons["editor-indent"]
+        XCTAssertTrue(indent.waitForExistence(timeout: 5), "Return in the empty nested item left the list")
+        wait(for: [expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: indent)], timeout: 8)
+        editor.typeText("Hoch\(stamp)\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the item after Hoch")
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor in the line after the list")
+        editor.typeText("Dran\(stamp)")
+        Thread.sleep(forTimeInterval: 0.6)
+        // To the line's start with a tap left of its text (see test44).
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).withOffset(CGVector(dx: 2, dy: 0)).tap()
+        Thread.sleep(forTimeInterval: 1.2)
+        editor.typeText(XCUIKeyboardKey.delete.rawValue)
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after Backspace at the start of the line after the list")
+        XCTAssertEqual(editor.value as? String, "Hoch\(stamp)Dran\(stamp)", "Backspace didn't join the line with the list's last item")
+        snapshot(app, "102-joined")
+        finishEditing(app)
+        waitForSync(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.
