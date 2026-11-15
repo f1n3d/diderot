@@ -93,6 +93,11 @@ struct ActiveTextEditor: View {
                         guard let model, view === model.editorTextView else { return }
                         model.handleKey(action)
                     }
+                    TextInputHooks.onUndo = { [weak model] view, redo in
+                        // Asked again: shaking's alert waits for its tap, and the page may be read-only by then.
+                        guard let model, view === model.editorTextView, model.isEditable, model.active != nil else { return }
+                        Task { if redo { await model.redo() } else { await model.undo() } }
+                    }
                 }
             }))
             .onAppear { if isActive { applyCursor() } }

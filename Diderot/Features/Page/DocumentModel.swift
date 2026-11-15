@@ -163,6 +163,9 @@ final class DocumentModel {
     /// A table edit is under way. It puts the cursor into a cell itself, so a document event meanwhile neither ends
     /// editing (the keyboard and its table row would go and come back) nor takes the edit for a collaborator's change.
     @ObservationIgnored private var editsTable = false
+    /// The undo or redo under way. Steps take turns: ⌘Z held down repeats, and each step adopts the block the one before
+    /// left.
+    @ObservationIgnored private var historyStep: Task<Void, Never>?
     /// The block became active through Return or Backspace in the previous one: the page keeps its place and only
     /// keeps the caret visible, while a tapped block is centered.
     @ObservationIgnored private(set) var activatedByTyping = false
@@ -2436,8 +2439,19 @@ final class DocumentModel {
         if active?.ref.path != path { deactivate() }
     }
 
-    func undo() async { await stepHistory(redo: false) }
-    func redo() async { await stepHistory(redo: true) }
+    func undo() async { await queueHistoryStep(redo: false) }
+    func redo() async { await queueHistoryStep(redo: true) }
+
+    /// Runs the step after the one under way (`historyStep`).
+    private func queueHistoryStep(redo: Bool) async {
+        let previous = historyStep
+        let step = Task { [weak self] in
+            await previous?.value
+            await self?.stepHistory(redo: redo)
+        }
+        historyStep = step
+        await step.value
+    }
 
     /// Undo/redo through the engine's Yjs history (like the web editor), after flushing pending input into it. The
     /// active editor then adopts its block's new state, or it would keep its old text and write it back on typing.

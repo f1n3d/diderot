@@ -175,6 +175,36 @@ struct TextInputHooksTests {
         #expect(editor.responds(to: TextInputHooks.keySelector))
     }
 
+    /// While the editor takes the keys, its text view hands out its editor undo manager, which steps the engine's history
+    /// for that text view and takes no registrations of the text view's own, also after its disable and enable pairs or
+    /// an enable without its disable. Otherwise the text view's own, and another text view of the class keeps its own.
+    @Test func undoGoesThroughTheEditor() {
+        let editor = Self.view(UndoTextView.self, cursorAt: 0)
+        let other = Self.view(UndoTextView.self, cursorAt: 0)
+        TextInputHooks.install(on: editor)
+        var takes = true
+        var steps: [Bool] = []
+        TextInputHooks.takesKey = { view, _ in view === editor && takes }
+        TextInputHooks.onUndo = { view, redo in if view === editor { steps.append(redo) } }
+        defer { TextInputHooks.takesKey = nil; TextInputHooks.onUndo = nil }
+
+        let manager = editor.undoManager
+        #expect(manager is EditorUndoManager)
+        #expect(editor.undoManager === manager)
+        #expect(!(other.undoManager is EditorUndoManager))
+        #expect(manager?.canUndo == true && manager?.canRedo == true)
+        manager?.undo()
+        manager?.redo()
+        #expect(steps == [false, true])
+        manager?.disableUndoRegistration()
+        manager?.enableUndoRegistration()
+        manager?.enableUndoRegistration()
+        #expect(manager?.isUndoRegistrationEnabled == false)
+
+        takes = false
+        #expect(!(editor.undoManager is EditorUndoManager))
+    }
+
     /// Without an own answer, the text view answers as it would without the hook (the inherited implementation).
     @Test func otherActionsAnswerAsWithoutTheHook() {
         let plain = Self.view(UITextView.self, cursorAt: 0)
@@ -198,6 +228,7 @@ private class LateParentTextView: UITextView {}
 private class LateChildTextView: LateParentTextView {}
 private class InheritingActionsTextView: UITextView {}
 private class KeyTextView: UITextView {}
+private class UndoTextView: UITextView {}
 
 /// Counts its own `buildMenu`, which the hook keeps.
 private class OwnMenuTextView: UITextView {
