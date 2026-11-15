@@ -61,16 +61,6 @@ struct EditorToolbar: View {
                 .disabled(levels?.outdent != true)
             iconButton("Indent", "increase.indent", id: "editor-indent") { Task { await model.moveActiveItemLevel(inward: true) } }
                 .disabled(levels?.indent != true)
-        } else if let steps = model.activeIndentSteps {
-            // In a paragraph or heading, as Shift-Tab and Tab on the web (Docmost's Indent): a step out or in.
-            iconButton("Outdent", "decrease.indent", id: "editor-block-outdent") { Task { await model.indentActive(inward: false) } }
-                .disabled(!steps.outdent)
-            iconButton("Indent", "increase.indent", id: "editor-block-indent") { Task { await model.indentActive(inward: true) } }
-                .disabled(!steps.indent)
-        }
-        if model.alignsActiveBlock {
-            iconButton("Alignment", model.activeAlignment.symbol, id: "editor-alignment") { mode = .alignment }
-                .accessibilityValue(Text(model.activeAlignment.title))
         }
         divider
         Group {
@@ -92,6 +82,18 @@ struct EditorToolbar: View {
             iconButton("Line break", "return", id: "format-linebreak") { model.insertLineBreak() }
         }
         .disabled(isCode)
+        // After the formats, which are used more and stay on the first screen of an iPhone's toolbar.
+        if !model.isInListItem, let steps = model.activeIndentSteps {
+            // In a paragraph or heading, as Shift-Tab and Tab on the web (Docmost's Indent): a step out or in.
+            iconButton("Outdent", "decrease.indent", id: "editor-block-outdent") { Task { await model.indentActive(inward: false) } }
+                .disabled(!steps.outdent)
+            iconButton("Indent", "increase.indent", id: "editor-block-indent") { Task { await model.indentActive(inward: true) } }
+                .disabled(!steps.indent)
+        }
+        if model.alignsActiveBlock {
+            iconButton("Alignment", model.activeAlignment.symbol, id: "editor-alignment") { mode = .alignment }
+                .accessibilityValue(Text(model.activeAlignment.title))
+        }
         // Like "Comment" in the selection menu.
         if model.canComment {
             iconButton("Comment", "text.bubble", id: "format-comment") { model.editsComment = true }

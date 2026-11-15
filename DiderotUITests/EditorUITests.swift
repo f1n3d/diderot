@@ -742,7 +742,17 @@ import XCTest
     private func tapToolbarButton(_ app: XCUIApplication, _ id: String) {
         let button = app.buttons[id], done = app.buttons["editor-done"]
         XCTAssertTrue(button.waitForExistence(timeout: 5), "Toolbar button “\(id)” missing")
-        let frame = button.frame, edge = done.exists ? done.frame.minX - 6 : .infinity
+        let edge = done.exists ? done.frame.minX - 6 : .infinity
+        // Scrolled out of sight, behind "Done" or off the left edge: drag the toolbar's row until it shows. A tap on a
+        // button behind "Done" lands on "Done" and ends editing.
+        for _ in 0..<6 {
+            let frame = button.frame
+            let shift: CGFloat = frame.minX > edge - 12 ? -120 : frame.minX < 20 ? 120 : 0
+            guard shift != 0, edge.isFinite else { break }
+            let start = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: edge / 2, dy: frame.midY))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: shift, dy: 0)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        let frame = button.frame
         guard frame.maxX > edge, edge - frame.minX >= 12 else { return button.tap() }
         app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: (frame.minX + edge) / 2, dy: frame.midY)).tap()
     }
@@ -2335,7 +2345,11 @@ import XCTest
         editor.typeText("Zentriert\(stamp)")
         let alignment = app.buttons["editor-alignment"]
         XCTAssertTrue(alignment.waitForExistence(timeout: 5), "No “Alignment” in a paragraph's toolbar")
-        alignment.tap()
+        // The formats come first: on an iPhone bold, italic and underline show without scrolling the toolbar.
+        let bold = app.buttons["format-bold"], done = app.buttons["editor-done"]
+        XCTAssertLessThan(app.buttons["format-underline"].frame.maxX, done.frame.minX, "Underline isn't on the toolbar's first screen")
+        XCTAssertLessThan(bold.frame.minX, app.buttons["format-underline"].frame.minX)
+        tapToolbarButton(app, "editor-alignment")
         let center = app.buttons["align-center"]
         XCTAssertTrue(center.waitForExistence(timeout: 5), "No “Align center” in the alignment row")
         center.tap()
@@ -2344,9 +2358,9 @@ import XCTest
         XCTAssertTrue(indent.waitForExistence(timeout: 5), "No “Indent” in a paragraph's toolbar")
         let outdent = app.buttons["editor-block-outdent"]
         XCTAssertFalse(outdent.isEnabled, "“Outdent” enabled in a paragraph that isn't indented")
-        indent.tap()
+        tapToolbarButton(app, "editor-block-indent")
         XCTAssertTrue(outdent.wait(for: \.isEnabled, toEqual: true, timeout: 5), "“Outdent” stays disabled after a step in")
-        indent.tap()
+        tapToolbarButton(app, "editor-block-indent")
         let said = alignment.value as? String ?? ""
         XCTAssertTrue(["Zentriert", "Center"].contains(said), "“Alignment” doesn't say the paragraph is centered: “\(said)”")
         snapshot(app, "97-aligned")
