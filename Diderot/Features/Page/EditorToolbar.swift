@@ -70,6 +70,7 @@ struct EditorToolbar: View {
         }
         if model.alignsActiveBlock {
             iconButton("Alignment", model.activeAlignment.symbol, id: "editor-alignment") { mode = .alignment }
+                .accessibilityValue(Text(model.activeAlignment.title))
         }
         divider
         Group {
@@ -219,9 +220,9 @@ struct EditorToolbar: View {
             colorButton(color, active: shows && table.color == color)
         }
         divider
-        tableButton("Align left", "text.alignleft", id: "table-align-left", .align(.left, formatScope), active: shows && table.align == .left)
-        tableButton("Align center", "text.aligncenter", id: "table-align-center", .align(.center, formatScope), active: shows && table.align == .center)
-        tableButton("Align right", "text.alignright", id: "table-align-right", .align(.right, formatScope), active: shows && table.align == .right)
+        tableButton("Align left", TextAlign.left.symbol, id: "table-align-left", .align(.left, formatScope), active: shows && table.align == .left)
+        tableButton("Align center", TextAlign.center.symbol, id: "table-align-center", .align(.center, formatScope), active: shows && table.align == .center)
+        tableButton("Align right", TextAlign.right.symbol, id: "table-align-right", .align(.right, formatScope), active: shows && table.align == .right)
         divider
         tableButton("Clear", "eraser", id: "table-clear", .clear(formatScope))
     }
@@ -578,6 +579,16 @@ extension TextAlign {
         case .center: "text.aligncenter"
         case .right: "text.alignright"
         case .justify: "text.justify"
+        }
+    }
+
+    /// What VoiceOver reads as the value of "Alignment".
+    var title: LocalizedStringResource {
+        switch self {
+        case .left: "Left"
+        case .center: "Center"
+        case .right: "Right"
+        case .justify: "Justified"
         }
     }
 }

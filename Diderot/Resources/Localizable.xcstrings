@@ -927,6 +927,16 @@
         }
       }
     },
+    "Center": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zentriert"
+          }
+        }
+      }
+    },
     "Change Link": {
       "localizations": {
         "de": {
@@ -2632,6 +2642,16 @@
         }
       }
     },
+    "Justified": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocksatz"
+          }
+        }
+      }
+    },
     "Kanban": {
       "localizations": {
         "de": {
@@ -2688,6 +2708,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Darstellung"
+          }
+        }
+      }
+    },
+    "Left": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linksbündig"
           }
         }
       }
@@ -4587,6 +4617,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Treffer"
+          }
+        }
+      }
+    },
+    "Right": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechtsbündig"
           }
         }
       }

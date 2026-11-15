@@ -2347,10 +2347,13 @@ import XCTest
         indent.tap()
         XCTAssertTrue(outdent.wait(for: \.isEnabled, toEqual: true, timeout: 5), "“Outdent” stays disabled after a step in")
         indent.tap()
-        Thread.sleep(forTimeInterval: 1)
+        let said = alignment.value as? String ?? ""
+        XCTAssertTrue(["Zentriert", "Center"].contains(said), "“Alignment” doesn't say the paragraph is centered: “\(said)”")
         snapshot(app, "97-aligned")
         XCTAssertEqual(activeEditor(app).value as? String, "Mitte\(stamp)", "Aligning or indenting changed the text")
         finishEditing(app)
+        // Both steps and the alignment reach the server before the next test starts the app anew.
+        waitForSync(app)
     }
 
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at

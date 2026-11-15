@@ -490,12 +490,16 @@ final class DocumentModel {
 
     // MARK: Alignment and indentation
 
-    /// Whether the toolbar aligns the active block: a paragraph or heading (TipTap's TextAlign, as the web's alignment
-    /// menu), but not in a table, whose own row aligns cells, rows and columns.
-    var alignsActiveBlock: Bool {
-        guard let active, ["paragraph", "heading"].contains(active.type) else { return false }
-        return insertLocation(of: active) != .tableCell
+    /// The types around the active paragraph or heading, outside tables: what alignment and indentation go by. Nil for
+    /// other blocks, and in a table (also in a list in one), whose own row aligns cells, rows and columns.
+    private var activeParagraphAncestors: Set<String>? {
+        guard let active, ["paragraph", "heading"].contains(active.type) else { return nil }
+        let ancestors = document.ancestorTypes(of: active.ref.path)
+        return ancestors.isDisjoint(with: ["tableCell", "tableHeader"]) ? ancestors : nil
     }
+
+    /// Whether the toolbar aligns the active block (TipTap's TextAlign, as the web's alignment menu).
+    var alignsActiveBlock: Bool { activeParagraphAncestors != nil }
 
     /// The active block's alignment; left where none is set, as the web shows it.
     var activeAlignment: TextAlign {
@@ -511,21 +515,19 @@ final class DocumentModel {
     /// the web's toolbar run: 0 to 8 steps). Nil where the web doesn't indent: in a list item (its buttons move the item
     /// instead) and in a table.
     var activeIndentSteps: (indent: Bool, outdent: Bool)? {
-        guard let active, ["paragraph", "heading"].contains(active.type), active.itemPath == nil,
-              document.ancestorTypes(of: active.ref.path).isDisjoint(with: ["listItem", "taskItem", "tableCell", "tableHeader"])
-        else { return nil }
-        let steps = activeIndent
-        return (steps < Self.maxIndent, steps > 0)
+        guard let ancestors = activeParagraphAncestors, ancestors.isDisjoint(with: ["listItem", "taskItem"]) else { return nil }
+        return (activeIndent < Self.maxIndent, activeIndent > 0)
     }
 
-    /// A step in or out, kept within 0 to 8 as the web's commands keep it (a larger value from elsewhere steps to 8).
+    /// A step in or out from where the block shows (`activeIndent`), kept within 0 to 8 as the web's commands keep it.
     func indentActive(inward: Bool) async {
         guard let steps = activeIndentSteps, inward ? steps.indent : steps.outdent, let active else { return }
-        let indent = min(max(activeIndent + (inward ? 1 : -1), 0), Self.maxIndent)
-        await setAttributes(of: active.ref, ["indent": .number(Double(indent))])
+        await setAttributes(of: active.ref, ["indent": .number(Double(activeIndent + (inward ? 1 : -1)))])
     }
 
-    private var activeIndent: Int { active?.attrs?["indent"]?.intValue ?? 0 }
+    /// The active block's indentation as it shows: within 0 to 8 (`TextNodeView`), also where another client stored
+    /// more or less (Engine/FORMAT.md doesn't limit it outside lists and tables).
+    private var activeIndent: Int { min(max(active?.attrs?["indent"]?.intValue ?? 0, 0), Self.maxIndent) }
     private static let maxIndent = 8
 
     /// Path of the active block's nearest ancestor of the given type (e.g. a callout).
@@ -2367,7 +2369,7 @@ final class DocumentModel {
               let cell = node(at: [position.row, position.column], in: table)
         else { return nil }
         return TableState(table: table, cell: cell, applies: activeAnswers?.tableCommands ?? [],
-                          align: active?.attrs?["textAlign"]?.stringValue.flatMap(TextAlign.init(rawValue:)) ?? .left)
+                          align: activeAlignment)
     }
 
     /// Whether the active table's first row / first column consists of header cells.

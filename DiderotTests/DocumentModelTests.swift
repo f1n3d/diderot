@@ -111,6 +111,46 @@ struct DocumentModelTests {
         #expect(model.activeIndentSteps == nil)
     }
 
+    /// Headings align and indent like paragraphs; a justified one reads as justified, which the toolbar doesn't offer.
+    /// Indentation steps from where the block shows (0 to 8), also where another client stored more or less. A list in
+    /// a table cell is in the table: neither aligns nor indents.
+    @Test func headingsAndOddValuesAlignAndIndentAsShown() async throws {
+        func heading(_ id: String, _ extra: [String: JSONValue]) -> PMNode {
+            var attrs: [String: JSONValue] = ["id": .string(id), "level": 2]
+            attrs.merge(extra) { $1 }
+            return PMNode(type: "heading", attrs: attrs, content: [PMNode(type: "text", text: id)])
+        }
+        let justified = heading("j", ["textAlign": "justify"]), deep = heading("d", ["indent": 10]), below = heading("b", ["indent": -2])
+        let cellItem = PMNode(type: "paragraph", attrs: ["id": "c"], content: [PMNode(type: "text", text: "Zelle")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            justified, deep, below,
+            PMNode(type: "table", content: [PMNode(type: "tableRow", content: [PMNode(type: "tableCell", content: [
+                PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [cellItem])]),
+            ])])]),
+        ]))
+        let model = try Self.model(engine)
+
+        model.activate(NodeRef(path: [0], node: justified), node: justified)
+        #expect(model.alignsActiveBlock)
+        #expect(model.activeAlignment == .justify)
+        await model.alignActive(.right)
+        #expect(engine.attributeValues.last == ["textAlign": .string("right")])
+
+        model.activate(NodeRef(path: [1], node: deep), node: deep)
+        #expect(model.activeIndentSteps?.indent == false)
+        await model.indentActive(inward: false)
+        #expect(engine.attributeValues.last == ["indent": .number(7)])
+
+        model.activate(NodeRef(path: [2], node: below), node: below)
+        #expect(model.activeIndentSteps?.outdent == false)
+        await model.indentActive(inward: true)
+        #expect(engine.attributeValues.last == ["indent": .number(1)])
+
+        model.activate(NodeRef(path: [3, 0, 0, 0, 0, 0], node: cellItem), node: cellItem)
+        #expect(!model.alignsActiveBlock)
+        #expect(model.activeIndentSteps == nil)
+    }
+
     /// Switching the list type with input pending: the input goes first, as typing sends it (with its base, so a
     /// collaborator's edit of the item stays), and the engine switches the list it has then (Engine/tools/
     /// conversions-check.ts). Nothing stays pending (it would hide a collaborator's later edit and overwrite it on leaving),
