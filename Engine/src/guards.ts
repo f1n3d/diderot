@@ -30,6 +30,10 @@ const columnLayouts: Record<string, number> = {
 };
 const oneOf = (...values: string[]) => (value: unknown) => typeof value === "string" && values.includes(value);
 const isBoolean = (value: unknown) => typeof value === "boolean";
+/** TipTap's TextAlign on paragraphs and headings; null is the web's "unset". */
+const isAlignment = (value: unknown) => value === null || oneOf("left", "center", "right", "justify")(value);
+/** Docmost's Indent: whole steps from 0 to 8, as its commands clamp them. */
+const isIndent = (value: unknown) => Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 8;
 
 /**
  * The attributes the app sets with `setAttributes`, and the values each takes, as on the web. The schema types none
@@ -42,7 +46,9 @@ const settable: Record<string, Record<string, (value: unknown, node: PMNode) => 
   columns: { layout: (value, node) => typeof value === "string" && Object.hasOwn(columnLayouts, value) && columnLayouts[value] === node.childCount },
   details: { open: isBoolean },
   embed: { src: (value) => typeof value === "string" && /^https?:\/\//i.test(value) },
+  heading: { textAlign: isAlignment, indent: isIndent },
   mathBlock: { text: (value) => typeof value === "string" },
+  paragraph: { textAlign: isAlignment, indent: isIndent },
   subpages: { sortBy: oneOf("default", "title-asc", "recent") },
   taskItem: { checked: isBoolean },
 };

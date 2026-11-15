@@ -488,6 +488,46 @@ final class DocumentModel {
 
     private static let shortPlaceholderParents: Set<String> = ["column", "tableCell", "tableHeader", "callout", "blockquote", "footnote"]
 
+    // MARK: Alignment and indentation
+
+    /// Whether the toolbar aligns the active block: a paragraph or heading (TipTap's TextAlign, as the web's alignment
+    /// menu), but not in a table, whose own row aligns cells, rows and columns.
+    var alignsActiveBlock: Bool {
+        guard let active, ["paragraph", "heading"].contains(active.type) else { return false }
+        return insertLocation(of: active) != .tableCell
+    }
+
+    /// The active block's alignment; left where none is set, as the web shows it.
+    var activeAlignment: TextAlign {
+        active?.attrs?["textAlign"]?.stringValue.flatMap(TextAlign.init(rawValue:)) ?? .left
+    }
+
+    func alignActive(_ align: TextAlign) async {
+        guard alignsActiveBlock, let active else { return }
+        await setAttributes(of: active.ref, ["textAlign": .string(align.rawValue)])
+    }
+
+    /// Whether the active paragraph or heading can move a step in or out (Docmost's Indent, which Tab and Shift-Tab and
+    /// the web's toolbar run: 0 to 8 steps). Nil where the web doesn't indent: in a list item (its buttons move the item
+    /// instead) and in a table.
+    var activeIndentSteps: (indent: Bool, outdent: Bool)? {
+        guard let active, ["paragraph", "heading"].contains(active.type), active.itemPath == nil,
+              document.ancestorTypes(of: active.ref.path).isDisjoint(with: ["listItem", "taskItem", "tableCell", "tableHeader"])
+        else { return nil }
+        let steps = activeIndent
+        return (steps < Self.maxIndent, steps > 0)
+    }
+
+    /// A step in or out, kept within 0 to 8 as the web's commands keep it (a larger value from elsewhere steps to 8).
+    func indentActive(inward: Bool) async {
+        guard let steps = activeIndentSteps, inward ? steps.indent : steps.outdent, let active else { return }
+        let indent = min(max(activeIndent + (inward ? 1 : -1), 0), Self.maxIndent)
+        await setAttributes(of: active.ref, ["indent": .number(Double(indent))])
+    }
+
+    private var activeIndent: Int { active?.attrs?["indent"]?.intValue ?? 0 }
+    private static let maxIndent = 8
+
     /// Path of the active block's nearest ancestor of the given type (e.g. a callout).
     func activeAncestorPath(ofType type: String) -> [Int]? {
         active.flatMap { document.ancestorPath(of: $0.ref.path, types: [type]) }

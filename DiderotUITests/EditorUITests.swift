@@ -2327,6 +2327,32 @@ import XCTest
         finishEditing(app)
     }
 
+    /// The toolbar aligns and indents a paragraph as the web's alignment menu and Tab do: the script checks that
+    /// "Mitte<stamp>" is centered and indented two steps.
+    func test97_AlignAndIndentParagraph() {
+        let app = launchPage()
+        let editor = appendParagraph(app)
+        editor.typeText("Mitte\(stamp)")
+        let alignment = app.buttons["editor-alignment"]
+        XCTAssertTrue(alignment.waitForExistence(timeout: 5), "No “Alignment” in a paragraph's toolbar")
+        alignment.tap()
+        let center = app.buttons["align-center"]
+        XCTAssertTrue(center.waitForExistence(timeout: 5), "No “Align center” in the alignment row")
+        center.tap()
+        // The row goes back to the toolbar's main row once the paragraph has its new alignment.
+        let indent = app.buttons["editor-block-indent"]
+        XCTAssertTrue(indent.waitForExistence(timeout: 5), "No “Indent” in a paragraph's toolbar")
+        let outdent = app.buttons["editor-block-outdent"]
+        XCTAssertFalse(outdent.isEnabled, "“Outdent” enabled in a paragraph that isn't indented")
+        indent.tap()
+        XCTAssertTrue(outdent.wait(for: \.isEnabled, toEqual: true, timeout: 5), "“Outdent” stays disabled after a step in")
+        indent.tap()
+        Thread.sleep(forTimeInterval: 1)
+        snapshot(app, "97-aligned")
+        XCTAssertEqual(activeEditor(app).value as? String, "Mitte\(stamp)", "Aligning or indenting changed the text")
+        finishEditing(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.

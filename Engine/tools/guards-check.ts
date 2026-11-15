@@ -76,8 +76,23 @@ expect("embed link", "accepted", attributes({ type: "embed" }, { src: "https://w
 expect("formula", "accepted", attributes({ type: "mathBlock" }, { text: "a^2+b^2=c^2" }));
 for (const sortBy of ["default", "title-asc", "recent"]) expect(`sub-pages ${sortBy}`, "accepted", attributes({ type: "subpages" }, { sortBy }));
 expect("task checked", "accepted", attributes(task, { checked: true }));
+// The toolbar's alignment and indentation of paragraphs and headings (Docmost's TextAlign and Indent).
+const heading: JSONContent = { type: "heading", attrs: { level: 2 }, content: [text("Title")] };
+for (const textAlign of ["left", "center", "right", "justify", null]) {
+  expect(`paragraph aligned ${textAlign}`, "accepted", attributes(paragraph(text("Hello")), { textAlign }));
+  expect(`heading aligned ${textAlign}`, "accepted", attributes(heading, { textAlign }));
+}
+for (const indent of [0, 1, 8]) {
+  expect(`paragraph indented ${indent}`, "accepted", attributes(paragraph(text("Hello")), { indent }));
+  expect(`heading indented ${indent}`, "accepted", attributes(heading, { indent }));
+}
 // What the app never sends: a wrong type, a value the web doesn't know, an attribute it doesn't set this way.
 expect("indent as text", "invalid paragraph.indent", attributes(paragraph(text("Hello")), { indent: "x" }));
+expect("indent beyond the web's 8", "invalid paragraph.indent", attributes(paragraph(text("Hello")), { indent: 9 }));
+expect("negative indent", "invalid heading.indent", attributes(heading, { indent: -1 }));
+expect("half an indent step", "invalid paragraph.indent", attributes(paragraph(text("Hello")), { indent: 1.5 }));
+expect("an unknown alignment", "invalid paragraph.textAlign", attributes(paragraph(text("Hello")), { textAlign: "middle" }));
+expect("alignment of a code block", "invalid codeBlock.textAlign", attributes(code, { textAlign: "center" }));
 expect("unknown callout type", "invalid callout.type", attributes(callout, { type: "error" }));
 expect("three columns' layout on two", "invalid columns.layout", attributes(columns(2), { layout: "three_equal" }));
 expect("an unknown layout", "invalid columns.layout", attributes(columns(2), { layout: "constructor" }));
