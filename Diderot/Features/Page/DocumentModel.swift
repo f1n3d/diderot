@@ -72,7 +72,8 @@ final class DocumentModel {
     var editorHeight: (ref: NodeRef, height: CGFloat)?
     /// How the page's text editor draws the active block's text.
     var editorStyle = EditorStyle(font: .body, leading: 0, alignment: .leading)
-    /// The page text editor's text view, for Backspace at the text's start (`TextInputHooks`).
+    /// The page text editor's text view, for the hooks on it (`TextInputHooks`): Backspace at the text's start, "Comment"
+    /// in its selection menu.
     @ObservationIgnored weak var editorTextView: UITextView?
     /// Text after "/" before the cursor (at block start or after whitespace, web parity); `nil` = no slash menu.
     private(set) var slashQuery: String?
@@ -132,15 +133,10 @@ final class DocumentModel {
     /// Offers "Comment" for text selected in the active text block (the toolbar's button, the selection menu). Not while
     /// a sheet (link, comment) has focus: its text fields would get the menu item too.
     var canCommentOnSelection: Bool {
-        guard canCommentOnActiveText, case .ranges(let ranges) = activeSelection.indices(in: activeText) else { return false }
+        guard canComment, !editsInSheet, let active, PMNode.editableTextTypes.contains(active.type),
+              case .ranges(let ranges) = activeSelection.indices(in: activeText)
+        else { return false }
         return ranges.ranges.contains { !$0.isEmpty }
-    }
-
-    /// The active text block takes a comment on selected text: the page allows comments, no sheet has focus, and the
-    /// block is text.
-    var canCommentOnActiveText: Bool {
-        guard canComment, !editsInSheet, let active else { return false }
-        return PMNode.editableTextTypes.contains(active.type)
     }
 
     /// The comment `commentId` was deleted: its passage loses its mark, as on the web (`unsetComment`). The server's
