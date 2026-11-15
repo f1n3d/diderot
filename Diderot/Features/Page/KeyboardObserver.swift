@@ -90,15 +90,27 @@ private extension UIResponder {
     }
 }
 
-/// Backspace at the start of the page editor's text, which SwiftUI's `TextEditor` doesn't report (the text doesn't
-/// change). The editor used to put an invisible character there for Backspace to delete, but iOS then saw a letter
-/// before the cursor: no capital letter and no sentence-start suggestions at a block's start. Hooks `deleteBackward`
-/// of the editor's text view class once; other text views of that class pass through (the handler answers `false`).
-/// The Return key stays with the text view: hooking `insertText` too left the keyboard at a sentence start while typing.
+/// What SwiftUI's `TextEditor` has no API for, hooked once on the page editor's text view class:
+/// - Backspace at the start of the text, which `TextEditor` doesn't report (the text doesn't change). The editor used to
+///   put an invisible character there for Backspace to delete, but iOS then saw a letter before the cursor: no capital
+///   letter and no sentence-start suggestions at a block's start. Other text views of that class pass through (the
+///   handler answers `false`). The Return key stays with the text view: hooking `insertText` too left the keyboard at a
+///   sentence start while typing.
+/// - Formats saving can't keep, refused (`refusedActions`), so the selection menu and the keyboard don't offer them.
 @MainActor
 enum TextInputHooks {
     static var onBackspaceAtStart: ((UITextView) -> Bool)?
     private static var hooked: Set<ObjectIdentifier> = []
+
+    /// "Format › More…" opened the system's formatting panel, and ⌘+ and ⌘− step the font size: fonts, sizes, colors,
+    /// line height and alignment, which the editor showed and saving dropped without a word (only bold, italic,
+    /// underline and strikethrough map to Docmost's marks, `EditorText.normalized`). The panel's action has no public
+    /// name; refusing it by name calls nothing private.
+    static let refusedActions: Set<Selector> = [
+        NSSelectorFromString("_showTextFormattingOptions:"),
+        #selector(UIResponderStandardEditActions.increaseSize(_:)),
+        #selector(UIResponderStandardEditActions.decreaseSize(_:)),
+    ]
 
     static func install(on view: UITextView) {
         // The class the view says it has: while it is observed, `object_getClass` gives KVO's subclass, which goes,
@@ -106,12 +118,35 @@ enum TextInputHooks {
         let cls: AnyClass = view.classForCoder
         // A subclass of a hooked class has the hook: a second one would ask the handler twice.
         guard !sequence(first: cls, next: class_getSuperclass).contains(where: { hooked.contains(ObjectIdentifier($0)) }) else { return }
+        hooked.insert(ObjectIdentifier(cls))
+        hookDeleteBackward(of: cls)
+        hookCanPerformAction(of: cls)
+    }
+
+    private static func hookCanPerformAction(of cls: AnyClass) {
+        let selector = #selector(UIResponder.canPerformAction(_:withSender:))
+        guard let method = class_getInstanceMethod(cls, selector) else { return }
+        typealias Function = @convention(c) (AnyObject, Selector, Selector, Any?) -> Bool
+        /// The class's own implementation, if it had one; an inherited one is looked up at each call.
+        var own: Function?
+        let block: @convention(block) (AnyObject, Selector, Any?) -> Bool = { object, action, sender in
+            if MainActor.assumeIsolated({ refusedActions.contains(action) }) { return false }
+            if let own { return own(object, selector, action, sender) }
+            guard let superclass = class_getSuperclass(cls), let inherited = class_getMethodImplementation(superclass, selector) else { return false }
+            return unsafeBitCast(inherited, to: Function.self)(object, selector, action, sender)
+        }
+        let implementation = imp_implementationWithBlock(block)
+        if !class_addMethod(cls, selector, implementation, method_getTypeEncoding(method)) {
+            own = unsafeBitCast(method_setImplementation(method, implementation), to: Function.self)
+        }
+    }
+
+    private static func hookDeleteBackward(of cls: AnyClass) {
         let selector = #selector(UITextView.deleteBackward)
         guard let method = class_getInstanceMethod(cls, selector) else {
             AppLog.ui.fault("\(NSStringFromClass(cls), privacy: .public) has no deleteBackward: Backspace at a block's start won't join it")
             return
         }
-        hooked.insert(ObjectIdentifier(cls))
         typealias Function = @convention(c) (AnyObject, Selector) -> Void
         /// The class's own implementation, if it had one; an inherited one is looked up at each call.
         var own: Function?
