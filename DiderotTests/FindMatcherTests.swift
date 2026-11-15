@@ -32,25 +32,23 @@ struct FindMatcherTests {
         #expect(paths("Inhalt") == [[1, 1, 0]])
     }
 
-    /// A toggle without `open` is closed, as on the web: its title is found, its hidden content isn't.
-    @Test func toggleWithoutOpenIsClosed() {
+    /// A collapsed toggle's content is searched too, as on the web, and the toggle shows it while it holds a match. Its
+    /// own `open`, or a reader's closing it on a read-only page, doesn't matter.
+    @Test func collapsedToggleContentIsFound() {
         let toggle = PMNode(type: "details", content: [
             PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "Treffer")]),
             PMNode(type: "detailsContent", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Treffer")])]),
         ])
-        let matches = FindMatcher.matches(of: "treffer", options: [.caseInsensitive], in: PMNode(type: "doc", content: [toggle]), baseURL: nil)
-        #expect(matches.map(\.ref.path) == [[0, 0]])
-    }
-
-    /// On read-only pages the reader opens and closes toggles without saving that; find follows what they see.
-    @Test func readerTogglesOverrideTheSavedState() {
-        let toggle = PMNode(type: "details", content: [
-            PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "Treffer")]),
-            PMNode(type: "detailsContent", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Treffer")])]),
-        ])
-        let document = PMNode(type: "doc", content: [toggle])
-        let matches = FindMatcher.matches(of: "treffer", options: [.caseInsensitive], in: document, baseURL: nil, toggles: [[0]: true])
-        #expect(matches.map(\.ref.path) == [[0, 0], [0, 1, 0]])
+        let document = PMNode(type: "doc", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Davor")]), toggle])
+        let find = PageFind()
+        find.query = "treffer"
+        find.update(document: document, baseURL: nil, restart: true)
+        #expect(find.matches.map(\.ref.path) == [[1, 0], [1, 1, 0]])
+        #expect(find.holdsMatch(inside: [1, 1]))
+        #expect(!find.holdsMatch(inside: [1, 0]), "a block counted as holding its own match")
+        find.query = "davor"
+        find.update(document: document, baseURL: nil, restart: true)
+        #expect(!find.holdsMatch(inside: [1, 1]))
     }
 
     @Test func columnsSyncedBlocksAndFootnotesAreSearched() {

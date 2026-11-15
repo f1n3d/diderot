@@ -35,7 +35,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - A button with the number of open comments, tabs for open and resolved ones.
   - Reply, edit, resolve and reopen, delete.
   - Comment on a text passage with "Comment" in the editor's selection menu; marked passages open their comment.
-- Find on page ("…" menu or ⌘F) with matches in text, tables and code, and "Aa" for case sensitivity.
+- Find on page ("…" menu or ⌘F) with matches in text, tables and code, also in collapsed toggles, which show their content while they hold a match (as on the web, without opening them), and "Aa" for case sensitivity.
 - Presentation mode ("…" menu) as on the web: the title, then the page's blocks as slides in larger type (a heading 1 begins a slide, a divider ends one). Swiping, the bar below or an iPad keyboard's arrow keys move between slides; on an iPad a laser pointer follows the trackpad or mouse. The screen stays on meanwhile.
 - Page history, new pages, title and icon, append notes, trash, web editor.
 - Templates (with a Docmost license that has them), as on the web: holding the space's "+" makes a page from one; an empty page offers "Get started with" a template, or with a database or kanban board (database license). The templates themselves are made and edited on the web.

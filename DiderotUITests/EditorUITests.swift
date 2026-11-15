@@ -2568,7 +2568,8 @@ import XCTest
     }
 
     /// Toggle via "/toggle" with a line in its content: collapsing it while that line is edited ends editing and hides
-    /// the line; the script checks that the toggle is stored closed (`open: false`), as on the web.
+    /// the line. Find on the page then shows the hidden line while it's a match, without opening the toggle, as on the
+    /// web. The script checks that the toggle is stored closed (`open: false`).
     func test45_CollapseToggle() {
         let app = launchPage()
         _ = appendParagraph(app)
@@ -2592,6 +2593,19 @@ import XCTest
         XCTAssertTrue(line.waitForNonExistence(timeout: 5), "Content still shown after collapsing")
         XCTAssertTrue(app.buttons["page-add-block"].waitForExistence(timeout: 5), "Line stays active after collapsing")
         snapshot(app, "45-toggle-collapsed")
+
+        app.buttons["page-more"].tap()
+        let findItem = button(app, labels: ["Find on Page", "Auf der Seite suchen"])
+        XCTAssertTrue(findItem.waitForExistence(timeout: 5), "“Find on Page” missing from the menu")
+        findItem.tap()
+        let field = app.textFields["page-find-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "Find bar doesn't appear")
+        field.typeText("Versteckt\(stamp)")
+        XCTAssertTrue(waitForLabel(app.staticTexts["page-find-count"], matching: "^1 (von|of) 1$"), "No match in the collapsed toggle")
+        XCTAssertTrue(line.waitForExistence(timeout: 5), "The match in the collapsed toggle doesn't show")
+        snapshot(app, "45-found-in-collapsed")
+        app.buttons["page-find-done"].tap()
+        XCTAssertTrue(line.waitForNonExistence(timeout: 5), "The toggle's content still shows after the search")
     }
 
     /// Embed via "/iframe": its card opens Safari; after closing Safari, the first tap on a paragraph starts editing.

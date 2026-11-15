@@ -395,9 +395,6 @@ struct PageView: View {
         .onChange(of: model?.document) { _, _ in
             if find.isShown { updateFind(restart: false) }
         }
-        .onChange(of: model?.readerToggles) { _, _ in
-            if find.isShown { updateFind(restart: false) }
-        }
         .onChange(of: model?.active?.ref) { _, _ in
             // Tapping into the text ends find; the user continues typing there.
             if model?.active != nil, find.isShown { find.close() }
@@ -531,7 +528,7 @@ struct PageView: View {
 
     private func updateFind(restart: Bool) {
         guard let model else { return }
-        find.update(document: model.document, baseURL: session.server?.url, toggles: model.readerToggles, restart: restart)
+        find.update(document: model.document, baseURL: session.server?.url, restart: restart)
     }
 
     private func header(_ page: Page) -> some View {
