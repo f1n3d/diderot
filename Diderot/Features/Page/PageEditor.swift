@@ -84,6 +84,11 @@ struct ActiveTextEditor: View {
                         return model.canCommentOnSelection
                     }
                     TextInputHooks.commentOnSelection = { [weak model] _ in model?.editsComment = true }
+                    TextInputHooks.takesKeys = { [weak model] view in view === model?.editorTextView }
+                    TextInputHooks.onKey = { [weak model] view, action in
+                        guard let model, view === model.editorTextView else { return }
+                        model.handleKey(action)
+                    }
                 }
             }))
             .onAppear { if isActive { applyCursor() } }
