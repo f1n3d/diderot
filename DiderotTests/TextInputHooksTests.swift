@@ -159,6 +159,22 @@ struct TextInputHooksTests {
         #expect(view.ownMenuCalls == 4)
     }
 
+    /// The editor's key commands come with the text view's own; only a text view that takes them performs them, others
+    /// keep Tab and Return as they are.
+    @Test func keyCommandsGoToTheEditorOnly() {
+        let editor = Self.view(KeyTextView.self, cursorAt: 0)
+        let other = Self.view(KeyTextView.self, cursorAt: 0)
+        TextInputHooks.install(on: editor)
+        TextInputHooks.takesKeys = { $0 === editor }
+        defer { TextInputHooks.takesKeys = nil }
+
+        let commands = editor.keyCommands ?? []
+        #expect(TextInputHooks.keyCommands.allSatisfy { ours in commands.contains { $0 === ours } })
+        #expect(editor.canPerformAction(TextInputHooks.keySelector, withSender: nil))
+        #expect(!other.canPerformAction(TextInputHooks.keySelector, withSender: nil))
+        #expect(editor.responds(to: TextInputHooks.keySelector))
+    }
+
     /// Without an own answer, the text view answers as it would without the hook (the inherited implementation).
     @Test func otherActionsAnswerAsWithoutTheHook() {
         let plain = Self.view(UITextView.self, cursorAt: 0)
@@ -181,6 +197,7 @@ private class ObservedTextView: UITextView {}
 private class LateParentTextView: UITextView {}
 private class LateChildTextView: LateParentTextView {}
 private class InheritingActionsTextView: UITextView {}
+private class KeyTextView: UITextView {}
 
 /// Counts its own `buildMenu`, which the hook keeps.
 private class OwnMenuTextView: UITextView {

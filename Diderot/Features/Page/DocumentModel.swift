@@ -2009,16 +2009,19 @@ final class DocumentModel {
         session.scheduleCommit()
     }
 
-    /// Inserts a soft line break at the cursor.
+    /// Inserts a soft line break at the cursor, in place of selected text, as Return replaces it.
     func insertLineBreak() {
         guard active != nil else { return }
-        let index = insertionIndex()
-        activeText.transform(updating: &activeSelection) { text in
-            text.insert(AttributedString(String(InlineAttributedText.lineBreak)), at: index)
+        let range: Range<AttributedString.Index>
+        if case .ranges(let ranges) = activeSelection.indices(in: activeText), let first = ranges.ranges.first, let last = ranges.ranges.last {
+            range = first.lowerBound..<last.upperBound
+        } else {
+            let index = insertionIndex()
+            range = index..<index
         }
-        if let after = activeText.characters.index(index, offsetBy: 1, limitedBy: activeText.endIndex) {
-            activeSelection = AttributedTextSelection(insertionPoint: after)
-        }
+        let offset = activeText.characters.distance(from: activeText.startIndex, to: range.lowerBound)
+        activeText.replaceSubrange(range, with: AttributedString(String(InlineAttributedText.lineBreak)))
+        activeSelection = AttributedTextSelection(insertionPoint: activeText.characters.index(activeText.startIndex, offsetBy: offset + 1))
         session.scheduleCommit()
     }
 

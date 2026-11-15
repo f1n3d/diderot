@@ -386,15 +386,7 @@ struct EditorToolbar: View {
 
     // MARK: - Formats
 
-    /// Whether the attribute is set across the whole selection; for a bare cursor, the typing attributes count.
-    private func isActive(_ check: (AttributeContainer) -> Bool) -> Bool {
-        switch model.activeSelection.indices(in: model.activeText) {
-        case .insertionPoint:
-            return check(model.activeSelection.typingAttributes(in: model.activeText))
-        case .ranges(let ranges):
-            return EditorText.allFormatted(model.activeText, in: ranges, check)
-        }
-    }
+    private func isActive(_ check: (AttributeContainer) -> Bool) -> Bool { model.activeTextHas(check) }
 
     /// Bold and italic, also from Cmd-B and Cmd-I (`EditorText.fontIntents`).
     private func hasIntent(_ intent: InlinePresentationIntent) -> Bool {
@@ -411,8 +403,8 @@ struct EditorToolbar: View {
     // sides together. Underline and strikethrough count only the visible style, like saving (`EditorText.normalized`).
 
     private var isUnderlined: Bool { isActive { $0.underlineStyle != nil } }
-    private var isStruck: Bool { isActive { $0.strikethroughStyle != nil } }
-    private var isCodeFormatted: Bool { isActive { $0.inlinePresentationIntent?.contains(.code) == true || $0.font == EditorText.codeFont } }
+    private var isStruck: Bool { model.activeTextIsStruck }
+    private var isCodeFormatted: Bool { model.activeTextIsCode }
     /// A text color across the selection (or for what is typed next): a stored one, or one of the web's typed text shows.
     private var hasTextColor: Bool {
         isActive { attributes in
@@ -420,9 +412,7 @@ struct EditorToolbar: View {
                 && (attributes.docmost.textColor != nil || EditorText.textColors.contains { $0.color == attributes.foregroundColor })
         }
     }
-    private var isHighlighted: Bool {
-        isActive { $0.docmost.highlight != nil || ($0.backgroundColor != nil && $0.backgroundColor != EditorText.codeBackground) }
-    }
+    private var isHighlighted: Bool { model.activeTextIsHighlighted }
 
     private func toggleUnderline() {
         let enabled = isUnderlined
@@ -432,15 +422,7 @@ struct EditorToolbar: View {
         }
     }
 
-    private func toggleStrikethrough() {
-        let enabled = isStruck
-        EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { container in
-            var intents = container.inlinePresentationIntent ?? []
-            if enabled { intents.remove(.strikethrough) } else { intents.insert(.strikethrough) }
-            container.inlinePresentationIntent = intents.isEmpty ? nil : intents
-            container.strikethroughStyle = enabled ? nil : .single
-        }
-    }
+    private func toggleStrikethrough() { model.toggleStrikethrough() }
 
     /// Like "/code": block to code block (keeping its text), code block back to paragraph. Where the line can't become
     /// one (an item's first line, a toggle's title, …), inserts one after the enclosing block.
@@ -455,15 +437,9 @@ struct EditorToolbar: View {
         }
     }
 
-    private func toggleCode() {
-        let enabled = isCodeFormatted
-        EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setCode(!enabled, in: &$0) }
-    }
+    private func toggleCode() { model.toggleInlineCode() }
 
-    private func toggleHighlight() {
-        let enabled = isHighlighted
-        EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setHighlight(!enabled, in: &$0) }
-    }
+    private func toggleHighlight() { model.toggleHighlight() }
 }
 
 /// A 3 × 3 grid with the scope's part filled: the middle cell, row or column.

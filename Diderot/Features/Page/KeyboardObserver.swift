@@ -98,9 +98,24 @@ private extension UIResponder {
 ///   sentence start while typing.
 /// - Formats saving can't keep, refused (`refusedActions`), so the selection menu and the keyboard don't offer them.
 /// - "Comment" in the selection menu (`commentsOnSelection`, `commentOnSelection`).
+/// - The web editor's keys (`EditorKeyAction`) as key commands, ahead of the text view's own Tab and Return.
 @MainActor
 enum TextInputHooks {
     static var onBackspaceAtStart: ((UITextView) -> Bool)?
+    /// Whether the text view takes the editor's keys (`onKey`): the page's editor does; other text views of the class
+    /// keep Tab and Return as they are.
+    static var takesKeys: ((UITextView) -> Bool)?
+    static var onKey: ((UITextView, EditorKeyAction) -> Void)?
+    /// What the key commands call, added to the text view's class: no responder in the chain would answer it.
+    static let keySelector = NSSelectorFromString("docmostEditorKey:")
+    /// `wantsPriorityOverSystemBehavior`: Tab, Shift-Tab and Shift-Return go to the editor, not to the text view's
+    /// typing or the focus system. A hook on the presses doesn't see them: the text view's keyboard input takes them
+    /// before.
+    static let keyCommands: [UIKeyCommand] = EditorKeyAction.shortcuts.map { shortcut in
+        let command = UIKeyCommand(input: shortcut.input, modifierFlags: shortcut.modifiers, action: keySelector)
+        command.wantsPriorityOverSystemBehavior = true
+        return command
+    }
     /// Whether the text view's page offers "Comment" for its selected text: asked when the selection menu is built and
     /// again when the entry is tapped. Other text views of the class answer false.
     static var commentsOnSelection: ((UITextView) -> Bool)?
@@ -128,6 +143,43 @@ enum TextInputHooks {
         hookDeleteBackward(of: cls)
         hookCanPerformAction(of: cls)
         hookBuildMenu(of: cls)
+        hookKeyCommands(of: cls)
+    }
+
+    /// The editor's key commands next to the text view's own, and the method they call. Only the page's editor performs
+    /// them (`canPerformAction`, `takesKeys`); in other text views of the class the keys go on as without them.
+    private static func hookKeyCommands(of cls: AnyClass) {
+        let action: @convention(block) (AnyObject, UIKeyCommand) -> Void = { object, command in
+            MainActor.assumeIsolated {
+                guard let view = object as? UITextView, let input = command.input,
+                      let key = EditorKeyAction(input: input, modifiers: command.modifierFlags) else { return }
+                onKey?(view, key)
+            }
+        }
+        class_addMethod(cls, keySelector, imp_implementationWithBlock(action), "v@:@")
+
+        let selector = #selector(getter: UIResponder.keyCommands)
+        guard let method = class_getInstanceMethod(cls, selector) else { return }
+        typealias Function = @convention(c) (AnyObject, Selector) -> NSArray?
+        /// The class's own implementation, if it had one; an inherited one is looked up at each call.
+        var own: Function?
+        let block: @convention(block) (AnyObject) -> NSArray? = { object in
+            var commands: NSArray?
+            MainActor.assumeIsolated {
+                var inherited: NSArray?
+                if let own {
+                    inherited = own(object, selector)
+                } else if let superclass = class_getSuperclass(cls), let implementation = class_getMethodImplementation(superclass, selector) {
+                    inherited = unsafeBitCast(implementation, to: Function.self)(object, selector)
+                }
+                commands = ((inherited as? [UIKeyCommand] ?? []) + keyCommands) as NSArray
+            }
+            return commands
+        }
+        let implementation = imp_implementationWithBlock(block)
+        if !class_addMethod(cls, selector, implementation, method_getTypeEncoding(method)) {
+            own = unsafeBitCast(method_setImplementation(method, implementation), to: Function.self)
+        }
     }
 
     /// Adds "Comment" to the selection menu, before Cut, Copy and Paste (after them it lands on the menu's second page
@@ -173,6 +225,9 @@ enum TextInputHooks {
         var own: Function?
         let block: @convention(block) (AnyObject, Selector, Any?) -> Bool = { object, action, sender in
             if MainActor.assumeIsolated({ refusedActions.contains(action) }) { return false }
+            if MainActor.assumeIsolated({ action == keySelector }) {
+                return MainActor.assumeIsolated { (object as? UITextView).map { takesKeys?($0) == true } ?? false }
+            }
             if let own { return own(object, selector, action, sender) }
             guard let superclass = class_getSuperclass(cls), let inherited = class_getMethodImplementation(superclass, selector) else { return false }
             return unsafeBitCast(inherited, to: Function.self)(object, selector, action, sender)

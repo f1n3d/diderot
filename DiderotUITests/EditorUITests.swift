@@ -2398,6 +2398,40 @@ import XCTest
         finishEditing(app)
     }
 
+    /// Hardware keys as the web editor's shortcuts: ⌘⌥2 makes a heading 2 of the line, ⌘⇧8 a bullet item of the next one,
+    /// and Tab moves the item after it a level in, without a tab character. The script checks the heading
+    /// "Taste<stamp>" and "Unter<stamp>" nested under "Liste<stamp>". Return with Shift or ⌘ (a line break) isn't
+    /// tested here: XCUITest doesn't send Return with a modifier as a hardware key in the simulator (probe of November
+    /// 15, 2026); the unit tests cover it.
+    func test99_HardwareKeysAsOnTheWeb() {
+        let app = launchPage()
+        var editor = appendParagraph(app)
+        editor.typeText("Taste\(stamp)")
+        waitForKeyboard(app)
+        editor.typeKey("2", modifierFlags: [.command, .option])
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor in the heading ⌘⌥2 made")
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor after Return in the heading")
+        editor.typeText("Liste\(stamp)")
+        waitForKeyboard(app)
+        editor.typeKey("8", modifierFlags: [.command, .shift])
+        XCTAssertTrue(app.buttons["editor-indent"].waitForExistence(timeout: 5), "⌘⇧8 didn't make a list item of the line")
+        editor = activeEditor(app)
+        editor.typeText("\n")
+        Thread.sleep(forTimeInterval: 1.2)
+        editor = activeEditor(app, "No editor in the new list item")
+        editor.typeText("Unter\(stamp)")
+        waitForKeyboard(app)
+        editor.typeKey(.tab, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertEqual(activeEditor(app).value as? String, "Unter\(stamp)", "Tab put a character into the item, or it lost its text")
+        snapshot(app, "99-keys")
+        finishEditing(app)
+        waitForSync(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.

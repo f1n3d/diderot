@@ -189,3 +189,45 @@ nonisolated enum EditorText {
         if attributes.docmost.inlineNode == nil { attributes.foregroundColor = hex.flatMap(Color.init(hex:)) }
     }
 }
+
+/// The formats the toolbar and the hardware keys share (`EditorToolbar`, `DocumentModel.handleKey`).
+extension DocumentModel {
+    /// Whether the attribute is set across the whole selection; for a bare cursor, the typing attributes count.
+    func activeTextHas(_ check: (AttributeContainer) -> Bool) -> Bool {
+        switch activeSelection.indices(in: activeText) {
+        case .insertionPoint:
+            return check(activeSelection.typingAttributes(in: activeText))
+        case .ranges(let ranges):
+            return EditorText.allFormatted(activeText, in: ranges, check)
+        }
+    }
+
+    // Strikethrough, code and highlight also set SwiftUI attributes that survive typing (`EditorText`), both sides
+    // together. Strikethrough counts only the visible style, like saving (`EditorText.normalized`).
+
+    var activeTextIsStruck: Bool { activeTextHas { $0.strikethroughStyle != nil } }
+    var activeTextIsCode: Bool { activeTextHas { $0.inlinePresentationIntent?.contains(.code) == true || $0.font == EditorText.codeFont } }
+    var activeTextIsHighlighted: Bool {
+        activeTextHas { $0.docmost.highlight != nil || ($0.backgroundColor != nil && $0.backgroundColor != EditorText.codeBackground) }
+    }
+
+    func toggleStrikethrough() {
+        let enabled = activeTextIsStruck
+        EditorText.transformRuns(of: &activeText, in: &activeSelection) { container in
+            var intents = container.inlinePresentationIntent ?? []
+            if enabled { intents.remove(.strikethrough) } else { intents.insert(.strikethrough) }
+            container.inlinePresentationIntent = intents.isEmpty ? nil : intents
+            container.strikethroughStyle = enabled ? nil : .single
+        }
+    }
+
+    func toggleInlineCode() {
+        let enabled = activeTextIsCode
+        EditorText.transformRuns(of: &activeText, in: &activeSelection) { EditorText.setCode(!enabled, in: &$0) }
+    }
+
+    func toggleHighlight() {
+        let enabled = activeTextIsHighlighted
+        EditorText.transformRuns(of: &activeText, in: &activeSelection) { EditorText.setHighlight(!enabled, in: &$0) }
+    }
+}
