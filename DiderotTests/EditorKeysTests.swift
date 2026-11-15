@@ -170,4 +170,111 @@ struct EditorKeysTests {
         #expect(model.active?.ref.path == [0, 0, 1, 0])
         #expect(engine.itemLevelMoves.count == 1)
     }
+
+    /// ↓ goes to the next text block in document order, into a list's first item and past a collapsed toggle's content to
+    /// the block after it; ↑ back. In a table to the cell below or above, out of it at its last or first row. Code at the
+    /// page's end gets a paragraph after it.
+    @Test(.timeLimit(.minutes(1))) func arrowsGoToTheBlockAboveOrBelow() async throws {
+        func text(_ id: String) -> PMNode { PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: id)]) }
+        func cell(_ id: String) -> PMNode { PMNode(type: "tableCell", content: [text(id)]) }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            text("a"),
+            PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [text("item")])]),
+            PMNode(type: "details", attrs: ["open": false], content: [
+                PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "Titel")]),
+                PMNode(type: "detailsContent", content: [text("hidden")]),
+            ]),
+            PMNode(type: "table", content: [PMNode(type: "tableRow", content: [cell("c1"), cell("c2")]),
+                                            PMNode(type: "tableRow", content: [cell("c3"), cell("c4")])]),
+            PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let x = 1")]),
+        ]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        func activate(_ path: [Int]) throws {
+            let node = try #require(model.node(at: path))
+            model.activate(NodeRef(path: path, node: node), node: node)
+        }
+
+        try activate([0])
+        model.handleKey(.lineDown)
+        #expect(model.active?.ref.path == [1, 0, 0])
+        model.handleKey(.lineDown)
+        #expect(model.active?.ref.path == [2, 0], "not the collapsed toggle's title")
+        model.handleKey(.lineDown)
+        #expect(model.active?.ref.path == [3, 0, 0, 0], "not the table's first cell")
+        try activate([3, 0, 1, 0])
+        model.handleKey(.lineDown)
+        #expect(model.active?.ref.path == [3, 1, 1, 0], "not the cell below")
+        model.handleKey(.lineDown)
+        #expect(model.active?.ref.path == [4], "not the code after the table")
+        model.handleKey(.lineUp)
+        #expect(model.active?.ref.path == [3, 1, 1, 0], "not the table's last cell")
+        try activate([3, 0, 0, 0])
+        model.handleKey(.lineUp)
+        #expect(model.active?.ref.path == [2, 0], "not the block before the table")
+        model.handleKey(.lineUp)
+        model.handleKey(.lineUp)
+        #expect(model.active?.ref.path == [0])
+
+        // Code at the page's end: a paragraph after it.
+        try activate([4])
+        model.handleKey(.lineDown)
+        while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.inserted.first?.node.type == "paragraph")
+        #expect(engine.inserted.first?.position == .after)
+    }
+
+    /// ↑ and ↓ leave the block only from its first or last line, by the caret's place.
+    @Test func arrowsLeaveOnlyFromTheEdgeLines() {
+        let view = UITextView(frame: CGRect(x: 0, y: 0, width: 300, height: 300))
+        view.text = "eins\nzwei\ndrei"
+        view.layoutIfNeeded()
+        view.selectedRange = NSRange(location: 0, length: 0)
+        #expect(DocumentModel.caretOnEdgeLine(of: view, up: true))
+        #expect(!DocumentModel.caretOnEdgeLine(of: view, up: false))
+        view.selectedRange = NSRange(location: 6, length: 0)
+        #expect(!DocumentModel.caretOnEdgeLine(of: view, up: true) && !DocumentModel.caretOnEdgeLine(of: view, up: false))
+        view.selectedRange = NSRange(location: 14, length: 0)
+        #expect(DocumentModel.caretOnEdgeLine(of: view, up: false))
+        // A selection stays with the text view.
+        view.selectedRange = NSRange(location: 0, length: 4)
+        #expect(!DocumentModel.caretOnEdgeLine(of: view, up: true))
+    }
+
+    /// Three Returns at a code block's end leave it, as on the web: the empty lines go, and a paragraph follows.
+    @Test(.timeLimit(.minutes(1))) func threeReturnsLeaveCode() async throws {
+        let code = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let x = 1")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [code]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        model.activate(NodeRef(path: [0], node: code), node: code)
+
+        for _ in 0..<3 {
+            model.activeCode += "\n"
+            model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+            model.activeCodeChanged()
+        }
+        #expect(model.activeCode == "let x = 1")
+        while engine.inserted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.inserted.first?.node.type == "paragraph")
+
+        // Quick Returns as one change leave it too; a pasted block that ends with empty lines doesn't.
+        let other = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "a")])
+        engine.document = PMNode(type: "doc", content: [code, other])
+        engine.sendDocument()
+        model.activate(NodeRef(path: [1], node: other), node: other)
+        model.activeCode += "\nb\n\n\n"
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        model.activeCodeChanged()
+        #expect(model.activeCode == "a\nb\n\n\n")
+        model.activeCode = "a"
+        model.activeCodeChanged()
+        model.activeCode += "\n\n\n"
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        model.activeCodeChanged()
+        #expect(model.activeCode == "a")
+        while engine.inserted.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+    }
 }

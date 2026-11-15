@@ -125,6 +125,40 @@ extension PMNode {
         return result
     }
 
+    /// First directly editable text or non-mermaid code block after `path` and what it holds, in document order: in a
+    /// table its first cell, for a collapsed toggle its summary. The mirror of `lastTextBlock(before:)`, for ↓.
+    func firstTextBlock(after path: [Int]) -> NodeRef? {
+        var result: NodeRef?
+        /// Visits the children in document order; true once found.
+        func visit(_ node: PMNode, at nodePath: [Int]) -> Bool {
+            for (index, child) in node.children.enumerated() {
+                let childPath = nodePath + [index]
+                if childPath.count < path.count && path.starts(with: childPath) {
+                    // An ancestor: what comes after `path` in it; nothing for a collapsed toggle's title, whose content
+                    // doesn't show.
+                    let collapsed = child.type == "details" && child.bool("open") != true
+                    if !collapsed, visit(child, at: childPath) { return true }
+                    continue
+                }
+                guard path.precedes(childPath) else { continue }
+                if Self.editableTextTypes.contains(child.type) || (child.type == "codeBlock" && child.string("language") != "mermaid") {
+                    result = NodeRef(path: childPath, node: child)
+                    return true
+                } else if child.type == "details", child.bool("open") != true {
+                    if let summary = child.children.first, summary.type == "detailsSummary" {
+                        result = NodeRef(path: childPath + [0], node: summary)
+                        return true
+                    }
+                } else if Self.inPlaceContainers.contains(child.type) {
+                    if visit(child, at: childPath) { return true }
+                }
+            }
+            return false
+        }
+        _ = visit(self, at: [])
+        return result
+    }
+
     /// The document with blocks replaced by `overrides`, by their identity (`NodeRef.identity`).
     func applyingOverrides(_ overrides: [String: PMNode]) -> PMNode {
         func apply(to node: PMNode, path: [Int]) -> PMNode {

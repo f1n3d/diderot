@@ -2432,6 +2432,34 @@ import XCTest
         waitForSync(app)
     }
 
+    /// ↓ in a block's last line goes to the block below, ↑ in its first line back, as the web's arrows go through the
+    /// page; three Returns at a code block's end leave it for a paragraph after it. The script checks that "let x = 1"
+    /// is still the code and "Nach<stamp>" the paragraph right after it.
+    func test100_ArrowsMoveBetweenBlocks() {
+        let app = launchPage()
+        var editor = edit(app, blockContaining: "Erster Absatz")
+        waitForKeyboard(app)
+        editor.typeKey(.downArrow, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1)
+        editor = activeEditor(app)
+        XCTAssertTrue((editor.value as? String)?.hasPrefix("Punkt eins") == true, "↓ didn't go to the list item below: \(editor.value ?? "nil")")
+        editor.typeKey(.upArrow, modifierFlags: [])
+        Thread.sleep(forTimeInterval: 1)
+        editor = activeEditor(app)
+        XCTAssertTrue((editor.value as? String)?.contains("Erster Absatz") == true, "↑ didn't go back to the paragraph: \(editor.value ?? "nil")")
+        finishEditing(app)
+
+        editor = edit(app, blockContaining: "let x = 1")
+        editor.typeText("\n\n\n")
+        Thread.sleep(forTimeInterval: 1.5)
+        editor = activeEditor(app, "No editor after three Returns in code")
+        XCTAssertEqual(editor.value as? String, "", "Three Returns didn't leave the code for an empty paragraph")
+        editor.typeText("Nach\(stamp)")
+        snapshot(app, "100-after-code")
+        finishEditing(app)
+        waitForSync(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.

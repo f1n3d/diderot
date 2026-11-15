@@ -2006,6 +2006,19 @@ final class DocumentModel {
 
     func activeCodeChanged() {
         guard let active, active.type == "codeBlock", session.codeChangeIsInput() else { return }
+        let before = typedText
+        typedText = activeCode
+        // Three Returns at the code's end leave it, as on the web (TipTap's `exitOnTripleEnter`): the two empty lines and
+        // the third Return go, and editing goes on in a paragraph after the block. From the change, not the key: the
+        // on-screen keyboard's Return is no key press. Quick Returns can come as one change; pasted text isn't Returns.
+        let added = activeCode.hasPrefix(before) ? activeCode.dropFirst(before.count) : ""
+        if !added.isEmpty, added.allSatisfy({ $0 == "\n" }), activeCode.hasSuffix("\n\n\n"), !before.hasSuffix("\n\n\n"),
+           insertionIndex() == activeText.endIndex {
+            activeCode = String(activeCode.dropLast(3))
+            session.scheduleCommit()
+            Task { await insertTemplate(.paragraph, placement: .replaceOrAfter(active.ref)) }
+            return
+        }
         session.scheduleCommit()
     }
 

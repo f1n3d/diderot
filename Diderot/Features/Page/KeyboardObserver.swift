@@ -102,9 +102,9 @@ private extension UIResponder {
 @MainActor
 enum TextInputHooks {
     static var onBackspaceAtStart: ((UITextView) -> Bool)?
-    /// Whether the text view takes the editor's keys (`onKey`): the page's editor does; other text views of the class
-    /// keep Tab and Return as they are.
-    static var takesKeys: ((UITextView) -> Bool)?
+    /// Whether the text view takes the key (`onKey`) now: the page's editor does, ↑ and ↓ only at a block's first or last
+    /// line (nil: asked for no particular key). Other text views of the class keep Tab, Return and the arrows as they are.
+    static var takesKey: ((UITextView, EditorKeyAction?) -> Bool)?
     static var onKey: ((UITextView, EditorKeyAction) -> Void)?
     /// What the key commands call, added to the text view's class: no responder in the chain would answer it.
     static let keySelector = NSSelectorFromString("docmostEditorKey:")
@@ -147,7 +147,7 @@ enum TextInputHooks {
     }
 
     /// The editor's key commands next to the text view's own, and the method they call. Only the page's editor performs
-    /// them (`canPerformAction`, `takesKeys`); in other text views of the class the keys go on as without them.
+    /// them (`canPerformAction`, `takesKey`); in other text views of the class the keys go on as without them.
     private static func hookKeyCommands(of cls: AnyClass) {
         let action: @convention(block) (AnyObject, UIKeyCommand) -> Void = { object, command in
             MainActor.assumeIsolated {
@@ -226,7 +226,13 @@ enum TextInputHooks {
         let block: @convention(block) (AnyObject, Selector, Any?) -> Bool = { object, action, sender in
             if MainActor.assumeIsolated({ refusedActions.contains(action) }) { return false }
             if MainActor.assumeIsolated({ action == keySelector }) {
-                return MainActor.assumeIsolated { (object as? UITextView).map { takesKeys?($0) == true } ?? false }
+                return MainActor.assumeIsolated {
+                    guard let view = object as? UITextView else { return false }
+                    let key = (sender as? UIKeyCommand).flatMap { command in
+                        command.input.flatMap { EditorKeyAction(input: $0, modifiers: command.modifierFlags) }
+                    }
+                    return takesKey?(view, key) == true
+                }
             }
             if let own { return own(object, selector, action, sender) }
             guard let superclass = class_getSuperclass(cls), let inherited = class_getMethodImplementation(superclass, selector) else { return false }

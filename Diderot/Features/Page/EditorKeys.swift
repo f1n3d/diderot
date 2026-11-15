@@ -15,6 +15,9 @@ enum EditorKeyAction: Equatable {
     /// ⌘⌥0 text, ⌘⌥1 to ⌘⌥3 headings, ⌘⇧7/8/9 numbered, bullet and task list, ⌘⇧B quote, ⌘⌥C code block. The same
     /// key again turns a heading or code back into text and takes a list item out a level, as on the web.
     case turnInto(BlockTemplate)
+    /// ↑ in a block's first line and ↓ in its last: to the block above or below, as the web's arrows go through the page.
+    /// Elsewhere in the block they stay with the text view (`DocumentModel.takesKey`).
+    case lineUp, lineDown
 
     /// The keys, as UIKit matches key commands: a letter or digit as typed without modifiers, so ⌘⇧7 is the 7 key also
     /// where Shift-7 types "/".
@@ -36,12 +39,15 @@ enum EditorKeyAction: Equatable {
         ("9", [.command, .shift], .turnInto(.taskList)),
         ("b", [.command, .shift], .turnInto(.quote)),
         ("c", [.command, .alternate], .turnInto(.codeBlock)),
+        (UIKeyCommand.inputUpArrow, [], .lineUp),
+        (UIKeyCommand.inputDownArrow, [], .lineDown),
     ]
 
     /// The action of a key command; nil for any other.
     init?(input: String, modifiers: UIKeyModifierFlags) {
         let modifiers = modifiers.intersection([.shift, .control, .alternate, .command])
-        guard let found = Self.shortcuts.first(where: { $0.input == input.lowercased() && $0.modifiers == modifiers }) else { return nil }
+        guard let found = Self.shortcuts.first(where: { ($0.input == input || $0.input == input.lowercased()) && $0.modifiers == modifiers })
+        else { return nil }
         self = found.action
     }
 }
@@ -80,6 +86,8 @@ extension DocumentModel {
             if !isCode { toggleHighlight() }
         case .link:
             if !isCode { editsLink = true }
+        case .lineUp, .lineDown:
+            moveToNeighbor(up: action == .lineUp)
         case .turnInto(let template):
             if activeTemplate != template {
                 if conversionTemplates.contains(template) { convertActive(to: template) }
@@ -91,6 +99,74 @@ extension DocumentModel {
                 convertActive(to: .paragraph)
             }
         }
+    }
+
+    /// Whether the editor takes the key now: ↑ and ↓ only with the cursor in the block's first or last line, where there is
+    /// a block to go to; every other key always.
+    func takesKey(_ action: EditorKeyAction, in view: UITextView) -> Bool {
+        switch action {
+        case .lineUp, .lineDown:
+            let up = action == .lineUp
+            return Self.caretOnEdgeLine(of: view, up: up) && neighbor(up: up) != nil
+        default:
+            return true
+        }
+    }
+
+    /// Whether the cursor, without a selection, is in the text view's first line, or its last: where ↑ or ↓ leaves the
+    /// block. By the caret's place, as long lines wrap.
+    static func caretOnEdgeLine(of view: UITextView, up: Bool) -> Bool {
+        guard let range = view.selectedTextRange, range.isEmpty else { return false }
+        let caret = view.caretRect(for: range.start)
+        let edge = view.caretRect(for: up ? view.beginningOfDocument : view.endOfDocument)
+        guard !caret.isNull, !edge.isNull else { return false }
+        return abs(caret.midY - edge.midY) < max(caret.height, 1) / 2
+    }
+
+    /// Where ↑ or ↓ goes from the active block.
+    private enum Neighbor {
+        case block(NodeRef)
+        /// ↓ at the page's end in code: a paragraph after it, as the web's arrow leaves code there.
+        case paragraphAfterCode
+    }
+
+    /// In a table the cell above or below, and out of the table at its first or last row; elsewhere the text block before
+    /// or after, in document order.
+    private func neighbor(up: Bool) -> Neighbor? {
+        guard let active else { return nil }
+        if let position = activeTablePosition, let table = node(at: position.tablePath) {
+            let row = position.row + (up ? -1 : 1)
+            guard table.children.indices.contains(row) else {
+                let found = up ? document.lastTextBlock(before: position.tablePath) : document.firstTextBlock(after: position.tablePath)
+                return found.map { .block($0) }
+            }
+            let column = min(position.column, max(table.children[row].children.count - 1, 0))
+            return cellText(of: position.tablePath, row: row, column: column).map { .block($0) }
+        }
+        if let found = up ? document.lastTextBlock(before: active.ref.path) : document.firstTextBlock(after: active.ref.path) {
+            return .block(found)
+        }
+        return !up && active.type == "codeBlock" ? .paragraphAfterCode : nil
+    }
+
+    private func moveToNeighbor(up: Bool) {
+        guard let active else { return }
+        switch neighbor(up: up) {
+        case .block(let ref):
+            guard let node = node(at: ref.path) else { return }
+            activate(ref, node: node, cursor: up ? .end : .start)
+        case .paragraphAfterCode:
+            Task { await insertTemplate(.paragraph, placement: .replaceOrAfter(active.ref)) }
+        case nil:
+            break
+        }
+    }
+
+    /// The cell's first text; nil where the cell starts with something else (an image, a formula).
+    private func cellText(of tablePath: [Int], row: Int, column: Int) -> NodeRef? {
+        let path = document.textPath(from: tablePath + [row, column])
+        guard let node = node(at: path), PMNode.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return nil }
+        return NodeRef(path: path, node: node)
     }
 
     /// Whether the engine says the active list item can move a level in or out (`activeItemLevels`).
@@ -174,9 +250,8 @@ extension DocumentModel {
     /// Edits the cell's first text; false where the cell starts with something else.
     @discardableResult
     private func focusCell(of tablePath: [Int], row: Int, column: Int) -> Bool {
-        let path = document.textPath(from: tablePath + [row, column])
-        guard let node = node(at: path), PMNode.editableTextTypes.contains(node.type) || node.type == "codeBlock" else { return false }
-        activate(NodeRef(path: path, node: node), node: node, cursor: .end)
+        guard let ref = cellText(of: tablePath, row: row, column: column), let node = node(at: ref.path) else { return false }
+        activate(ref, node: node, cursor: .end)
         return true
     }
 }
