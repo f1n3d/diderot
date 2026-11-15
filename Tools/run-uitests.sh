@@ -488,9 +488,9 @@ checks = [
      any(b.get("type") == "codeBlock" and block_text_of(b) == "Mdcode" + stamp for b in doc.get("content", []))),
     (E + "test94_MarkdownMarksTurnLines", "Markdown: a divider right before Mdnach" + stamp,
      top_index("paragraph", "Mdnach" + stamp) > 0 and block_at(top_index("paragraph", "Mdnach" + stamp) - 1).get("type") == "horizontalRule"),
-    (E + "test97_AlignAndIndentParagraph", "Toolbar: Mitte" + stamp + " is a paragraph centered and indented two steps",
+    (E + "test97_AlignAndIndentParagraph", "Toolbar: Zentriert" + stamp + " is a paragraph centered and indented two steps",
      [((b.get("attrs") or {}).get("textAlign"), (b.get("attrs") or {}).get("indent")) for b in doc.get("content", [])
-      if b.get("type") == "paragraph" and block_text_of(b) == "Mitte" + stamp] == [("center", 2)]),
+      if b.get("type") == "paragraph" and block_text_of(b) == "Zentriert" + stamp] == [("center", 2)]),
     (E + "test90_BackspaceLeavesCodeAndList", "Backspace: the empty code block became the paragraph Text" + stamp,
      any(b.get("type") == "paragraph" and block_text_of(b) == "Text" + stamp for b in doc.get("content", []))),
     (E + "test90_BackspaceLeavesCodeAndList", "Backspace: Raus" + stamp + " left the list as a paragraph, and the list went with it",

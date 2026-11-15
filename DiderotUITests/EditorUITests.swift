@@ -2328,11 +2328,11 @@ import XCTest
     }
 
     /// The toolbar aligns and indents a paragraph as the web's alignment menu and Tab do: the script checks that
-    /// "Mitte<stamp>" is centered and indented two steps.
+    /// "Zentriert<stamp>" is centered and indented two steps.
     func test97_AlignAndIndentParagraph() {
         let app = launchPage()
         let editor = appendParagraph(app)
-        editor.typeText("Mitte\(stamp)")
+        editor.typeText("Zentriert\(stamp)")
         let alignment = app.buttons["editor-alignment"]
         XCTAssertTrue(alignment.waitForExistence(timeout: 5), "No “Alignment” in a paragraph's toolbar")
         alignment.tap()
@@ -2350,7 +2350,7 @@ import XCTest
         let said = alignment.value as? String ?? ""
         XCTAssertTrue(["Zentriert", "Center"].contains(said), "“Alignment” doesn't say the paragraph is centered: “\(said)”")
         snapshot(app, "97-aligned")
-        XCTAssertEqual(activeEditor(app).value as? String, "Mitte\(stamp)", "Aligning or indenting changed the text")
+        XCTAssertEqual(activeEditor(app).value as? String, "Zentriert\(stamp)", "Aligning or indenting changed the text")
         finishEditing(app)
         // Both steps and the alignment reach the server before the next test starts the app anew.
         waitForSync(app)
