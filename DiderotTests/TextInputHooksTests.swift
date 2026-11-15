@@ -115,6 +115,33 @@ struct TextInputHooksTests {
         view.deleteBackward()
         #expect(handler.calls == 1)
     }
+
+    /// The formatting panel and the font size steps are refused, so the selection menu and the keyboard don't offer
+    /// them; the class's own answer stays behind the hook for every other action.
+    @Test func formatsSavingCantKeepAreRefused() {
+        let view = Self.view(OwnActionsTextView.self, cursorAt: 0)
+        TextInputHooks.install(on: view)
+
+        for action in TextInputHooks.refusedActions {
+            #expect(!view.canPerformAction(action, withSender: nil), "\(NSStringFromSelector(action)) is offered")
+        }
+        #expect(view.canPerformAction(#selector(UIResponderStandardEditActions.toggleBoldface(_:)), withSender: nil))
+        #expect(view.canPerformAction(#selector(UIResponderStandardEditActions.paste(_:)), withSender: nil))
+        #expect(TextInputHooks.refusedActions.contains(NSSelectorFromString("_showTextFormattingOptions:")))
+    }
+
+    /// Without an own answer, the text view answers as it would without the hook (the inherited implementation).
+    @Test func otherActionsAnswerAsWithoutTheHook() {
+        let plain = Self.view(UITextView.self, cursorAt: 0)
+        let view = Self.view(InheritingActionsTextView.self, cursorAt: 0)
+        TextInputHooks.install(on: view)
+        let actions = [#selector(UIResponderStandardEditActions.toggleBoldface(_:)), #selector(UIResponderStandardEditActions.copy(_:)),
+                       #selector(UIResponderStandardEditActions.selectAll(_:)), #selector(UIResponderStandardEditActions.paste(_:))]
+        for action in actions {
+            #expect(view.canPerformAction(action, withSender: nil) == plain.canPerformAction(action, withSender: nil),
+                    "\(NSStringFromSelector(action)) answers differently")
+        }
+    }
 }
 
 private class StartTextView: UITextView {}
@@ -124,6 +151,12 @@ private class ChildTextView: ParentTextView {}
 private class ObservedTextView: UITextView {}
 private class LateParentTextView: UITextView {}
 private class LateChildTextView: LateParentTextView {}
+private class InheritingActionsTextView: UITextView {}
+
+/// Offers every action: what the hook refuses shows against it.
+private class OwnActionsTextView: UITextView {
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool { true }
+}
 
 private class OwnBackspaceTextView: UITextView {
     var ownCalls = 0

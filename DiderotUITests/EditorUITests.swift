@@ -2282,6 +2282,31 @@ import XCTest
         finishEditing(app)
     }
 
+    /// "Format" in the selection menu offers bold, italic and underline, but not "More…": the system's formatting panel
+    /// set fonts, sizes, colors, line height and alignment, which the editor showed and saving dropped without a word.
+    /// Changes nothing on the page.
+    func test95_FormatMenuOffersOnlyKeptFormats() {
+        let app = launchPage()
+        let editor = edit(app, blockContaining: "Erster Absatz")
+        editor.doubleTap()
+        // On a narrow screen the menu shows Cut, Copy and Paste first; its arrow opens all of its entries.
+        let next = app.buttons.matching(NSPredicate(format: "label IN %@", ["Nächste Seite", "Next Page", "Next page"])).firstMatch
+        XCTAssertTrue(next.waitForExistence(timeout: 5), "No selection menu after a double tap on a word")
+        next.tap()
+        let format = app.buttons["Format"]
+        XCTAssertTrue(format.waitForExistence(timeout: 5), "No “Format” in the selection menu")
+        format.tap()
+        // The system's entries have no identifier; the toolbar's Bold and the page's "…" ("More") have one.
+        let bold = app.buttons.matching(NSPredicate(format: "identifier == '' AND label IN %@", ["Fett", "Bold"])).firstMatch
+        XCTAssertTrue(bold.waitForExistence(timeout: 5), "“Format” doesn't offer bold")
+        snapshot(app, "95-format")
+        let more = app.buttons.matching(NSPredicate(format: "identifier == '' AND (label BEGINSWITH 'Mehr' OR label BEGINSWITH 'More')"))
+        XCTAssertEqual(more.count, 0, "“Format” offers the system's formatting panel, whose fonts, sizes and colors aren't saved")
+        // Closes the menu, and the editor with it.
+        editor.tap()
+        finishEditing(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.
