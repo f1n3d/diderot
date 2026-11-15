@@ -51,6 +51,42 @@ struct EditorTextTests {
         #expect(EditorText.normalized(mention).runs.first?.docmost.textColor == nil)
     }
 
+    /// Text typed next to a stored color keeps that color as stored, also one outside the web's palette or spelled in
+    /// lowercase, so the word stays one piece: it showed in the color and saved without it.
+    @Test func typedTextKeepsAStoredColorAsSpelled() {
+        for stored in ["#e03131", "#2563eb"] {
+            var word = AttributedString("rot")
+            word.docmost.textColor = stored
+            word.foregroundColor = Color(hex: stored)
+            var typed = AttributedString("er")
+            typed.foregroundColor = Color(hex: stored)
+            #expect(DocumentModel.inlines(from: EditorText.normalized(word + typed), base: .body)
+                == [PMNode(type: "text", marks: [InlineMark.textColor(stored).mark], text: "roter")])
+        }
+    }
+
+    /// A text color leaves inline code alone (its mark excludes all others, as on the web), and code takes one away;
+    /// a mention takes the color but keeps showing its accent color.
+    @Test func textColorLeavesCodeAndMentionsAsTheyShow() {
+        var code = AttributeContainer()
+        EditorText.setCode(true, in: &code)
+        EditorText.setTextColor("#2563EB", in: &code)
+        #expect(code.docmost.textColor == nil)
+
+        var colored = AttributeContainer()
+        EditorText.setTextColor("#2563EB", in: &colored)
+        EditorText.setCode(true, in: &colored)
+        #expect(colored.docmost.textColor == nil && colored.foregroundColor == nil)
+
+        var mention = AttributeContainer()
+        mention.docmost.inlineNode = #"{"type":"mention"}"#
+        mention.foregroundColor = .accentColor
+        EditorText.setTextColor("#2563EB", in: &mention)
+        #expect(mention.docmost.textColor == "#2563EB" && mention.foregroundColor == .accentColor)
+        EditorText.setTextColor(nil, in: &mention)
+        #expect(mention.docmost.textColor == nil && mention.foregroundColor == .accentColor)
+    }
+
     /// A stored text color shows while the block is edited, as on the page; it used to show black there.
     @Test func storedTextColorShowsWhileEditing() {
         let opened = DocumentModel.editorText(from: [PMNode(type: "text", marks: [InlineMark.textColor("#E00000").mark], text: "rot")])

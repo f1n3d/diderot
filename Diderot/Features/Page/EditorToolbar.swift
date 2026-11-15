@@ -37,7 +37,7 @@ struct EditorToolbar: View {
         }
         // The table rows stay while the cursor goes from cell to cell, as their actions move it to new rows and columns.
         .onChange(of: model.active) { _, _ in
-            if mode == .blockType || model.activeTablePosition == nil { mode = .main }
+            if mode == .blockType || mode == .color || model.activeTablePosition == nil { mode = .main }
         }
     }
 
@@ -165,7 +165,7 @@ struct EditorToolbar: View {
         iconButton("Back", "chevron.left", id: "editor-back") { mode = .main }
         divider
         textColorButton(nil)
-        ForEach(Array(TextColors.named), id: \.key) { textColorButton($0) }
+        ForEach(EditorText.textColors, id: \.name) { textColorButton((key: $0.name, value: $0.hex)) }
         divider
         highlightButton(nil)
         ForEach(HighlightColors.names, id: \.self) { highlightButton($0) }
@@ -186,7 +186,7 @@ struct EditorToolbar: View {
                 .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel(Text(Self.colorTitle(color?.key)))
+        .accessibilityLabel(Text(EditorText.colorTitle(color?.key)))
         .accessibilityHint(Text("Text color"))
         .accessibilityIdentifier("text-color-\(color?.key ?? "default")")
         .accessibilityAddTraits(active ? .isSelected : [])
@@ -194,7 +194,10 @@ struct EditorToolbar: View {
 
     /// A swatch in the highlight's color (`HighlightColors`); none for "Default".
     private func highlightButton(_ name: String?) -> some View {
-        let active = name.map { name in isActive { $0.backgroundColor == EditorText.highlightColor(name) } } ?? false
+        // Also a highlight stored by its hex alone, which shows in a color of its own.
+        let active = name.map { name in
+            isActive { $0.backgroundColor == EditorText.highlightColor(name) || $0.docmost.highlight?.lowercased() == HighlightColors.hex(for: name) }
+        } ?? false
         return Button {
             EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setHighlight(named: name, in: &$0) }
             mode = .main
@@ -213,26 +216,10 @@ struct EditorToolbar: View {
             .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
         }
-        .accessibilityLabel(Text(Self.colorTitle(name)))
+        .accessibilityLabel(Text(EditorText.colorTitle(name)))
         .accessibilityHint(Text("Highlight color"))
         .accessibilityIdentifier("highlight-color-\(name ?? "default")")
         .accessibilityAddTraits(active ? .isSelected : [])
-    }
-
-    /// The web's color names (`color-selector.tsx`); "Default" for none.
-    private static func colorTitle(_ name: String?) -> LocalizedStringResource {
-        switch name {
-        case "blue": "Blue"
-        case "green": "Green"
-        case "purple": "Purple"
-        case "red": "Red"
-        case "yellow": "Yellow"
-        case "orange": "Orange"
-        case "pink": "Pink"
-        case "gray": "Gray"
-        case "brown": "Brown"
-        default: "Default"
-        }
     }
 
     /// The table's actions on the cell being edited, as in the web's table menus. Merging goes cell by cell (the app
@@ -426,10 +413,11 @@ struct EditorToolbar: View {
     private var isUnderlined: Bool { isActive { $0.underlineStyle != nil } }
     private var isStruck: Bool { isActive { $0.strikethroughStyle != nil } }
     private var isCodeFormatted: Bool { isActive { $0.inlinePresentationIntent?.contains(.code) == true || $0.font == EditorText.codeFont } }
-    /// A text color of the web's palette across the selection (or for what is typed next).
+    /// A text color across the selection (or for what is typed next): a stored one, or one of the web's typed text shows.
     private var hasTextColor: Bool {
         isActive { attributes in
-            attributes.docmost.inlineNode == nil && TextColors.named.contains { Color(hex: $0.value) == attributes.foregroundColor }
+            attributes.docmost.inlineNode == nil
+                && (attributes.docmost.textColor != nil || EditorText.textColors.contains { $0.color == attributes.foregroundColor })
         }
     }
     private var isHighlighted: Bool {
