@@ -97,9 +97,13 @@ private extension UIResponder {
 ///   handler answers `false`). The Return key stays with the text view: hooking `insertText` too left the keyboard at a
 ///   sentence start while typing.
 /// - Formats saving can't keep, refused (`refusedActions`), so the selection menu and the keyboard don't offer them.
+/// - "Comment" in the selection menu (`commentAction`).
 @MainActor
 enum TextInputHooks {
     static var onBackspaceAtStart: ((UITextView) -> Bool)?
+    /// What "Comment" in the text view's selection menu runs, if its page offers it for the selected text; nil leaves it
+    /// out (other text views of the class, nothing selected, no right to comment).
+    static var commentAction: ((UITextView) -> (() -> Void)?)?
     private static var hooked: Set<ObjectIdentifier> = []
 
     /// "Format › More…" opened the system's formatting panel, and ⌘+ and ⌘− step the font size: fonts, sizes, colors,
@@ -121,6 +125,40 @@ enum TextInputHooks {
         hooked.insert(ObjectIdentifier(cls))
         hookDeleteBackward(of: cls)
         hookCanPerformAction(of: cls)
+        hookBuildMenu(of: cls)
+    }
+
+    /// Adds "Comment" to the selection menu, before Cut, Copy and Paste (after them it lands on the menu's second page
+    /// on narrow screens). UIKit builds the menu along the responder chain, which ends at SwiftUI's app delegate, not the
+    /// app's own: the entry it added there never showed. So it goes in here, at the first responder, and runs its action
+    /// itself, as a command's selector would find no responder to answer it.
+    private static func hookBuildMenu(of cls: AnyClass) {
+        let selector = #selector(UIResponder.buildMenu(with:))
+        guard let method = class_getInstanceMethod(cls, selector) else { return }
+        typealias Function = @convention(c) (AnyObject, Selector, UIMenuBuilder) -> Void
+        /// The class's own implementation, if it had one; an inherited one is looked up at each call.
+        var own: Function?
+        let block: @convention(block) (AnyObject, UIMenuBuilder) -> Void = { object, builder in
+            if let own {
+                own(object, selector, builder)
+            } else if let superclass = class_getSuperclass(cls), let inherited = class_getMethodImplementation(superclass, selector) {
+                unsafeBitCast(inherited, to: Function.self)(object, selector, builder)
+            }
+            MainActor.assumeIsolated {
+                guard builder.system == .context, let view = object as? UITextView, let comment = commentAction?(view) else { return }
+                let item = UIAction(title: String(localized: "Comment"), image: UIImage(systemName: "text.bubble")) { _ in comment() }
+                let menu = UIMenu(options: .displayInline, children: [item])
+                if builder.menu(for: .standardEdit) != nil {
+                    builder.insertSibling(menu, beforeMenu: .standardEdit)
+                } else {
+                    builder.insertChild(menu, atStartOfMenu: .root)
+                }
+            }
+        }
+        let implementation = imp_implementationWithBlock(block)
+        if !class_addMethod(cls, selector, implementation, method_getTypeEncoding(method)) {
+            own = unsafeBitCast(method_setImplementation(method, implementation), to: Function.self)
+        }
     }
 
     private static func hookCanPerformAction(of cls: AnyClass) {

@@ -1171,7 +1171,9 @@ import XCTest
         // Inline comment: double-tap the first word on the first line (earlier tests make the paragraph wrap).
         let editor = edit(app, blockContaining: "Erster Absatz")
         editor.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 14, dy: 12)).doubleTap()
-        let commentItem = app.descendants(matching: .any).matching(NSPredicate(format: "label IN %@", ["Comment", "Kommentieren"])).firstMatch
+        // The menu's entry has no identifier: the toolbar's Comment button, which has one, has the same label.
+        let commentItem = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == '' AND label IN %@", ["Comment", "Kommentieren"])).firstMatch
         XCTAssertTrue(commentItem.waitForExistence(timeout: 5), "“Comment” missing from the selection menu")
         snapshot(app, "33-selection-menu")
         commentItem.tap()

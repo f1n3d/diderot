@@ -129,13 +129,18 @@ final class DocumentModel {
     /// Read-only pages: toggle blocks the reader opened or closed, by path; not saved (web parity).
     var readerToggles: [[Int]: Bool] = [:]
 
-    /// Offers "Comment" for text selected in the active text block. Not while a sheet (link, comment) has focus: its
-    /// text fields would get the menu item too.
+    /// Offers "Comment" for text selected in the active text block (the toolbar's button, the selection menu). Not while
+    /// a sheet (link, comment) has focus: its text fields would get the menu item too.
     var canCommentOnSelection: Bool {
-        guard canComment, !editsInSheet, let active, PMNode.editableTextTypes.contains(active.type),
-              case .ranges(let ranges) = activeSelection.indices(in: activeText)
-        else { return false }
+        guard canCommentOnActiveText, case .ranges(let ranges) = activeSelection.indices(in: activeText) else { return false }
         return ranges.ranges.contains { !$0.isEmpty }
+    }
+
+    /// The active text block takes a comment on selected text: the page allows comments, no sheet has focus, and the
+    /// block is text.
+    var canCommentOnActiveText: Bool {
+        guard canComment, !editsInSheet, let active else { return false }
+        return PMNode.editableTextTypes.contains(active.type)
     }
 
     /// The comment `commentId` was deleted: its passage loses its mark, as on the web (`unsetComment`). The server's

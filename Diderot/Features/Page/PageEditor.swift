@@ -78,6 +78,12 @@ struct ActiveTextEditor: View {
                         guard let model, view === model.editorTextView else { return false }
                         return model.backspaceAtStart()
                     }
+                    // The text view's own selection: the page's follows it, perhaps after the menu is built.
+                    TextInputHooks.commentAction = { [weak model] view in
+                        guard let model, view === model.editorTextView, model.canCommentOnActiveText, view.selectedRange.length > 0
+                        else { return nil }
+                        return { model.editsComment = true }
+                    }
                 }
             }))
             .onAppear { if isActive { applyCursor() } }
