@@ -1,10 +1,10 @@
 import SwiftUI
 import DocmostKit
 
-/// Editor keyboard toolbar. No pop-up menus (on device they hide behind the keyboard): "Block type", "Alignment" and, in
-/// a table, "Table" swap in a row of buttons, "+" opens the insert menu below the block (as "/" does).
+/// Editor keyboard toolbar. No pop-up menus (on device they hide behind the keyboard): "Block type", "Alignment",
+/// "Color" and, in a table, "Table" swap in a row of buttons, "+" opens the insert menu below the block (as "/" does).
 struct EditorToolbar: View {
-    private enum Mode { case main, blockType, alignment, table, tableFormat }
+    private enum Mode { case main, blockType, alignment, color, table, tableFormat }
 
     @Bindable var model: DocumentModel
     @State private var mode: Mode = .main
@@ -23,6 +23,7 @@ struct EditorToolbar: View {
                     case .main: mainRow
                     case .blockType: blockTypeRow
                     case .alignment: alignmentRow
+                    case .color: colorRow
                     case .table: tableRow
                     case .tableFormat: tableFormatRow
                     }
@@ -36,7 +37,7 @@ struct EditorToolbar: View {
         }
         // The table rows stay while the cursor goes from cell to cell, as their actions move it to new rows and columns.
         .onChange(of: model.active) { _, _ in
-            if mode == .blockType || model.activeTablePosition == nil { mode = .main }
+            if mode == .blockType || mode == .color || model.activeTablePosition == nil { mode = .main }
         }
     }
 
@@ -78,6 +79,7 @@ struct EditorToolbar: View {
         }
         Group {
             iconButton("Highlight", "highlighter", id: "format-highlight", active: isHighlighted) { toggleHighlight() }
+            iconButton("Color", "paintpalette", id: "format-color", active: hasTextColor) { mode = .color }
             iconButton("Link", "link", id: "format-link", active: isActive { $0.link != nil }) { model.editsLink = true }
             iconButton("Line break", "return", id: "format-linebreak") { model.insertLineBreak() }
         }
@@ -154,6 +156,70 @@ struct EditorToolbar: View {
             mode = .main
             Task { await model.alignActive(align) }
         }
+    }
+
+    /// As the web's color menu: its text colors, then its highlights, each with "Default" taking the color away. Like the
+    /// format buttons, a color applies to the selection, or to what is typed next.
+    @ViewBuilder
+    private var colorRow: some View {
+        iconButton("Back", "chevron.left", id: "editor-back") { mode = .main }
+        divider
+        textColorButton(nil)
+        ForEach(EditorText.textColors, id: \.name) { textColorButton((key: $0.name, value: $0.hex)) }
+        divider
+        highlightButton(nil)
+        ForEach(HighlightColors.names, id: \.self) { highlightButton($0) }
+    }
+
+    /// "A" in the color (`name`/`hex` of `TextColors`), as the web's swatches; none for "Default".
+    private func textColorButton(_ color: (key: String, value: String)?) -> some View {
+        let shown = color.flatMap { Color(hex: $0.value) }
+        let active = shown.map { shown in isActive { $0.foregroundColor == shown } } ?? false
+        return Button {
+            EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setTextColor(color?.value, in: &$0) }
+            mode = .main
+        } label: {
+            Text(verbatim: "A")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(shown ?? Color.primary)
+                .frame(width: 30, height: 30)
+                .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(EditorText.colorTitle(color?.key)))
+        .accessibilityHint(Text("Text color"))
+        .accessibilityIdentifier("text-color-\(color?.key ?? "default")")
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    /// A swatch in the highlight's color (`HighlightColors`); none for "Default".
+    private func highlightButton(_ name: String?) -> some View {
+        // Also a highlight stored by its hex alone, which shows in a color of its own.
+        let active = name.map { name in
+            isActive { $0.backgroundColor == EditorText.highlightColor(name) || $0.docmost.highlight?.lowercased() == HighlightColors.hex(for: name) }
+        } ?? false
+        return Button {
+            EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setHighlight(named: name, in: &$0) }
+            mode = .main
+        } label: {
+            Group {
+                if let name {
+                    Circle()
+                        .fill(EditorText.highlightColor(name))
+                        .overlay(Circle().strokeBorder(Color(.separator)))
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: "circle.slash")
+                }
+            }
+            .frame(width: 30, height: 30)
+            .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(EditorText.colorTitle(name)))
+        .accessibilityHint(Text("Highlight color"))
+        .accessibilityIdentifier("highlight-color-\(name ?? "default")")
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// The table's actions on the cell being edited, as in the web's table menus. Merging goes cell by cell (the app
@@ -347,6 +413,13 @@ struct EditorToolbar: View {
     private var isUnderlined: Bool { isActive { $0.underlineStyle != nil } }
     private var isStruck: Bool { isActive { $0.strikethroughStyle != nil } }
     private var isCodeFormatted: Bool { isActive { $0.inlinePresentationIntent?.contains(.code) == true || $0.font == EditorText.codeFont } }
+    /// A text color across the selection (or for what is typed next): a stored one, or one of the web's typed text shows.
+    private var hasTextColor: Bool {
+        isActive { attributes in
+            attributes.docmost.inlineNode == nil
+                && (attributes.docmost.textColor != nil || EditorText.textColors.contains { $0.color == attributes.foregroundColor })
+        }
+    }
     private var isHighlighted: Bool {
         isActive { $0.docmost.highlight != nil || ($0.backgroundColor != nil && $0.backgroundColor != EditorText.codeBackground) }
     }

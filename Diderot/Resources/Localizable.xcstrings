@@ -837,6 +837,16 @@
         }
       }
     },
+    "Brown": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Braun"
+          }
+        }
+      }
+    },
     "Bullet list": {
       "localizations": {
         "de": {
@@ -2307,6 +2317,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "H3"
+          }
+        }
+      }
+    },
+    "Highlight color": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markierungsfarbe"
           }
         }
       }
@@ -3881,6 +3901,16 @@
         }
       }
     },
+    "Orange": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orange"
+          }
+        }
+      }
+    },
     "Original": {
       "localizations": {
         "de": {
@@ -5440,6 +5470,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Text"
+          }
+        }
+      }
+    },
+    "Text color": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Textfarbe"
           }
         }
       }

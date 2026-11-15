@@ -2,8 +2,8 @@ import SwiftUI
 import DocmostKit
 
 /// Formats in the block editor. While typing, `TextEditor` drops attributes it doesn't know (custom Docmost ones, the
-/// code intent) and doesn't render them even on existing text. So underline, strikethrough, code and highlight also
-/// get SwiftUI attributes, which survive typing and render; saving converts them back.
+/// code intent) and doesn't render them even on existing text. So underline, strikethrough, code, highlight and text
+/// color also get SwiftUI attributes, which survive typing and render; saving converts them back.
 nonisolated enum EditorText {
     /// As in the reader (`InlineTextBuilder.monospacedFont`): a larger one made inline code jump on activation.
     static let codeFont = Font.system(.callout, design: .monospaced)
@@ -11,6 +11,27 @@ nonisolated enum EditorText {
 
     static func highlightColor(_ value: String) -> Color {
         value.hasPrefix("#") ? HighlightPalette.color(name: nil, hex: value) : HighlightPalette.color(name: value, hex: nil)
+    }
+
+    /// The web's text colors (`TextColors`) as the editor shows them, made once: the toolbar asks for each run.
+    static let textColors: [(name: String, hex: String, color: Color)] = TextColors.named.compactMap { name, hex in
+        Color(hex: hex).map { (name, hex, $0) }
+    }
+
+    /// The web's color names (`color-selector.tsx`, also the table's cell colors); "Default" for none.
+    static func colorTitle(_ name: String?) -> LocalizedStringResource {
+        switch name?.lowercased() {
+        case "blue": "Blue"
+        case "green": "Green"
+        case "purple": "Purple"
+        case "red": "Red"
+        case "yellow": "Yellow"
+        case "orange": "Orange"
+        case "pink": "Pink"
+        case "gray": "Gray"
+        case "brown": "Brown"
+        default: "Default"
+        }
     }
 
     /// On opening a block for editing: adds the visible SwiftUI attributes next to the Docmost ones.
@@ -26,6 +47,7 @@ nonisolated enum EditorText {
                 container.backgroundColor = codeBackground
             }
             if let highlight = run.docmost.highlight { container.backgroundColor = highlightColor(highlight) }
+            if let color = run.docmost.textColor.flatMap(Color.init(hex:)) { container.foregroundColor = color }
             if run.docmost.inlineNode != nil { container.foregroundColor = .accentColor }
             result[run.range].mergeAttributes(container)
         }
@@ -38,6 +60,14 @@ nonisolated enum EditorText {
     /// code intent), so the font decides. `base`: the font the block's editor draws with.
     static func normalized(_ text: AttributedString, base: Font = .body) -> AttributedString {
         var result = text
+        // Text typed next to a colored word shows its color but has lost the hex: the colors the text holds, then the
+        // web's. A color outside the palette (set on the web from elsewhere) stays with what is typed next to it, and
+        // keeps its spelling, so the word stays one piece.
+        var shownColors: [(hex: String, color: Color)] = []
+        for (hex, _) in text.runs[\.textColor] {
+            if let hex, !shownColors.contains(where: { $0.hex == hex }), let color = Color(hex: hex) { shownColors.append((hex, color)) }
+        }
+        shownColors += textColors.map { ($0.hex, $0.color) }
         for run in text.runs {
             let range = run.range
             var intents = (run.inlinePresentationIntent ?? []).union(fontIntents(run.font, base: base))
@@ -48,6 +78,12 @@ nonisolated enum EditorText {
                let name = HighlightColors.names.first(where: { HighlightPalette.color(name: $0, hex: nil) == background })
             {
                 result[range].docmost.highlight = name
+            }
+            // A mention's or status's accent color isn't a text color, nor is code's: its mark excludes all others.
+            if run.docmost.textColor == nil, run.docmost.inlineNode == nil, !intents.contains(.code), let shown = run.foregroundColor,
+               let hex = shownColors.first(where: { $0.color == shown })?.hex
+            {
+                result[range].docmost.textColor = hex
             }
         }
         return result
@@ -126,6 +162,8 @@ nonisolated enum EditorText {
         if on {
             attributes.docmost.highlight = nil
             attributes.backgroundColor = codeBackground
+            attributes.docmost.textColor = nil
+            if attributes.docmost.inlineNode == nil { attributes.foregroundColor = nil }
         } else if attributes.backgroundColor == codeBackground {
             attributes.backgroundColor = nil
         }
@@ -133,8 +171,21 @@ nonisolated enum EditorText {
 
     /// Toolbar: highlight on/off; turning it off on code restores the code background.
     static func setHighlight(_ on: Bool, in attributes: inout AttributeContainer) {
+        setHighlight(named: on ? "yellow" : nil, in: &attributes)
+    }
+
+    /// Toolbar: a highlight in one of the web's colors (`HighlightColors`), or none.
+    static func setHighlight(named name: String?, in attributes: inout AttributeContainer) {
         let isCode = attributes.inlinePresentationIntent?.contains(.code) == true || attributes.font == codeFont
-        attributes.docmost.highlight = on ? "yellow" : nil
-        attributes.backgroundColor = on ? highlightColor("yellow") : (isCode ? codeBackground : nil)
+        attributes.docmost.highlight = name
+        attributes.backgroundColor = name.map(highlightColor) ?? (isCode ? codeBackground : nil)
+    }
+
+    /// Toolbar: a text color of the web's (`TextColors`, as hex), or none (the web's "Default"). Not on inline code,
+    /// whose mark excludes all others, as the web leaves it; a mention or status keeps showing its accent color.
+    static func setTextColor(_ hex: String?, in attributes: inout AttributeContainer) {
+        guard attributes.inlinePresentationIntent?.contains(.code) != true, attributes.font != codeFont else { return }
+        attributes.docmost.textColor = hex
+        if attributes.docmost.inlineNode == nil { attributes.foregroundColor = hex.flatMap(Color.init(hex:)) }
     }
 }

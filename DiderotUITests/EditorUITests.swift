@@ -2372,6 +2372,32 @@ import XCTest
         waitForSync(app)
     }
 
+    /// "Color" in the toolbar sets the web's text colors and highlights, for what is typed next as the format buttons do:
+    /// the script checks that "Blau<stamp>" is in the web's blue and "Gruen<stamp>" has its green highlight.
+    func test98_TextAndHighlightColors() {
+        let app = launchPage()
+        let editor = appendParagraph(app)
+        editor.typeText("Farben\(stamp) ")
+        /// Opens "Color" and picks the swatch `id`; the row goes back to the format buttons.
+        func pick(_ id: String) {
+            tapToolbarButton(app, "format-color")
+            let swatch = app.buttons[id]
+            XCTAssertTrue(swatch.waitForExistence(timeout: 5), "No “\(id)” in the color row")
+            swatch.tap()
+            XCTAssertTrue(app.buttons["format-bold"].waitForExistence(timeout: 5), "The color row stays after a pick")
+        }
+        pick("text-color-blue")
+        editor.typeText("Blau\(stamp)")
+        pick("text-color-default")
+        editor.typeText(" ")
+        pick("highlight-color-green")
+        editor.typeText("Gruen\(stamp)")
+        pick("highlight-color-default")
+        editor.typeText(" Ende")
+        snapshot(app, "98-colors")
+        finishEditing(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.

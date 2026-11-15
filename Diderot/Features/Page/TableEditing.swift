@@ -40,18 +40,7 @@ extension DocumentModel {
             }
         }
 
-        var title: LocalizedStringResource {
-            switch self {
-            case .none: "Default"
-            case .blue: "Blue"
-            case .green: "Green"
-            case .yellow: "Yellow"
-            case .red: "Red"
-            case .pink: "Pink"
-            case .gray: "Gray"
-            case .purple: "Purple"
-            }
-        }
+        var title: LocalizedStringResource { EditorText.colorTitle(name) }
     }
 
     /// The keyboard toolbar's table actions, run by the engine as the web's table menus run them.

@@ -340,7 +340,7 @@ E=EditorUITests
 case "${AREA:-}" in
   "") ;;
   schnell) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test5_ReturnAndBackspace,$E/test6_CreatePageFromSpace,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test42_EditAfterReturningToPage,HomeUITests/test19_SearchTabShowsHomeThenResults,HomeUITests/test50_TrashConfirmationAtRow,BaseUITests/test22_BasePageFromTree,BaseUITests/test25_BaseKanbanColumnsAndCard" ;;
-  editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test87_ReturnAtLineStartKeepsText,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test88_TrashDeletesListItem,$E/test90_BackspaceLeavesCodeAndList,$E/test92_IndentAndOutdentListItems,$E/test93_BackspaceLeavesQuoteCalloutAndToggle,$E/test94_MarkdownMarksTurnLines,$E/test95_FormatMenuOffersOnlyKeptFormats,$E/test96_EmptyLineShowsPlaceholder,$E/test97_AlignAndIndentParagraph,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly" ;;
+  editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test87_ReturnAtLineStartKeepsText,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test88_TrashDeletesListItem,$E/test90_BackspaceLeavesCodeAndList,$E/test92_IndentAndOutdentListItems,$E/test93_BackspaceLeavesQuoteCalloutAndToggle,$E/test94_MarkdownMarksTurnLines,$E/test95_FormatMenuOffersOnlyKeptFormats,$E/test96_EmptyLineShowsPlaceholder,$E/test97_AlignAndIndentParagraph,$E/test98_TextAndHighlightColors,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly" ;;
   bloecke) ONLY="$E/test7_DragBlock,$E/test91_ListItemsMoveAndDuplicateAlone,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test89_BlockMenuDeletesListAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink,$E/test84_PreviewStaysOpenWhenABlockComesInAbove" ;;
   seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test33_Comments,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test85_AppendNoteKeptAcrossLaunches,$E/test86_AppendNoteRefusedOnAPageWithFootnotes,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
@@ -434,6 +434,16 @@ def top_index(kind, text):
     return next((n for n, b in enumerate(doc.get("content", [])) if b.get("type") == kind and block_text_of(b) == text), -1)
 def block_at(n):
     return doc["content"][n] if 0 <= n < len(doc.get("content", [])) else {}
+def marks_of(text):
+    """The marks of each text node that is exactly `text`."""
+    found = []
+    def collect(node):
+        if node.get("type") == "text" and node.get("text") == text:
+            found.append(node.get("marks", []))
+        for child in node.get("content", []) or []:
+            collect(child)
+    collect(doc)
+    return found
 E = "EditorUITests/"
 checks = [
     (E + "test1_TapParagraphTypeAndBold", "Paragraph: Tipp" + stamp, has("Tipp" + stamp)),
@@ -491,6 +501,9 @@ checks = [
     (E + "test97_AlignAndIndentParagraph", "Toolbar: Zentriert" + stamp + " is a paragraph centered and indented two steps",
      [((b.get("attrs") or {}).get("textAlign"), (b.get("attrs") or {}).get("indent")) for b in doc.get("content", [])
       if b.get("type") == "paragraph" and block_text_of(b) == "Zentriert" + stamp] == [("center", 2)]),
+    (E + "test98_TextAndHighlightColors", "Toolbar: Blau" + stamp + " in blue (textStyle #2563EB), Gruen" + stamp + " with the green highlight",
+     [[(m.get("type"), (m.get("attrs") or {}).get("color"), (m.get("attrs") or {}).get("colorName")) for m in ms] for ms in marks_of("Blau" + stamp)] == [[("textStyle", "#2563EB", None)]]
+     and [[(m.get("type"), (m.get("attrs") or {}).get("color"), (m.get("attrs") or {}).get("colorName")) for m in ms] for ms in marks_of("Gruen" + stamp)] == [[("highlight", "#7edb6c", "green")]]),
     (E + "test90_BackspaceLeavesCodeAndList", "Backspace: the empty code block became the paragraph Text" + stamp,
      any(b.get("type") == "paragraph" and block_text_of(b) == "Text" + stamp for b in doc.get("content", []))),
     (E + "test90_BackspaceLeavesCodeAndList", "Backspace: Raus" + stamp + " left the list as a paragraph, and the list went with it",
