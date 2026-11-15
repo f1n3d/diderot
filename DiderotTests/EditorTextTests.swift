@@ -22,6 +22,42 @@ struct EditorTextTests {
         #expect(DocumentModel.inlines(from: DocumentModel.editorText(from: inlines), base: .body) == inlines)
     }
 
+    /// The toolbar's colors are the web's and save as it stores them: a text color as `textStyle` with its hex, a
+    /// highlight with its color and name. "Default" takes either away.
+    @Test func toolbarColorsSaveAsTheWebStoresThem() {
+        var container = AttributeContainer()
+        EditorText.setTextColor("#2563EB", in: &container)
+        EditorText.setHighlight(named: "green", in: &container)
+        #expect(DocumentModel.inlines(from: AttributedString("Blau", attributes: container), base: .body) == [
+            PMNode(type: "text", marks: [InlineMark.highlight(color: "#7edb6c", colorName: "green").mark,
+                                         InlineMark.textColor("#2563EB").mark], text: "Blau"),
+        ])
+        EditorText.setTextColor(nil, in: &container)
+        EditorText.setHighlight(named: nil, in: &container)
+        #expect(DocumentModel.inlines(from: AttributedString("Blau", attributes: container), base: .body) == [PMNode(type: "text", text: "Blau")])
+    }
+
+    /// Typed text that continues a colored word carries only the shown color; saving gives it the same text color. A
+    /// mention's accent color isn't one.
+    @Test func typedTextKeepsItsTextColor() {
+        for (_, hex) in TextColors.named {
+            var typed = AttributedString("x")
+            typed.foregroundColor = Color(hex: hex)
+            #expect(EditorText.normalized(typed).runs.first?.docmost.textColor == hex)
+        }
+        var mention = AttributedString("@Ann")
+        mention.docmost.inlineNode = #"{"type":"mention"}"#
+        mention.foregroundColor = .accentColor
+        #expect(EditorText.normalized(mention).runs.first?.docmost.textColor == nil)
+    }
+
+    /// A stored text color shows while the block is edited, as on the page; it used to show black there.
+    @Test func storedTextColorShowsWhileEditing() {
+        let opened = DocumentModel.editorText(from: [PMNode(type: "text", marks: [InlineMark.textColor("#E00000").mark], text: "rot")])
+        #expect(opened.runs.first?.foregroundColor == Color(hex: "#E00000"))
+        #expect(DocumentModel.inlines(from: opened, base: .body) == [PMNode(type: "text", marks: [InlineMark.textColor("#E00000").mark], text: "rot")])
+    }
+
     @Test func typedTextKeepsItsHighlightColor() {
         for name in ["red", "pink", "brown"] {
             var typed = AttributedString("x")

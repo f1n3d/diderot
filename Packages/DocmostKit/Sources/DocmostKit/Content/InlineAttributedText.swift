@@ -317,3 +317,11 @@ public enum HighlightColors {
         named.first { $0.key == name.lowercased() }?.value ?? "#faf594"
     }
 }
+
+/// The web client's text colors (`color-selector.tsx`) in its order, name → hex as it stores them in `textStyle`.
+public enum TextColors {
+    public static let named: KeyValuePairs<String, String> = [
+        "blue": "#2563EB", "green": "#008A00", "purple": "#9333EA", "red": "#E00000", "yellow": "#EAB308",
+        "orange": "#FFA500", "pink": "#BA4081", "gray": "#A8A29E", "brown": "#92400E",
+    ]
+}

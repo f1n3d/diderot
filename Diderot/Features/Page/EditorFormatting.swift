@@ -2,8 +2,8 @@ import SwiftUI
 import DocmostKit
 
 /// Formats in the block editor. While typing, `TextEditor` drops attributes it doesn't know (custom Docmost ones, the
-/// code intent) and doesn't render them even on existing text. So underline, strikethrough, code and highlight also
-/// get SwiftUI attributes, which survive typing and render; saving converts them back.
+/// code intent) and doesn't render them even on existing text. So underline, strikethrough, code, highlight and text
+/// color also get SwiftUI attributes, which survive typing and render; saving converts them back.
 nonisolated enum EditorText {
     /// As in the reader (`InlineTextBuilder.monospacedFont`): a larger one made inline code jump on activation.
     static let codeFont = Font.system(.callout, design: .monospaced)
@@ -26,6 +26,7 @@ nonisolated enum EditorText {
                 container.backgroundColor = codeBackground
             }
             if let highlight = run.docmost.highlight { container.backgroundColor = highlightColor(highlight) }
+            if let color = run.docmost.textColor.flatMap(Color.init(hex:)) { container.foregroundColor = color }
             if run.docmost.inlineNode != nil { container.foregroundColor = .accentColor }
             result[run.range].mergeAttributes(container)
         }
@@ -48,6 +49,12 @@ nonisolated enum EditorText {
                let name = HighlightColors.names.first(where: { HighlightPalette.color(name: $0, hex: nil) == background })
             {
                 result[range].docmost.highlight = name
+            }
+            // A mention's or status's accent color isn't a text color; only the web's palette, as the toolbar sets it.
+            if run.docmost.textColor == nil, run.docmost.inlineNode == nil, let shown = run.foregroundColor,
+               let hex = TextColors.named.first(where: { Color(hex: $0.value) == shown })?.value
+            {
+                result[range].docmost.textColor = hex
             }
         }
         return result
@@ -133,8 +140,19 @@ nonisolated enum EditorText {
 
     /// Toolbar: highlight on/off; turning it off on code restores the code background.
     static func setHighlight(_ on: Bool, in attributes: inout AttributeContainer) {
+        setHighlight(named: on ? "yellow" : nil, in: &attributes)
+    }
+
+    /// Toolbar: a highlight in one of the web's colors (`HighlightColors`), or none.
+    static func setHighlight(named name: String?, in attributes: inout AttributeContainer) {
         let isCode = attributes.inlinePresentationIntent?.contains(.code) == true || attributes.font == codeFont
-        attributes.docmost.highlight = on ? "yellow" : nil
-        attributes.backgroundColor = on ? highlightColor("yellow") : (isCode ? codeBackground : nil)
+        attributes.docmost.highlight = name
+        attributes.backgroundColor = name.map(highlightColor) ?? (isCode ? codeBackground : nil)
+    }
+
+    /// Toolbar: a text color of the web's (`TextColors`, as hex), or none (the web's "Default").
+    static func setTextColor(_ hex: String?, in attributes: inout AttributeContainer) {
+        attributes.docmost.textColor = hex
+        attributes.foregroundColor = hex.flatMap(Color.init(hex:))
     }
 }
