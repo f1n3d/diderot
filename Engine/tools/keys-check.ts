@@ -158,6 +158,29 @@ expect("an empty middle item", "bulletList(Eins) ∅ bulletList(Drei) @1:0",
   enter(page(list(item(paragraph("a", "Eins")), item(paragraph("b")), item(paragraph("c", "Drei")))), [0, 1, 0], 0));
 expect("an empty last item", "bulletList(Eins) ∅ @1:0", enter(page(list(item(paragraph("a", "Eins")), item(paragraph("b")))), [0, 1, 0], 0));
 expect("a list's only item, empty", "∅ @0:0", enter(page(list(item(paragraph("a")))), [0, 0, 0], 0));
+// In a nested list, an empty last line of the last item goes a level up, as an item after the one holding the list, as
+// on the web; the item and the list it leaves empty go. A list in an item of another kind, blocks after the list in its
+// item: the line lifts into that item as before.
+const nested = (...inner: JSONContent[]) => page(list(item(paragraph("a", "A"), list(...inner))), paragraph("e", "Ende"));
+expect("an empty last nested item", "bulletList(A/bulletList(B), ∅) Ende @0.1.0:0", enter(nested(item(paragraph("b", "B")), item(paragraph("c"))), [0, 0, 1, 1, 0], 0));
+expect("a nested list's only item, empty: the nested list goes", "bulletList(A, ∅) Ende @0.1.0:0", enter(nested(item(paragraph("c"))), [0, 0, 1, 0, 0], 0));
+expect("an empty middle nested item: a line of the item around it, as before", "bulletList(A/bulletList(B)/∅/bulletList(C)) Ende @0.0.2:0",
+  enter(nested(item(paragraph("b", "B")), item(paragraph("c")), item(paragraph("d", "C"))), [0, 0, 1, 1, 0], 0));
+expect("an empty last line below the last nested item's first: its item stays", "bulletList(A/bulletList(B), ∅) Ende @0.1.0:0",
+  enter(nested(item(paragraph("b", "B"), paragraph("c"))), [0, 0, 1, 0, 1], 0));
+expect("…before the next item of the list around it", "bulletList(A/bulletList(B), ∅, Z) Ende @0.1.0:0",
+  enter(page(list(item(paragraph("a", "A"), list(item(paragraph("b", "B")), item(paragraph("c")))), item(paragraph("z", "Z"))), paragraph("e", "Ende")), [0, 0, 1, 1, 0], 0));
+const third = list(item(paragraph("c", "C")), item(paragraph("d")));
+expect("…three levels deep: one level up", "bulletList(A/bulletList(B/bulletList(C), ∅)) Ende @0.0.1.1.0:0",
+  enter(nested(item(paragraph("b", "B"), third)), [0, 0, 1, 0, 1, 1, 0], 0));
+const nestedTasks = page({ type: "taskList", content: [task(paragraph("a", "A"), { type: "taskList", content: [task(paragraph("b", "B")), task(paragraph("c"))] })] });
+const upTask = enterEdit(schema, nestedTasks, { id: "c" }, paragraph("c"), [], null);
+expect("an empty last nested task", "taskList(A/taskList(B), ∅) @0.1.0:0", run(nestedTasks, upTask));
+expect("…is open", { checked: false }, (upTask?.steps[0] as { json: JSONContent[] }).json[0].attrs);
+expect("a task list in a bullet item: a line of the item, as on the web", "bulletList(A/∅) Ende @0.0.1:0",
+  enter(page(list(item(paragraph("a", "A"), { type: "taskList", content: [task(paragraph("c"))] })), paragraph("e", "Ende")), [0, 0, 1, 0, 0], 0));
+expect("blocks after the nested list in its item: a line of the item, as before", "bulletList(A/bulletList(B)/∅/C) Ende @0.0.2:0",
+  enter(page(list(item(paragraph("a", "A"), list(item(paragraph("b", "B")), item(paragraph("c"))), paragraph("d", "C"))), paragraph("e", "Ende")), [0, 0, 1, 1, 0], 0));
 expect("an empty first line before a nested list", "bulletList(∅/bulletList(y), ∅) @0.1.0:0",
   enter(page(list(item(paragraph("a"), list(item(paragraph("y", "y")))))), [0, 0, 0], 0));
 expect("an item's line", "bulletList(Eins, Zwei) @0.1.0:0", enter(page(list(item(paragraph("a", "EinsZwei")))), [0, 0, 0], 4));
@@ -205,6 +228,38 @@ expect("an empty line after a closed toggle", "details(>Titel, detailsContent(In
   backspace(page(toggle(false, "Titel", paragraph("i", "Inhalt")), paragraph("a")), [1]));
 expect("an empty item after a nested list", "bulletList(Eins/bulletList(y))",
   backspace(page(list(item(paragraph("a", "Eins"), list(item(paragraph("y", "y")))), item(paragraph("b")))), [0, 1, 0]));
+// A line right after a list, quote or callout joins their last line, as on the web: a list's through nested lists, a
+// callout's on the page's top level only. Where that last block is no text line, or the line is in an item of the list's
+// kind (or in a quote, after a quote), the key does as before.
+const after = (...blocks: JSONContent[]) => page(...blocks, paragraph("n", "Nach"), paragraph("e", "Ende"));
+expect("a line after a list", "bulletList(A, BNach) Ende @0.1.0:1", backspace(after(list(item(paragraph("a", "A")), item(paragraph("b", "B")))), [1]));
+expect("…a nested list: its last line", "bulletList(A/bulletList(BNach)) Ende @0.0.1.0.0:1",
+  backspace(after(list(item(paragraph("a", "A"), list(item(paragraph("b", "B")))))), [1]));
+expect("…a list whose last item has a line after its nested list: that line", "bulletList(A/bulletList(B)/CNach) Ende @0.0.2:1",
+  backspace(after(list(item(paragraph("a", "A"), list(item(paragraph("b", "B"))), paragraph("c", "C")))), [1]));
+expect("…a checklist", "taskList(ANach) Ende @0.0.0:1", backspace(after({ type: "taskList", content: [task(paragraph("a", "A"))] }), [1]));
+expect("an empty line after a list: joined, the cursor at the item's end", "bulletList(A) Ende @0.0.0:1",
+  backspace(page(list(item(paragraph("a", "A"))), paragraph("n"), paragraph("e", "Ende")), [1]));
+expect("a heading after a list: its text into the item's line", "bulletList(ANach) Ende @0.0.0:1",
+  backspace(page(list(item(paragraph("a", "A"))), heading("n", "Nach"), paragraph("e", "Ende")), [1]));
+expect("a line after a list in a callout", "callout(bulletList(ANach)) Ende @0.0.0.0:1",
+  backspace(page(callout(list(item(paragraph("a", "A"))), paragraph("n", "Nach")), paragraph("e", "Ende")), [0, 1]));
+expect("a line after a quote", "blockquote(ZitatNach) Ende @0.0:5", backspace(after(quote(paragraph("z", "Zitat"))), [1]));
+expect("a line after a quote in an item", "bulletList(A/blockquote(ZNach)) Ende @0.0.1.0:1",
+  backspace(page(list(item(paragraph("a", "A"), quote(paragraph("z", "Z")), paragraph("n", "Nach"))), paragraph("e", "Ende")), [0, 0, 2]));
+expect("a line after a callout", "callout(HinweisNach) Ende @0.0:7", backspace(after(callout(paragraph("h", "Hinweis"))), [1]));
+expect("…ending in a heading", "callout(#KopfNach) Ende @0.0:4", backspace(after(callout(heading("k", "Kopf"))), [1]));
+expect("a line after a callout in a toggle: nothing, as on the web", "nothing",
+  backspace(page(toggle(true, "T", callout(paragraph("h", "H")), paragraph("n", "Nach")), paragraph("e", "Ende")), [0, 1, 1]));
+expect("a line after a callout ending in a list: nothing", "nothing", backspace(after(callout(paragraph("h", "Hinweis"), list(item(paragraph("x", "x"))))), [1]));
+expect("a line after a list ending in an image: nothing", "nothing", backspace(after(list(item(paragraph("a", "A"), image))), [1]));
+expect("a line after a quote ending in a list: nothing", "nothing", backspace(after(quote(paragraph("z", "Z"), list(item(paragraph("a", "A"))))), [1]));
+expect("a line in an item after its nested list: nothing", "nothing",
+  backspace(page(list(item(paragraph("a", "A"), list(item(paragraph("b", "B"))), paragraph("n", "Nach"))), paragraph("e", "Ende")), [0, 0, 2]));
+expect("a quote's line after a quote in it: as before, nothing", "nothing",
+  backspace(page(quote(quote(paragraph("z", "Z")), paragraph("n", "Nach")), paragraph("e", "Ende")), [0, 1]));
+const typedAfterList = page(list(item(paragraph("a", "A"))), paragraph("n", "Nach"));
+expect("…with what was typed", "bulletList(ANach!)", run(typedAfterList, backspaceEdit(schema, typedAfterList, { id: "n" }, paragraph("n", "Nach!"))?.edit).replace(/ @.*/, ""));
 expect("a block that's gone", "refused", run(page(paragraph("a", "Eins")), backspaceEdit(schema, page(paragraph("a", "Eins")), { id: "x" }, paragraph("x"))?.edit));
 
 // A quote's first line leaves the quote, as on the web; an empty callout goes whole; a toggle's title dissolves the toggle.
@@ -267,6 +322,10 @@ expect("plans", [["join", [0]], ["leave", "leave"], ["join", [2, 0, 0]], ["remov
   const empty = backspacePlan(plans, { path }, true)!, typed = backspacePlan(plans, { path }, false)!;
   return empty.kind === "join" ? [empty.kind, empty.path] : [empty.kind, typed.kind];
 }));
+
+const afterList = page(list(item(paragraph("a", "Eins"))), paragraph("b"));
+expect("plans after a list", [{ kind: "join", path: [0, 0, 0] }, { kind: "join", path: [0, 0, 0] }],
+  [true, false].map((empty) => backspacePlan(afterList, { path: [1] }, empty)));
 
 // "/Heading" in an item's only line: the line leaves the list as the heading, the cursor at its end.
 const items = page(list(item(paragraph("a", "Eins")), item(paragraph("b", "Zwei"))));

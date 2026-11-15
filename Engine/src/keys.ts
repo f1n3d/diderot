@@ -5,14 +5,15 @@
 //
 // The rules are the app's, which follow the web where it lifts a line out of a list, quote, callout or toggle, and in
 // what Backspace does at a block's start: it takes a first item's line out of its list and a quote's first line out of
-// the quote, turns an empty code block into a paragraph, removes an empty callout and dissolves a toggle from its title.
-// Where the app differs from the web, it keeps its own: a heading split mid-text continues in a paragraph, a new line takes no
-// attributes, Backspace after an image or a divider never removes it.
+// the quote, joins a line right after a list, quote or callout with their last line, turns an empty code block into a
+// paragraph, removes an empty callout and dissolves a toggle from its title. Where the app differs from the web, it
+// keeps its own: a heading split mid-text continues in a paragraph, a new line takes no attributes, Backspace after an
+// image or a divider never removes it. `pnpm run compare-keys` puts the rules beside Docmost's editor, case by case.
 import type { JSONContent } from "@tiptap/core";
-import { Fragment, Node as PMNode, type Schema } from "@tiptap/pm/model";
+import { Fragment, Node as PMNode, type ResolvedPos, type Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 import { difference, rebase } from "./rebase";
-import { applySteps, items, locate, pathOf, type Step, type Target } from "./steps";
+import { applySteps, items, lists, locate, pathOf, type Step, type Target } from "./steps";
 
 /** Where the cursor goes: the text block at `path`, `offset` into its content (ProseMirror's count). */
 export type Cursor = { path: number[]; offset: number };
@@ -21,16 +22,19 @@ export type Cursor = { path: number[]; offset: number };
 export type KeyEdit = { steps: Step[]; cursor: Cursor };
 
 /**
- * What Backspace at a block's start does: joins it with the text block at `path`, removes it (an empty line after an
- * image, a table, a divider …, or an empty callout with its line; the app puts the cursor in the text before, which it
- * knows), leaves the list or quote (a first item's only line or a quote's first line, with its text), becomes a plain
- * paragraph (an empty code block, or a toggle's title, whose toggle goes) or nothing.
+ * What Backspace at a block's start does: joins it with the text block at `path` (the one before it, or the last line of
+ * a list, quote or callout right before it), removes it (an empty line after an image, a table, a divider …, or an empty
+ * callout with its line; the app puts the cursor in the text before, which it knows), leaves the list or quote (a first
+ * item's only line or a quote's first line, with its text), becomes a plain paragraph (an empty code block, or a
+ * toggle's title, whose toggle goes) or nothing.
  */
 export type BackspacePlan = { kind: "join"; path: number[] } | { kind: "remove" } | { kind: "leave" } | { kind: "plain" } | { kind: "none" };
 
 /** Text blocks the app edits as text, which Backspace joins (`DocumentModel.editableTextTypes`). */
 const joinable = new Set(["paragraph", "heading", "detailsSummary"]);
 const paragraph: JSONContent = { type: "paragraph" };
+/** A new list item of `type` with `line`: a task starts open. */
+const newItem = (type: string, line: JSONContent): JSONContent => ({ type, ...(type === "taskItem" ? { attrs: { checked: false } } : {}), content: [line] });
 
 /**
  * The app's line `json` as the engine holds it by now: the app's input (`base` → `json`) applied onto what a
@@ -66,6 +70,8 @@ function changedAfterCursor(schema: Schema, node: PMNode, base: PMNode, before: 
  * input started from, as a save), and the text after the cursor (`after`, inline content) continues in a new line:
  * - a toggle's title stays whole, and an empty line starts its content (open) or follows it (closed);
  * - an empty line leaves a quote or callout, a toggle as its last line, or an item as its last line below the first;
+ * - in a nested list, an empty line ending its last item goes a level up, as an item of the list around it
+ *   (`toOuterList`);
  * - an empty item that holds only that line leaves the list;
  * - an item's line continues in a new item after it;
  * - any other line in a new paragraph after it.
@@ -112,17 +118,15 @@ export function enterEdit(schema: Schema, doc: PMNode, target: Target, json: JSO
     let lifted: KeyEdit | undefined;
     if (container === "blockquote" || container === "callout") lifted = lift(doc, path, 1, false, paragraph);
     else if (container === "detailsContent" && last && parent.childCount > 1) lifted = lift(doc, path, 2, false, paragraph);
-    else if (items.has(container) && index > 0 && last) lifted = lift(doc, path, 2, false, paragraph);
-    else if (items.has(container) && parent.childCount === 1) lifted = lift(doc, path, 2, true, paragraph);
+    // An item's last line: up a level in a nested list, out of the list otherwise, with the item if it holds only the line.
+    else if (items.has(container) && last) lifted = toOuterList(doc, path) ?? lift(doc, path, 2, index === 0, paragraph);
     if (lifted) return lifted;
   }
 
   if (items.has(parent.type.name)) {
     const itemPath = path.slice(0, -1);
-    const item: JSONContent = { type: parent.type.name, content: [line(after)] };
-    if (parent.type.name === "taskItem") item.attrs = { checked: false };
     return {
-      steps: [save, { op: "insert", target: { path: itemPath, type: parent.type.name }, json: [item], position: "after" }],
+      steps: [save, { op: "insert", target: { path: itemPath, type: parent.type.name }, json: [newItem(parent.type.name, line(after))], position: "after" }],
       cursor: { path: [...next(itemPath), 0], offset: 0 },
     };
   }
@@ -206,7 +210,7 @@ export function backspacePlan(doc: PMNode, target: Target, empty: boolean): Back
       if (parent.type.name === "callout" && parent.childCount === 1 && empty) return { kind: "remove" };
       return { kind: "none" };
     }
-    previousPath = previous(path);
+    previousPath = lastLineIn(doc, previous(path), $pos) ?? previous(path);
   }
   if (joinable.has(nodeAt(doc, previousPath)?.type.name ?? "")) return { kind: "join", path: previousPath };
   return { kind: empty ? "remove" : "none" };
@@ -306,6 +310,58 @@ function lift(doc: PMNode, line: number[], levels: number, withItem: boolean, re
     steps.push({ op: "delete", target: { path: [...containerNow, ...removing.slice(containerPath.length)], type: gone.type.name } });
   }
   return { steps, cursor: { path: cursorPath, offset: 0 } };
+}
+
+/**
+ * Return in the empty line at `line`, the last block of a nested list's last item, as on the web (Tiptap's
+ * `splitListItem`): the line goes a level up, as a new item right after the item that holds the list, and the item and
+ * the list it leaves empty go. The cursor goes to the new item. Undefined where the list sits in an item of another kind
+ * (the web, too, makes the line one of that item's) and where blocks follow the list in its item (the web's split
+ * scrambles the item there): Return makes the line one of the item's then, as before.
+ */
+function toOuterList(doc: PMNode, line: number[]): KeyEdit | undefined {
+  const itemPath = line.slice(0, -1), listPath = line.slice(0, -2), outerPath = line.slice(0, -3);
+  const item = nodeAt(doc, itemPath), list = nodeAt(doc, listPath), outer = nodeAt(doc, outerPath);
+  if (!item || !list || !outer || !items.has(item.type.name) || outer.type !== item.type) return undefined;
+  const at = (path: number[]) => path[path.length - 1];
+  if (at(line) !== item.childCount - 1 || at(itemPath) !== list.childCount - 1 || at(listPath) !== outer.childCount - 1) return undefined;
+  const gone = item.childCount > 1 ? { path: line, type: nodeAt(doc, line)!.type.name }
+    : list.childCount > 1 ? { path: itemPath, type: item.type.name } : { path: listPath, type: list.type.name };
+  return {
+    // The new item goes after the one holding the list first, so the paths inside that one stay as they are.
+    steps: [{ op: "insert", target: { path: outerPath, type: outer.type.name }, json: [newItem(item.type.name, paragraph)], position: "after" },
+      { op: "delete", target: gone }],
+    cursor: { path: [...next(outerPath), 0], offset: 0 },
+  };
+}
+
+/**
+ * The last line of the list, quote or callout at `before`, which Backspace at the start of the line right after it (at
+ * `$line`) joins, as on the web: a list's last line (its last item's last block, through nested lists) unless the line is
+ * in an item of that list's kind (Tiptap's list keymap), a quote's last block unless the line's own parent is a quote
+ * (Tiptap's quote, which lifts the line out of it there), a callout's last block on the page's top level only (Docmost's
+ * callout). Only where that block is a text line Backspace joins; undefined otherwise.
+ */
+function lastLineIn(doc: PMNode, before: number[], $line: ResolvedPos): number[] | undefined {
+  let node = nodeAt(doc, before), path = before;
+  if (!node) return undefined;
+  if (lists.has(node.type.name)) {
+    // In an item of the list's kind, at any depth, the web moves the line into the list instead (not yet the app's).
+    const kind = node.firstChild?.type;
+    for (let depth = $line.depth; depth > 0; depth--) if ($line.node(depth).type === kind) return undefined;
+    while (node && lists.has(node.type.name)) {
+      const item: PMNode | null = node.lastChild;
+      if (!item?.lastChild) return undefined;
+      path = [...path, node.childCount - 1, item.childCount - 1];
+      node = item.lastChild;
+    }
+  } else if ((node.type.name === "blockquote" && $line.parent.type.name !== "blockquote") || (node.type.name === "callout" && $line.depth === 0)) {
+    path = [...path, node.childCount - 1];
+    node = node.lastChild ?? undefined;
+  } else {
+    return undefined;
+  }
+  return node && joinable.has(node.type.name) ? path : undefined;
 }
 
 function nodeAt(doc: PMNode, path: number[]): PMNode | undefined {

@@ -21,7 +21,9 @@ to documents. The results are in `spec/`:
 The engine's own extensions (`src/extensions.ts`) are written from this description, `spec/` and TipTap's
 MIT-licensed extensions and documentation, without Docmost's source code. `pnpm run check` compares them with `spec/`
 (also in CI); `pnpm run compare` runs thousands of random transactions on the app's test documents with Docmost's
-extensions and the engine's side by side (needs the Docmost checkout, like `pnpm run observe`). The development
+extensions and the engine's side by side, and `pnpm run compare-keys` does Return and Backspace as the engine does them
+(`src/keys.ts`) and through Docmost's keymaps, case by case, with the reason for each difference (both need the Docmost
+checkout, like `pnpm run observe`). The development
 dependencies besides esbuild and TypeScript are the packages Docmost's extensions import when these two tools load
 them; nothing of them goes into `engine.js`.
 
