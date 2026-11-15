@@ -230,14 +230,4 @@ extension DocumentModel {
         let enabled = activeTextIsHighlighted
         EditorText.transformRuns(of: &activeText, in: &activeSelection) { EditorText.setHighlight(!enabled, in: &$0) }
     }
-
-    /// ⌘⇧S, ⌘E and ⌘⇧H, as the toolbar's buttons.
-    func toggleFormat(_ action: EditorKeyAction) {
-        switch action {
-        case .strikethrough: toggleStrikethrough()
-        case .inlineCode: toggleInlineCode()
-        case .highlight: toggleHighlight()
-        default: break
-        }
-    }
 }

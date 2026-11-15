@@ -1,3 +1,4 @@
+import SwiftUI
 import Testing
 import UIKit
 import DocmostKit
@@ -58,8 +59,11 @@ struct EditorKeysTests {
         model.activate(NodeRef(path: [0, 0, 0], node: item), node: item)
         model.handleKey(.indent)
         model.handleKey(.outdent)
-        while engine.itemLevelMoves.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
-        #expect(engine.itemLevelMoves.map(\.inward) == [true, false])
+        // The same list key again takes the item out a level.
+        #expect(model.activeTemplate == .bulletList)
+        model.handleKey(.turnInto(.bulletList))
+        while engine.itemLevelMoves.count < 3 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.itemLevelMoves.map(\.inward) == [true, false, false])
 
         model.activate(NodeRef(path: [1], node: paragraph), node: paragraph)
         model.handleKey(.indent)
@@ -67,6 +71,11 @@ struct EditorKeysTests {
         #expect(engine.attributeValues == [["indent": .number(1)]])
         model.handleKey(.lineBreak)
         #expect(String(model.activeText.characters) == "Hallo\u{2028}")
+        // Selected text: the break takes its place, as Return does.
+        let lo = model.activeText.characters.index(model.activeText.startIndex, offsetBy: 2)
+        model.activeSelection = AttributedTextSelection(range: lo..<model.activeText.endIndex)
+        model.handleKey(.lineBreak)
+        #expect(String(model.activeText.characters) == "Ha\u{2028}")
         model.handleKey(.turnInto(.heading2))
         while engine.converted.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.converted.last?.kind == "heading2")
@@ -76,6 +85,35 @@ struct EditorKeysTests {
         model.handleKey(.turnInto(.heading2))
         while engine.converted.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.converted.last?.kind == "paragraph")
+    }
+
+    /// Tab and Shift-Tab in code, through the text view: two spaces at the cursor, every selected line in and out (the
+    /// lines stay selected), and at a cursor up to two spaces out of its line with the cursor staying in place.
+    @Test func codeIndentsAndOutdentsItsLines() throws {
+        let code = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "a\nb\nc")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [code]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        model.activate(NodeRef(path: [0], node: code), node: code)
+        let view = UITextView()
+        view.text = "a\nb\nc"
+        model.editorTextView = view
+
+        view.selectedRange = NSRange(location: 0, length: 5)
+        model.handleKey(.indent)
+        #expect(view.text == "  a\n  b\n  c")
+        #expect(view.selectedRange == NSRange(location: 0, length: 11))
+        model.handleKey(.outdent)
+        #expect(view.text == "a\nb\nc")
+
+        view.text = "x\n    y"
+        view.selectedRange = NSRange(location: 7, length: 0)
+        model.handleKey(.outdent)
+        #expect(view.text == "x\n  y")
+        #expect(view.selectedRange == NSRange(location: 5, length: 0))
+        model.handleKey(.indent)
+        #expect(view.text == "x\n  y  ")
     }
 
     /// Tab in a table cell goes to the next cell, row by row, Shift-Tab to the previous one, as the web's table keys do.
@@ -99,5 +137,37 @@ struct EditorKeysTests {
         model.handleKey(.outdent)
         while model.active?.ref.path == [0, 1, 0, 0] { try await Task.sleep(for: .milliseconds(10)) }
         #expect(model.active?.ref.path == [0, 0, 1, 0])
+    }
+
+    /// In a list in a table cell, Tab moves the item where it can, as the web's list keys go first, and goes to the next
+    /// cell where it can't.
+    @Test(.timeLimit(.minutes(1))) func tabInAListInACellMovesTheItemFirst() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "i"], content: [PMNode(type: "text", text: "Punkt")])
+        let table = PMNode(type: "table", content: [PMNode(type: "tableRow", content: [
+            PMNode(type: "tableCell", content: [PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [line])])]),
+            PMNode(type: "tableCell", content: [PMNode(type: "paragraph", attrs: ["id": "n"], content: [PMNode(type: "text", text: "Nachbar")])]),
+        ])])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [table]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+
+        engine.levels = ItemLevels(indent: true, outdent: false)
+        model.activate(NodeRef(path: [0, 0, 0, 0, 0, 0], node: line), node: line)
+        while model.activeItemLevels == nil { try await Task.sleep(for: .milliseconds(10)) }
+        model.handleKey(.indent)
+        while engine.itemLevelMoves.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.itemLevelMoves.map(\.inward) == [true])
+
+        // Can't go out a level: Shift-Tab goes to the cell before, of which there is none; Tab where it can't go in either
+        // goes to the next cell.
+        engine.levels = ItemLevels(indent: false, outdent: false)
+        model.deactivate()
+        model.activate(NodeRef(path: [0, 0, 0, 0, 0, 0], node: line), node: line)
+        while model.activeItemLevels?.indent != false { try await Task.sleep(for: .milliseconds(10)) }
+        model.handleKey(.indent)
+        while model.active?.ref.path == [0, 0, 0, 0, 0, 0] { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(model.active?.ref.path == [0, 0, 1, 0])
+        #expect(engine.itemLevelMoves.count == 1)
     }
 }
