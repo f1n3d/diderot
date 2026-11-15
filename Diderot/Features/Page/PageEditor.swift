@@ -45,7 +45,6 @@ struct ActiveTextEditor: View {
     let ref: NodeRef
     let font: Font
     var isCode = false
-    @Environment(\.multilineTextAlignment) private var textAlignment
 
     private var isActive: Bool { model.active?.ref == ref }
 
@@ -95,30 +94,7 @@ struct ActiveTextEditor: View {
                 DispatchQueue.main.async { FirstResponder.current?.reloadInputViews() }
             }
             // Outside the editor's own modifiers, so its identifier stays on the text view alone.
-            .overlay(alignment: .topLeading) { placeholder }
-    }
-
-    /// The web's placeholder on an empty line (`DocumentModel.activePlaceholder`), where the first letter goes. One line:
-    /// the overlay doesn't take room, and a second line would lie over the block below.
-    @ViewBuilder private var placeholder: some View {
-        if isActive, !isCode, model.activeText.characters.isEmpty, let prompt = model.activePlaceholder {
-            Text(prompt)
-                .font(font)
-                .foregroundStyle(Color(uiColor: .placeholderText))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: frameAlignment)
-                .allowsHitTesting(false)
-                .accessibilityIdentifier("editor-placeholder")
-        }
-    }
-
-    /// Where a centered or right-aligned block's first letter goes.
-    private var frameAlignment: Alignment {
-        switch textAlignment {
-        case .center: .center
-        case .trailing: .trailing
-        default: .leading
-        }
+            .overlay(alignment: .topLeading) { EditorPlaceholder(model: model, ref: ref, font: font, isCode: isCode) }
     }
 
     private var text: Binding<AttributedString> {
@@ -206,5 +182,39 @@ private struct EditorFocus: ViewModifier {
                     if isActive, !model.editsInSheet, !focused { focused = true }
                 }
             }
+    }
+}
+
+/// The web's placeholder on the editor's empty line (`DocumentModel.activePlaceholder`), where the first letter goes.
+/// A view of its own, so what it reads (the page's document, for the block around the line) doesn't update the editor:
+/// read in the editor's body, every document event while the line is empty would update the text view too, as when a
+/// Markdown mark turns the line while keys are on their way (`DocumentModel.turnLine`). One line: the overlay takes no
+/// room, and a second line would lie over the block below.
+private struct EditorPlaceholder: View {
+    let model: DocumentModel
+    let ref: NodeRef
+    let font: Font
+    let isCode: Bool
+    @Environment(\.multilineTextAlignment) private var textAlignment
+
+    var body: some View {
+        if !isCode, model.active?.ref == ref, model.activeText.characters.isEmpty, let prompt = model.activePlaceholder {
+            Text(prompt)
+                .font(font)
+                .foregroundStyle(Color(uiColor: .placeholderText))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: frameAlignment)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("editor-placeholder")
+        }
+    }
+
+    /// Where a centered or right-aligned block's first letter goes.
+    private var frameAlignment: Alignment {
+        switch textAlignment {
+        case .center: .center
+        case .trailing: .trailing
+        default: .leading
+        }
     }
 }
