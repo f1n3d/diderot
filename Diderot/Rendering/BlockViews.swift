@@ -206,18 +206,17 @@ struct ListBlockView: View {
     let items: [ListItem]
     let ordered: Bool
     @Environment(\.listDepth) private var listDepth
+    @Environment(\.orderedListDepth) private var orderedListDepth
 
     var body: some View {
+        let widest = Self.widest(items.map(marker(for:)))
         VStack(alignment: .leading, spacing: 6) {
             ForEach(items) { item in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(marker(for: item))
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: 22, alignment: .trailing)
-                        .accessibilityHidden(true)
+                    ListMarker(text: marker(for: item), widest: widest)
                     BlockStack(blocks: item.blocks, spacing: 6)
                         .environment(\.listDepth, listDepth + 1)
+                        .environment(\.orderedListDepth, orderedListDepth + (ordered ? 1 : 0))
                 }
             }
         }
@@ -226,9 +225,47 @@ struct ListBlockView: View {
 
     private func marker(for item: ListItem) -> String {
         if ordered {
-            return "\(item.number ?? 1)."
+            return Self.number(item.number ?? 1, depth: orderedListDepth)
         }
         return Self.bullet(depth: listDepth)
+    }
+
+    /// An item's number in a numbered list inside `depth` others, as the web counts them: 1., a., i., then 1. again
+    /// (Docmost's ordered-list.css, CSS's `decimal`, `lower-alpha` and `lower-roman`). Also the editor's (`ListNodeView`).
+    /// Where letters or Roman numerals don't reach (below 1, Roman above 3999), a decimal number, as CSS falls back.
+    static func number(_ value: Int, depth: Int) -> String {
+        switch depth % 3 {
+        case 1 where value >= 1:
+            // a … z, aa, ab …: CSS's alphabetic system, without a zero.
+            var letters = "", rest = value
+            while rest > 0 {
+                rest -= 1
+                letters.insert(Character(Unicode.Scalar(UInt8(ascii: "a") + UInt8(rest % 26))), at: letters.startIndex)
+                rest /= 26
+            }
+            return letters + "."
+        case 2 where (1...3999).contains(value):
+            let numerals: [(Int, String)] = [
+                (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
+                (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+            ]
+            var roman = "", rest = value
+            for (amount, numeral) in numerals {
+                while rest >= amount {
+                    roman += numeral
+                    rest -= amount
+                }
+            }
+            return roman + "."
+        default:
+            return "\(value)."
+        }
+    }
+
+    /// The marker that takes the most room, for the column all of a list's markers share: Roman numerals don't grow
+    /// with the number ("viii." before "ix.").
+    static func widest(_ markers: [String]) -> String {
+        markers.max { $0.count < $1.count } ?? ""
     }
 
     /// Also the editor's (`ListNodeView`).
@@ -238,6 +275,24 @@ struct ListBlockView: View {
         case 1: return "◦"
         default: return "‣"
         }
+    }
+}
+
+/// A list item's number or bullet, right-aligned in a column as wide as the list's widest marker, so the items' lines
+/// start alike (`ListBlockView.widest`). Also the editor's (`ListNodeView`).
+struct ListMarker: View {
+    let text: String
+    let widest: String
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Text(widest).hidden()
+            Text(text)
+        }
+        .font(.body)
+        .foregroundStyle(.secondary)
+        .frame(minWidth: 22, alignment: .trailing)
+        .accessibilityHidden(true)
     }
 }
 

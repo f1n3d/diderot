@@ -284,18 +284,17 @@ struct ListNodeView: View {
     let node: PMNode
     let ref: NodeRef
     @Environment(\.listDepth) private var depth
+    @Environment(\.orderedListDepth) private var orderedDepth
 
     var body: some View {
+        let widest = ListBlockView.widest(node.children.indices.map(marker(index:)))
         VStack(alignment: .leading, spacing: 6) {
             ForEach(NodeEntry.entries(node.children, parentPath: ref.path)) { item in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(marker(index: item.ref.path.last ?? 0))
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: 22, alignment: .trailing)
-                        .accessibilityHidden(true)
+                    ListMarker(text: marker(index: item.ref.path.last ?? 0), widest: widest)
                     NodeListView(model: model, nodes: item.node.children, parentPath: item.ref.path, spacing: 6)
                         .environment(\.listDepth, depth + 1)
+                        .environment(\.orderedListDepth, orderedDepth + (node.type == "orderedList" ? 1 : 0))
                         .movesAsElement(item, of: ref, model: model)
                         // The first item's text ends before the list's "…".
                         .clearOfBlockActions(applies: item.ref.path.last == 0)
@@ -307,7 +306,7 @@ struct ListNodeView: View {
 
     private func marker(index: Int) -> String {
         if node.type == "orderedList" {
-            return "\(ContentParser.listStart(of: node) + index)."
+            return ListBlockView.number(ContentParser.listStart(of: node) + index, depth: orderedDepth)
         }
         return ListBlockView.bullet(depth: depth)
     }
