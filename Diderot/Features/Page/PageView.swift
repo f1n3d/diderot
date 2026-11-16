@@ -310,10 +310,10 @@ struct PageView: View {
             model?.notice = nil
         }
         .background {
-            // "/emoji": the iOS emoji keyboard takes over; the chosen emoji is inserted at the cursor.
-            EmojiPickerField(isPresented: Binding(get: { model?.editsEmoji ?? false }, set: { if !$0 { model?.finishEmoji(nil) } }),
+            // "/emoji": the iOS emoji keyboard takes over; the chosen emoji is inserted at the cursor. Also a callout's icon.
+            EmojiPickerField(isPresented: Binding(get: { model?.editsEmoji ?? false }, set: { if !$0 { model?.finishEmoji(.dismissed) } }),
                              identifier: "insert-emoji-field") { emoji in
-                model?.finishEmoji(emoji)
+                model?.finishEmoji(emoji.map(DocumentModel.EmojiAnswer.picked) ?? .removed)
             }
             .frame(width: 1, height: 1)
         }

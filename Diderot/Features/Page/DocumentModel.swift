@@ -97,9 +97,21 @@ final class DocumentModel {
     /// Block from the math or embed sheet, inserted once the sheet has closed (`editorSheetDismissed`): switching
     /// editors while it slides away can leave a UIKit animation that never ends, or end editing.
     @ObservationIgnored private var blockAfterSheet: (node: PMNode, placement: BlockPlacement)?
-    /// The emoji keyboard is open; the chosen emoji goes into the active text at `emojiOffset`.
+    /// The emoji keyboard is open; the chosen emoji goes where `emojiTarget` says.
     var editsEmoji = false
-    @ObservationIgnored private var emojiOffset: Int?
+    @ObservationIgnored private var emojiTarget: EmojiTarget?
+    /// Into the active text at an offset ("/emoji"), or as a callout's icon (`pickCalloutIcon`).
+    private enum EmojiTarget {
+        case text(offset: Int)
+        case calloutIcon(path: [Int])
+    }
+
+    /// What the emoji keyboard answered (`finishEmoji`): an emoji, its delete key, or closing without either.
+    enum EmojiAnswer: Equatable {
+        case picked(String)
+        case removed
+        case dismissed
+    }
     /// Just after an emoji pick: keeps the block in edit mode until the emoji keyboard is fully gone.
     private(set) var emojiReturning = false
     /// The page should open in the app's web editor (Draw.io and Excalidraw drawings are made there).
@@ -1110,7 +1122,7 @@ final class DocumentModel {
         case .date: insertIntoActiveText(AttributedString(Date.now.formatted(.dateTime.day().month(.wide).year())), offset: offset)
         case .time: insertIntoActiveText(AttributedString(Date.now.formatted(.dateTime.hour().minute())), offset: offset)
         case .emoji:
-            emojiOffset = offset
+            emojiTarget = .text(offset: offset)
             editsEmoji = true
         case .status: editorSheet = .status(.insert(offset: offset), text: "", color: "gray")
         case .mathInline: editorSheet = .mathInline(.insert(offset: offset), latex: "")
@@ -1517,15 +1529,37 @@ final class DocumentModel {
         return url.absoluteString
     }
 
-    /// Applies the emoji keyboard's pick (`nil`: closed without one). The editor regains focus only once that
-    /// keyboard is fully gone; otherwise focus flips back and forth and editing ends.
-    func finishEmoji(_ emoji: String?) {
+    /// The emoji keyboard for the callout at `path`, as the web's callout menu has its emoji picker: the emoji picked
+    /// becomes the callout's icon, the keyboard's delete key takes the icon away (`finishEmoji`), as for a page's icon.
+    func pickCalloutIcon(path: [Int]) {
+        // Not over a keyboard already open: its pick would go here instead.
+        guard isEditable, !editsEmoji else { return }
+        emojiTarget = .calloutIcon(path: path)
+        editsEmoji = true
+    }
+
+    /// Applies the emoji keyboard's answer: an emoji goes into the text or becomes the callout's icon, the delete key takes
+    /// a callout's icon away. The editor regains focus only once that keyboard is fully gone; otherwise focus flips back
+    /// and forth and editing ends.
+    func finishEmoji(_ answer: EmojiAnswer) {
         guard editsEmoji else { return }
-        let offset = emojiOffset
-        emojiOffset = nil
+        let target = emojiTarget
+        emojiTarget = nil
         editsEmoji = false
         emojiReturning = true
-        if let emoji, let offset { insertIntoActiveText(AttributedString(emoji), offset: offset) }
+        switch (target, answer) {
+        case (.text(let offset), .picked(let emoji)):
+            insertIntoActiveText(AttributedString(emoji), offset: offset)
+        case (.calloutIcon(let path), .picked), (.calloutIcon(let path), .removed):
+            // The callout found by its place while the keyboard was open: written only if a callout is there still, with
+            // its type, so a block moved in meanwhile doesn't get it; nothing to take away without an icon.
+            guard let callout = node(at: path), callout.type == "callout" else { break }
+            let icon: JSONValue = if case .picked(let emoji) = answer { .string(emoji) } else { .null }
+            if icon == .null, callout.string("icon") == nil { break }
+            Task { await setAttributes(of: NodeRef(path: path, node: callout), ["icon": icon]) }
+        default:
+            break
+        }
         Task { @MainActor [weak self, clock = dependencies.clock] in
             try? await clock.sleep(for: .milliseconds(250))
             self?.emojiReturning = false

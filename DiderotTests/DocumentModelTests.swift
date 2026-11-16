@@ -74,6 +74,45 @@ struct DocumentModelTests {
         #expect(model.activePlaceholder.map { String(localized: $0) } == "Schreiben …")
     }
 
+    /// A callout's emoji from the emoji keyboard, as the web's callout menu sets it: an emoji picked becomes its icon, the
+    /// keyboard's delete key takes the icon away, and closing the keyboard changes nothing. The callout's line stays the
+    /// one being edited meanwhile.
+    @Test func calloutIconFromTheEmojiKeyboard() async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "p"], content: [PMNode(type: "text", text: "Hinweis")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "callout", content: [paragraph])]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0, 0], node: paragraph), node: paragraph)
+
+        // Without an icon, the delete key has nothing to take away.
+        model.pickCalloutIcon(path: [0])
+        model.finishEmoji(.removed)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(engine.attributeValues.isEmpty, "a missing icon was taken away")
+
+        model.pickCalloutIcon(path: [0])
+        #expect(model.editsEmoji)
+        model.pickCalloutIcon(path: [9])  // A second tap while the keyboard is open changes nothing.
+        model.finishEmoji(.picked("🎉"))
+        for _ in 0..<100 where engine.attributeValues.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.attributeValues == [["icon": .string("🎉")]])
+        #expect(engine.attributeTargets.last == .path([0], type: "callout"), "not the callout, or without its type")
+        #expect(model.active?.ref.path == [0, 0])
+        #expect(String(model.activeText.characters) == "Hinweis", "the emoji went into the text")
+
+        engine.sendDocument(PMNode(type: "doc", content: [PMNode(type: "callout", attrs: ["icon": "🎉"], content: [paragraph])]))
+        for _ in 0..<100 where model.node(at: [0])?.string("icon") == nil { try await Task.sleep(for: .milliseconds(10)) }
+        model.pickCalloutIcon(path: [0])
+        model.finishEmoji(.removed)
+        for _ in 0..<100 where engine.attributeValues.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.attributeValues.last == ["icon": .null])
+
+        model.pickCalloutIcon(path: [0])
+        model.finishEmoji(.dismissed)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(engine.attributeValues.count == 2, "closing the keyboard changed the icon")
+        #expect(!model.editsEmoji)
+    }
+
     /// Paragraphs and headings align and indent as on the web (TipTap's TextAlign, Docmost's Indent): the toolbar sets
     /// the block's attributes, indentation in steps from 0 to 8. A list item aligns but its buttons move the item, so
     /// it doesn't indent; a table cell neither aligns (the table's row does) nor indents.
