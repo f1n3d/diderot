@@ -2560,6 +2560,11 @@ import XCTest
             }
             snapshot(app, "103-\(word)")
             Thread.sleep(forTimeInterval: 1.0)
+            finishEditing(app)
+        }
+        waitForSync(app)
+    }
+
     /// ⌘⌥D, as the web's toggle shortcut: the line goes into a new open toggle and the cursor into its empty title; in the
     /// title, the key dissolves the toggle again. The script checks that the open toggle "Faltkopf<stamp>" holds
     /// "Gefaltet<stamp>", and that "Aufgeklappt<stamp>" and "Entfaltet<stamp>" are paragraphs again, one after the other.
