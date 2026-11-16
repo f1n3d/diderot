@@ -102,7 +102,14 @@ expect("a script as embed link", "invalid embed.src", attributes({ type: "embed"
 expect("formula as a number", "invalid mathBlock.text", attributes({ type: "mathBlock" }, { text: 2 }));
 expect("unknown sub-page order", "invalid subpages.sortBy", attributes({ type: "subpages" }, { sortBy: "title-desc" }));
 expect("task checked as a number", "invalid taskItem.checked", attributes(task, { checked: 1 }));
-expect("an attribute the app doesn't set", "invalid callout.icon", attributes(callout, { icon: "🔥" }));
+for (const icon of ["🔥", "👍🏽", "👨‍👩‍👧‍👦", "❤️", "🇩🇪", "1️⃣", null]) expect(`callout icon ${icon}`, "accepted", attributes(callout, { icon }));
+expect("a letter as a callout icon", "invalid callout.icon", attributes(callout, { icon: "A" }));
+expect("a digit as a callout icon", "invalid callout.icon", attributes(callout, { icon: "1" }));
+expect("two emoji as a callout icon", "invalid callout.icon", attributes(callout, { icon: "🔥🔥" }));
+expect("a word as a callout icon", "invalid callout.icon", attributes(callout, { icon: "Hinweis" }));
+expect("an empty callout icon", "invalid callout.icon", attributes(callout, { icon: "" }));
+expect("a callout icon as a number", "invalid callout.icon", attributes(callout, { icon: 1 }));
+expect("an attribute the app doesn't set", "invalid callout.title", attributes(callout, { title: "x" }));
 expect("a name from Object's prototype", "invalid callout.constructor", attributes(callout, { constructor: "x" }));
 
 // MARK: Structural edits

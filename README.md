@@ -76,7 +76,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - 11 embeds: the link is checked, and the embed shows as a card that opens in the browser
 
   Status and math open their editor with a tap. The floating "+" offers the same entries in groups.
-- @-mentions of pages and people; links on the selection, on existing links or to pages; callout type and code language from a bar; tables with merged cells, colors and alignment as on the web.
+- @-mentions of pages and people; links on the selection, on existing links or to pages; callout type and emoji (the emoji keyboard; its delete key takes the emoji away) and code language from a bar; tables with merged cells, colors and alignment as on the web.
 - Offline reading from the cache; German and English interface.
 
 ## Sign-in

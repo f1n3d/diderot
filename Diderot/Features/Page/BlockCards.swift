@@ -370,14 +370,16 @@ struct CalloutNodeView: View {
 
     /// Missing or unknown type is info, as in the schema, web and reader.
     var kind: CalloutKind { node.string("type").flatMap(CalloutKind.init(rawValue:)) ?? .info }
+    /// The emoji the web's callout menu set; without one the type's symbol shows.
+    var icon: String? { node.string("icon").flatMap { $0.isEmpty ? nil : $0 } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if model.activeAncestorPath(ofType: "callout") == ref.path {
-                CalloutTypeBar(model: model, path: ref.path, current: kind)
+                CalloutTypeBar(model: model, path: ref.path, current: kind, icon: icon)
             }
             HStack(alignment: .top, spacing: 10) {
-                if let icon = node.string("icon"), !icon.isEmpty {
+                if let icon {
                     Text(icon).font(.title3)
                 } else {
                     Image(systemName: kind.symbol)

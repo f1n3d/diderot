@@ -32,6 +32,11 @@ const oneOf = (...values: string[]) => (value: unknown) => typeof value === "str
 const isBoolean = (value: unknown) => typeof value === "boolean";
 /** TipTap's TextAlign on paragraphs and headings; null is the web's "unset". */
 const isAlignment = (value: unknown) => value === null || oneOf("left", "center", "right", "justify")(value);
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+/** One emoji: one user-perceived character (also one of several code points, 👍🏽 or 👨‍👩‍👧‍👦) drawn as a picture. */
+const isEmoji = (value: unknown) =>
+  typeof value === "string" && value.length <= 32 && [...graphemes.segment(value)].length === 1
+  && /\p{Extended_Pictographic}|\p{Emoji_Presentation}|\uFE0F/u.test(value);
 /** Docmost's Indent: whole steps from 0 to 8, as its commands clamp them. */
 const isIndent = (value: unknown) => Number.isInteger(value) && (value as number) >= 0 && (value as number) <= 8;
 
@@ -41,7 +46,8 @@ const isIndent = (value: unknown) => Number.isInteger(value) && (value as number
  * `indent: "x"`, was stored as it came and shown wrongly on every client.
  */
 const settable: Record<string, Record<string, (value: unknown, node: PMNode) => boolean>> = {
-  callout: { type: oneOf("default", "info", "note", "success", "warning", "danger") },
+  // The emoji from the web's callout menu, or null without one (Docmost's `updateCalloutIcon`).
+  callout: { type: oneOf("default", "info", "note", "success", "warning", "danger"), icon: (value) => value === null || isEmoji(value) },
   codeBlock: { language: (value) => value === null || (typeof value === "string" && value !== "") },
   columns: { layout: (value, node) => typeof value === "string" && Object.hasOwn(columnLayouts, value) && columnLayouts[value] === node.childCount },
   details: { open: isBoolean },

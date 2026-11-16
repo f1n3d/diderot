@@ -28,11 +28,12 @@ private extension Text {
     }
 }
 
-/// Switches the type of the active callout.
+/// Switches the type of the active callout, and sets its emoji, as the web's callout menu does.
 struct CalloutTypeBar: View {
     let model: DocumentModel
     let path: [Int]
     let current: CalloutKind
+    let icon: String?
 
     var body: some View {
         FloatingBlockBar {
@@ -45,6 +46,16 @@ struct CalloutTypeBar: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("callout-\(kind.rawValue)")
             }
+            // The emoji keyboard: an emoji becomes the icon, its delete key takes the icon away (`pickCalloutIcon`).
+            Button {
+                model.pickCalloutIcon(path: path)
+            } label: {
+                (icon.map { Text(verbatim: $0) } ?? Text(Image(systemName: "face.smiling"))).barOption(selected: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Emoji")
+            .accessibilityValue(icon ?? "")
+            .accessibilityIdentifier("callout-icon")
         }
     }
 }

@@ -2530,6 +2530,41 @@ import XCTest
         waitForSync(app)
     }
 
+    /// A callout's emoji, as the web's callout menu sets it: the bar's emoji button opens the emoji keyboard, the emoji
+    /// typed becomes the callout's icon, and the keyboard's delete key takes it away again. The script checks that the
+    /// callout "Symbol<stamp>" keeps the icon and "OhneSymbol<stamp>" has none.
+    func test103_CalloutIcon() {
+        let app = launchPage()
+        for word in ["Symbol", "OhneSymbol"] {
+            _ = appendParagraph(app)
+            slash(app, "callout", pick: "block-callout")
+            let editor = activeEditor(app, "No editor in the callout")
+            Thread.sleep(forTimeInterval: 0.8)
+            editor.typeText("\(word)\(stamp)")
+            Thread.sleep(forTimeInterval: 0.8)
+            let button = app.buttons["callout-icon"]
+            XCTAssertTrue(button.waitForExistence(timeout: 5), "The callout's bar has no emoji button")
+            button.tap()
+            let field = app.textFields["insert-emoji-field"]
+            let focused = NSPredicate(format: "hasKeyboardFocus == true")
+            wait(for: [expectation(for: focused, evaluatedWith: field)], timeout: 8)
+            field.typeText("🎉")
+            wait(for: [expectation(for: NSPredicate(format: "value == %@", "🎉"), evaluatedWith: button)], timeout: 8)
+            if word == "OhneSymbol" {
+                // Once the editor has its keyboard back (the emoji keyboard goes first).
+                wait(for: [expectation(for: focused, evaluatedWith: activeEditor(app))], timeout: 8)
+                button.tap()
+                wait(for: [expectation(for: focused, evaluatedWith: field)], timeout: 8)
+                field.typeText(XCUIKeyboardKey.delete.rawValue)
+                wait(for: [expectation(for: NSPredicate(format: "NOT (value CONTAINS %@)", "🎉"), evaluatedWith: button)], timeout: 8)
+            }
+            snapshot(app, "103-\(word)")
+            Thread.sleep(forTimeInterval: 1.0)
+            finishEditing(app)
+        }
+        waitForSync(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.
