@@ -99,6 +99,10 @@ protocol DocumentEngine: AnyObject, Observable {
     /// What the line at `target` can turn into where it is (the kinds `convert` takes); nil without an engine or the
     /// block.
     func conversions(_ target: BlockTarget) async -> Set<String>?
+    /// ⌘⌥D, as the web's `toggleDetails` (`toggleDetailsEdit` in Engine/src/conversions.ts): in a toggle the innermost one
+    /// around the line dissolves, elsewhere the line goes into a new open toggle with an empty title. Returns where the
+    /// cursor goes.
+    func toggleDetails(_ target: BlockTarget) async -> KeyResult
     /// Sets the count of the columns block at `target` as the web does: new columns are empty, the ones removed go into
     /// the last one kept.
     func setColumnCount(_ target: BlockTarget, count: Int) async -> EngineResult
@@ -640,6 +644,12 @@ final class WebDocumentEngine: DocumentEngine {
                                                     ["target": target.jsObject])
         if case .value(let kinds) = result { return Set(kinds) }
         return nil
+    }
+
+    func toggleDetails(_ target: BlockTarget) async -> KeyResult {
+        let result: KeyAnswer<EngineCursor> = await key("return JSON.stringify(window.DocmostEngine.toggleDetails(target));",
+                                                        ["target": target.jsObject])
+        return Self.moved(result)
     }
 
     func setColumnCount(_ target: BlockTarget, count: Int) async -> EngineResult {

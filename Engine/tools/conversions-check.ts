@@ -7,7 +7,7 @@
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
-import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, type Kind } from "../src/conversions";
+import { columnCountEdit, conversions, convertEdit, referenceEdit, toggleDetailsEdit, unsyncEdit, type Kind } from "../src/conversions";
 import { type Cursor } from "../src/keys";
 import { schemaExtensions } from "../src/schema";
 import { applySteps, type Step } from "../src/steps";
@@ -188,6 +188,33 @@ expect("an embed's content without its source's ids", [null, "center", null], [
   blockAfter(embeds, referenceEdit(embeds, [1], { sourcePageId: "p", transclusionId: "t" }, withIds), [1])?.attrs?.textAlign,
   blockAfter(embeds, referenceEdit(embeds, [1], { sourcePageId: "p", transclusionId: "t" }, withIds), [2, 0])?.attrs?.id,
 ]);
+
+// ⌘⌥D, as the web's toggleDetails: a line goes into a new open toggle with an empty title, and in a toggle the innermost
+// one dissolves into its title as a paragraph and its content, the cursor staying in the line.
+const toggled = (before: PMNode, path: number[]) => {
+  const edit = toggleDetailsEdit(schema, before, { path });
+  return run(before, edit?.steps, edit?.cursor);
+};
+expect("⌘⌥D on a paragraph", "Vor details(>∅, detailsContent(Eins)) @1.0:0", toggled(page(paragraph("v", "Vor"), paragraph("a", "Eins")), [1]));
+const single = page(paragraph("a", "Eins"));
+const wrapped = (path: number[]) => blockAfter(single, toggleDetailsEdit(schema, single, { path: [0] })?.steps, path);
+expect("…keeps the line's id", "a", wrapped([0, 1, 0])?.attrs?.id);
+expect("…opens the toggle", true, wrapped([0])?.attrs?.open);
+expect("⌘⌥D on a heading", "details(>∅, detailsContent(##Kopf)) @0.0:0",
+  toggled(page({ type: "heading", attrs: { id: "h", level: 2 }, content: text("Kopf") }), [0]));
+expect("⌘⌥D in a quote", "blockquote(details(>∅, detailsContent(Zitat))) @0.0.0:0", toggled(page(quote(paragraph("a", "Zitat"))), [0, 0]));
+expect("⌘⌥D on an item's first line: refused, a toggle can't start an item", "refused", toggled(page(list("bulletList", item(paragraph("a", "Eins")))), [0, 0, 0]));
+expect("⌘⌥D on an item's second line", "bulletList(Eins/details(>∅, detailsContent(Zwei))) @0.0.1.0:0",
+  toggled(page(list("bulletList", item(paragraph("a", "Eins"), paragraph("b", "Zwei")))), [0, 0, 1]));
+expect("⌘⌥D in a toggle's title: the cursor at its start, as on the web", "Vor Titel Eins Zwei Nach @1:0",
+  toggled(page(paragraph("v", "Vor"), toggle("Titel", paragraph("a", "Eins"), paragraph("b", "Zwei")), paragraph("n", "Nach")), [1, 0]));
+expect("⌘⌥D in a toggle's content: the cursor at the title's start", "Vor Titel Eins Zwei Nach @1:0",
+  toggled(page(paragraph("v", "Vor"), toggle("Titel", paragraph("a", "Eins"), paragraph("b", "Zwei")), paragraph("n", "Nach")), [1, 1, 1]));
+expect("⌘⌥D in a list in a toggle", "Titel bulletList(Eins, Zwei) @0:0",
+  toggled(page(toggle("Titel", list("bulletList", item(paragraph("a", "Eins")), item(paragraph("b", "Zwei"))))), [0, 1, 0, 1, 0]));
+expect("⌘⌥D in a toggle in a toggle: the inner one", "details(>Außen, detailsContent(Innen, Eins)) @0.1.0:0",
+  toggled(page(toggle("Außen", toggle("Innen", paragraph("a", "Eins")))), [0, 1, 0, 1, 0]));
+expect("⌘⌥D on a block that's gone", "refused", toggled(page(paragraph("a", "Eins")), [3]));
 
 if (differences) {
   console.log(`${differences} difference(s).`);

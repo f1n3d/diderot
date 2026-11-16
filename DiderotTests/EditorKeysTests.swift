@@ -29,6 +29,7 @@ struct EditorKeysTests {
         #expect(action("7", [.command, .shift]) == .turnInto(.orderedList))
         #expect(action("8", [.command, .shift]) == .turnInto(.bulletList))
         #expect(action("9", [.command, .shift]) == .turnInto(.taskList))
+        #expect(action("d", [.command, .alternate]) == .toggleDetails)
         // What the text view keeps: Return, its own formats and undo, typing.
         #expect(action("\r") == nil)
         #expect(action("b", .command) == nil)
@@ -85,6 +86,23 @@ struct EditorKeysTests {
         model.handleKey(.turnInto(.heading2))
         while engine.converted.count < 2 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(engine.converted.last?.kind == "paragraph")
+
+        // ⌘⌥D: the engine toggles around the line (active again: the refused turn ended its editing).
+        model.activate(NodeRef(path: [2], node: heading), node: heading)
+        engine.toggleDetailsResult = .moved(EngineCursor(path: [2, 0], offset: 0))
+        model.handleKey(.toggleDetails)
+        for _ in 0..<200 where engine.toggledDetails.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.toggledDetails == [NodeRef(path: [2], node: heading).target])
+
+        // Where no toggle fits and none is around the line (an item's first line), the key does nothing, as on the web.
+        engine.conversionKinds = ["bulletList", "orderedList", "taskList"]
+        model.activate(NodeRef(path: [0, 0, 0], node: item), node: item)
+        engine.sendDocument()
+        for _ in 0..<200 where model.answers?.conversions == nil { try await Task.sleep(for: .milliseconds(10)) }
+        model.handleKey(.toggleDetails)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(engine.toggledDetails.count == 1, "the engine was asked where no toggle fits")
+        #expect(model.active?.ref.path == [0, 0, 0], "editing ended")
     }
 
     /// Tab and Shift-Tab in code, through the text view: two spaces at the cursor, every selected line in and out (the

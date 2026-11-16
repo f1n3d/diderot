@@ -2565,6 +2565,30 @@ import XCTest
         waitForSync(app)
     }
 
+    /// ⌘⌥D, as the web's toggle shortcut: the line goes into a new open toggle and the cursor into its empty title; in the
+    /// title, the key dissolves the toggle again. The script checks that the open toggle "Faltkopf<stamp>" holds
+    /// "Gefaltet<stamp>", and that "Aufgeklappt<stamp>" and "Entfaltet<stamp>" are paragraphs again, one after the other.
+    func test104_ToggleKeyWrapsTheLine() {
+        let app = launchPage()
+        for (line, title) in [("Gefaltet", "Faltkopf"), ("Entfaltet", "Aufgeklappt")] {
+            var editor = appendParagraph(app)
+            editor.typeText("\(line)\(stamp)")
+            waitForKeyboard(app)
+            editor.typeKey("d", modifierFlags: [.command, .option])
+            // The new toggle's empty title takes the page's one text editor.
+            wait(for: [expectation(for: NSPredicate(format: "value == %@", ""), evaluatedWith: editor)], timeout: 8)
+            editor = activeEditor(app, "No editor in the toggle's title after ⌘⌥D")
+            editor.typeText("\(title)\(stamp)")
+            if line == "Entfaltet" {
+                waitForKeyboard(app)
+                editor.typeKey("d", modifierFlags: [.command, .option])
+            }
+            snapshot(app, "104-\(line)")
+            finishEditing(app)
+        }
+        waitForSync(app)
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.
