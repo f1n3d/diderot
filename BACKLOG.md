@@ -121,7 +121,6 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
     - Return in a callout leaves it only from its last line on the web, and an empty callout stays (the new line comes after it); an empty middle line gets another line. The app splits the callout there and removes an empty one.
     - Return in an item with a nested list, in its line or in an empty first line before the list, splits the item on the web: the nested list goes along into the new item, right below the line. The app puts the new item after the nested list.
     - Backspace right after a block whose last block is no text line (a list ending in an image, a quote ending in a list, a quote in a quote, a callout ending in a list), and right after a list inside a list item at any depth (a nested list before a line of its item, a list in a toggle in an item), moves the line into that block on the web; the app does nothing.
-    - Find on the page skips the content of collapsed toggles; the web finds it there and opens the toggle.
     - Numbered lists count 1., 2. … at every level; the web goes 1. → a. → i. in nested lists, when reading and editing.
     - A callout's emoji can't be set or removed in the app (the web's callout menu has an emoji picker); the app shows one that is set.
     - ⌘⌥D (a line into a toggle and back) isn't among the hardware keys yet.

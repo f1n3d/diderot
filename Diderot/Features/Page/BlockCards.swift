@@ -403,6 +403,7 @@ struct ToggleNodeView: View {
     let node: PMNode
     let ref: NodeRef
     @State private var isExpanded: Bool
+    @Environment(\.pageFind) private var find
 
     init(model: DocumentModel, node: PMNode, ref: NodeRef) {
         self.model = model
@@ -420,7 +421,7 @@ struct ToggleNodeView: View {
                         Task { await model.setAttributes(of: NodeRef(path: ref.path, id: nil), ["open": .bool(!isExpanded)]) }
                     } else {
                         withAnimation(.snappy) { isExpanded.toggle() }
-                        // Find on page searches what the reader sees.
+                        // Kept by the model: the view is made anew when it scrolls back into the page.
                         model.readerToggles[ref.path] = isExpanded
                     }
                 } label: {
@@ -438,7 +439,7 @@ struct ToggleNodeView: View {
                         .clearOfBlockActions()
                 }
             }
-            if isExpanded {
+            if showsContent {
                 // Numbered before dropping the summary: content starts at index 1, and edits address blocks by path.
                 ForEach(NodeEntry.entries(node.children, parentPath: ref.path).dropFirst()) { entry in
                     NodeView(model: model, node: entry.node, ref: entry.ref)
@@ -456,6 +457,18 @@ struct ToggleNodeView: View {
             // Closed with the cursor inside: editing ends, as the content's editor used to vanish with it.
             if open == false, let active = model.active?.ref.path, active.starts(with: ref.path + [1]) { model.deactivate() }
         }
+    }
+
+    /// The content shows while the toggle is open, and while a collapsed one holds a match of the page's search, as on the
+    /// web, which shows it without opening the toggle. The arrow keeps the toggle's own state, so a tap on it opens or
+    /// closes the toggle visibly (the web turns the arrow too, and its first tap changed nothing to see). A line tapped
+    /// among the matches stays while it's edited: the tap ends the search.
+    private var showsContent: Bool {
+        // Both read every time: behind `||` they went unread while the toggle was open, so the view didn't depend on them,
+        // and collapsing it while its line was edited left the content shown after editing ended.
+        let found = find?.holdsMatch(inside: ref.path + [1]) == true
+        let edited = model.active?.ref.path.starts(with: ref.path + [1]) == true
+        return isExpanded || found || edited
     }
 }
 

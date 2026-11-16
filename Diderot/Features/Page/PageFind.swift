@@ -16,7 +16,8 @@ struct FindMatch: Equatable {
 
 /// Find like Safari's "Find on Page": matches in reading order; the page scrolls to the current one. Ignores
 /// diacritics, and case while "Aa" is off. Searches paragraphs, headings and code, also inside lists, quotes,
-/// callouts, tables, open toggle blocks, columns, footnotes and this page's synced blocks.
+/// callouts, tables, toggle blocks, columns, footnotes and this page's synced blocks. A collapsed toggle shows its
+/// content while it holds a match, as on the web (`holdsMatch(inside:)`), and stays collapsed: nothing is saved.
 @MainActor
 @Observable
 final class PageFind {
@@ -54,9 +55,9 @@ final class PageFind {
     }
 
     /// Recomputes matches for a new query (`restart`: jumps to the first match) or a changed document.
-    func update(document: PMNode, baseURL: URL?, toggles: [[Int]: Bool], restart: Bool) {
+    func update(document: PMNode, baseURL: URL?, restart: Bool) {
         let previous = currentMatch
-        matches = FindMatcher.matches(of: query, options: options, in: document, baseURL: baseURL, toggles: toggles)
+        matches = FindMatcher.matches(of: query, options: options, in: document, baseURL: baseURL)
         if restart {
             current = 0
         } else if let previous, let index = matches.firstIndex(of: previous) {
@@ -65,6 +66,11 @@ final class PageFind {
             current = min(current, max(matches.count - 1, 0))
         }
         if restart, !matches.isEmpty { revealRequest += 1 }
+    }
+
+    /// Whether a match lies in the block at `path` or below it: a collapsed toggle shows its content then.
+    func holdsMatch(inside path: [Int]) -> Bool {
+        matches.contains { $0.ref.path.count > path.count && $0.ref.path.starts(with: path) }
     }
 
     func next() { step(1) }
@@ -113,21 +119,18 @@ enum FindMatcher {
         String(InlineTextBuilder(baseURL: baseURL).attributedString(for: ContentParser.inlines(of: node)).characters)
     }
 
-    /// `toggles`: `DocumentModel.readerToggles`.
-    static func matches(
-        of query: String, options: String.CompareOptions, in document: PMNode, baseURL: URL?, toggles: [[Int]: Bool] = [:]
-    ) -> [FindMatch] {
+    static func matches(of query: String, options: String.CompareOptions, in document: PMNode, baseURL: URL?) -> [FindMatch] {
         guard !query.isEmpty else { return [] }
         var result: [FindMatch] = []
         for entry in NodeEntry.entries(document.children, parentPath: []) {
-            collect(entry.node, ref: entry.ref, topLevel: entry.ref, query: query, options: options, baseURL: baseURL, toggles: toggles, into: &result)
+            collect(entry.node, ref: entry.ref, topLevel: entry.ref, query: query, options: options, baseURL: baseURL, into: &result)
         }
         return result
     }
 
     private static func collect(
         _ node: PMNode, ref: NodeRef, topLevel: NodeRef, query: String, options: String.CompareOptions, baseURL: URL?,
-        toggles: [[Int]: Bool], into result: inout [FindMatch]
+        into result: inout [FindMatch]
     ) {
         func add(_ text: String) {
             for occurrence in ranges(of: query, options: options, in: text).indices {
@@ -135,7 +138,7 @@ enum FindMatcher {
             }
         }
         func visit(_ node: PMNode, ref: NodeRef) {
-            collect(node, ref: ref, topLevel: topLevel, query: query, options: options, baseURL: baseURL, toggles: toggles, into: &result)
+            collect(node, ref: ref, topLevel: topLevel, query: query, options: options, baseURL: baseURL, into: &result)
         }
         func children(_ nodes: [PMNode], parentPath: [Int]) {
             for entry in NodeEntry.entries(nodes, parentPath: parentPath) {
@@ -158,15 +161,10 @@ enum FindMatcher {
                     children(cell.node.children, parentPath: cell.ref.path)
                 }
             }
-        case "blockquote", "callout", "detailsContent", "transclusionSource":
+        case "blockquote", "callout", "details", "detailsContent", "transclusionSource":
+            // A toggle's title at index 0 and its content from index 1, also while it's collapsed: it shows a match there
+            // (`ToggleNodeView`), as the web's search does.
             children(node.children, parentPath: ref.path)
-        case "details":
-            // Like `ToggleNodeView`: summary at index 0, content from index 1 only while the toggle is open.
-            if toggles[ref.path] ?? node.bool("open") ?? false {
-                children(node.children, parentPath: ref.path)
-            } else if let summary = node.children.first {
-                visit(summary, ref: NodeRef(path: ref.path + [0], node: summary))
-            }
         default:
             break
         }
