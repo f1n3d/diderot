@@ -80,6 +80,9 @@ struct CentersAboveKeyboard: ViewModifier {
         var hideTask: Task<Void, Never>?
         /// Find's match or a comment's passage to center once its block reports its frame (built after the scroll there).
         var findTarget: FindMatch?
+        /// The passage shown was centered again once after a scroll settled (`passageSettled`): once is enough, and where
+        /// the page can't get there (its end), more would scroll without end.
+        var passageRecentered = false
 
         var isCentering: Bool { centerUntil > .now }
         var current: CGFloat { offset + insetTop }
@@ -290,6 +293,7 @@ struct CentersAboveKeyboard: ViewModifier {
     private func revealFindMatch() {
         guard let target = find.revealTarget else { return }
         centering.findTarget = target
+        centering.passageRecentered = false
         // Next run loop: by then this update has laid out the blocks, and a built one holding the target has reported.
         DispatchQueue.main.async {
             guard centering.findTarget == target, find.revealTarget == target else { return }
@@ -339,7 +343,8 @@ struct CentersAboveKeyboard: ViewModifier {
         else { return }
         let top = centering.windowY(of: frame.minY)
         let bottom = centering.windowY(of: frame.maxY)
-        guard top < free.lowerBound || bottom > free.upperBound else { return }
+        guard top < free.lowerBound || bottom > free.upperBound, !centering.passageRecentered else { return }
+        centering.passageRecentered = true
         centerFindMatch(frame)
     }
 
