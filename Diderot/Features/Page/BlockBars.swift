@@ -28,7 +28,8 @@ private extension Text {
     }
 }
 
-/// Switches the type of the active callout, and sets its emoji, as the web's callout menu does.
+/// Sets the active callout's emoji and switches its type, as the web's callout menu does. The emoji comes first, above
+/// the callout's own icon, where it shows without scrolling; the web has it last.
 struct CalloutTypeBar: View {
     let model: DocumentModel
     let path: [Int]
@@ -37,15 +38,6 @@ struct CalloutTypeBar: View {
 
     var body: some View {
         FloatingBlockBar {
-            ForEach(CalloutKind.allCases, id: \.self) { kind in
-                Button {
-                    Task { await model.setAttributes(of: NodeRef(path: path, id: nil), ["type": .string(kind.rawValue)]) }
-                } label: {
-                    Text(kind.title).barOption(selected: kind == current)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("callout-\(kind.rawValue)")
-            }
             // The emoji keyboard: an emoji becomes the icon, its delete key takes the icon away (`pickCalloutIcon`).
             Button {
                 model.pickCalloutIcon(path: path)
@@ -56,6 +48,15 @@ struct CalloutTypeBar: View {
             .accessibilityLabel("Emoji")
             .accessibilityValue(icon ?? "")
             .accessibilityIdentifier("callout-icon")
+            ForEach(CalloutKind.allCases, id: \.self) { kind in
+                Button {
+                    Task { await model.setAttributes(of: NodeRef(path: path, id: nil), ["type": .string(kind.rawValue)]) }
+                } label: {
+                    Text(kind.title).barOption(selected: kind == current)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("callout-\(kind.rawValue)")
+            }
         }
     }
 }

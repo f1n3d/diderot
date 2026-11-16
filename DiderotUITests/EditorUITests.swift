@@ -1381,8 +1381,10 @@ import XCTest
         editor.typeText("Hinweis\(stamp): Donaudampfschifffahrtsgesellschaftskapitän und Rechtsschutzversicherungsgesellschaften "
             + "sind lange Wörter, die anders umbrechen als kurze. Noch ein Satz, damit die Box mehrere Zeilen hoch wird.")
         Thread.sleep(forTimeInterval: 1.0)
-        let box = app.otherElements.matching(NSPredicate(format: "label ENDSWITH[c] 'callout' OR label ENDSWITH 'Hinweis'")).firstMatch
-        XCTAssertTrue(box.waitForExistence(timeout: 5), "Callout missing")
+        // The page's last callout, this test's: an earlier test's can still be on the screen in a short run.
+        let boxes = app.otherElements.matching(NSPredicate(format: "label ENDSWITH[c] 'callout' OR label ENDSWITH 'Hinweis'"))
+        XCTAssertTrue(boxes.firstMatch.waitForExistence(timeout: 5), "Callout missing")
+        let box = boxes.element(boundBy: boxes.count - 1)
         snapshot(app, "68-callout-long-text")
         XCTAssertLessThanOrEqual(editor.frame.maxY, box.frame.maxY + 1, "Text hangs out of the callout: editor \(editor.frame), box \(box.frame)")
         finishEditing(app)
@@ -2531,8 +2533,9 @@ import XCTest
     }
 
     /// A callout's emoji, as the web's callout menu sets it: the bar's emoji button opens the emoji keyboard, the emoji
-    /// typed becomes the callout's icon, and the keyboard's delete key takes it away again. The script checks that the
-    /// callout "Symbol<stamp>" keeps the icon and "OhneSymbol<stamp>" has none.
+    /// typed becomes the callout's icon, and the keyboard's delete key takes it away again. The emoji button shows
+    /// without scrolling, and the callout's "…" lies beside the bar, not over it. The script checks that the callout
+    /// "Symbol<stamp>" keeps the icon and "OhneSymbol<stamp>" has none.
     func test103_CalloutIcon() {
         let app = launchPage()
         for word in ["Symbol", "OhneSymbol"] {
@@ -2544,6 +2547,22 @@ import XCTest
             Thread.sleep(forTimeInterval: 0.8)
             let button = app.buttons["callout-icon"]
             XCTAssertTrue(button.waitForExistence(timeout: 5), "The callout's bar has no emoji button")
+            if word == "Symbol" {
+                // The callout's "…" lay over the bar's end, where the emoji button was (November 16, 2026). The bar
+                // ends before the "…" now, and the emoji comes first, where it shows without scrolling.
+                snapshot(app, "103-bar")
+                XCTAssertTrue(button.isHittable, "The callout's emoji button doesn't show without scrolling the bar")
+                // The bar: the narrowest scroll view around its buttons (the page's is one too).
+                let bars = app.scrollViews.containing(.button, identifier: "callout-icon").allElementsBoundByIndex
+                if let bar = bars.min(by: { $0.frame.width < $1.frame.width }) {
+                    // The "…" as drawn: its button has 6 points of padding around the symbol.
+                    let covering = app.buttons.matching(identifier: "block-actions").allElementsBoundByIndex
+                        .filter { $0.frame.insetBy(dx: 6, dy: 6).intersects(bar.frame) }
+                    XCTAssertTrue(covering.isEmpty, "A block's “…” lies over the callout's bar \(bar.frame): \(covering.map(\.frame))")
+                } else {
+                    XCTFail("The callout's bar isn't a scroll view")
+                }
+            }
             button.tap()
             let field = app.textFields["insert-emoji-field"]
             let focused = NSPredicate(format: "hasKeyboardFocus == true")

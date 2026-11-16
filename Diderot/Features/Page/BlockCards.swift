@@ -377,6 +377,8 @@ struct CalloutNodeView: View {
         VStack(alignment: .leading, spacing: 6) {
             if model.activeAncestorPath(ofType: "callout") == ref.path {
                 CalloutTypeBar(model: model, path: ref.path, current: kind, icon: icon)
+                    // The bar ends before the callout's "…", which lay over its last button.
+                    .clearOfBlockActions()
             }
             HStack(alignment: .top, spacing: 10) {
                 if let icon {
