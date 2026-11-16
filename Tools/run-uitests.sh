@@ -259,9 +259,10 @@ APPEND_PAGE=${NOTE_PAGES%% *} FOOTNOTES_PAGE=${NOTE_PAGES##* }
 export TEST_RUNNER_DOCMOST_UITEST_APPEND_PAGE="$APPEND_PAGE" TEST_RUNNER_DOCMOST_UITEST_FOOTNOTES_PAGE="$FOOTNOTES_PAGE"
 
 # The pages of the rename tests (HomeUITests test47, test48, test51) under "Fixtures", one each, named back each run
-# (also after a run that renamed one to "Umbenennen47x<stamp>") and updated now, so they lead Recently Updated; test48's
-# favorite goes. They shared "Datenbank-Einbettung" before: a test that failed before restoring its title failed the
-# ones after it as well (November 9, 2026: test47, then test48 and test51).
+# (also after a run that renamed one to "Umbenennen47x<stamp>") and updated now, which keeps them near the top of
+# Recently Updated: first in a short run, below the pages the tests before them update in a whole run (the tests scroll
+# to their rows); test48's favorite goes. They shared "Datenbank-Einbettung" before: a test that failed before
+# restoring its title failed the ones after it as well (November 9, 2026: test47, then test48 and test51).
 python3 - "$PAGE" <<'PY' || echo "No pages for the rename tests"
 import sys
 from dev_api import ApiError, session

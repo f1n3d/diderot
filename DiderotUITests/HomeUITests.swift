@@ -114,13 +114,42 @@ import XCTest
         XCTAssertTrue(copy.waitForNonExistence(timeout: 5), "Menu doesn't close")
     }
 
-    /// Opens the page whose title begins with `title` from the list on the screen (Recently Updated, Favorites) and
-    /// waits until its title field shows `title`.
+    /// The first row whose label begins with `title` in the list on the screen, once it stays put where it can be
+    /// tapped; nil if it doesn't by `timeout`. Till then the list moves down, or `upward`, by less than a screen and
+    /// without momentum, so no row passes unseen: a List keeps only the rows near the visible ones in the accessibility
+    /// tree. Never at the list's top, where pulling would refresh it: test51 checks that the list reloads by itself.
+    /// In a whole run the rename tests' pages sit far down Recently Updated, below the pages the tests before them
+    /// updated; after "Back" a renamed page leads the list, which stays where it was scrolled to for opening the page
+    /// (November 16, 2026: test47 and test51 found nothing there).
+    private func listRow(_ app: XCUIApplication, beginningWith title: String, upward: Bool = false, timeout: TimeInterval) -> XCUIElement? {
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        let list = app.collectionViews.firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if row.waitForExistence(timeout: 1) {
+                // Asked once the row stays put: caught between two layouts, `isHittable` fails the test.
+                let frame = row.frame
+                Thread.sleep(forTimeInterval: 0.1)
+                if row.frame == frame, row.isHittable { return row }
+            }
+            guard list.exists else { continue }
+            // At the top the first row lies below the navigation bar; scrolled, the rows above reach under it.
+            let top = list.buttons.element(boundBy: 0)
+            if upward, top.exists, top.frame.minY >= app.navigationBars.firstMatch.frame.maxY { continue }
+            let start = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: upward ? 300 : -300)),
+                        withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        return nil
+    }
+
+    /// Opens the page whose title begins with `title` from the list on the screen (Recently Updated, Favorites),
+    /// scrolling to its row, and waits until its title field shows `title`.
     @discardableResult
     private func openPage(_ app: XCUIApplication, _ title: String, from list: String = "Recently Updated") -> XCUIElement {
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 20), "“\(title)” missing from \(list)")
-        row.tap()
+        let row = listRow(app, beginningWith: title, timeout: 30)
+        XCTAssertNotNil(row, "“\(title)” missing from \(list)")
+        row?.tap()
         let field = app.textFields["page-title"]
         XCTAssertTrue(field.waitForExistence(timeout: 30), "“\(title)” doesn't open")
         wait(for: [expectation(for: NSPredicate(format: "value == %@", title), evaluatedWith: field)], timeout: 15)
@@ -153,9 +182,9 @@ import XCTest
         retitle(openPage(app, "Umbenennen51"), to: renamed, save: true)
         XCTAssertTrue(app.navigationBars[renamed].waitForExistence(timeout: 15), "Title “\(renamed)” wasn't saved")
         backButton(app).tap()
-        let shown = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", renamed)).firstMatch.waitForExistence(timeout: 10)
+        let shown = listRow(app, beginningWith: renamed, upward: true, timeout: 20) != nil
         snapshot(app, "51-after-back")
-        XCTAssertTrue(shown, "Recently Updated still shows the old title after “Back”")
+        XCTAssertTrue(shown, "Recently Updated doesn't show “\(renamed)” after “Back”")
     }
 
     /// "Back" while the title is still being edited saves it, like the web's save on navigation.
@@ -166,9 +195,10 @@ import XCTest
         // No Return: the field keeps its focus.
         retitle(openPage(app, "Umbenennen47"), to: renamed, save: false)
         backButton(app).tap()
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Umbenennen47")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "Recently Updated doesn't show after “Back”")
-        row.tap()
+        // By its new title: the old one stays at its place until the list has reloaded and moved the page to the top.
+        let row = listRow(app, beginningWith: renamed, upward: true, timeout: 20)
+        XCTAssertNotNil(row, "Recently Updated doesn't show “\(renamed)” after “Back”: the title typed before wasn't saved")
+        row?.tap()
         let saved = app.navigationBars[renamed].waitForExistence(timeout: 15)
         snapshot(app, "47-reopened")
         XCTAssertTrue(saved, "Title typed before “Back” wasn't saved")
