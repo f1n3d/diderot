@@ -129,6 +129,9 @@ extension HTTPCookie {
 extension EnvironmentValues {
     @Entry var renderContext: RenderContext = .empty
     @Entry var listDepth: Int = 0
+    /// Numbered lists around a view, at any depth and through other blocks: a numbered list counts 1., a. or i. by it,
+    /// as the web's ordered-list.css does for `ol ol` and `ol ol ol` (`ListBlockView.number`).
+    @Entry var orderedListDepth: Int = 0
     /// The synced blocks shown around a view ("sourcePageId/transclusionId", outermost first): one that contains itself
     /// would load and nest forever.
     @Entry var syncedBlockChain: [String] = []
