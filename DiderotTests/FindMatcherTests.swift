@@ -67,4 +67,65 @@ struct FindMatcherTests {
         #expect(matches.map(\.occurrence) == [0, 0, 1, 0, 0])
         #expect(matches.map(\.topLevel.path) == [[0], [0], [0], [1], [2]])
     }
+
+    /// "Show on Page" goes to the first text block holding the comment's mark, by the refs the views give it, as find
+    /// goes to a match: an item's second paragraph, a table cell's. Where find doesn't look (tabs), nothing: the page
+    /// falls back to the top-level block there.
+    @Test func commentPassageIsItsFirstTextBlock() {
+        func text(_ text: String, comment: String? = nil) -> PMNode {
+            PMNode(type: "text", marks: comment.map { [PMMark(type: "comment", attrs: ["commentId": .string($0)])] }, text: text)
+        }
+        func paragraph(_ content: PMNode...) -> PMNode { PMNode(type: "paragraph", content: content) }
+        let list = PMNode(type: "bulletList", content: [
+            PMNode(type: "listItem", content: [paragraph(text("Eins"))]),
+            PMNode(type: "listItem", content: [paragraph(text("Zwei")), paragraph(text("vor "), text("markiert", comment: "c1"))]),
+        ])
+        let table = PMNode(type: "table", content: [PMNode(type: "tableRow", content: [
+            PMNode(type: "tableCell", content: [paragraph(text("A"))]),
+            PMNode(type: "tableCell", content: [paragraph(text("B", comment: "c2"))]),
+        ])])
+        let tabs = PMNode(type: "tabs", content: [NodeFactory.tab(label: "Reiter", panel: [paragraph(text("C", comment: "c3"))])])
+        let document = PMNode(type: "doc", content: [paragraph(text("Davor")), list, table, tabs, paragraph(text("später", comment: "c1"))])
+
+        let first = FindMatcher.passage(ofComment: "c1", in: document)
+        #expect(first?.ref.path == [1, 1, 1])
+        #expect(first?.topLevel.path == [1])
+        #expect(FindMatcher.passage(ofComment: "c2", in: document)?.ref.path == [2, 0, 1, 0])
+        #expect(FindMatcher.passage(ofComment: "c3", in: document) == nil)
+        #expect(document.children[3].holdsComment("c3"), "the fallback finds the tabs by their mark")
+        #expect(FindMatcher.passage(ofComment: "c4", in: document) == nil)
+    }
+
+    /// A comment's passage goes before find's current match, with a request of its own, until find moves on.
+    @Test func passageGoesBeforeTheMatchUntilFindMovesOn() {
+        func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", content: [PMNode(type: "text", text: text)]) }
+        let document = PMNode(type: "doc", content: [paragraph("Treffer"), paragraph("Treffer"), paragraph("Stelle")])
+        let find = PageFind()
+        find.query = "treffer"
+        find.update(document: document, baseURL: nil, restart: true)
+        let requests = find.revealRequest
+        let passage = FindMatch(ref: NodeRef(path: [2], id: nil), occurrence: 0, topLevel: NodeRef(path: [2], id: nil))
+        find.reveal(passage: passage)
+        #expect(find.revealTarget == passage)
+        #expect(find.revealRequest == requests + 1)
+        find.next()
+        #expect(find.passage == nil)
+        #expect(find.revealTarget == find.currentMatch)
+        #expect(find.currentMatch?.ref.path == [1])
+        // The user's scrolling ends it too.
+        find.reveal(passage: passage)
+        find.endPassage()
+        #expect(find.revealTarget == find.currentMatch)
+    }
+
+    /// A passage is shown for a moment only: afterwards find's match is the target again, and no block keeps reporting
+    /// for it.
+    @Test func passageEndsByItself() async throws {
+        let find = PageFind()
+        let passage = FindMatch(ref: NodeRef(path: [0], id: nil), occurrence: 0, topLevel: NodeRef(path: [0], id: nil))
+        find.reveal(passage: passage)
+        #expect(find.passage == passage)
+        try await Task.sleep(for: PageFind.passageDuration + .milliseconds(300))
+        #expect(find.passage == nil)
+    }
 }

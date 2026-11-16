@@ -49,8 +49,8 @@ struct PageView: View {
     @State private var pendingCommentId: String?
     /// A new page's title takes the cursor once the page has pushed in: focus asked for mid-push is dropped.
     @State private var focusesTitle = false
-    /// Block a comment's passage is in ("Show on Page"), scrolled to once the comments are gone.
-    @State private var revealsAnchor: String?
+    /// The comment whose passage the page shows once the comments are gone ("Show on Page").
+    @State private var revealsComment: String?
     /// A web page in the in-app browser (an integration mention's link).
     @State private var browsing: URL?
     /// The page's space; its settings say whether readers may comment.
@@ -846,22 +846,25 @@ struct PageView: View {
 
     private func dismissedComments() {
         commentsFocusId = nil
-        // The page can only scroll once the sheet is gone.
-        if let anchor = revealsAnchor {
-            revealsAnchor = nil
-            withAnimation { position.scrollTo(id: anchor, anchor: .center) }
+        // The page can only scroll once the sheet is gone; the passage is looked up then, in the page as it is.
+        if let id = revealsComment {
+            revealsComment = nil
+            if let passage = passage(ofComment: id) { find.reveal(passage: passage) }
         }
     }
 
-    /// Shows a comment's passage by scrolling to the top-level block that contains its mark, once the comments are
-    /// gone (`dismissedComments`).
+    /// Shows a comment's passage once the comments are gone (`dismissedComments`).
     private func showInPage(_ comment: PageComment) {
-        guard let model else { return }
-        func contains(_ node: PMNode) -> Bool {
-            node.marks?.contains { $0.type == "comment" && $0.string("commentId") == comment.id } == true || node.children.contains(where: contains)
-        }
-        guard let entry = model.topLevel.first(where: { contains($0.node) }) else { return }
-        revealsAnchor = entry.ref.anchorId
+        revealsComment = comment.id
+    }
+
+    /// Where "Show on Page" goes, as find goes to a match: the text block holding the comment's mark, centered above the
+    /// keyboard (the top-level block went to the middle of the screen, behind the keyboard). Where find doesn't look
+    /// (tabs), the top-level block around the mark.
+    private func passage(ofComment id: String) -> FindMatch? {
+        guard let model else { return nil }
+        return FindMatcher.passage(ofComment: id, in: model.document)
+            ?? model.topLevel.first { $0.node.holdsComment(id) }.map { FindMatch(ref: $0.ref, occurrence: 0, topLevel: $0.ref) }
     }
 
     private func loadWebHTML() async {

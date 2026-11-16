@@ -186,7 +186,7 @@ struct TextNodeView: View {
             }
         } else {
             let inlines = ContentParser.inlines(of: node)
-            let holdsCurrentMatch = find?.currentMatch?.ref == ref
+            let holdsTarget = find?.revealTarget?.ref == ref
             Group {
                 if inlines.isEmpty {
                     Text(" ")
@@ -200,8 +200,8 @@ struct TextNodeView: View {
             .frame(maxWidth: .infinity, alignment: align.frameAlignment)
             .padding(.leading, indent)
             .padding(.top, headingTop)
-            // Report the frame while this block holds the current find match (the page scrolls there).
-            .onGeometryChange(for: CGRect?.self) { holdsCurrentMatch ? $0.frame(in: .named(DocumentModel.documentSpace)) : nil } action: { frame in
+            // Report the frame while this block holds find's current match or a comment's passage (the page goes there).
+            .onGeometryChange(for: CGRect?.self) { holdsTarget ? $0.frame(in: .named(DocumentModel.documentSpace)) : nil } action: { frame in
                 if let frame { find?.currentFrame = (ref, frame) }
             }
             .textSelection(.enabled)
@@ -586,8 +586,8 @@ struct CodeNodeView: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture { if model.isEditable { model.activate(ref, node: node) } }
-                .onGeometryChange(for: CGRect?.self) { [holdsCurrentMatch = find?.currentMatch?.ref == ref] in
-                    holdsCurrentMatch ? $0.frame(in: .named(DocumentModel.documentSpace)) : nil
+                .onGeometryChange(for: CGRect?.self) { [holdsTarget = find?.revealTarget?.ref == ref] in
+                    holdsTarget ? $0.frame(in: .named(DocumentModel.documentSpace)) : nil
                 } action: { frame in
                     if let frame { find?.currentFrame = (ref, frame) }
                 }
