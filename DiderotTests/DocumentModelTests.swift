@@ -3022,6 +3022,13 @@ final class FakeDocumentEngine: DocumentEngine {
     /// What a line can turn into, as the engine would say; nothing said by default.
     var conversionKinds: Set<String>?
     func conversions(_ target: BlockTarget) async -> Set<String>? { conversionKinds }
+    /// Targets of ⌘⌥D's toggle, and what it answers.
+    private(set) var toggledDetails: [BlockTarget] = []
+    var toggleDetailsResult = KeyResult.refused
+    func toggleDetails(_ target: BlockTarget) async -> KeyResult {
+        toggledDetails.append(target)
+        return toggleDetailsResult
+    }
     /// Column counts set, unsynced sources and replaced embeds, as the model sent them.
     private(set) var columnCounts: [(target: BlockTarget, count: Int)] = []
     func setColumnCount(_ target: BlockTarget, count: Int) async -> EngineResult {

@@ -9,7 +9,7 @@ import * as Y from "yjs";
 import { connection } from "./connection";
 import { fits, type Place } from "./fits";
 import { bindingChanges } from "./guards";
-import { columnCountEdit, conversions, convertEdit, referenceEdit, unsyncEdit, type Kind } from "./conversions";
+import { columnCountEdit, conversions, convertEdit, referenceEdit, toggleDetailsEdit, unsyncEdit, type Kind } from "./conversions";
 import { backspaceEdit, backspacePlan, enterEdit, enterLinesEdit, type BackspacePlan, type Cursor, type KeyEdit } from "./keys";
 import { ListJoiner } from "./extensions";
 import { DocumentSchedule, documentDelay } from "./schedule";
@@ -347,6 +347,11 @@ class DocmostEngine {
   /** Turns the line at `target` into `kind` (`convertEdit`) and returns where the cursor goes, as the keys do. */
   convert(target: Target, kind: Kind): Cursor | false | null {
     return this.applyEdit((editor) => convertEdit(editor.schema, editor.state.doc, target, kind));
+  }
+
+  /** ⌘⌥D on the line at `target`: into a new toggle, or out of the one around it (`toggleDetailsEdit`); as `convert`. */
+  toggleDetails(target: Target): Cursor | false | null {
+    return this.applyEdit((editor) => toggleDetailsEdit(editor.schema, editor.state.doc, target));
   }
 
   /** Sets the count of the columns block at `target` (`columnCountEdit`). */

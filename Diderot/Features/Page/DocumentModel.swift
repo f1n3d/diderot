@@ -2342,14 +2342,31 @@ final class DocumentModel {
     /// from the engine's document read beforehand, and the engine refused it when a collaborator changed the block in
     /// between.
     private func convert(_ ref: NodeRef, to kind: String) async {
+        await editLine(ref, focus: .end) { engine in await engine.convert(ref.target, to: kind) }
+    }
+
+    /// ⌘⌥D, as the web's `toggleDetails`: in a toggle the innermost one around the line dissolves into its title and its
+    /// content, the cursor staying in the line; elsewhere the line goes into a new open toggle, the cursor into its empty
+    /// title (`toggleDetailsEdit` in Engine/src/conversions.ts). The app's "toggle" conversion makes the line the title.
+    func toggleActiveDetails() async {
+        guard let active else { return }
+        // Where the web's key does nothing, nothing happens: no toggle around the line, and none fits in its place (an
+        // item's first line). Sent anyway, the engine's refusal ended editing with a notice.
+        guard activeAncestorPath(ofType: "details") != nil || conversionTemplates.contains(.toggle) else { return }
+        await editLine(active.ref) { engine in await engine.toggleDetails(active.ref.target) }
+    }
+
+    /// An edit of the line at `ref` the engine makes from its block then (a conversion, ⌘⌥D's toggle); the cursor goes to
+    /// the line the engine names, at `focus` (a conversion: the end of the new block's first line) or else where it says.
+    private func editLine(_ ref: NodeRef, focus: CursorRequest? = nil, _ edit: (any DocumentEngine) async -> KeyResult) async {
         guard let engine else { return }
         // Its input goes first: the engine turns the block it has.
         await flush()
         if active?.ref.identity == ref.identity { session.dropActive() }
-        switch await engine.convert(ref.target, to: kind) {
+        switch await edit(engine) {
         case .moved(let cursor):
             report(.applied)
-            await focusAfterOperation(cursor.path, .end)
+            if let focus { await focusAfterOperation(cursor.path, focus) } else { await focusAfterOperation(cursor) }
         case .refused: report(.refused)
         case .unavailable: break
         }

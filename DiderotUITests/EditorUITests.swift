@@ -2560,6 +2560,25 @@ import XCTest
             }
             snapshot(app, "103-\(word)")
             Thread.sleep(forTimeInterval: 1.0)
+    /// ⌘⌥D, as the web's toggle shortcut: the line goes into a new open toggle and the cursor into its empty title; in the
+    /// title, the key dissolves the toggle again. The script checks that the open toggle "Faltkopf<stamp>" holds
+    /// "Gefaltet<stamp>", and that "Aufgeklappt<stamp>" and "Entfaltet<stamp>" are paragraphs again, one after the other.
+    func test104_ToggleKeyWrapsTheLine() {
+        let app = launchPage()
+        for (line, title) in [("Gefaltet", "Faltkopf"), ("Entfaltet", "Aufgeklappt")] {
+            var editor = appendParagraph(app)
+            editor.typeText("\(line)\(stamp)")
+            waitForKeyboard(app)
+            editor.typeKey("d", modifierFlags: [.command, .option])
+            // The new toggle's empty title takes the page's one text editor.
+            wait(for: [expectation(for: NSPredicate(format: "value == %@", ""), evaluatedWith: editor)], timeout: 8)
+            editor = activeEditor(app, "No editor in the toggle's title after ⌘⌥D")
+            editor.typeText("\(title)\(stamp)")
+            if line == "Entfaltet" {
+                waitForKeyboard(app)
+                editor.typeKey("d", modifierFlags: [.command, .option])
+            }
+            snapshot(app, "104-\(line)")
             finishEditing(app)
         }
         waitForSync(app)

@@ -18,6 +18,8 @@ enum EditorKeyAction: Equatable {
     /// ↑ in a block's first line and ↓ in its last: to the block above or below, as the web's arrows go through the page.
     /// Elsewhere in the block they stay with the text view (`DocumentModel.takesKey`).
     case lineUp, lineDown
+    /// ⌘⌥D: the line into a new toggle, or out of the one around it, as the web's `toggleDetails`.
+    case toggleDetails
 
     /// The keys, as UIKit matches key commands: a letter or digit as typed without modifiers, so ⌘⇧7 is the 7 key also
     /// where Shift-7 types "/".
@@ -39,6 +41,7 @@ enum EditorKeyAction: Equatable {
         ("9", [.command, .shift], .turnInto(.taskList)),
         ("b", [.command, .shift], .turnInto(.quote)),
         ("c", [.command, .alternate], .turnInto(.codeBlock)),
+        ("d", [.command, .alternate], .toggleDetails),
         (UIKeyCommand.inputUpArrow, [], .lineUp),
         (UIKeyCommand.inputDownArrow, [], .lineDown),
     ]
@@ -88,6 +91,8 @@ extension DocumentModel {
             if !isCode { editsLink = true }
         case .lineUp, .lineDown:
             moveToNeighbor(up: action == .lineUp)
+        case .toggleDetails:
+            Task { await toggleActiveDetails() }
         case .turnInto(let template):
             if activeTemplate != template {
                 if conversionTemplates.contains(template) { convertActive(to: template) }

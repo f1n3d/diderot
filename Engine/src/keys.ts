@@ -241,8 +241,7 @@ export function backspaceEdit(schema: Schema, doc: PMNode, target: Target, json:
     }
     // The toggle's place takes its title as a paragraph, with what was typed, and its content's blocks after it.
     const toggle = $pos.parent, togglePath = path.slice(0, -1);
-    const blocks: JSONContent[] = [schema.nodes.paragraph.create(null, typed.content).toJSON()];
-    if (toggle.childCount > 1) toggle.child(1).forEach((block) => blocks.push(block.toJSON()));
+    const blocks = dissolvedToggle(schema, toggle, typed.content);
     return { edit: { steps: [{ op: "replace", target: { path: togglePath, type: toggle.type.name }, json: blocks }], cursor: { path: togglePath, offset: 0 } }, plan };
   }
   if (plan.kind === "leave") {
@@ -264,6 +263,16 @@ export function backspaceEdit(schema: Schema, doc: PMNode, target: Target, json:
     edit: { steps: [{ op: "replace", target: { path: plan.path, type: into.type.name }, json: [joined.toJSON()] }, removal], cursor: { path: plan.path, offset: into.content.size } },
     plan,
   };
+}
+
+/**
+ * What takes a dissolved toggle's place, as the web's `unsetDetails` makes it: its title, `title` (the text it holds by
+ * now), as a paragraph, and its content's blocks after it. Backspace at the title's start and ⌘⌥D dissolve a toggle.
+ */
+export function dissolvedToggle(schema: Schema, toggle: PMNode, title: Fragment): JSONContent[] {
+  const blocks: JSONContent[] = [schema.nodes.paragraph.create(null, title).toJSON()];
+  if (toggle.childCount > 1) toggle.child(1).forEach((block) => blocks.push(block.toJSON()));
+  return blocks;
 }
 
 /**

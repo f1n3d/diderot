@@ -7,7 +7,7 @@ import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { uniqueIdTypes } from "./extensions";
 import { holds, slotAt } from "./fits";
-import { liftLineEdit, type KeyEdit } from "./keys";
+import { dissolvedToggle, liftLineEdit, type KeyEdit } from "./keys";
 import { locate, pathOf, type Step, type Target } from "./steps";
 
 /** What a line can turn into: the app's block types for "/" and the toolbar, and a synced block. */
@@ -89,6 +89,35 @@ export function convertEdit(schema: Schema, doc: PMNode, target: Target, kind: K
   return {
     steps: [{ op: "replace", target: { path, type: found.node.type.name }, json: [replacement.toJSON()] }],
     cursor: { path: [...path, ...first], offset: line.content.size },
+  };
+}
+
+/**
+ * ⌘⌥D, as the web's `toggleDetails` (Docmost's toggle): in a toggle, its title or content, the innermost toggle around
+ * the line dissolves, its title going on as a paragraph and its content's blocks after it, as Backspace at the title's
+ * start does (`dissolvedToggle`), and the cursor goes to the old title's start, as on the web; elsewhere the line goes
+ * into a new open toggle's content, with an empty title for the cursor (where the app's "toggle" conversion makes the
+ * line the title). Undefined when the block is gone, or no line outside a toggle; a toggle that doesn't fit where the
+ * line is (an item's first line) is refused by its step.
+ */
+export function toggleDetailsEdit(schema: Schema, doc: PMNode, target: Target): KeyEdit | undefined {
+  const found = locate(doc, target);
+  if (!found) return undefined;
+  const path = pathOf(doc, found.pos);
+  const $pos = doc.resolve(found.pos);
+  for (let depth = $pos.depth; depth > 0; depth--) {
+    const toggle = $pos.node(depth);
+    if (toggle.type.name !== "details" || toggle.childCount < 2) continue;
+    const togglePath = path.slice(0, depth);
+    const blocks = dissolvedToggle(schema, toggle, toggle.child(0).content);
+    return { steps: [{ op: "replace", target: { path: togglePath, type: "details" }, json: blocks }], cursor: { path: togglePath, offset: 0 } };
+  }
+  if (!lines.has(found.node.type.name)) return undefined;
+  const nodes = schema.nodes;
+  const wrapped = nodes.details.create({ open: true }, [nodes.detailsSummary.create(), nodes.detailsContent.create(null, found.node)]);
+  return {
+    steps: [{ op: "replace", target: { path, type: found.node.type.name }, json: [wrapped.toJSON()] }],
+    cursor: { path: [...path, 0], offset: 0 },
   };
 }
 
