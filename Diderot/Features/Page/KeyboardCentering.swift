@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Centers the page's active block above the keyboard in one motion with it, keeps the caret visible while typing, and
-/// scrolls to find's current match. The page turns SwiftUI's keyboard avoidance off (`ignoresSafeArea(.keyboard)`): it
-/// jumped before the centering ran. On the page's scroll view, whose height it reports for the trailing space.
+/// scrolls to find's current match or a comment's passage. The page turns SwiftUI's keyboard avoidance off
+/// (`ignoresSafeArea(.keyboard)`): it jumped before the centering ran. On the page's scroll view, whose height it
+/// reports for the trailing space.
 struct CentersAboveKeyboard: ViewModifier {
     /// A binding: the keyboard's callback outlives this value and needs the page's model of the time.
     @Binding var model: DocumentModel?
@@ -31,10 +32,14 @@ struct CentersAboveKeyboard: ViewModifier {
                 centering.insetTop = metrics.insetTop
             }
             .onScrollPhaseChange { _, phase in
-                // Never scroll against the user, also not later for find's match.
+                // Never scroll against the user, also not later for find's match or a comment's passage.
                 centering.userScrolling = phase == .interacting || phase == .decelerating
-                if centering.userScrolling { centering.findTarget = nil }
+                if centering.userScrolling {
+                    centering.findTarget = nil
+                    find.endPassage()
+                }
                 if phase != .animating { centering.target = nil }
+                if phase == .idle { passageSettled() }
             }
             .onChange(of: model?.active?.ref) { _, _ in
                 activeBlockChanged()
@@ -73,7 +78,7 @@ struct CentersAboveKeyboard: ViewModifier {
         var target: CGFloat?
         var targetUntil = Date.distantPast
         var hideTask: Task<Void, Never>?
-        /// Find's match to center once its block reports its frame (built after the scroll there).
+        /// Find's match or a comment's passage to center once its block reports its frame (built after the scroll there).
         var findTarget: FindMatch?
 
         var isCentering: Bool { centerUntil > .now }
@@ -182,7 +187,14 @@ struct CentersAboveKeyboard: ViewModifier {
         }
         let changed = centering.keyboardTop.map { abs($0 - top) > 1 } ?? true
         centering.keyboardTop = top
-        guard changed, model?.active != nil else { return }
+        guard changed else { return }
+        // The keyboard that comes back with the editor once the comments are gone keeps a comment's passage in sight,
+        // not the caret. Not yet measured, its block centers it with this keyboard once it reports (`findFrameChanged`).
+        if let passage = find.passage {
+            if let frame = frame(of: passage) { centerFindMatch(frame, duration: duration) }
+            return
+        }
+        guard model?.active != nil else { return }
         if centering.isCentering {
             center(duration: duration)
         } else {
@@ -193,6 +205,11 @@ struct CentersAboveKeyboard: ViewModifier {
     /// The active editor changed size or position (line wrap, slash/mention menu).
     private func activeFrameChanged() {
         guard let model, model.active != nil, model.activeBlockFrame.height > 0 else { return }
+        // A comment's passage in the edited block, measured once the page went there; elsewhere the caret waits.
+        if find.passage != nil {
+            findFrameChanged()
+            return
+        }
         if centering.isCentering {
             // While the keyboard is still coming, its notification does the centering; the placed caret starts it
             // (`cursorPlaced`), with the keyboard up or none docking.
@@ -207,6 +224,8 @@ struct CentersAboveKeyboard: ViewModifier {
     /// reported itself with the focus; without one docked by now none comes (a hardware keyboard, a floating one), and
     /// the editor is centered in the whole height. Without centering (Return, Backspace) the caret only stays visible.
     private func cursorPlaced() {
+        // A comment's passage being shown keeps the page.
+        guard find.passage == nil else { return }
         if centering.isCentering {
             center(duration: 0.35)
         } else {
@@ -263,40 +282,65 @@ struct CentersAboveKeyboard: ViewModifier {
         scroll(to: base + delta, duration: duration)
     }
 
-    // MARK: - Find's current match
+    // MARK: - Find's current match, a comment's passage
 
-    /// Goes to the current match: if its block is built, it reports its frame once it holds the match, and the match is
-    /// centered above the find bar; otherwise the page first scrolls to the enclosing top-level block, which builds it
-    /// and so reports it (`findFrameChanged`).
+    /// Goes to find's current match, or to a comment's passage ("Show on Page"): if its block is built, it reports its
+    /// frame once it holds the target, and the target is centered above the find bar or the keyboard; otherwise the page
+    /// first scrolls to the enclosing top-level block, which builds it and so reports it (`findFrameChanged`).
     private func revealFindMatch() {
-        guard let match = find.currentMatch else { return }
-        centering.findTarget = match
-        // Next run loop: by then this update has laid out the blocks, and a built one holding the match has reported.
+        guard let target = find.revealTarget else { return }
+        centering.findTarget = target
+        // Next run loop: by then this update has laid out the blocks, and a built one holding the target has reported.
         DispatchQueue.main.async {
-            guard centering.findTarget == match, find.currentMatch == match else { return }
-            if let current = find.currentFrame, current.ref == match.ref {
+            guard centering.findTarget == target, find.revealTarget == target else { return }
+            if let frame = frame(of: target) {
                 centering.findTarget = nil
-                centerFindMatch(current.frame)
+                centerFindMatch(frame)
             } else {
-                position.scrollTo(id: match.topLevel.anchorId, anchor: .center)
+                position.scrollTo(id: target.topLevel.anchorId, anchor: .center)
             }
         }
     }
 
-    /// The block holding find's match reported its frame: centers it if the page is on its way there.
+    /// The block holding find's target reported its frame: centers it if the page is on its way there.
     private func findFrameChanged() {
-        guard let match = centering.findTarget, find.currentMatch == match,
-              let current = find.currentFrame, current.ref == match.ref
-        else { return }
+        guard let target = centering.findTarget, find.revealTarget == target, let frame = frame(of: target) else { return }
         centering.findTarget = nil
-        centerFindMatch(current.frame)
+        centerFindMatch(frame)
     }
 
-    private func centerFindMatch(_ frame: CGRect) {
+    /// The frame of the target's block in document coordinates, once it is built: the editor's while the block is
+    /// edited (a comment's passage can be there), else the one the block reports.
+    private func frame(of target: FindMatch) -> CGRect? {
+        if let model, model.active?.ref == target.ref {
+            return model.activeBlockFrame.height > 0 ? model.activeBlockFrame : nil
+        }
+        guard let current = find.currentFrame, current.ref == target.ref else { return nil }
+        return current.frame
+    }
+
+    private func centerFindMatch(_ frame: CGRect, duration: Double = 0.3) {
+        guard let free = freeRange else { return }
+        scroll(to: centering.scrollTarget(placing: frame.midY, atWindowY: (free.lowerBound + free.upperBound) / 2), duration: duration)
+    }
+
+    /// Where find's target is centered, in window coordinates: below the navigation bar, above the find bar and the
+    /// keyboard.
+    private var freeRange: ClosedRange<CGFloat>? {
         let top = centering.frame.minY
         let bottom = min(find.barTop ?? .infinity, centering.keyboardTop ?? .infinity, centering.frame.maxY)
-        guard bottom - top > 60 else { return }
-        scroll(to: centering.scrollTarget(placing: frame.midY, atWindowY: (top + bottom) / 2), duration: 0.3)
+        return bottom - top > 60 ? top...bottom : nil
+    }
+
+    /// A scroll ended while a comment's passage is shown: if something else moved the page meanwhile, the passage is
+    /// centered again. The editor taking its focus back once the comments are gone undid the first centering.
+    private func passageSettled() {
+        guard let passage = find.passage, !centering.userScrolling, let frame = frame(of: passage), let free = freeRange
+        else { return }
+        let top = centering.windowY(of: frame.minY)
+        let bottom = centering.windowY(of: frame.maxY)
+        guard top < free.lowerBound || bottom > free.upperBound else { return }
+        centerFindMatch(frame)
     }
 
     /// Animates to `target` (`ScrollPosition.scrollTo(y:)` units) without restarting a running animation to it.

@@ -29,14 +29,25 @@ final class PageFind {
     }
     private(set) var matches: [FindMatch] = []
     private(set) var current = 0
-    /// Incremented whenever the page should scroll to the current match.
+    /// A comment's passage the page shows ("Show on Page"): its first text block, which the page centers as it centers
+    /// the current match, above the keyboard. Nothing is highlighted for it. It is shown for `passageDuration`, while
+    /// the keyboard that comes back with the editor once the comments are gone centers it rather than the caret; the
+    /// user's scrolling or find's next step end it sooner (`endPassage`).
+    private(set) var passage: FindMatch?
+    /// The comments' sheet closes in about half a second and the editor's keyboard comes back with it, later on a slow
+    /// device.
+    static let passageDuration = Duration.seconds(2.5)
+    /// Incremented whenever the page should scroll to `revealTarget`.
     private(set) var revealRequest = 0
-    /// Frame (in document coordinates) of the block with the current match, once it is rendered.
+    /// Frame (in document coordinates) of the block holding `revealTarget`, once it is rendered.
     var currentFrame: (ref: NodeRef, frame: CGRect)?
     /// Top edge of the find bar in window coordinates while it shows: the current match is centered above it.
     @ObservationIgnored var barTop: CGFloat?
 
     var currentMatch: FindMatch? { matches.indices.contains(current) ? matches[current] : nil }
+
+    /// What the page goes to: a comment's passage while it is shown, else the current match.
+    var revealTarget: FindMatch? { passage ?? currentMatch }
 
     private static let matchCaseKey = "pageFind.matchCase"
 
@@ -65,7 +76,27 @@ final class PageFind {
         } else {
             current = min(current, max(matches.count - 1, 0))
         }
-        if restart, !matches.isEmpty { revealRequest += 1 }
+        if restart, !matches.isEmpty {
+            passage = nil
+            revealRequest += 1
+        }
+    }
+
+    /// Shows a comment's passage as find shows its match: the page goes to its block and centers it above the keyboard.
+    func reveal(passage: FindMatch) {
+        self.passage = passage
+        revealRequest += 1
+        let request = revealRequest
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.passageDuration)
+            // Unless something was shown since: a match (which ended the passage) or another passage (with its own end).
+            if let self, revealRequest == request { self.passage = nil }
+        }
+    }
+
+    /// The passage gives way: the user scrolls.
+    func endPassage() {
+        passage = nil
     }
 
     /// Whether a match lies in the block at `path` or below it: a collapsed toggle shows its content then.
@@ -79,6 +110,7 @@ final class PageFind {
     private func step(_ delta: Int) {
         guard !matches.isEmpty else { return }
         current = (current + delta + matches.count) % matches.count
+        passage = nil
         revealRequest += 1
     }
 }
@@ -122,52 +154,68 @@ enum FindMatcher {
     static func matches(of query: String, options: String.CompareOptions, in document: PMNode, baseURL: URL?) -> [FindMatch] {
         guard !query.isEmpty else { return [] }
         var result: [FindMatch] = []
-        for entry in NodeEntry.entries(document.children, parentPath: []) {
-            collect(entry.node, ref: entry.ref, topLevel: entry.ref, query: query, options: options, baseURL: baseURL, into: &result)
+        forEachTextBlock(in: document) { node, ref, topLevel in
+            let text = node.type == "codeBlock" ? node.plainText : displayedText(of: node, baseURL: baseURL)
+            for occurrence in ranges(of: query, options: options, in: text).indices {
+                result.append(FindMatch(ref: ref, occurrence: occurrence, topLevel: topLevel))
+            }
+            return true
         }
         return result
     }
 
-    private static func collect(
-        _ node: PMNode, ref: NodeRef, topLevel: NodeRef, query: String, options: String.CompareOptions, baseURL: URL?,
-        into result: inout [FindMatch]
-    ) {
-        func add(_ text: String) {
-            for occurrence in ranges(of: query, options: options, in: text).indices {
-                result.append(FindMatch(ref: ref, occurrence: occurrence, topLevel: topLevel))
-            }
+    /// The first text block holding a comment's mark: where "Show on Page" goes, as find goes to a match. Nil where find
+    /// doesn't look (tabs).
+    static func passage(ofComment id: String, in document: PMNode) -> FindMatch? {
+        var passage: FindMatch?
+        forEachTextBlock(in: document) { node, ref, topLevel in
+            guard node.holdsComment(id) else { return true }
+            passage = FindMatch(ref: ref, occurrence: 0, topLevel: topLevel)
+            return false
         }
-        func visit(_ node: PMNode, ref: NodeRef) {
-            collect(node, ref: ref, topLevel: topLevel, query: query, options: options, baseURL: baseURL, into: &result)
+        return passage
+    }
+
+    /// The text blocks find searches, in reading order, with the refs the views give them and their top-level block:
+    /// paragraphs, headings, toggle titles and code (not Mermaid, which shows a diagram), also inside lists, quotes,
+    /// callouts, tables, toggles, columns, footnotes and synced blocks. `body` returns false to stop.
+    private static func forEachTextBlock(in document: PMNode, _ body: (PMNode, NodeRef, NodeRef) -> Bool) {
+        for entry in NodeEntry.entries(document.children, parentPath: []) {
+            guard visit(entry.node, ref: entry.ref, topLevel: entry.ref, body) else { return }
         }
-        func children(_ nodes: [PMNode], parentPath: [Int]) {
-            for entry in NodeEntry.entries(nodes, parentPath: parentPath) {
-                visit(entry.node, ref: entry.ref)
-            }
+    }
+
+    /// One block and the text blocks inside it; false once `body` stopped.
+    private static func visit(_ node: PMNode, ref: NodeRef, topLevel: NodeRef, _ body: (PMNode, NodeRef, NodeRef) -> Bool) -> Bool {
+        func children(_ nodes: [PMNode], parentPath: [Int]) -> Bool {
+            NodeEntry.entries(nodes, parentPath: parentPath).allSatisfy { visit($0.node, ref: $0.ref, topLevel: topLevel, body) }
         }
         switch node.type {
         case "paragraph", "heading", "detailsSummary":
-            add(displayedText(of: node, baseURL: baseURL))
+            return body(node, ref, topLevel)
         case "codeBlock":
             // Mermaid renders a diagram instead of the code.
-            if node.string("language") != "mermaid" { add(node.plainText) }
+            return node.string("language") == "mermaid" || body(node, ref, topLevel)
         case "bulletList", "orderedList", "taskList", "columns", "footnotes":
-            for item in NodeEntry.entries(node.children, parentPath: ref.path) {
-                children(item.node.children, parentPath: item.ref.path)
-            }
+            return NodeEntry.entries(node.children, parentPath: ref.path).allSatisfy { children($0.node.children, parentPath: $0.ref.path) }
         case "table":
-            for row in NodeEntry.entries(node.children, parentPath: ref.path) {
-                for cell in NodeEntry.entries(row.node.children, parentPath: row.ref.path) {
-                    children(cell.node.children, parentPath: cell.ref.path)
-                }
+            return NodeEntry.entries(node.children, parentPath: ref.path).allSatisfy { row in
+                NodeEntry.entries(row.node.children, parentPath: row.ref.path).allSatisfy { children($0.node.children, parentPath: $0.ref.path) }
             }
         case "blockquote", "callout", "details", "detailsContent", "transclusionSource":
             // A toggle's title at index 0 and its content from index 1, also while it's collapsed: it shows a match there
             // (`ToggleNodeView`), as the web's search does.
-            children(node.children, parentPath: ref.path)
+            return children(node.children, parentPath: ref.path)
         default:
-            break
+            return true
         }
+    }
+}
+
+extension PMNode {
+    /// Whether the node or one inside it carries the comment's mark.
+    func holdsComment(_ id: String) -> Bool {
+        marks?.contains { $0.type == "comment" && $0.string("commentId") == id } == true || children.contains { $0.holdsComment(id) }
     }
 }
 

@@ -2608,6 +2608,88 @@ import XCTest
         waitForSync(app)
     }
 
+    /// "Show on Page" puts a comment's passage above the keyboard while a block is edited, as find puts its match: it
+    /// went to the middle of the screen, behind the keyboard (November 16, 2026, on an iPhone). The passage is the last
+    /// item of a long list, which lay below the screen's middle once the list was centered there.
+    func test105_ShowOnPageAboveTheKeyboard() {
+        let app = launchPage()
+        _ = appendParagraph(app)
+        slash(app, "bullet", pick: "block-bulletList")
+        let editor = activeEditor(app, "No editor in the list")
+        // Item by item: typed in one go, the Returns outran the text, which landed in the wrong items.
+        for number in 1...8 {
+            editor.typeText("Punkt\(number)\n")
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        editor.typeText("Ziel\(stamp)")
+        Thread.sleep(forTimeInterval: 1.0)
+        // An inline comment on the last item's word, from the selection menu.
+        editor.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 14, dy: 12)).doubleTap()
+        let commentItem = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier != 'format-comment' AND label IN %@", ["Comment", "Kommentieren"])).firstMatch
+        XCTAssertTrue(commentItem.waitForExistence(timeout: 5), "“Comment” missing from the selection menu")
+        commentItem.tap()
+        let inlineText = element(app, "inline-comment-text")
+        XCTAssertTrue(inlineText.waitForExistence(timeout: 5), "Sheet for the inline comment doesn't open")
+        let quote = app.staticTexts["inline-comment-quote"].label
+        XCTAssertEqual(quote, "Ziel\(stamp)", "The comment isn't on the last item's word")
+        inlineText.typeText("Gezeigt\(stamp)")
+        app.buttons["inline-comment-send"].tap()
+        XCTAssertTrue(inlineText.waitForNonExistence(timeout: 10), "Sheet doesn't close after sending")
+
+        // Editing far above, with the keyboard up: the passage is out of sight.
+        _ = edit(app, blockContaining: "Erster Absatz")
+        waitForKeyboard(app)
+        let marked = app.links.matching(NSPredicate(format: "label == %@", quote)).firstMatch
+        XCTAssertFalse(marked.exists && marked.isHittable, "The passage is in sight before “Show on Page”")
+
+        app.buttons["page-comments"].tap()
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'comment-'"))
+            .containing(NSPredicate(format: "label == %@", "Gezeigt\(stamp)")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The inline comment is missing from the comments")
+        let showOnPage = row.buttons.matching(NSPredicate(format: "label IN %@", ["Show on Page", "Auf der Seite zeigen"])).firstMatch
+        XCTAssertTrue(showOnPage.waitForExistence(timeout: 5), "The inline comment has no “Show on Page”")
+        showOnPage.tap()
+        XCTAssertTrue(element(app, "comments-composer").waitForNonExistence(timeout: 5), "“Show on Page” doesn't close the comments")
+        // The editor keeps its block and gets the keyboard back. Once the page stays put, the passage lies between the
+        // navigation bar and the keyboard's bar.
+        _ = focusedEditor(app)
+        waitForKeyboard(app)
+        XCTAssertTrue(marked.waitForExistence(timeout: 5), "“Show on Page” doesn't bring the passage into sight")
+        func inFreeArea(_ frame: CGRect) -> Bool {
+            var bottom = app.windows.firstMatch.frame.maxY
+            for blocker in [app.keyboards.firstMatch, app.buttons["editor-done"]] where blocker.exists {
+                bottom = min(bottom, blocker.frame.minY)
+            }
+            return frame.minY >= app.navigationBars.firstMatch.frame.maxY && frame.maxY <= bottom
+        }
+        var settled = false
+        let deadline = Date().addingTimeInterval(6)
+        while !settled, Date() < deadline {
+            let frame = marked.frame
+            Thread.sleep(forTimeInterval: 0.3)
+            settled = marked.frame == frame && app.keyboards.firstMatch.exists && inFreeArea(frame)
+        }
+        snapshot(app, "105-shown")
+        XCTAssertTrue(settled, "“Show on Page” left the passage \(marked.frame) outside the free area")
+        finishEditing(app)
+
+        // The comment goes again: test33, after this one, finds its own comments where it expects them.
+        app.buttons["page-comments"].tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The inline comment is missing from the comments")
+        let menu = app.buttons["comment-menu-\(row.identifier.dropFirst("comment-".count))"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5), "The inline comment has no menu")
+        menu.tap()
+        let delete = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "“Delete” missing from the comment menu")
+        delete.tap()
+        let confirm = button(app, labels: ["Delete", "Löschen"])
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Delete confirmation missing")
+        confirm.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10), "The inline comment stays")
+        tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.
