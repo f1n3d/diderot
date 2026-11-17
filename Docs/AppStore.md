@@ -62,8 +62,25 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notes,knowledge base,documentation,self-hosted,editor,team,pages,markdown
 
-**What's New in This Version** (4000 at most; version 1.2.4, with 1.2.3's, 1.2.2's, 1.2.1's and 1.2.0's below it for those who skip them)
+**What's New in This Version** (4000 at most; version 1.2.5, with 1.2.4's, 1.2.3's and 1.2.2's below it for those who skip them; older lists are left out for the limit)
 
+> • "Color" above the keyboard: the web's text and highlight colors; "Default" takes them away again
+> • "Alignment" above the keyboard aligns paragraphs and headings left, center or right; "Indent" and "Outdent" indent them step by step, as Tab does on the web
+> • "Comment" is in the menu of selected text
+> • Undo takes back everything on the page, Return, conversions and deletions too: with "Undo" above the keyboard, by shaking, with three fingers or with ⌘Z
+> • An empty line shows the web's hint to write, or to type "/" for commands
+> • Nested numbered lists count 1., a., i.
+> • Return in an empty last item of a nested list makes it an item of the list above
+> • Backspace at the start of a line right after a list, quote or callout joins the line to their last line
+> • A callout's emoji is chosen in its bar
+> • "Find on Page" also finds text in collapsed toggles
+> • Three Returns at the end of a code block leave it
+> • "Show on Page" in the comments shows the passage above the keyboard
+> • With a hardware keyboard, the web editor's keys: Tab and Shift-Tab indent and outdent (in tables to the next cell), Shift-Return breaks the line, ⌘K adds a link, ⌘⌥0 to ⌘⌥3 make text and headings, ⌘⇧7, 8 and 9 lists, and more
+> • With a hardware keyboard, ↑ and ↓ go on into the block above or below
+> • "Format" in the selection menu offers bold, italic and underline only: font, size and color from there were lost on leaving the block
+>
+> New in 1.2.4:
 > • Back in the app after a while, a page goes back to "Saved" by itself: before, it stayed at "Connecting" until you typed
 > • A Markdown mark typed quickly with text right after it ("- Shopping") keeps every letter in its place
 >
@@ -88,24 +105,6 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Scrolling past photos no longer downloads all of them
 > • On an iPad, the pointer hides under the presentation's laser pointer
 > • More reliable: formulas and diagrams no longer stay cut off, errors read plainly, and many rare problems are fixed
->
-> New in 1.2.1:
-> • "Append Note" adds no note to a page with footnotes anymore: Docmost would put it after them, where the page can't take it. It says so at once and keeps what you typed
->
-> New in 1.2.0:
-> • Images and diagrams open full screen: swipe through a page's images, zoom in, and share or save them
->
-> Also in 1.2.0:
-> • Pages that many people have edited for a long time open faster
-> • Editing together: Return, Backspace, a selection and a dragged block keep what someone else just typed in the same line
-> • Pasting or dictating several lines goes in at once, with the cursor where the pasted text ends
-> • A note you append stays on the device until it reaches the server
-> • When your device can't keep unsent changes (a full disk), the page says so
-> • "Saving" shows only while the server hasn't confirmed a change yet
-> • Audio and video in pages play with the silent switch on
-> • Attachments and database files from another website name it before you open them
-> • Search results and the template list keep their place when you come back
-> • Editing a comment keeps its line breaks
 
 ## Deutsch
 
@@ -151,8 +150,25 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 
 > docmost,wiki,notizen,wissensdatenbank,dokumentation,selbst gehostet,editor,team,seiten,markdown
 
-**Neu in dieser Version** (höchstens 4000; Version 1.2.4, darunter die von 1.2.3, 1.2.2, 1.2.1 und 1.2.0 für alle, die sie überspringen)
+**Neu in dieser Version** (höchstens 4000; Version 1.2.5, darunter die von 1.2.4, 1.2.3 und 1.2.2 für alle, die sie überspringen; ältere sind wegen der Grenze weggelassen)
 
+> • „Farbe“ über der Tastatur: die Text- und Markierungsfarben des Webs; „Standard“ nimmt sie wieder weg
+> • „Ausrichtung“ über der Tastatur richtet Absätze und Überschriften links, zentriert oder rechts aus; „Einrücken“ und „Ausrücken“ rücken sie stufenweise ein, wie Tab im Web
+> • „Kommentieren“ steht im Menü eines markierten Texts
+> • Widerrufen nimmt alles auf der Seite zurück, auch Return, Umwandeln und Löschen: mit „Widerrufen“ über der Tastatur, durch Schütteln, mit drei Fingern oder mit ⌘Z
+> • Eine leere Zeile zeigt wie im Web den Hinweis, zu schreiben oder „/“ für Befehle zu tippen
+> • Verschachtelte nummerierte Listen zählen 1., a., i.
+> • Return in einem leeren letzten Punkt einer Unterliste macht ihn zu einem Punkt der Liste darüber
+> • Backspace am Anfang einer Zeile direkt nach einer Liste, einem Zitat oder Callout hängt die Zeile an deren letzte Zeile
+> • Das Emoji eines Callouts wird in seiner Leiste gewählt
+> • „Auf der Seite suchen“ findet auch Text in zugeklappten Toggles
+> • Drei Returns am Ende eines Codeblocks verlassen ihn
+> • „Auf der Seite zeigen“ in den Kommentaren zeigt die Stelle über der Tastatur
+> • Mit Hardware-Tastatur die Tasten des Web-Editors: Tab und Umschalt-Tab rücken ein und aus (in Tabellen zur nächsten Zelle), Umschalt-Return bricht die Zeile um, ⌘K setzt einen Link, ⌘⌥0 bis ⌘⌥3 machen Text und Überschriften, ⌘⇧7, 8 und 9 Listen, und weitere
+> • Mit Hardware-Tastatur gehen ↑ und ↓ weiter in den Block darüber oder darunter
+> • „Format“ im Auswahlmenü bietet nur noch Fett, Kursiv und Unterstrichen: Schrift, Größe und Farbe von dort gingen beim Verlassen des Blocks verloren
+>
+> Neu in 1.2.4:
 > • Zurück in der App nach einer Weile geht eine Seite von selbst wieder auf „Gespeichert“: Bisher blieb sie bei „Verbinde“, bis man etwas tippte
 > • Ein zügig getipptes Markdown-Kürzel mit Text direkt dahinter („- Einkauf“) behält jeden Buchstaben an seiner Stelle
 >
@@ -177,31 +193,13 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Beim Scrollen an Fotos vorbei werden nicht mehr alle heruntergeladen
 > • Auf dem iPad verschwindet der Zeiger unter dem Laserpointer der Präsentation
 > • Zuverlässiger: Formeln und Diagramme bleiben nicht mehr abgeschnitten, Fehler lesen sich verständlich, und viele seltene Probleme sind behoben
->
-> Neu in 1.2.1:
-> • „Notiz anhängen“ fügt einer Seite mit Fußnoten keine Notiz mehr an: Docmost würde sie hinter die Fußnoten setzen, wo die Seite sie nicht aufnehmen kann. Die App sagt das sofort und behält, was du getippt hast
->
-> Neu in 1.2.0:
-> • Bilder und Diagramme öffnen sich im Vollbild: durch die Bilder einer Seite wischen, hineinzoomen, teilen oder sichern
->
-> Außerdem in 1.2.0:
-> • Seiten, an denen viele schon lange schreiben, öffnen schneller
-> • Gemeinsam bearbeiten: Return, Backspace, eine Auswahl und ein gezogener Block behalten, was jemand anderes gerade in derselben Zeile getippt hat
-> • Mehrere eingefügte oder diktierte Zeilen kommen auf einmal hinein, der Cursor steht danach am Ende des eingefügten Texts
-> • Eine angehängte Notiz bleibt auf dem Gerät, bis sie beim Server ist
-> • Kann dein Gerät ungesendete Änderungen nicht sichern (volle Festplatte), sagt die Seite es
-> • „Speichere“ erscheint nur, solange der Server eine Änderung noch nicht bestätigt hat
-> • Ton und Video in Seiten spielen auch mit Stummschalter
-> • Anhänge und Datenbank-Dateien von einer anderen Website nennen sie, bevor du sie öffnest
-> • Suchergebnisse und die Vorlagenliste behalten ihre Stelle, wenn du zurückkommst
-> • Beim Bearbeiten eines Kommentars bleiben seine Zeilenumbrüche
 
 ## App Review
 
 Notes for Apple's reviewers (English, 4000 characters at most). They answer the six points App Review asks new developer accounts (Guideline 2.1, Information Needed, October 2026), and the same text goes into the reply in App Store Connect. The demo account's email and password go into the "Sign-in required" fields, never into this file. App Store Connect takes one attachment here: `Diderot-AppReview.mp4`, the screen recording of the release build on an iPhone (launch to sign-out), then the databases on a licensed server.
 
 > 1. Screen recording
-> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight; version 1.2.1 works the same in these steps. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
+> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight; version 1.2.5 works the same in these steps. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
 > • Accounts: the app doesn't create accounts. Accounts belong to the Docmost server that an organization or person runs, and its administrators invite and remove members. The app only signs in to existing accounts, so it has no registration or deletion flow.
 > • User-generated content: pages and comments come only from members of the same private workspace, on a server their own organization runs. There is no public content and no way to reach people outside the workspace. The workspace's administrators decide who is a member and can deactivate or remove members; space administrators can delete any page or comment.
 > • Paid content: none. The app is free, with no in-app purchases, subscriptions, ads or links to buy anything.
