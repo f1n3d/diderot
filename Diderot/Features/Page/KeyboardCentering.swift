@@ -344,8 +344,10 @@ struct CentersAboveKeyboard: ViewModifier {
         guard find.passage == nil, let match = find.currentMatch, !centering.userScrolling, let frame = frame(of: match),
               let free = freeRange, let before = find.barTopBeforeRise
         else { return }
-        let top = centering.windowY(of: frame.minY)
-        let bottom = centering.windowY(of: frame.maxY)
+        // Where a scroll still on its way will have put the match (to the next match, say), as `reveal` counts.
+        let shift = (centering.pendingTarget ?? centering.current) - centering.current
+        let top = centering.windowY(of: frame.minY) - shift
+        let bottom = centering.windowY(of: frame.maxY) - shift
         guard top >= free.lowerBound, bottom <= before, bottom > free.upperBound else { return }
         // Next run loop: asked for within the update that moved the bar, the scroll never started.
         DispatchQueue.main.async {
