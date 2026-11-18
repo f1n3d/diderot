@@ -41,6 +41,19 @@ else
   DEFAULT_SERVER="$DOCMOST_SEED_URL"
   ALT_SERVER="http://127.0.0.1:$PORT"
   UDID=$(Tools/simulator-udid.py "$DEVICE")
+  # The simulator's on-screen keyboard stays up while a test types. With automatic minimization on, as the test
+  # simulator had it on November 18, 2026, the keyboard folds away once XCUITest's keys arrive (they count as a
+  # hardware keyboard's) and comes back a moment later, or not until the app starts again: a tap on a text field brings
+  # none then. What a test expects above the keyboard lies elsewhere meanwhile (test32's match on November 16, 2026).
+  # The setting is the simulator's own. It is turned off again every few seconds while the script runs: the simulator
+  # turned it back on once during a run of the editor area, and not in the next one; what did it wasn't found.
+  xcrun simctl bootstatus "$UDID" -b > /dev/null
+  keyboard_stays_up() { xcrun simctl spawn "$UDID" defaults write com.apple.keyboard.preferences AutomaticMinimizationEnabled -bool NO; }
+  keyboard_stays_up || echo "Automatic minimization couldn't be turned off: the simulator's keyboard may fold away" >&2
+  # Until the script ends, however it ends.
+  (while kill -0 $$ 2> /dev/null && perl -e 'sleep 3'; do keyboard_stays_up 2> /dev/null || true; done) &
+  KEYBOARD_KEEPER=$!
+  trap 'kill "$KEYBOARD_KEEPER" 2> /dev/null || true' EXIT
 fi
 
 # The user the tests sign in as: the admin from .env, unless DOCMOST_DEBUG_EMAIL and DOCMOST_DEBUG_PASSWORD say
@@ -317,7 +330,7 @@ while os.path.isdir(folder):
             open(os.path.join(folder, name[:-5] + ".done"), "w").close()
     time.sleep(0.2)
 PY
-trap 'rm -rf "$COLLEAGUE"' EXIT
+trap 'rm -rf "$COLLEAGUE"; [ -z "${KEYBOARD_KEEPER:-}" ] || kill "$KEYBOARD_KEEPER" 2> /dev/null || true' EXIT
 export TEST_RUNNER_DOCMOST_UITEST_COLLEAGUE="$COLLEAGUE"
 
 export TEST_RUNNER_DOCMOST_DEBUG_SERVER="${DOCMOST_DEBUG_SERVER-$DEFAULT_SERVER}"
