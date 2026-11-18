@@ -50,8 +50,9 @@ else
   # what did it wasn't found. Only written when it is on, so the simulator hears of no change while it stays off.
   xcrun simctl bootstatus "$UDID" -b > /dev/null
   keyboard_stays_up() {
-    [ "$(xcrun simctl spawn "$UDID" defaults read com.apple.keyboard.preferences AutomaticMinimizationEnabled 2> /dev/null)" = 0 ] ||
-      xcrun simctl spawn "$UDID" defaults write com.apple.keyboard.preferences AutomaticMinimizationEnabled -bool NO
+    [ "$(xcrun simctl spawn "$UDID" defaults read com.apple.keyboard.preferences AutomaticMinimizationEnabled 2> /dev/null)" != 0 ] || return 0
+    xcrun simctl spawn "$UDID" defaults write com.apple.keyboard.preferences AutomaticMinimizationEnabled -bool NO &&
+      echo "$(date +%H:%M:%S) The simulator's automatic minimization was on: turned off"
   }
   keyboard_stays_up || echo "Automatic minimization couldn't be turned off: the simulator's keyboard may fold away" >&2
   # Until the script ends, however it ends.
