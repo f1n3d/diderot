@@ -14,13 +14,42 @@ extension AppSessionRaceTests {
         let store = SessionStore(keychain: MemorySecretStore())
 
         @MainActor @Test(.timeLimit(.minutes(3))) func everyOperationReachesTheEngine() async throws {
+            try await withEngine { engine, seen in try await exercise(engine, seen: seen) }
+        }
+
+        /// A redo right after an undo is applied, also when the step undone began in a longer page than the undo leaves.
+        /// Here that step is a table's new row, on its own after a pause: Yjs joins changes less than half a second apart
+        /// into one history step. The table command leaves the editor's selection in the new row; the binding kept it
+        /// from the undo for the page's next change and threw resolving it in the page without that row ("Position 43
+        /// out of range"), so the redo counted as refused. `everyOperationReachesTheEngine` failed that way on GitHub's
+        /// runners whenever the engine took more than half a second there and no longer anywhere after it (November 10
+        /// and 11, 2026); with a pause before each of its operations in turn, that one alone failed, every time.
+        @MainActor @Test(.timeLimit(.minutes(3))) func redoFollowsTheUndoOfAStepThatGrewThePage() async throws {
+            try await withEngine { engine, _ in
+                try #require(await until { engine.status == .synced }, "The engine didn't sync: \(engine.status)")
+                #expect(await engine.insertBlocks([paragraph("a", "Eins")], relativeTo: nil, position: .after) == .applied)
+                let table = PMNode(type: "table", content: [PMNode(type: "tableRow", content: [cell("1"), cell("2")])])
+                let tablePath = try #require(await engine.placeBlocks([table], at: nil, position: .after, expected: nil).path)
+                try await Task.sleep(for: .milliseconds(650))
+                let row = await engine.tableCommand(.path(tablePath, type: "table"), cell: [0, 0], command: ["name": "addRowAfter"])
+                #expect(row.result == .applied)
+                #expect(await block(at: tablePath, in: engine)?.children.count == 2, "the table got no second row")
+                #expect(await engine.undo() == .applied)
+                #expect(await block(at: tablePath, in: engine)?.children.count == 1, "the undo left the new row")
+                #expect(await engine.redo() == .applied)
+                #expect(await block(at: tablePath, in: engine)?.children.count == 2, "the redo didn't bring the row back")
+            }
+        }
+
+        /// An engine on a new page of the stand-in collab server for `body`, closed again however that ends.
+        @MainActor private func withEngine(_ body: (WebDocumentEngine, Seen) async throws -> Void) async throws {
             let session = try await sessionOnA()
             defer { UnsentChanges.removeAll(server: a) }
             let engine = WebDocumentEngine(session: session, pageScripts: [StandInCollab.script])
             let seen = Seen()
             engine.onDocument = { _ in seen.documents += 1 }
             engine.onUnsentChangesKept = { seen.kept.append($0) }
-            // WebKit starts its processes with the first page. On GitHub's runners, where this test may open the run's
+            // WebKit starts its processes with the first page. On GitHub's runners, where this suite may open the run's
             // first page, the engine then didn't start within the app's 15 s; a page loaded first starts them, and the
             // engine gets a second try.
             let firstPage = WebPage()
@@ -38,7 +67,7 @@ extension AppSessionRaceTests {
                 }
             }
             // However the checks end (a failed `#require` has recorded its issue), the engine closes and the caches go.
-            try? await exercise(engine, seen: seen)
+            try? await body(engine, seen)
             await engine.close()
             #expect(engine.status == .idle)
             await removeCaches()

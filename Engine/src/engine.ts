@@ -5,6 +5,7 @@ import Collaboration from "@tiptap/extension-collaboration";
 import { type HocuspocusProvider, type HocuspocusProviderWebsocket, WebSocketStatus } from "@hocuspocus/provider";
 import { Node as PMNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
+import { ySyncPluginKey } from "@tiptap/y-tiptap";
 import * as Y from "yjs";
 import { connection } from "./connection";
 import { fits, type Place } from "./fits";
@@ -464,11 +465,29 @@ class DocmostEngine {
 
   /** False with nothing to undo (TipTap's Collaboration refuses an empty history). */
   undo(): boolean | null {
-    return this.transact((editor) => editor.commands.undo());
+    return this.transact((editor) => this.historyStep(editor, () => editor.commands.undo()));
   }
 
   redo(): boolean | null {
-    return this.transact((editor) => editor.commands.redo());
+    return this.transact((editor) => this.historyStep(editor, () => editor.commands.redo()));
+  }
+
+  /**
+   * An undo or a redo, after which the binding forgets the selection of the history step it went through. y-tiptap keeps
+   * that selection to restore it with the shared document's next change (its `stack-item-popped`), with the positions
+   * it had in the document where the step began. That change compares them with the editor's document of then, another
+   * one, and a position past its end throws ("Position 43 out of range", from `isMisresolvedAfterStructuralChange`):
+   * the change has reached the shared document by then, but not the editor. So a redo right after the undo of a table's
+   * new row was refused, the row gone for good. As the binding's code reads, a collaborator's change arriving next
+   * would meet the same selection; that wasn't tried. The engine has no selection to restore: it edits by position.
+   */
+  private historyStep(editor: Editor, step: () => boolean): boolean {
+    try {
+      return step();
+    } finally {
+      const binding = ySyncPluginKey.getState(editor.state)?.binding;
+      if (binding) binding.beforeTransactionSelection = null;
+    }
   }
 
   // MARK: Internal
