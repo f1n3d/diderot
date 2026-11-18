@@ -156,6 +156,23 @@ import XCTest
         return field
     }
 
+    /// A tab's button in the tab bar. A list scrolled down folds the bar to the tab in use (`tabBarMinimizeBehavior`),
+    /// and the other tabs leave the accessibility tree until a tap on that tab unfolds the bar (eight slow drags back
+    /// to the list's top didn't, on iOS 27.0). A bar without the tab is a folded one: its first button is tapped, again
+    /// if the tap came while the bar was moving. In a whole run test48 scrolls Recently Updated to its page's row
+    /// (`listRow`), and found no "Favorites" after "Back" (November 16, 2026).
+    private func tab(_ app: XCUIApplication, labels: [String]) -> XCUIElement {
+        let tab = button(app, labels: labels)
+        let bar = app.tabBars.firstMatch
+        XCTAssertTrue(bar.waitForExistence(timeout: 10), "No tab bar")
+        for _ in 0..<3 where !tab.exists {
+            bar.buttons.firstMatch.tap()
+            _ = tab.waitForExistence(timeout: 3)
+        }
+        XCTAssertTrue(tab.exists, "The tab bar shows no “\(labels[0])”")
+        return tab
+    }
+
     /// Puts `title` in place of the page's title, all of it: a double tap selects the title, a single word, and the
     /// typed text replaces it. Return (`save`) saves it; without, the field keeps its focus. A tap at the field's end
     /// and a fixed pause used to place the caret for appending; on November 12, 2026 test51's title came out unsaved
@@ -219,7 +236,7 @@ import XCTest
         openPage(app, original)
         pageMenu(["Add to Favorites", "Zu Favoriten hinzufügen"])
         backButton(app).tap()
-        button(app, labels: ["Favorites", "Favoriten"]).tap()
+        tab(app, labels: ["Favorites", "Favoriten"]).tap()
         retitle(openPage(app, original, from: "Favorites"), to: renamed, save: true)
         XCTAssertTrue(app.navigationBars[renamed].waitForExistence(timeout: 15), "Title “\(renamed)” wasn't saved")
         backButton(app).tap()
