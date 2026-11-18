@@ -42,7 +42,11 @@ final class PageFind {
     /// Frame (in document coordinates) of the block holding `revealTarget`, once it is rendered.
     var currentFrame: (ref: NodeRef, frame: CGRect)?
     /// Top edge of the find bar in window coordinates while it shows: the current match is centered above it.
-    @ObservationIgnored var barTop: CGFloat?
+    @ObservationIgnored private(set) var barTop: CGFloat?
+    /// Where the bar's top edge was before it last rose (`barRise`).
+    @ObservationIgnored private(set) var barTopBeforeRise: CGFloat?
+    /// Incremented whenever the bar rose: the keyboard came up under it, and the page keeps the current match in sight.
+    private(set) var barRise = 0
 
     var currentMatch: FindMatch? { matches.indices.contains(current) ? matches[current] : nil }
 
@@ -63,6 +67,17 @@ final class PageFind {
         matches = []
         current = 0
         currentFrame = nil
+    }
+
+    /// The find bar's top edge moved, or the bar went (`nil`). It rises when the keyboard comes up under it: the field
+    /// took its focus back after the user scrolled the keyboard away.
+    func barMoved(to top: CGFloat?) {
+        let before = barTop
+        barTop = top
+        if let top, let before, top < before - 1 {
+            barTopBeforeRise = before
+            barRise += 1
+        }
     }
 
     /// Recomputes matches for a new query (`restart`: jumps to the first match) or a changed document.

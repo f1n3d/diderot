@@ -1096,12 +1096,52 @@ import XCTest
         // A table cell match scrolls into view between the navigation bar and the find bar.
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 10) + "ZeileVier")
         XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) 1$"), "“ZeileVier” not found in the table: \(count.label)")
-        Thread.sleep(forTimeInterval: 1.0)
         let cell = app.staticTexts.matching(NSPredicate(format: "label == 'ZeileVier'")).firstMatch
-        XCTAssertTrue(cell.exists, "Table cell missing")
-        XCTAssertGreaterThanOrEqual(cell.frame.minY, app.navigationBars.firstMatch.frame.maxY - 1, "Match is under the navigation bar")
-        XCTAssertLessThanOrEqual(cell.frame.maxY, field.frame.minY, "Match is behind the find bar")
+        XCTAssertTrue(cell.waitForExistence(timeout: 5), "Table cell missing")
+        let keyboard = app.keyboards.firstMatch
+        /// Whether the match comes to lie between the navigation bar and the find bar, once the page and the bar stay put.
+        func matchSettlesInSight() -> Bool {
+            let deadline = Date().addingTimeInterval(6)
+            while Date() < deadline {
+                waitForKeyboard(app)
+                let match = cell.frame, bar = field.frame
+                Thread.sleep(forTimeInterval: 0.3)
+                if cell.frame == match, field.frame == bar,
+                   match.minY >= app.navigationBars.firstMatch.frame.maxY - 1, match.maxY <= bar.minY { return true }
+            }
+            return false
+        }
+        XCTAssertTrue(matchSettlesInSight(), "Match \(cell.frame) doesn't lie between the navigation bar and the find bar \(field.frame)")
         snapshot(app, "32-find-table")
+
+        // Scrolling the page takes the keyboard away, and the find bar goes down with it. The drag leaves the match low
+        // on the page, where the keyboard comes up once the field is tapped: the match stays in sight above the bar then.
+        // An iPad with a hardware keyboard shows no keyboard, and nothing rises there.
+        let window = app.windows.firstMatch.frame
+        let keyboardIsUp = NSPredicate { _, _ in keyboard.exists && keyboard.frame.minY < window.maxY - 100 }
+        let hasKeyboard = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: keyboardIsUp, object: nil)], timeout: 3) == .completed
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            XCTAssertTrue(hasKeyboard, "No keyboard under the find bar (Tools/run-uitests.sh keeps the simulator from folding it away)")
+        }
+        if hasKeyboard {
+            let shift = window.maxY - 220 - cell.frame.midY
+            let from = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: window.width * 0.9, dy: min(field.frame.minY - 50, window.maxY - 20 - shift)))
+            from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 0, dy: shift)), withVelocity: .slow, thenHoldForDuration: 0.1)
+            let barIsDown = NSPredicate { _, _ in field.frame.minY > window.maxY - 120 }
+            let away = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: barIsDown, object: nil)], timeout: 5) == .completed
+            XCTAssertTrue(away, "Scrolling the page doesn't take the keyboard away: the find bar stays at \(field.frame)")
+            XCTAssertTrue(matchSettlesInSight(), "Match \(cell.frame) isn't in sight after scrolling")
+            let low = cell.frame
+            snapshot(app, "32-find-scrolled")
+            field.tap()
+            let back = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: keyboardIsUp, object: nil)], timeout: 5) == .completed
+            XCTAssertTrue(back, "A tap on the find field brings no keyboard")
+            let inSight = matchSettlesInSight()
+            snapshot(app, "32-find-keyboard-back")
+            XCTAssertGreaterThan(low.maxY, field.frame.minY, "The drag left the match \(low) above the keyboard's place: nothing to check")
+            XCTAssertTrue(inSight, "Match \(cell.frame) is behind the find bar \(field.frame) once the keyboard is back")
+        }
 
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 12) + "let x")
         XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) 1$"), "“let x” not found in the code: \(count.label)")

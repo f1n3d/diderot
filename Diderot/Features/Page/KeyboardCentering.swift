@@ -52,6 +52,7 @@ struct CentersAboveKeyboard: ViewModifier {
             }
             .onChange(of: find.revealRequest) { _, _ in revealFindMatch() }
             .onChange(of: find.currentFrame.map { FindFrame(ref: $0.ref, frame: $0.frame) }) { _, _ in findFrameChanged() }
+            .onChange(of: find.barRise) { _, _ in findBarRose() }
             .onAppear {
                 keyboard.start { top, duration in keyboardChanged(top: top, duration: duration) }
             }
@@ -334,6 +335,23 @@ struct CentersAboveKeyboard: ViewModifier {
         let top = centering.frame.minY
         let bottom = min(find.barTop ?? .infinity, centering.keyboardTop ?? .infinity, centering.frame.maxY)
         return bottom - top > 60 ? top...bottom : nil
+    }
+
+    /// The find bar rose on the keyboard that came up under it: the field took its focus back after the user scrolled
+    /// the keyboard away. A current match that was in sight above the bar's place before, and isn't above its new one,
+    /// is centered there, as when find went to it. One the user scrolled out of sight stays where it is.
+    private func findBarRose() {
+        guard find.passage == nil, let match = find.currentMatch, !centering.userScrolling, let frame = frame(of: match),
+              let free = freeRange, let before = find.barTopBeforeRise
+        else { return }
+        let top = centering.windowY(of: frame.minY)
+        let bottom = centering.windowY(of: frame.maxY)
+        guard top >= free.lowerBound, bottom <= before, bottom > free.upperBound else { return }
+        // Next run loop: asked for within the update that moved the bar, the scroll never started.
+        DispatchQueue.main.async {
+            guard find.currentMatch == match, find.passage == nil, !centering.userScrolling else { return }
+            centerFindMatch(frame)
+        }
     }
 
     /// A scroll ended while a comment's passage is shown: if something else moved the page meanwhile, the passage is

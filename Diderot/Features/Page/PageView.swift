@@ -384,8 +384,8 @@ struct PageView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if find.isShown {
                 PageFindBar(find: find)
-                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { find.barTop = $0 }
-                    .onDisappear { find.barTop = nil }
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { find.barMoved(to: $0) }
+                    .onDisappear { find.barMoved(to: nil) }
             }
         }
         // No tab bar on iPhone pages: more room, and its Search tab (for pages) isn't needed here.
