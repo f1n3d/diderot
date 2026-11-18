@@ -157,14 +157,19 @@ import XCTest
     }
 
     /// A tab's button in the tab bar. A list scrolled down folds the bar to the tab in use (`tabBarMinimizeBehavior`),
-    /// and the other tabs leave the accessibility tree until a tap on that tab unfolds the bar; scrolling back up
-    /// doesn't. In a whole run test48 scrolls Recently Updated to its page's row (`listRow`), and found no "Favorites"
-    /// after "Back" (November 16, 2026).
+    /// and the other tabs leave the accessibility tree until a tap on that tab unfolds the bar (eight slow drags back
+    /// to the list's top didn't, on iOS 27.0). A bar without the tab is a folded one: its first button is tapped, again
+    /// if the tap came while the bar was moving. In a whole run test48 scrolls Recently Updated to its page's row
+    /// (`listRow`), and found no "Favorites" after "Back" (November 16, 2026).
     private func tab(_ app: XCUIApplication, labels: [String]) -> XCUIElement {
         let tab = button(app, labels: labels)
-        let folded = app.tabBars.buttons.firstMatch
-        if !tab.waitForExistence(timeout: 3), folded.waitForExistence(timeout: 5) { folded.tap() }
-        XCTAssertTrue(tab.waitForExistence(timeout: 5), "The tab bar shows no “\(labels[0])”")
+        let bar = app.tabBars.firstMatch
+        XCTAssertTrue(bar.waitForExistence(timeout: 10), "No tab bar")
+        for _ in 0..<3 where !tab.exists {
+            bar.buttons.firstMatch.tap()
+            _ = tab.waitForExistence(timeout: 3)
+        }
+        XCTAssertTrue(tab.exists, "The tab bar shows no “\(labels[0])”")
         return tab
     }
 
