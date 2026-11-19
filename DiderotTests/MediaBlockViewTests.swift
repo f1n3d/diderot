@@ -201,7 +201,8 @@ struct MediaBlockViewTests {
         try #require(island.responds(to: end))
         let process = try #require(island.value(forKey: "_webProcessIdentifier") as? pid_t)
         island.perform(end)
-        let blank = await poll { island.url == nil }
+        // 20 s, as before: no web process starts here, and where this one keeps running the test ends itself.
+        let blank = await poll(tries: 400) { island.url == nil }
         if !blank, process > 0, kill(process, 0) == 0 || errno == EPERM {
             try Test.cancel("The web process kept running.")
         }

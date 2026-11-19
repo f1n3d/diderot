@@ -43,6 +43,7 @@ extension AppSessionRaceTests {
 
         /// An engine on a new page of the stand-in collab server for `body`, closed again however that ends.
         @MainActor private func withEngine(_ body: (WebDocumentEngine, Seen) async throws -> Void) async throws {
+            reached("its start")
             let session = try await sessionOnA()
             defer { UnsentChanges.removeAll(server: a) }
             let engine = WebDocumentEngine(session: session, pageScripts: [StandInCollab.script])
@@ -205,9 +206,10 @@ extension AppSessionRaceTests {
         /// A line in the run's output for each part of the way: where a run stood that the time limit ended. On GitHub's
         /// runners `everyOperationReachesTheEngine` took over three minutes twice (November 10 and 15, 2026) where it
         /// takes under one, after web processes that took 25 and 70 s to launch, and nothing said what it waited for.
-        /// To the error output, which isn't held back until the process ends.
+        /// With the test's name: both tests here start the same way. To the error output, which isn't held back until
+        /// the process ends.
         private func reached(_ part: String) {
-            FileHandle.standardError.write(Data("EngineBridge reached: \(part)\n".utf8))
+            FileHandle.standardError.write(Data("EngineBridge \(Test.current?.name ?? "?") reached: \(part)\n".utf8))
         }
 
         @MainActor private final class Seen {
