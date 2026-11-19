@@ -314,9 +314,11 @@ struct CentersAboveKeyboard: ViewModifier {
     /// Jumps to the target's top-level block, which builds the target's block and so makes it report its frame. A jump
     /// asked for while an animated scroll is on its way doesn't always arrive. With "Versteckt…" typed at a key per
     /// frame, the page was on its way to the match of "Ver" when the jump to the one match left was asked for: in 5 of
-    /// 78 searches it then stood at its top, the block not built, with "1 of 1" in the bar (test45, November 19, 2026).
-    /// So where the block hasn't reported half a second later, the page is asked again (`askForBlock`). One such chain
-    /// per target: each key of the query asks for its target anew.
+    /// 47 searches it then stood at its top, the block not built, with "1 of 1" in the bar (test45, November 19, 2026).
+    /// With the centering asked for on the next run loop (`findFrameChanged`), which is how the scroll to "Ver" starts
+    /// too, no jump was lost in 98 more such searches. Why either is so isn't known: where the block hasn't reported
+    /// half a second later, the page is asked again (`askForBlock`). One such chain per target: each key of the query
+    /// asks for its target anew.
     private func jump(to target: FindMatch) {
         guard centering.jumpTarget != target else { return }
         centering.jumpTarget = target
