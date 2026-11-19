@@ -64,6 +64,7 @@ jobs:
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
         run: |
+          rm -rf ../../docmost
           git clone --quiet --depth 1 --branch v0.97.0 https://github.com/docmost/docmost.git ../../docmost
           corepack pnpm run compare
           corepack pnpm run compare-keys
