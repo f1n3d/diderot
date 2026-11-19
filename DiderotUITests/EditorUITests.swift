@@ -2796,6 +2796,40 @@ import XCTest
         }
     }
 
+    /// Find goes to a match in a block that isn't built yet: the page jumps to the match's top-level block, which
+    /// builds it, and then centers the match itself. Here the top-level block is a list of 40 items, far longer than
+    /// the screen, and the match its last item: where only the jump arrives, the page shows the list's middle and the
+    /// match lies below the keyboard. "Fixture: Tiefer Treffer" (`Tools/run-uitests.sh`) has one "Q", so every key of
+    /// the query has the same match, and no scroll to another is on its way when the page jumps (test45 has that).
+    /// Changes nothing on the page.
+    func test107_FindCentersAMatchDeepInALongList() {
+        let app = openFixture("Fixture: Tiefer Treffer")
+        app.buttons["page-more"].tap()
+        let item = button(app, labels: ["Find on Page", "Auf der Seite suchen"])
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "“Find on Page” missing from the menu")
+        item.tap()
+        let field = app.textFields["page-find-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "Find bar doesn't appear")
+        field.typeText("Qwert")
+        let count = app.staticTexts["page-find-count"]
+        XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) 1$"), "“Qwert” isn't found once in the list: \(count.label)")
+        let match = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Qwertpunkt")).firstMatch
+        XCTAssertTrue(match.waitForExistence(timeout: 5), "The list's last item isn't built: the page didn't go to the list")
+        // Once the page and the bar stay put: between the navigation bar and the find bar.
+        let top = app.navigationBars.firstMatch.frame.maxY - 1
+        var inSight = false
+        let deadline = Date().addingTimeInterval(6)
+        while Date() < deadline, !inSight {
+            waitForKeyboard(app)
+            let before = match.frame, bar = field.frame
+            Thread.sleep(forTimeInterval: 0.3)
+            inSight = match.frame == before && field.frame == bar && before.minY >= top && before.maxY <= bar.minY
+        }
+        snapshot(app, "107-find-deep-in-a-list")
+        XCTAssertTrue(inSight, "The match \(match.frame) isn't between the navigation bar (\(top)) and the find bar \(field.frame): the page went to the list, not to the match")
+        app.buttons["page-find-done"].tap()
+    }
+
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
     /// the start of a list's first item it takes the line out of the list, with its text. Both used to do nothing. The
     /// script checks that "Text<stamp>" and "Raus<stamp>" are paragraphs of the page.

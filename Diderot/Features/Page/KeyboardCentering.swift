@@ -81,6 +81,8 @@ struct CentersAboveKeyboard: ViewModifier {
         var hideTask: Task<Void, Never>?
         /// Find's match or a comment's passage to center once its block reports its frame (built after the scroll there).
         var findTarget: FindMatch?
+        /// The target the page jumps to and asks for again until its block reports (`jump`).
+        var jumpTarget: FindMatch?
         /// The passage shown was centered again once after a scroll settled (`passageSettled`): once is enough, and where
         /// the page can't get there (its end), more would scroll without end.
         var passageRecentered = false
@@ -302,8 +304,33 @@ struct CentersAboveKeyboard: ViewModifier {
                 centering.findTarget = nil
                 centerFindMatch(frame)
             } else {
-                position.scrollTo(id: target.topLevel.anchorId, anchor: .center)
+                jump(to: target)
             }
+        }
+    }
+
+    /// Jumps to the target's top-level block, which builds the target's block and so makes it report its frame. A jump
+    /// asked for while an animated scroll is on its way doesn't always arrive. With "Versteckt…" typed at a key per
+    /// frame, the page was on its way to the match of "Ver" when the jump to the one match left was asked for: in 5 of
+    /// 78 searches it then stood at its top, the block not built, with "1 of 1" in the bar (test45, November 19, 2026).
+    /// Asked for the same place again, as by every further key, the page does nothing. So where the block hasn't
+    /// reported 0.4 s later, the page is asked again, by another anchor, three more times at most. One such chain per
+    /// target: each key of the query asks for its target anew. After a jump by the other anchor the match was in sight
+    /// in 2 of 2 searches, though 147 points above where the centering that follows was to put it; why that scroll
+    /// didn't move the page isn't known.
+    private func jump(to target: FindMatch, again attempt: Int = 0) {
+        guard attempt > 0 || centering.jumpTarget != target else { return }
+        centering.jumpTarget = target
+        position.scrollTo(id: target.topLevel.anchorId, anchor: attempt.isMultiple(of: 2) ? .center : .top)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            guard centering.jumpTarget == target else { return }
+            guard attempt < 3, centering.findTarget == target, find.revealTarget == target, !centering.userScrolling,
+                  frame(of: target) == nil
+            else {
+                centering.jumpTarget = nil
+                return
+            }
+            jump(to: target, again: attempt + 1)
         }
     }
 
