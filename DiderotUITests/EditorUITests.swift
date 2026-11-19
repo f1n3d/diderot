@@ -1124,9 +1124,11 @@ import XCTest
 
         // Scrolling the page takes the keyboard away, and the find bar goes down with it. With the match low on the
         // page, where the keyboard comes up once the field is tapped, the match stays in sight above the bar then.
-        // An iPad with a hardware keyboard shows no keyboard, and nothing rises there.
+        // An iPad with a hardware keyboard shows no keyboard, and a floating one leaves the bar down: nothing rises there.
         let window = app.windows.firstMatch.frame
-        let keyboardIsUp = NSPredicate { _, _ in keyboard.exists && keyboard.frame.minY < window.maxY - 100 }
+        let keyboardIsUp = NSPredicate { _, _ in
+            keyboard.exists && keyboard.frame.minY < window.maxY - 100 && field.frame.minY < window.maxY - 120
+        }
         let hasKeyboard = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: keyboardIsUp, object: nil)], timeout: 3) == .completed
         if UIDevice.current.userInterfaceIdiom == .phone {
             XCTAssertTrue(hasKeyboard, "No keyboard under the find bar (Tools/run-uitests.sh keeps the simulator from folding it away)")
@@ -1143,8 +1145,10 @@ import XCTest
             let barIsDown = NSPredicate { _, _ in field.frame.minY > window.maxY - 120 }
             let away = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: barIsDown, object: nil)], timeout: 5) == .completed
             XCTAssertTrue(away, "Scrolling the page doesn't take the keyboard away: the find bar stays at \(field.frame)")
-            // The page followed the finger only down to the keyboard. A short page comes to rest with the match low
-            // enough; on a longer one a second drag, with the keyboard away, takes the match there.
+            // How far the page went with the finger differs. On the fresh test page it followed all the way, and the
+            // match lies low enough. After the tests that come before this one in a whole run it stopped where the
+            // finger reached the keyboard (November 19, 2026; what makes the difference isn't known): a second drag,
+            // with the keyboard away, takes the match down then.
             _ = matchSettlesInSight()
             if cell.frame.maxY < raised + 20 {
                 let from = app.navigationBars.firstMatch.frame.maxY + 40
@@ -1154,7 +1158,7 @@ import XCTest
             let low = cell.frame
             field.tap()
             let back = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: keyboardIsUp, object: nil)], timeout: 5) == .completed
-            XCTAssertTrue(back, "A tap on the find field brings no keyboard")
+            XCTAssertTrue(back, "A tap on the find field brings no keyboard under the find bar")
             assertMatchInSight("once the keyboard is back", shot: "32-find-keyboard-back")
             XCTAssertGreaterThan(low.maxY, field.frame.minY, "The drag left the match \(low) above the keyboard's place: nothing was checked")
         }
