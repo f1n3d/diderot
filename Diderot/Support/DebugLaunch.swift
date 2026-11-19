@@ -14,6 +14,9 @@ nonisolated enum DebugLaunch {
     /// The page says what its engine's web page answers to `document.visibilityState`, for a UI test to read
     /// (`EngineVisibilityProbe`).
     static var readsEngineVisibility: Bool { value("DOCMOST_DEBUG_ENGINE_VISIBILITY") == "1" }
+    /// Find's first jump to a block not yet built isn't made, as when the page loses it (`KeyboardCentering.jump`): a UI
+    /// test then sees whether the page asks again (test108).
+    static var losesFindJump: Bool { value("DOCMOST_DEBUG_LOSE_FIND_JUMP") == "1" }
     /// Text edited in its block, as with VoiceOver (which doesn't run in the simulator), for UI tests.
     static var editsInBlock: Bool { value("DOCMOST_DEBUG_IN_BLOCK") == "1" }
     /// Start route: `search`, `favorites`, `recent` (MainTabView), `notifications` (HomeView); together with

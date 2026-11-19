@@ -24,8 +24,8 @@ import XCTest
     }
 
     /// Opens a fixture page (Tools/seed-fixtures.py) through the space's search.
-    private func openFixture(_ title: String) -> XCUIApplication {
-        let app = launch(openPage: false)
+    private func openFixture(_ title: String, extraEnvironment: [String: String] = [:]) -> XCUIApplication {
+        let app = launch(openPage: false, extraEnvironment: extraEnvironment)
         let slug = environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo"
         let space = app.buttons["space-\(slug)"]
         XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card “\(slug)” not on the home screen")
@@ -2803,7 +2803,19 @@ import XCTest
     /// the query has the same match, and no scroll to another is on its way when the page jumps (test45 has that).
     /// Changes nothing on the page.
     func test107_FindCentersAMatchDeepInALongList() {
-        let app = openFixture("Fixture: Tiefer Treffer")
+        findTheLongListsLastItem(openFixture("Fixture: Tiefer Treffer"), shot: "107-find-deep-in-a-list")
+    }
+
+    /// The same search with the page's first jump to the list not made (`DOCMOST_DEBUG_LOSE_FIND_JUMP`), as when the
+    /// page loses it: a jump asked for while an animated scroll was on its way left the page at its top in about one
+    /// search in 16 typed at a key per frame, with "1 of 1" in the bar (test45, November 19, 2026). The page asks
+    /// again half a second later. Changes nothing on the page.
+    func test108_FindAsksAgainForABlockThatWasntBuilt() {
+        findTheLongListsLastItem(openFixture("Fixture: Tiefer Treffer", extraEnvironment: ["DOCMOST_DEBUG_LOSE_FIND_JUMP": "1"]),
+                                 shot: "108-find-after-a-lost-jump")
+    }
+
+    private func findTheLongListsLastItem(_ app: XCUIApplication, shot: String) {
         app.buttons["page-more"].tap()
         let item = button(app, labels: ["Find on Page", "Auf der Seite suchen"])
         XCTAssertTrue(item.waitForExistence(timeout: 5), "“Find on Page” missing from the menu")
@@ -2825,7 +2837,7 @@ import XCTest
             Thread.sleep(forTimeInterval: 0.3)
             inSight = match.frame == before && field.frame == bar && before.minY >= top && before.maxY <= bar.minY
         }
-        snapshot(app, "107-find-deep-in-a-list")
+        snapshot(app, shot)
         XCTAssertTrue(inSight, "The match \(match.frame) isn't between the navigation bar (\(top)) and the find bar \(field.frame): the page went to the list, not to the match")
         app.buttons["page-find-done"].tap()
     }
