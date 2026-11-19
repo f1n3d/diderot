@@ -2157,6 +2157,12 @@ import XCTest
         deleteThroughBlockMenu(app, blockContaining: "Code\(stamp)")
         XCTAssertTrue(waitForCount(app, of: "Code\(stamp)", equals: 0), "“…” → Delete leaves the code block")
         snapshot(app, "89-deleted")
+        // A line typed after the deletions: on the server it shows that the page's changes arrived up to here, the
+        // deletions among them. That the three texts are missing there was also true when none of this arrived (V55).
+        _ = appendParagraph(app)
+        activeEditor(app).typeText("Nach89\(stamp)")
+        finishEditing(app)
+        waitForSync(app)
     }
 
     /// A list's items are elements of their own, as on the web: holding and dragging moves one item, not the list, and
@@ -2557,6 +2563,10 @@ import XCTest
         // Waited for: the editor starts again in the paragraph.
         XCTAssertTrue(waitForText(editor, contains: "Zurueck\(stamp)", expected: true), "⌘Z changed the text instead of the block's type")
         XCTAssertEqual(editor.value as? String, "Zurueck\(stamp)", "⌘Z changed the text instead of the block's type")
+        // A letter typed after the undo: on the server it shows that the page's changes arrived up to here. The
+        // paragraph alone was also there when neither ⌘⌥2 nor ⌘Z arrived (V55).
+        editor.typeText("!")
+        XCTAssertTrue(waitForText(editor, contains: "Zurueck\(stamp)!", expected: true), "A letter typed after ⌘Z didn't arrive")
         snapshot(app, "101-undone")
         finishEditing(app)
         waitForSync(app)

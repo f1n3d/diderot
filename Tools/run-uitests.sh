@@ -494,8 +494,8 @@ checks = [
     (E + "test44_BackspaceJoinsListItems", "List: Backspace at the start of Unten" + stamp + " joins it into Oben" + stamp + ", one item left", [block_text_of(i) for i in bullet_items if ("Oben" + stamp) in block_text_of(i) or ("Unten" + stamp) in block_text_of(i)] == ["Oben" + stamp + "Unten" + stamp]),
     (E + "test88_TrashDeletesListItem", "Trash in a checklist item: Weg" + stamp + " went with its item, Bleibt" + stamp + " alone in the list",
      [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "taskList" and ("Bleibt" + stamp) in block_text_of(b)] == [["Bleibt" + stamp]]),
-    (E + "test89_BlockMenuDeletesListAndCode", "Block menu: the checklist with Ganz" + stamp + " and the code block Code" + stamp + " are gone",
-     not has("Ganz" + stamp) and not has("Auch" + stamp) and not has("Code" + stamp)),
+    (E + "test89_BlockMenuDeletesListAndCode", "Block menu: the checklist with Ganz" + stamp + " and the code block Code" + stamp + " are gone, and Nach89" + stamp + " typed after them is there",
+     not has("Ganz" + stamp) and not has("Auch" + stamp) and not has("Code" + stamp) and has("Nach89" + stamp)),
     (E + "test91_ListItemsMoveAndDuplicateAlone", "Checklist items: Zweiter" + stamp + " dragged above Erster" + stamp + ", which Duplicate copied as an item",
      [[block_text_of(c) for c in b.get("content", [])] for b in doc.get("content", []) if b.get("type") == "taskList" and ("Erster" + stamp) in block_text_of(b)] == [["Zweiter" + stamp, "Erster" + stamp, "Erster" + stamp]]),
     (E + "test91_ListItemsMoveAndDuplicateAlone", "Numbered items: Zwei" + stamp + " dragged above Eins" + stamp + ", one list",
@@ -528,8 +528,8 @@ checks = [
      and [[(m.get("type"), (m.get("attrs") or {}).get("color"), (m.get("attrs") or {}).get("colorName")) for m in ms] for ms in marks_of("Gruen" + stamp)] == [[("highlight", "#7edb6c", "green")]]),
     (E + "test99_HardwareKeysAsOnTheWeb", "Keys: Taste" + stamp + " is a heading 2 (Cmd-Alt-2)",
      top_index("heading", "Taste" + stamp) >= 0 and (block_at(top_index("heading", "Taste" + stamp)).get("attrs") or {}).get("level") == 2),
-    (E + "test101_SystemUndoThroughTheHistory", "Undo: Zurueck" + stamp + " is a paragraph again after Cmd-Z took back Cmd-Alt-2",
-     top_index("paragraph", "Zurueck" + stamp) >= 0 and top_index("heading", "Zurueck" + stamp) < 0),
+    (E + "test101_SystemUndoThroughTheHistory", "Undo: Zurueck" + stamp + " is a paragraph again after Cmd-Z took back Cmd-Alt-2, with the ! typed after it",
+     top_index("paragraph", "Zurueck" + stamp + "!") >= 0 and not any(b.get("type") == "heading" and ("Zurueck" + stamp) in block_text_of(b) for b in doc.get("content", []))),
     (E + "test104_ToggleKeyWrapsTheLine", "Keys: Cmd-Alt-D put Gefaltet" + stamp + " into an open toggle titled Faltkopf" + stamp,
      any(b.get("type") == "details" and (b.get("attrs") or {}).get("open") is True
          and [c.get("type") for c in b.get("content", [])] == ["detailsSummary", "detailsContent"]
