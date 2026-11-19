@@ -160,6 +160,8 @@ DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_EDIT="Neuer Absatz" Tools/run-sim.sh
 # Zwei Clients" (a PDF between two paragraphs). It also stands in for a colleague: a test writes a page update into the
 # folder DOCMOST_UITEST_COLLEAGUE, and the script sends it as another client. On a simulator it turns the keyboard's
 # automatic minimization off, so the on-screen keyboard stays up while a test types.
+# With it up, iOS doesn't pass the first ⌘ key the text view handles itself (⌘Z, ⌘B) after a launch on: a test repeats
+# such a key until its effect shows (test2, test101).
 Tools/run-uitests.sh
 ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh   # selected tests and their API checks
 AREA=schnell Tools/run-uitests.sh   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
