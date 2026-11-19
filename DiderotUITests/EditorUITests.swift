@@ -2771,14 +2771,14 @@ import XCTest
 
     /// The page shows its engine as a web page WebKit counts as visible (`EngineHost`): the engine's page answers
     /// "visible" to `document.visibilityState`. Hidden, the engine still syncs in the simulator, which doesn't stop the
-    /// processes WebKit suspends; on a device the page then said "Connecting" until the next edit. Changes nothing on
-    /// the page.
+    /// processes WebKit suspends; on a device the page then said "Connecting" until the next edit. Read once the page
+    /// has synced: not again after a sheet or the camera covered it. Changes nothing on the page.
     func test106_PageShowsTheEngineAsAVisiblePage() {
         let app = launch(openPage: true, extraEnvironment: ["DOCMOST_DEBUG_ENGINE_VISIBILITY": "1"])
         waitForSync(app)
         let probe = element(app, "engine-visibility")
         XCTAssertTrue(probe.waitForExistence(timeout: 10), "The page doesn't say how visible its engine is")
-        let visible = expectation(for: NSPredicate(format: "label == %@", "visible"), evaluatedWith: probe)
+        let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "visible"), object: probe)
         if XCTWaiter().wait(for: [visible], timeout: 10) != .completed {
             XCTFail("WebKit counts the engine's page as “\(probe.label)”, not as visible: the page view doesn't show it")
         }
