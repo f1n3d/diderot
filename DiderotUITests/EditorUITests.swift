@@ -1603,13 +1603,21 @@ import XCTest
         XCTAssertTrue(share.waitForExistence(timeout: 20), "The image doesn't load full screen")
         snapshot(app, "81-viewer")
 
-        app.swipeLeft()
+        // Across four fifths of the screen, so that where the finger ends turns the page. A plain swipe began to turn it
+        // and let it fall back once (November 19, 2026, the test's screen recording): the counter stayed at 1.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)), withVelocity: .fast,
+                   thenHoldForDuration: 0)
         let second = NSPredicate { _, _ in shown().number == 2 }
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: second, object: nil)], timeout: 5), .completed,
                        "Swiping doesn't show the next image: \(counter.label)")
         // The fixture's second image is the same file: it shows once loaded, then a pull closes the viewer.
         XCTAssertTrue(share.waitForExistence(timeout: 20), "The second image doesn't load")
-        app.swipeDown()
+        // Down by nearly half the screen and held: the viewer closes past 80 points of pull, whatever the speed. A plain
+        // swipe pulled the image about 60 points and let it spring back once (November 19, 2026, the screen recording).
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)), withVelocity: .default,
+                   thenHoldForDuration: 0.1)
         XCTAssertTrue(counter.waitForNonExistence(timeout: 5), "Pulling down doesn't close the viewer")
         XCTAssertTrue(image.waitForExistence(timeout: 5), "The page doesn't show again")
     }
