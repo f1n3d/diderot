@@ -2523,7 +2523,8 @@ import XCTest
     }
 
     /// ⌘Z goes through the engine's history, as the toolbar's Undo: it takes back a conversion, which the text view's own
-    /// undo never saw. The script checks that "Zurueck<stamp>" is a paragraph again after ⌘⌥2 made a heading of it.
+    /// undo never saw. "Zurueck<stamp>" is a paragraph again after ⌘⌥2 made a heading of it; the script checks it on the
+    /// server too.
     func test101_SystemUndoThroughTheHistory() {
         let app = launchPage()
         var editor = appendParagraph(app)
@@ -2531,12 +2532,22 @@ import XCTest
         Thread.sleep(forTimeInterval: 1.5)
         waitForKeyboard(app)
         editor.typeKey("2", modifierFlags: [.command, .option])
-        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertTrue(waitForBlockType("H2", in: app), "⌘⌥2 didn't make a heading 2 of the line: \(blockType(app))")
         editor = activeEditor(app, "No editor in the heading ⌘⌥2 made")
-        waitForKeyboard(app)
-        editor.typeKey("z", modifierFlags: .command)
-        Thread.sleep(forTimeInterval: 1.5)
+        // ⌘Z until the line is text again, at most three times. The text view handles ⌘Z itself, and iOS passes such
+        // a key on only in its hardware keyboard mode: for the first ⌘Z after a launch the app wasn't asked anything,
+        // the second arrived (the app's log in four probe runs, November 19, 2026). `Tools/run-uitests.sh` keeps the
+        // on-screen keyboard up, so every launch starts out of that mode; the editor's own key commands, as ⌘⌥2,
+        // arrive in either. An arrow key first, a second before ⌘Z, got it through in three of four runs.
+        for _ in 0..<3 where blockType(app) != "Text" {
+            waitForKeyboard(app)
+            editor.typeKey("z", modifierFlags: .command)
+            _ = waitForBlockType("Text", in: app, timeout: 3)
+        }
+        XCTAssertEqual(blockType(app), "Text", "⌘Z didn't take ⌘⌥2 back")
         editor = activeEditor(app, "No editor after ⌘Z")
+        // Waited for: the editor starts again in the paragraph.
+        XCTAssertTrue(waitForText(editor, contains: "Zurueck\(stamp)", expected: true), "⌘Z changed the text instead of the block's type")
         XCTAssertEqual(editor.value as? String, "Zurueck\(stamp)", "⌘Z changed the text instead of the block's type")
         snapshot(app, "101-undone")
         finishEditing(app)
@@ -3318,6 +3329,19 @@ import XCTest
         } else {
             editor.typeKey("v", modifierFlags: .command)
         }
+    }
+
+    /// What the toolbar's Block type button shows: "Text", "H2", "List", "Code".
+    private func blockType(_ app: XCUIApplication) -> String {
+        let button = app.buttons["editor-block-type"]
+        // Asked of a button that isn't there, XCUITest fails the test instead of answering.
+        return button.exists ? button.value as? String ?? "nothing" : "no button"
+    }
+
+    /// Waits until the toolbar's Block type button shows `title`.
+    private func waitForBlockType(_ title: String, in app: XCUIApplication, timeout: TimeInterval = 5) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", title), object: app.buttons["editor-block-type"])
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     /// Waits until the label matches the regular expression.

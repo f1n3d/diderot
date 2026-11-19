@@ -364,6 +364,8 @@ struct EditorToolbar: View {
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Block type")
+        // What the button shows: the label alone told VoiceOver nothing of the block's type.
+        .accessibilityValue(Text(title))
         .accessibilityIdentifier(id)
     }
 
