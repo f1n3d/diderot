@@ -325,6 +325,12 @@ struct PageView: View {
         .background {
             if let page = model?.engine?.webPage { EngineHost(page: page) }
         }
+        #if DEBUG
+        // Beside the host, not in it: the answer is the engine's, whether or not the page shows it.
+        .background {
+            if DebugLaunch.readsEngineVisibility, let page = model?.engine?.webPage { EngineVisibilityProbe(page: page).id(ObjectIdentifier(page)) }
+        }
+        #endif
         .toast($toast)
         // Refreshes on every appearance, as the web does: coming back to a page deleted or unshared meanwhile shows that
         // instead of its old content, and a refresh cancelled by opening a subpage runs again.

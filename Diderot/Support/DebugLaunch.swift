@@ -11,6 +11,9 @@ nonisolated enum DebugLaunch {
     /// Block the reader scrolls to after loading, as `NodeRef.anchorId`: UniqueID, else index path (`12` = 13th block).
     static var scrollBlockId: String? { value("DOCMOST_DEBUG_SCROLL") }
     static var webLayout: Bool { value("DOCMOST_DEBUG_WEB") == "1" }
+    /// The page says what its engine's web page answers to `document.visibilityState`, for a UI test to read
+    /// (`EngineVisibilityProbe`).
+    static var readsEngineVisibility: Bool { value("DOCMOST_DEBUG_ENGINE_VISIBILITY") == "1" }
     /// Text edited in its block, as with VoiceOver (which doesn't run in the simulator), for UI tests.
     static var editsInBlock: Bool { value("DOCMOST_DEBUG_IN_BLOCK") == "1" }
     /// Start route: `search`, `favorites`, `recent` (MainTabView), `notifications` (HomeView); together with

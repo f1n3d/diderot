@@ -18,3 +18,30 @@ struct EngineHost: View {
             .accessibilityHidden(true)
     }
 }
+
+#if DEBUG
+/// What the engine's page answers to `document.visibilityState`, as an element a UI test reads
+/// (`DOCMOST_DEBUG_ENGINE_VISIBILITY=1`, test106). WebKit says "visible" only while the page's view is in a window of the
+/// active app: where the page view no longer shows `EngineHost`, the engine works on, and WebKit suspends it between
+/// the app's calls on a device. The simulator doesn't stop suspended processes, so no other test noticed (code review
+/// of November 12, 2026). Asked twice a second, which changes nothing about what WebKit answers, but a page that is
+/// called isn't suspended: with the value set, a suspension can't be watched.
+struct EngineVisibilityProbe: View {
+    let page: WebPage
+    @State private var answer = "not asked"
+
+    var body: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .accessibilityElement()
+            .accessibilityIdentifier("engine-visibility")
+            .accessibilityLabel(answer)
+            .task {
+                while !Task.isCancelled {
+                    answer = (try? await page.callJavaScript("return document.visibilityState") as? String) ?? "no answer"
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+            }
+    }
+}
+#endif

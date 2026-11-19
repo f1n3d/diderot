@@ -11,9 +11,9 @@ import XCTest
 
     // MARK: - Helpers
 
-    private func launch(openPage: Bool, arguments: [String] = []) -> XCUIApplication {
+    private func launch(openPage: Bool, arguments: [String] = [], extraEnvironment: [String: String] = [:]) -> XCUIApplication {
         let keys = openPage ? ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"] : []
-        return launchApp(extraEnvironment: environment.filter { keys.contains($0.key) }, arguments: arguments)
+        return launchApp(extraEnvironment: environment.filter { keys.contains($0.key) }.merging(extraEnvironment) { $1 }, arguments: arguments)
     }
 
     /// Opens the test page and waits for the engine sync ("Saved").
@@ -2779,6 +2779,21 @@ import XCTest
         confirm.tap()
         XCTAssertTrue(row.waitForNonExistence(timeout: 10), "The inline comment stays")
         tapSheetBarButton(app.buttons["comments-done"], in: element(app, "comments-sheet"))
+    }
+
+    /// The page shows its engine as a web page WebKit counts as visible (`EngineHost`): the engine's page answers
+    /// "visible" to `document.visibilityState`. Hidden, the engine still syncs in the simulator, which doesn't stop the
+    /// processes WebKit suspends; on a device the page then said "Connecting" until the next edit. Read once the page
+    /// has synced: not again after a sheet or the camera covered it. Changes nothing on the page.
+    func test106_PageShowsTheEngineAsAVisiblePage() {
+        let app = launch(openPage: true, extraEnvironment: ["DOCMOST_DEBUG_ENGINE_VISIBILITY": "1"])
+        waitForSync(app)
+        let probe = element(app, "engine-visibility")
+        XCTAssertTrue(probe.waitForExistence(timeout: 10), "The page doesn't say how visible its engine is")
+        let visible = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "visible"), object: probe)
+        if XCTWaiter().wait(for: [visible], timeout: 10) != .completed {
+            XCTFail("WebKit counts the engine's page as “\(probe.label)”, not as visible: the page view doesn't show it")
+        }
     }
 
     /// Backspace as on the web, with the keyboard staying up: in an empty code block it makes a paragraph of it, and at
