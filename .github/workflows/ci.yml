@@ -54,6 +54,21 @@ jobs:
           node build.mjs
           git diff --exit-code -- ../Diderot/Resources/Engine
 
+      - name: Engine beside Docmost's editor
+        # The engine's extensions and Docmost's own, run side by side: 2000 random transactions must leave the same
+        # document (compare), and Return and Backspace must do what Docmost's keymaps do, case by case, but for the
+        # differences the tool lists as kept or open (compare-keys). Until November 19, 2026 only a Mac with a Docmost
+        # checkout ran them. The tools look for Docmost's sources next to this repository; they need none of its
+        # dependencies. v0.97.0 is the version the release's UI tests run against.
+        working-directory: Engine
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+        run: |
+          rm -rf ../../docmost
+          git clone --quiet --depth 1 --branch v0.97.0 https://github.com/docmost/docmost.git ../../docmost
+          corepack pnpm run compare
+          corepack pnpm run compare-keys
+
       - name: Project checks
         # Tools/check-project.sh: translations, project.yml against the Xcode project, shellcheck. The tools in the versions
         # it was last run with on the Mac (xcodegen --version, shellcheck --version), checked against their release files.
