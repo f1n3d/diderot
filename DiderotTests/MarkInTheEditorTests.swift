@@ -53,6 +53,7 @@ import DocmostKit
         try await Task.sleep(for: .milliseconds(300))
         view.insertText("x")
         try await Task.sleep(for: .milliseconds(200))
+        #expect(editor.model.editorTextView == nil, "the page knows the text view again: the mark may have gone its way")
         let expected = String(typed.drop { $0 == "-" || $0 == " " }) + next.joined() + "x"
         #expect(view.text == expected)
         #expect(String(editor.model.activeText.characters) == expected)

@@ -415,10 +415,16 @@ xcrun xcresulttool export attachments --path "$RESULTS" --output-path "$ATTACHME
 echo "Screenshots: $ATTACHMENTS"
 # The app's own log of the run, from the simulator: its notices and errors, which hold none of a page's text. For
 # what a test's message doesn't say, as which way a typed mark went when its letters came out of order (test94).
-# Nothing on a device, where `simctl` doesn't reach.
+# Nothing on a device, where `simctl` doesn't reach. The subsystem is `AppLog.subsystem`. A run with a failed test
+# keeps a copy under its stamp: the next run, of the failed test alone as a rule, writes the file anew.
 APP_LOG="Tools/.cache/uitests-app.log"
-xcrun simctl spawn "$UDID" log show --start "$RUN_START" --style compact \
-  --predicate 'subsystem == "io.github.f1n3d.diderot"' > "$APP_LOG" 2> /dev/null && echo "The app's log: $APP_LOG" || rm -f "$APP_LOG"
+if xcrun simctl spawn "$UDID" log show --start "$RUN_START" --style compact \
+  --predicate 'subsystem == "io.github.f1n3d.diderot"' > "$APP_LOG" 2> /dev/null; then
+  echo "The app's log: $APP_LOG"
+  [ "$TEST_FAILED" = 0 ] || { cp "$APP_LOG" "Tools/.cache/uitests-app-failed-$STAMP.log"; echo "Kept as: Tools/.cache/uitests-app-failed-$STAMP.log"; }
+else
+  rm -f "$APP_LOG"
+fi
 
 # The server persists `content` ~10 s after the last change; then verify via the API (from the Mac).
 echo "Waiting for the server state (stamp $STAMP) …"
