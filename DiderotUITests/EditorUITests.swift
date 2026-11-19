@@ -2486,6 +2486,8 @@ import XCTest
         }
         XCTAssertEqual(blockType(app), "Text", "⌘Z didn't take ⌘⌥2 back")
         editor = activeEditor(app, "No editor after ⌘Z")
+        // Waited for: the editor starts again in the paragraph.
+        XCTAssertTrue(waitForText(editor, contains: "Zurueck\(stamp)", expected: true), "⌘Z changed the text instead of the block's type")
         XCTAssertEqual(editor.value as? String, "Zurueck\(stamp)", "⌘Z changed the text instead of the block's type")
         snapshot(app, "101-undone")
         finishEditing(app)
@@ -3271,7 +3273,9 @@ import XCTest
 
     /// What the toolbar's Block type button shows: "Text", "H2", "List", "Code".
     private func blockType(_ app: XCUIApplication) -> String {
-        app.buttons["editor-block-type"].value as? String ?? "nothing"
+        let button = app.buttons["editor-block-type"]
+        // Asked of a button that isn't there, XCUITest fails the test instead of answering.
+        return button.exists ? button.value as? String ?? "nothing" : "no button"
     }
 
     /// Waits until the toolbar's Block type button shows `title`.
