@@ -71,6 +71,8 @@ struct ActiveTextEditor: View {
                 } onLink: { link in
                     model.pasteLink(link)
                 }
+                // Said where it isn't so: the page then keeps the text view it had, or none (see `removeMark`'s notice).
+                if !(FirstResponder.current is UITextView) { AppLog.ui.notice("Editor: no text view is first responder as the focus comes") }
                 if let view = FirstResponder.current as? UITextView {
                     model.editorTextView = view
                     TextInputHooks.install(on: view)

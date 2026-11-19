@@ -403,6 +403,7 @@ if [ -n "${ONLY:-}" ]; then
 fi
 
 TEST_FAILED=0
+RUN_START=$(date "+%Y-%m-%d %H:%M:%S")
 xcodebuild -project Diderot.xcodeproj -scheme DiderotUI -configuration Debug \
   -destination "id=$UDID" -derivedDataPath "$DERIVED" -resultBundlePath "$RESULTS" \
   -test-timeouts-enabled YES -default-test-execution-time-allowance 300 -collect-test-diagnostics never \
@@ -412,6 +413,12 @@ xcodebuild -project Diderot.xcodeproj -scheme DiderotUI -configuration Debug \
 mkdir -p "$ATTACHMENTS"
 xcrun xcresulttool export attachments --path "$RESULTS" --output-path "$ATTACHMENTS" >/dev/null 2>&1 || true
 echo "Screenshots: $ATTACHMENTS"
+# The app's own log of the run, from the simulator: its notices and errors, which hold none of a page's text. For
+# what a test's message doesn't say, as which way a typed mark went when its letters came out of order (test94).
+# Nothing on a device, where `simctl` doesn't reach.
+APP_LOG="Tools/.cache/uitests-app.log"
+xcrun simctl spawn "$UDID" log show --start "$RUN_START" --style compact \
+  --predicate 'subsystem == "io.github.f1n3d.diderot"' > "$APP_LOG" 2> /dev/null && echo "The app's log: $APP_LOG" || rm -f "$APP_LOG"
 
 # The server persists `content` ~10 s after the last change; then verify via the API (from the Mac).
 echo "Waiting for the server state (stamp $STAMP) …"

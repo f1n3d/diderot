@@ -672,6 +672,11 @@ final class DocumentModel {
         let start = activeText.startIndex
         let end = activeText.characters.index(start, offsetBy: length)
         let markLength = String(activeText[start..<end].characters).utf16.count
+        // For the run in which letters typed with a mark come out of order again (test94: three whole runs in November
+        // 2026, in no probe): which way the mark went and why, without any of the text.
+        let known = editorTextView != nil, first = editorTextView?.isFirstResponder ?? false
+        let same = editorTextView?.text == String(activeText.characters)
+        AppLog.ui.notice("Mark of \(length) taken away in the \(known && first && same ? "text view" : "page", privacy: .public): text view known \(known), first responder \(first), holds the page's text \(same), \(self.activeText.characters.count - length) after the mark")
         if let view = editorTextView, view.isFirstResponder, view.text == String(activeText.characters),
            let markEnd = view.position(from: view.beginningOfDocument, offset: markLength),
            let range = view.textRange(from: view.beginningOfDocument, to: markEnd) {
@@ -702,6 +707,10 @@ final class DocumentModel {
         defer { typingSwitchEnded() }
         // Its input goes first: the engine turns the line it has.
         await flush()
+        let asked = ContinuousClock.now, lengthAsked = activeText.characters.count, viewAsked = editorTextView.map(ObjectIdentifier.init)
+        defer {
+            AppLog.ui.notice("Mark: turning the line ended after \(Int((ContinuousClock.now - asked) / .milliseconds(1))) ms, \(self.activeText.characters.count - lengthAsked) typed meanwhile, same text view \(self.editorTextView.map(ObjectIdentifier.init) == viewAsked)")
+        }
         let result = await engine.convert(active.ref.target, to: template.rawValue)
         guard case .moved(let cursor) = result else {
             if result == .refused { report(.refused) }
