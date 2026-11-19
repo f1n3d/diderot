@@ -245,6 +245,35 @@ PY
 [ -n "$TWO_CLIENTS_PAGE" ] || echo "No page for the two-client test"
 export TEST_RUNNER_DOCMOST_UITEST_TWO_CLIENTS_PAGE="$TWO_CLIENTS_PAGE"
 
+# The page of the find tests for a match deep in a long block (EditorUITests test107, test108), "Fixture: Tiefer
+# Treffer" under "Fixtures": 150 paragraphs, then one list of 40 items whose last holds the only "Q" of the page. So
+# far down that the list isn't built when the page opens: with 30 paragraphs it was, and find needed no jump. Made
+# anew where the page doesn't have that many blocks, as after a change here.
+python3 - "$PAGE" <<'PY' || echo "No page for the find tests of a long list" >&2
+import sys
+from dev_api import session
+call = session().call
+space = call("pages/info", {"pageId": sys.argv[1]})["spaceId"]
+def child(title, parent=None):
+    pages = call("pages/sidebar-pages", {"spaceId": space, **({"pageId": parent} if parent else {}), "limit": 100})["items"]
+    return next((page for page in pages if page["title"] == title), None)
+root = child("Fixtures")
+if root is None:
+    sys.exit("No page \"Fixtures\" (Tools/seed-fixtures.py)")
+def paragraph(text):
+    return {"type": "paragraph", "content": [{"type": "text", "text": text}]}
+items = [{"type": "listItem", "content": [paragraph(f"Punkt {n}" if n < 40 else "Qwertpunkt am Ende")]} for n in range(1, 41)]
+blocks = [paragraph(f"Vor der Liste, Absatz {n}.") for n in range(1, 151)] + [{"type": "bulletList", "content": items}]
+page = child("Fixture: Tiefer Treffer", root["id"])
+if page is not None:
+    has = (call("pages/info", {"pageId": page["id"], "format": "json"}).get("content") or {}).get("content") or []
+    if len(has) != len(blocks):
+        call("pages/delete", {"pageId": page["id"], "permanentlyDelete": True})
+        page = None
+if page is None:
+    call("pages/create", {"spaceId": space, "parentPageId": root["id"], "title": "Fixture: Tiefer Treffer",
+                          "content": {"type": "doc", "content": blocks}, "format": "json"})
+PY
 # The pages of "Append Note" (EditorUITests test85, test86) under "Fixtures", their content made anew each run:
 # "Fixture: Notiz anhängen" without footnotes, as the test page has them after test35, and "Fixture: Notiz und Fußnote"
 # with one, where no note may go (Docmost's append would put it after the footnotes).
@@ -361,7 +390,7 @@ case "${AREA:-}" in
   schnell) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test5_ReturnAndBackspace,$E/test6_CreatePageFromSpace,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test42_EditAfterReturningToPage,HomeUITests/test19_SearchTabShowsHomeThenResults,HomeUITests/test50_TrashConfirmationAtRow,BaseUITests/test22_BasePageFromTree,BaseUITests/test25_BaseKanbanColumnsAndCard" ;;
   editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test87_ReturnAtLineStartKeepsText,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test88_TrashDeletesListItem,$E/test90_BackspaceLeavesCodeAndList,$E/test92_IndentAndOutdentListItems,$E/test93_BackspaceLeavesQuoteCalloutAndToggle,$E/test94_MarkdownMarksTurnLines,$E/test95_FormatMenuOffersOnlyKeptFormats,$E/test96_EmptyLineShowsPlaceholder,$E/test97_AlignAndIndentParagraph,$E/test98_TextAndHighlightColors,$E/test99_HardwareKeysAsOnTheWeb,$E/test100_ArrowsMoveBetweenBlocks,$E/test101_SystemUndoThroughTheHistory,$E/test102_NestedReturnAndBackspaceAfterList,$E/test104_ToggleKeyWrapsTheLine,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly,$E/test106_PageShowsTheEngineAsAVisiblePage" ;;
   bloecke) ONLY="$E/test7_DragBlock,$E/test91_ListItemsMoveAndDuplicateAlone,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test89_BlockMenuDeletesListAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink,$E/test84_PreviewStaysOpenWhenABlockComesInAbove,$E/test103_CalloutIcon" ;;
-  seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test33_Comments,$E/test105_ShowOnPageAboveTheKeyboard,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test85_AppendNoteKeptAcrossLaunches,$E/test86_AppendNoteRefusedOnAPageWithFootnotes,HomeUITests" ;;
+  seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test107_FindCentersAMatchDeepInALongList,$E/test108_FindAsksAgainForABlockThatWasntBuilt,$E/test33_Comments,$E/test105_ShowOnPageAboveTheKeyboard,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test85_AppendNoteKeptAcrossLaunches,$E/test86_AppendNoteRefusedOnAPageWithFootnotes,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
   server) ONLY="ServerUITests" ;;
   *) echo "Unknown AREA '$AREA': schnell, editor, bloecke, seiten, datenbanken or server" >&2; exit 1 ;;

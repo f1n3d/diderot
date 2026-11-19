@@ -81,6 +81,10 @@ struct CentersAboveKeyboard: ViewModifier {
         var hideTask: Task<Void, Never>?
         /// Find's match or a comment's passage to center once its block reports its frame (built after the scroll there).
         var findTarget: FindMatch?
+        /// The target the page jumps to and asks for again until its block reports (`jump`), and which chain of jumps
+        /// is the one that goes on: a target asked for anew starts another.
+        var jumpTarget: FindMatch?
+        var jumpChain = 0
         /// The passage shown was centered again once after a scroll settled (`passageSettled`): once is enough, and where
         /// the page can't get there (its end), more would scroll without end.
         var passageRecentered = false
@@ -302,16 +306,62 @@ struct CentersAboveKeyboard: ViewModifier {
                 centering.findTarget = nil
                 centerFindMatch(frame)
             } else {
-                position.scrollTo(id: target.topLevel.anchorId, anchor: .center)
+                jump(to: target)
             }
         }
     }
 
-    /// The block holding find's target reported its frame: centers it if the page is on its way there.
+    /// Jumps to the target's top-level block, which builds the target's block and so makes it report its frame. A jump
+    /// asked for while an animated scroll is on its way doesn't always arrive. With "Versteckt…" typed at a key per
+    /// frame, the page was on its way to the match of "Ver" when the jump to the one match left was asked for: in 5 of
+    /// 47 searches it then stood at its top, the block not built, with "1 of 1" in the bar (test45, November 19, 2026).
+    /// With the centering asked for on the next run loop (`findFrameChanged`), which is how the scroll to "Ver" starts
+    /// too, no jump was lost in 98 more such searches. Why either is so isn't known: where the block hasn't reported
+    /// half a second later, the page is asked again (`askForBlock`). One such chain per target: each key of the query
+    /// asks for its target anew.
+    private func jump(to target: FindMatch) {
+        guard centering.jumpTarget != target else { return }
+        centering.jumpTarget = target
+        centering.jumpChain += 1
+        askForBlock(of: target, chain: centering.jumpChain)
+    }
+
+    /// One jump of the chain, and half a second later the next, three more at most, unless the block has reported, find
+    /// has another target, or the user scrolled (which ends `findTarget`). Asked for the same place again, the page
+    /// does nothing, as it did for every further key: it is first told to stay where it is, which is another place to
+    /// it and ends a scroll still on its way, and asked on the next run loop, from rest as a first jump is.
+    private func askForBlock(of target: FindMatch, chain: Int, again attempt: Int = 0) {
+        var lost = false
+        #if DEBUG
+        lost = attempt == 0 && DebugLaunch.losesFindJump
+        #endif
+        if !lost { position.scrollTo(id: target.topLevel.anchorId, anchor: .center) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard centering.jumpTarget == target, centering.jumpChain == chain else { return }
+            guard attempt < 3, centering.findTarget == target, find.revealTarget == target, frame(of: target) == nil else {
+                centering.jumpTarget = nil
+                return
+            }
+            centering.target = nil
+            position.scrollTo(y: centering.current)
+            DispatchQueue.main.async {
+                guard centering.jumpTarget == target, centering.jumpChain == chain else { return }
+                askForBlock(of: target, chain: chain, again: attempt + 1)
+            }
+        }
+    }
+
+    /// The block holding find's target reported its frame: centers it if the page is on its way there. On the next run
+    /// loop: asked for within the update that brought the frame, the one of the jump that built the block, the scroll
+    /// never started, as `findBarRose` found. The page stayed where the jump had put the top-level block: a point or two
+    /// off for a short block, and for the last item of a list of 40 with the match below the keyboard (test107).
     private func findFrameChanged() {
-        guard let target = centering.findTarget, find.revealTarget == target, let frame = frame(of: target) else { return }
+        guard let target = centering.findTarget, find.revealTarget == target, frame(of: target) != nil else { return }
         centering.findTarget = nil
-        centerFindMatch(frame)
+        DispatchQueue.main.async {
+            guard find.revealTarget == target, !centering.userScrolling, let frame = frame(of: target) else { return }
+            centerFindMatch(frame)
+        }
     }
 
     /// The frame of the target's block in document coordinates, once it is built: the editor's while the block is
