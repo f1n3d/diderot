@@ -33,6 +33,34 @@ import DocmostKit
         await editor.turn()
     }
 
+    /// The same with the page not knowing the editor's text view, as when UIKit hasn't made it first responder by the
+    /// time SwiftUI's focus arrives (`EditorFocus`): the mark is then taken away on the page's text, and the keys right
+    /// after that, before SwiftUI's next update, stay in order all the same. A guess at test94's "lMiste…d" (a whole
+    /// run, November 19, 2026) that this test didn't bear out: it passed before any change.
+    @Test(.timeLimit(.minutes(1)), arguments: [("- ", ["M", "d"]), ("- M", ["d"])])
+    func lettersStayInOrderWhereThePageMissedTheTextView(typed: String, next: [String]) async throws {
+        let editor = try await Editor()
+        defer { editor.close() }
+        let view = editor.view
+        editor.model.editorTextView = nil
+
+        view.insertText(typed)
+        editor.model.activeTextChanged()
+        // The keys right after the page took the mark away, before SwiftUI's next update brings that to the text view.
+        for _ in 0..<1000 where String(editor.model.activeText.characters).hasPrefix("- ") { await Task.yield() }
+        try #require(!String(editor.model.activeText.characters).hasPrefix("- "), "the page didn't take the mark away")
+        for key in next { view.insertText(key) }
+        try await Task.sleep(for: .milliseconds(300))
+        view.insertText("x")
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(editor.model.editorTextView == nil, "the page knows the text view again: the mark may have gone its way")
+        let expected = String(typed.drop { $0 == "-" || $0 == " " }) + next.joined() + "x"
+        #expect(view.text == expected)
+        #expect(String(editor.model.activeText.characters) == expected)
+        #expect(view.selectedRange == NSRange(location: expected.utf16.count, length: 0), "the caret isn't after the letters")
+        await editor.turn()
+    }
+
     /// The mark taken away in the editor's `onChange`, where the text view's report of it comes with SwiftUI's next
     /// update: the engine still gets the line without it, before it turns the line.
     @Test(.timeLimit(.minutes(1))) func theLineTurnsWithoutTheMark() async throws {

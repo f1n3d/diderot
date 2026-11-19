@@ -153,7 +153,8 @@ DOCMOST_DEBUG_PAGE=<pageId> DOCMOST_DEBUG_EDIT="Neuer Absatz" Tools/run-sim.sh
 
 # UI tests with real taps in the document view (simulator, or UDID=<udid> for an iPhone). The script makes the test page
 # "Editor-Test" in the space "demo" anew each run (an earlier run's goes for good) and checks it through the API
-# afterwards; screenshots go to Tools/.cache/uitests-attachments/. The server switch test signs in to the dev instance
+# afterwards; screenshots go to Tools/.cache/uitests-attachments/, the app's own log of the run to
+# Tools/.cache/uitests-app.log. The server switch test signs in to the dev instance
 # under a second address (127.0.0.1, or the Mac's LAN address: DOCMOST_UITEST_ALT_SERVER).
 # For the bell tests the script first creates two mentions of the admin (Tools/seed-notifications.py), for the database
 # tests the test database and a page embedding it (Tools/seed-bases.py), for the two-client test the page "Fixture:
