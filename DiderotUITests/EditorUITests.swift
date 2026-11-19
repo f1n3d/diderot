@@ -2157,8 +2157,9 @@ import XCTest
         deleteThroughBlockMenu(app, blockContaining: "Code\(stamp)")
         XCTAssertTrue(waitForCount(app, of: "Code\(stamp)", equals: 0), "“…” → Delete leaves the code block")
         snapshot(app, "89-deleted")
-        // A line typed after the deletions: on the server it shows that the page's changes arrived up to here, the
-        // deletions among them. That the three texts are missing there was also true when none of this arrived (V55).
+        // A line typed after the deletions: on the server it shows that the page still sent its changes then, the
+        // deletions before it among them. That the three texts are missing there was also true when none of this
+        // arrived (V55). Synced before the test ends: the app's next launch wouldn't wait for it.
         _ = appendParagraph(app)
         activeEditor(app).typeText("Nach89\(stamp)")
         finishEditing(app)
@@ -2538,7 +2539,7 @@ import XCTest
 
     /// ⌘Z goes through the engine's history, as the toolbar's Undo: it takes back a conversion, which the text view's own
     /// undo never saw. "Zurueck<stamp>" is a paragraph again after ⌘⌥2 made a heading of it; the script checks it on the
-    /// server too.
+    /// server too, with the "!" typed after the undo.
     func test101_SystemUndoThroughTheHistory() {
         let app = launchPage()
         var editor = appendParagraph(app)
@@ -2563,8 +2564,9 @@ import XCTest
         // Waited for: the editor starts again in the paragraph.
         XCTAssertTrue(waitForText(editor, contains: "Zurueck\(stamp)", expected: true), "⌘Z changed the text instead of the block's type")
         XCTAssertEqual(editor.value as? String, "Zurueck\(stamp)", "⌘Z changed the text instead of the block's type")
-        // A letter typed after the undo: on the server it shows that the page's changes arrived up to here. The
-        // paragraph alone was also there when neither ⌘⌥2 nor ⌘Z arrived (V55).
+        // A letter typed after the undo: on the server it shows that the page still sent its changes then. The
+        // paragraph without it was also there when the page had stopped sending before ⌘⌥2 (V55). That the heading
+        // itself was on the server in between, no check after the run can show.
         editor.typeText("!")
         XCTAssertTrue(waitForText(editor, contains: "Zurueck\(stamp)!", expected: true), "A letter typed after ⌘Z didn't arrive")
         snapshot(app, "101-undone")
