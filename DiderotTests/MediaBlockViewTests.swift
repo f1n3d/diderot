@@ -201,7 +201,8 @@ struct MediaBlockViewTests {
         try #require(island.responds(to: end))
         let process = try #require(island.value(forKey: "_webProcessIdentifier") as? pid_t)
         island.perform(end)
-        let blank = await poll { island.url == nil }
+        // 20 s, as before: no web process starts here, and where this one keeps running the test ends itself.
+        let blank = await poll(tries: 400) { island.url == nil }
         if !blank, process > 0, kill(process, 0) == 0 || errno == EPERM {
             try Test.cancel("The web process kept running.")
         }
@@ -372,9 +373,11 @@ struct MediaBlockViewTests {
         #expect(size.height.isFinite && size.height > 0 && size.height <= 300, "\(size)")
     }
 
-    /// Polls `condition` while SwiftUI lays out (`tries` × 50 ms, 20 s by default: GitHub's runners start web processes
-    /// far slower than a Mac, and a met condition ends the wait at once).
-    private func poll(tries: Int = 400, _ condition: () -> Bool) async -> Bool {
+    /// Polls `condition` while SwiftUI lays out (`tries` × 50 ms, a minute by default; a met condition ends the wait at
+    /// once). GitHub's runners start web processes far slower than a Mac: in three of about 130 runs from November 8 to
+    /// 15, 2026 one took 15 to 22 s to launch, and the 20 s this waited before ended as the launch did
+    /// (`keepsItsContentOnReturn`) or four seconds after it (`formulaRendersAgainAfterItsWebProcessEnded`).
+    private func poll(tries: Int = 1200, _ condition: () -> Bool) async -> Bool {
         for _ in 0..<tries {
             if condition() { return true }
             try? await Task.sleep(for: .milliseconds(50))

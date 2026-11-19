@@ -43,6 +43,7 @@ extension AppSessionRaceTests {
 
         /// An engine on a new page of the stand-in collab server for `body`, closed again however that ends.
         @MainActor private func withEngine(_ body: (WebDocumentEngine, Seen) async throws -> Void) async throws {
+            reached("its start")
             let session = try await sessionOnA()
             defer { UnsentChanges.removeAll(server: a) }
             let engine = WebDocumentEngine(session: session, pageScripts: [StandInCollab.script])
@@ -54,6 +55,7 @@ extension AppSessionRaceTests {
             // engine gets a second try.
             let firstPage = WebPage()
             for try await _ in firstPage.load(html: "<!doctype html><p>", baseURL: IslandHTML.baseURL) {}
+            reached("WebKit's first page loaded")
             do {
                 StubURLProtocol.body.withLock { $0 = #"{"data": {"token": "collab"}}"# }
                 defer { StubURLProtocol.body.withLock { $0 = nil } }
@@ -66,6 +68,7 @@ extension AppSessionRaceTests {
                     }
                 }
             }
+            reached("the engine opened")
             // However the checks end (a failed `#require` has recorded its issue), the engine closes and the caches go.
             try? await body(engine, seen)
             await engine.close()
@@ -77,6 +80,7 @@ extension AppSessionRaceTests {
         @MainActor private func exercise(_ engine: WebDocumentEngine, seen: Seen) async throws {
             try #require(await until { engine.status == .synced }, "The engine didn't sync: \(engine.status)")
 
+            reached("synced")
             // Blocks, Return, Backspace.
             #expect(await engine.insertBlocks([paragraph("a", "Eins"), paragraph("b", "Zwei")], relativeTo: nil, position: .after) == .applied)
             let (a, aPath) = try await find("a", in: engine)
@@ -90,6 +94,7 @@ extension AppSessionRaceTests {
             #expect(await engine.backspacePlans(lineTarget)?.text == .join(aPath))
             #expect(await engine.backspace(lineTarget, holding: next, base: next) == .done(.join(aPath), cursor: EngineCursor(path: aPath, offset: 2)))
 
+            reached("blocks, Return and Backspace done")
             // Conversions.
             #expect(await engine.conversions(a)?.contains("heading2") == true)
             guard case .moved = await engine.convert(a, to: "heading2") else {
@@ -98,6 +103,7 @@ extension AppSessionRaceTests {
             }
             let (heading, _) = try await find("a", in: engine)
 
+            reached("conversions done")
             // Moving, replacing, placing.
             let (zweiBefore, _) = try await find("b", in: engine)
             #expect(await engine.moveBlock(zweiBefore, to: heading, position: .before) == .applied)
@@ -122,6 +128,7 @@ extension AppSessionRaceTests {
             let (dreiNow, _) = try await find("c", in: engine)
             #expect(await engine.deleteBlock(dreiNow) == .applied)
 
+            reached("moving, replacing and placing done")
             // A table, columns and a list.
             let table = PMNode(type: "table", content: [PMNode(type: "tableRow", content: [cell("1"), cell("2")])])
             let tablePath = try #require(await engine.placeBlocks([table], at: nil, position: .after, expected: nil).path)
@@ -165,6 +172,7 @@ extension AppSessionRaceTests {
                     == .done(.plain, cursor: EngineCursor(path: codePath, offset: 0)))
             #expect(await block(at: codePath, in: engine)?.type == "paragraph")
 
+            reached("tables, columns and lists done")
             // A synced block, an embedded one and a comment's mark: each call's arguments find what they name.
             let source = PMNode(type: "transclusionSource", attrs: ["id": "s1"], content: [paragraph(nil, "Synchron")])
             let sourcePath = try #require(await engine.placeBlocks([source], at: nil, position: .after, expected: nil).path)
@@ -180,10 +188,12 @@ extension AppSessionRaceTests {
             #expect(await engine.unsetComment("c1") == .applied)
             #expect(await block(at: markedPath, in: engine)?.children.first?.marks?.isEmpty ?? true, "the comment's mark stayed")
 
+            reached("synced blocks, embeds and marks done")
             // History.
             #expect(await engine.undo() == .applied)
             #expect(await engine.redo() == .applied)
 
+            reached("history done")
             // What the page shows, and what it keeps: the stand-in confirms nothing.
             let document = try #require(await engine.currentDocument())
             #expect(document.children.map(\.plainText).contains("B2"))
@@ -193,6 +203,15 @@ extension AppSessionRaceTests {
         }
 
         /// What the engine reported through the page's callbacks.
+        /// A line in the run's output for each part of the way: where a run stood that the time limit ended. On GitHub's
+        /// runners `everyOperationReachesTheEngine` took over three minutes twice (November 10 and 15, 2026) where it
+        /// takes under one, after web processes that took 25 and 70 s to launch, and nothing said what it waited for.
+        /// With the test's name: both tests here start the same way. To the error output, which isn't held back until
+        /// the process ends.
+        private func reached(_ part: String) {
+            FileHandle.standardError.write(Data("EngineBridge \(Test.current?.name ?? "?") reached: \(part)\n".utf8))
+        }
+
         @MainActor private final class Seen {
             var documents = 0
             var kept: [(any Error)?] = []

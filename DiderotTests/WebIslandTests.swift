@@ -10,7 +10,7 @@ struct WebIslandTests {
     /// the one scrolled away doesn't undo that. Depending on how far the page had loaded, the next render's wait for the
     /// page's events got the replaced load's failure, or the scrolled-away render's measurement failed once the page
     /// loaded anew. Either set the minimum height, which cut the formula off while it stayed in view.
-    @Test(.timeLimit(.minutes(1)), arguments: [50, 600])
+    @Test(.timeLimit(.minutes(2)), arguments: [50, 600])
     func anIslandScrolledAwayWhileLoadingKeepsTheNextRendersHeight(awayMilliseconds: Int) async throws {
         let html = IslandHTML.math(#"\sum_{k=1}^{n} k^2 = \frac{n(n+1)(2n+1)}{6}"#, displayMode: true)
         let host = UIHostingController(rootView: ScrolledIsland(html: html, away: false))
@@ -43,9 +43,10 @@ struct WebIslandTests {
         #expect(WebIslandView.lastHeight(of: html, width: 390, typeSize: .xxxLarge) == nil)
     }
 
-    /// Polls `condition` while SwiftUI lays out (20 s at most: GitHub's runners start web processes slowly).
+    /// Polls `condition` while SwiftUI lays out, a minute at most. GitHub's runners start web processes slowly: one
+    /// took 15.6 s to launch on November 15, 2026, and the 20 s this waited before ended six seconds after it.
     private func poll(_ condition: () -> Bool) async -> Bool {
-        for _ in 0..<400 {
+        for _ in 0..<1200 {
             if condition() { return true }
             try? await Task.sleep(for: .milliseconds(50))
         }
