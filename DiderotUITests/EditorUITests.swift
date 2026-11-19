@@ -1096,12 +1096,72 @@ import XCTest
         // A table cell match scrolls into view between the navigation bar and the find bar.
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 10) + "ZeileVier")
         XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) 1$"), "“ZeileVier” not found in the table: \(count.label)")
-        Thread.sleep(forTimeInterval: 1.0)
         let cell = app.staticTexts.matching(NSPredicate(format: "label == 'ZeileVier'")).firstMatch
-        XCTAssertTrue(cell.exists, "Table cell missing")
-        XCTAssertGreaterThanOrEqual(cell.frame.minY, app.navigationBars.firstMatch.frame.maxY - 1, "Match is under the navigation bar")
-        XCTAssertLessThanOrEqual(cell.frame.maxY, field.frame.minY, "Match is behind the find bar")
-        snapshot(app, "32-find-table")
+        XCTAssertTrue(cell.waitForExistence(timeout: 5), "Table cell missing")
+        let keyboard = app.keyboards.firstMatch
+        /// Whether the match comes to lie between the navigation bar and the find bar, once the page and the bar stay put.
+        func matchSettlesInSight() -> Bool {
+            let deadline = Date().addingTimeInterval(6)
+            while Date() < deadline {
+                waitForKeyboard(app)
+                let match = cell.frame, bar = field.frame
+                Thread.sleep(forTimeInterval: 0.3)
+                if cell.frame == match, field.frame == bar,
+                   match.minY >= app.navigationBars.firstMatch.frame.maxY - 1, match.maxY <= bar.minY { return true }
+            }
+            return false
+        }
+        /// Fails with the edge the match lies behind, or that the page didn't stay put; `shot` names the screenshot.
+        func assertMatchInSight(_ when: String, shot: String) {
+            let inSight = matchSettlesInSight()
+            snapshot(app, shot)
+            guard !inSight else { return }
+            XCTAssertGreaterThanOrEqual(cell.frame.minY, app.navigationBars.firstMatch.frame.maxY - 1, "Match is under the navigation bar \(when)")
+            XCTAssertLessThanOrEqual(cell.frame.maxY, field.frame.minY, "Match \(cell.frame) is behind the find bar \(field.frame) \(when)")
+            XCTFail("The page or the find bar doesn't stay put \(when)")
+        }
+        assertMatchInSight("after typing", shot: "32-find-table")
+
+        // Scrolling the page takes the keyboard away, and the find bar goes down with it. With the match low on the
+        // page, where the keyboard comes up once the field is tapped, the match stays in sight above the bar then.
+        // An iPad with a hardware keyboard shows no keyboard, and a floating one leaves the bar down: nothing rises there.
+        let window = app.windows.firstMatch.frame
+        let keyboardIsUp = NSPredicate { _, _ in
+            keyboard.exists && keyboard.frame.minY < window.maxY - 100 && field.frame.minY < window.maxY - 120
+        }
+        let hasKeyboard = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: keyboardIsUp, object: nil)], timeout: 3) == .completed
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            XCTAssertTrue(hasKeyboard, "No keyboard under the find bar (Tools/run-uitests.sh keeps the simulator from folding it away)")
+        }
+        if hasKeyboard {
+            let raised = field.frame.minY
+            /// A slow drag down the page's middle, from `from` to `to` (window coordinates), let go at rest.
+            func dragDown(from: CGFloat, to: CGFloat) {
+                let top = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: window.width * 0.5, dy: 0))
+                top.withOffset(CGVector(dx: 0, dy: from))
+                    .press(forDuration: 0.05, thenDragTo: top.withOffset(CGVector(dx: 0, dy: to)), withVelocity: .slow, thenHoldForDuration: 0.1)
+            }
+            dragDown(from: raised - 50, to: window.maxY - 60)
+            let barIsDown = NSPredicate { _, _ in field.frame.minY > window.maxY - 120 }
+            let away = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: barIsDown, object: nil)], timeout: 5) == .completed
+            XCTAssertTrue(away, "Scrolling the page doesn't take the keyboard away: the find bar stays at \(field.frame)")
+            // How far the page went with the finger differs. On the fresh test page it followed all the way, and the
+            // match lies low enough. After the tests that come before this one in a whole run it stopped where the
+            // finger reached the keyboard (November 19, 2026; what makes the difference isn't known): a second drag,
+            // with the keyboard away, takes the match down then.
+            _ = matchSettlesInSight()
+            if cell.frame.maxY < raised + 20 {
+                let from = app.navigationBars.firstMatch.frame.maxY + 40
+                dragDown(from: from, to: from + raised + 60 - cell.frame.maxY)
+            }
+            assertMatchInSight("after scrolling", shot: "32-find-scrolled")
+            let low = cell.frame
+            field.tap()
+            let back = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: keyboardIsUp, object: nil)], timeout: 5) == .completed
+            XCTAssertTrue(back, "A tap on the find field brings no keyboard under the find bar")
+            assertMatchInSight("once the keyboard is back", shot: "32-find-keyboard-back")
+            XCTAssertGreaterThan(low.maxY, field.frame.minY, "The drag left the match \(low) above the keyboard's place: nothing was checked")
+        }
 
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 12) + "let x")
         XCTAssertTrue(waitForLabel(count, matching: "^1 (von|of) 1$"), "“let x” not found in the code: \(count.label)")
