@@ -86,7 +86,7 @@ struct TemplatePickerView: View {
                 TemplatePreviewView(template: template, isUsing: using == template.id) { await apply($0) }
             }
             .task(id: scope) { await load() }
-            .sheet(item: $asking) { fields in
+            .linkSheet(item: $asking) { fields in
                 TemplateFieldsView(fields: fields, action: action) { values in
                     try await use(fields.template, values)
                     asking = nil
