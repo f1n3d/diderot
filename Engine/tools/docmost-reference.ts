@@ -38,11 +38,14 @@ import { Indent } from "editor-ext/lib/indent";
 import { UniqueID } from "editor-ext/lib/unique-id";
 import { Columns, Column } from "editor-ext/lib/columns";
 import { Status } from "editor-ext/lib/status";
+import { DateNode } from "editor-ext/lib/date";
+import { TemplatePlaceholder } from "editor-ext/lib/template-placeholder";
 import { TransclusionSource, TransclusionReference } from "editor-ext/lib/transclusion";
 import { BaseEmbed } from "editor-ext/lib/base-embed";
 import { Footnotes, Footnote, FootnoteReference } from "editor-ext/lib/footnotes";
 import { Tabs, Tab, TabLabel, TabPanel } from "editor-ext/lib/tabs";
 import { IntegrationCard, IntegrationMention } from "editor-ext/lib/integration-link";
+import { MicrosoftFile, MicrosoftFolder } from "editor-ext/lib/microsoft";
 
 export const docmostExtensions = [
   coreExtensions.TextDirection.configure({ direction: "auto" }),
@@ -108,6 +111,8 @@ export const docmostExtensions = [
   Columns,
   Column,
   Status,
+  DateNode,
+  TemplatePlaceholder,
   TransclusionSource,
   TransclusionReference,
   BaseEmbed,
@@ -116,4 +121,6 @@ export const docmostExtensions = [
   FootnoteReference,
   IntegrationCard,
   IntegrationMention,
+  MicrosoftFile,
+  MicrosoftFolder,
 ] as any[];

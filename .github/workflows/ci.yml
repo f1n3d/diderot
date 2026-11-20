@@ -59,13 +59,13 @@ jobs:
         # document (compare), and Return and Backspace must do what Docmost's keymaps do, case by case, but for the
         # differences the tool lists as kept or open (compare-keys). Until November 19, 2026 only a Mac with a Docmost
         # checkout ran them. The tools look for Docmost's sources next to this repository; they need none of its
-        # dependencies. v0.97.0 is the version the release's UI tests run against.
+        # dependencies. v0.98.0 is the newest version the engine knows (tools/docmost-reference.ts loads its extensions).
         working-directory: Engine
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
         run: |
           rm -rf ../../docmost
-          git clone --quiet --depth 1 --branch v0.97.0 https://github.com/docmost/docmost.git ../../docmost
+          git clone --quiet --depth 1 --branch v0.98.0 https://github.com/docmost/docmost.git ../../docmost
           corepack pnpm run compare
           corepack pnpm run compare-keys
 

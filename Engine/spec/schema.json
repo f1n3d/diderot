@@ -1,5 +1,5 @@
 {
- "docmost": "v0.97.0",
+ "docmost": "v0.98.0",
  "topNode": "doc",
  "nodes": [
   {
@@ -544,6 +544,9 @@
     "src": {
      "default": ""
     },
+    "name": {
+     "default": "(undefined)"
+    },
     "attachmentId": {
      "default": "(undefined)"
     },
@@ -842,6 +845,37 @@
    "leafText": false
   },
   {
+   "name": "date",
+   "group": "inline",
+   "inline": true,
+   "atom": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "date": {
+     "default": null
+    }
+   },
+   "leafText": true
+  },
+  {
+   "name": "templatePlaceholder",
+   "group": "inline",
+   "inline": true,
+   "atom": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "hint": {
+     "default": "",
+     "validate": "string"
+    }
+   },
+   "leafText": false
+  },
+  {
    "name": "transclusionSource",
    "content": "(paragraph | heading | blockquote | codeBlock | horizontalRule | bulletList | orderedList | taskList | image | video | audio | attachment | callout | details | embed | mathBlock | table | drawio | excalidraw | pdf | subpages | columns | youtube)+",
    "group": "block",
@@ -993,6 +1027,63 @@
      "default": ""
     },
     "provider": {
+     "default": ""
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "microsoftFile",
+   "group": "block",
+   "inline": false,
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "items": {
+     "default": []
+    },
+    "width": {
+     "default": 800
+    },
+    "height": {
+     "default": 600
+    },
+    "align": {
+     "default": "center"
+    },
+    "pendingKey": {
+     "default": null
+    }
+   },
+   "leafText": false
+  },
+  {
+   "name": "microsoftFolder",
+   "group": "block",
+   "inline": false,
+   "atom": true,
+   "draggable": true,
+   "defining": true,
+   "isolating": true,
+   "attrs": {
+    "dir": {
+     "default": "auto"
+    },
+    "driveId": {
+     "default": ""
+    },
+    "itemId": {
+     "default": ""
+    },
+    "webUrl": {
+     "default": ""
+    },
+    "name": {
      "default": ""
     }
    },
