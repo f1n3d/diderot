@@ -3193,12 +3193,15 @@ import XCTest
         Thread.sleep(forTimeInterval: 0.8)
         finishEditing(app)
 
-        // The app's language may not be the test runner's: the chip is a link with the year in it.
+        // The app's language may not be the test runner's: the chip is a link with the year in it. test35 and test39
+        // put dates on the page too, so the second date is the rightmost one on this paragraph's line.
         let year = String(Calendar.current.component(.year, from: .now))
-        let dates = app.links.matching(NSPredicate(format: "label CONTAINS %@", year))
-        XCTAssertTrue(dates.firstMatch.waitForExistence(timeout: 10), "The date doesn't show as a chip with \(year)")
-        let second = dates.element(boundBy: max(0, dates.count - 1))
-        XCTAssertTrue(scrollTo(second, in: app), "The date isn't tappable")
+        let paragraph = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Termin\(stamp)")).firstMatch
+        XCTAssertTrue(scrollTo(paragraph, in: app), "The paragraph with the dates is missing")
+        let dates = app.links.matching(NSPredicate(format: "label CONTAINS %@", year)).allElementsBoundByIndex
+            .filter { $0.frame.midY >= paragraph.frame.minY && $0.frame.midY <= paragraph.frame.maxY }
+        XCTAssertEqual(dates.count, 2, "The paragraph doesn't show two date chips with \(year)")
+        let second = try XCTUnwrap(dates.max { $0.frame.minX < $1.frame.minX }, "No date to tap")
         second.tap()
         XCTAssertTrue(element(app, "date-picker").waitForExistence(timeout: 5), "Tapping the date doesn't open its sheet")
         snapshot(app, "109-date-sheet")

@@ -173,7 +173,14 @@ private struct DateSheet: View {
     }
 
     private func apply() {
-        let node = PMNode(type: "date", attrs: ["date": .string(CalendarDay(containing: selection).value)])
+        let day = JSONValue.string(CalendarDay(containing: selection).value)
+        // A changed date keeps what else it had: its formatting, link or comment, and its other attributes.
+        var node = PMNode(type: "date", attrs: ["date": day])
+        if case .edit(_, _, let atom) = target {
+            var attrs = atom.attrs ?? [:]
+            attrs["date"] = day
+            node = PMNode(type: "date", attrs: attrs, content: atom.content, marks: atom.marks, text: atom.text)
+        }
         Task { await model.applyAtom(node, type: "date", target: target) }
         dismiss()
     }
