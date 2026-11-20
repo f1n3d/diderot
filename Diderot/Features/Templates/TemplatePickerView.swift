@@ -137,13 +137,8 @@ struct TemplatePickerView: View {
         errorMessage = nil
         defer { using = nil }
         do {
-            // Docmost 0.98: a template with fields needs their values, from the content as it is now (the web reads the
-            // template again, too). Older servers have no fields.
-            guard session.ready?.hasDocmost098Features == true else {
-                try await use(template, nil)
-                dismiss()
-                return
-            }
+            // A template with fields (Docmost 0.98) needs their values, from the content as it is now (the web reads the
+            // template again, too). Decided by the content, not the version, which Docmost Cloud doesn't name.
             let full = try await session.send(Endpoints.Templates.info(templateId: template.id))
             let variables: [TemplateVariable]
             do {
@@ -354,6 +349,8 @@ struct TemplateFieldsView: View {
                     Text(option).tag(option)
                 }
             }
+            // The section names the field already.
+            .labelsHidden()
             .accessibilityIdentifier("template-field-\(variable.name)")
         }
     }
