@@ -22,9 +22,20 @@ import XCTest
     }
 
     /// The dev server runs Docmost 0.97 or newer.
-    nonisolated var serverHasDocmost097: Bool {
+    nonisolated var serverHasDocmost097: Bool { serverRuns(atLeast: 97) }
+
+    /// Skips a test of content Docmost 0.98 introduced unless the dev server runs 0.98 or newer
+    /// (`PORT=3002 Tools/run-uitests.sh`).
+    nonisolated func requireDocmost098() throws {
+        guard serverRuns(atLeast: 98) else {
+            let version = environment["DOCMOST_SERVER_VERSION"] ?? ""
+            throw XCTSkip("Needs Docmost 0.98 or newer, the server runs \(version.isEmpty ? "an unknown version" : version)")
+        }
+    }
+
+    private nonisolated func serverRuns(atLeast minor: Int) -> Bool {
         let parts = (environment["DOCMOST_SERVER_VERSION"] ?? "").split(separator: ".").prefix(2).compactMap { Int($0) }
-        return parts.count == 2 && (parts[0], parts[1]) >= (0, 97)
+        return parts.count == 2 && (parts[0], parts[1]) >= (0, minor)
     }
 
     /// Launches the app signed in to the dev server. Spaces show as a list, or as tiles with `gridLayout`; that and

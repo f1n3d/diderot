@@ -3177,6 +3177,36 @@ import XCTest
         XCTAssertTrue(theirs.waitForExistence(timeout: 10), "The colleague's block isn't on the page")
     }
 
+    // MARK: - Docmost 0.98 (`PORT=3002 Tools/run-uitests.sh`; skipped on older servers)
+
+    /// Dates: "/datum" inserts today as a date the server keeps as a node, shown in the reader's language; a tap opens
+    /// the date's sheet, and "Remove Date" takes the second of two away. The server check expects one date, today's, in
+    /// the paragraph "Termin<stamp>".
+    func test109_Dates() throws {
+        try requireDocmost098()
+        let app = launchPage()
+        _ = appendParagraph(app)
+        activeEditor(app).typeText("Termin\(stamp) ")
+        slash(app, "datum", pick: "date")
+        activeEditor(app).typeText(" bis ")
+        slash(app, "datum", pick: "date")
+        Thread.sleep(forTimeInterval: 0.8)
+        finishEditing(app)
+
+        // The app's language may not be the test runner's: the chip is a link with the year in it.
+        let year = String(Calendar.current.component(.year, from: .now))
+        let dates = app.links.matching(NSPredicate(format: "label CONTAINS %@", year))
+        XCTAssertTrue(dates.firstMatch.waitForExistence(timeout: 10), "The date doesn't show as a chip with \(year)")
+        let second = dates.element(boundBy: max(0, dates.count - 1))
+        XCTAssertTrue(scrollTo(second, in: app), "The date isn't tappable")
+        second.tap()
+        XCTAssertTrue(element(app, "date-picker").waitForExistence(timeout: 5), "Tapping the date doesn't open its sheet")
+        snapshot(app, "109-date-sheet")
+        button(app, labels: ["Remove Date", "Datum entfernen"]).tap()
+        XCTAssertTrue(element(app, "date-picker").waitForNonExistence(timeout: 5), "The sheet stays open")
+        Thread.sleep(forTimeInterval: 1.0)
+    }
+
     // MARK: - Docmost 0.97 (`PORT=3001 Tools/run-uitests.sh`; skipped on older servers)
 
     /// Tabs: "/reiter" inserts "Tab 1" and "Tab 2" with the cursor in the first; "+" adds a tab and asks for its name;

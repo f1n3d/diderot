@@ -29,7 +29,7 @@ struct ReadySession: Sendable {
     /// Restored from the cache without reaching the server.
     var restoredOffline = false
 
-    /// The server's version if it is newer than the bundled editor's (Docmost 0.97, `Engine/`), which could damage
+    /// The server's version if it is newer than the bundled editor's (Docmost 0.98, `Engine/`), which could damage
     /// content it doesn't know: pages there open read-only. An unknown version counts as supported.
     var newerServerVersion: String? { Self.isNewerThanEditor(serverVersion) ? serverVersion : nil }
 
@@ -37,12 +37,19 @@ struct ReadySession: Sendable {
     /// count: on an older server they would get lost.
     var hasDocmost097Features: Bool { Self.supportsDocmost097(serverVersion) }
 
+    /// Docmost 0.98 or newer: dates can be added (an older server would drop them).
+    var hasDocmost098Features: Bool { Self.supportsDocmost098(serverVersion) }
+
     static func supportsDocmost097(_ version: String?) -> Bool {
         majorMinor(version).map { $0 >= (0, 97) } ?? false
     }
 
+    static func supportsDocmost098(_ version: String?) -> Bool {
+        majorMinor(version).map { $0 >= (0, 98) } ?? false
+    }
+
     static func isNewerThanEditor(_ version: String?) -> Bool {
-        majorMinor(version).map { $0 > (0, 97) } ?? false
+        majorMinor(version).map { $0 > (0, 98) } ?? false
     }
 
     private static func majorMinor(_ version: String?) -> (Int, Int)? {

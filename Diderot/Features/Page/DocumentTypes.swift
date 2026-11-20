@@ -220,6 +220,8 @@ enum EditorSheet: Identifiable, Equatable {
 
     case status(AtomTarget, text: String, color: String)
     case mathInline(AtomTarget, latex: String)
+    /// A date atom (Docmost 0.98), edited with a tap.
+    case date(AtomTarget, day: CalendarDay)
     case mathBlock(BlockSlot, latex: String)
     case embed(BlockSlot, provider: EmbedProvider, link: String)
 
@@ -227,6 +229,7 @@ enum EditorSheet: Identifiable, Equatable {
         switch self {
         case .status: "status"
         case .mathInline: "math-inline"
+        case .date: "date"
         case .mathBlock: "math-block"
         case .embed: "embed"
         }

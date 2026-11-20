@@ -76,6 +76,10 @@ struct BlockView: View {
             TabsBlockView(tabs: tabs)
         case .integrationCard(let link):
             IntegrationCardView(link: link)
+        case .microsoftFiles(let items):
+            MicrosoftItemsView(items: items, isFolder: false)
+        case .microsoftFolder(let item):
+            MicrosoftItemsView(items: [item], isFolder: true)
         case .transclusionSource(let blocks):
             TransclusionSourceView(blocks: blocks)
         case .transclusionReference(let sourcePageId, let transclusionId):

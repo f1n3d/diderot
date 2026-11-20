@@ -91,7 +91,7 @@ struct PageLoader {
         var dependencies = DocumentModel.Dependencies(
             serverURL: owner.server.url, currentUserId: owner.currentUser.user.id, liveOwner: liveOwner,
             linkPreviews: session.linkPreviews, canCreateBases: owner.entitlements.has("bases"),
-            hasDocmost097Features: owner.hasDocmost097Features
+            hasDocmost097Features: owner.hasDocmost097Features, hasDocmost098Features: owner.hasDocmost098Features
         )
         dependencies.postAppNotice = { message in notices.post(message) }
         dependencies.suggest = { query in

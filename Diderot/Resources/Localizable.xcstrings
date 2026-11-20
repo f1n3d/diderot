@@ -2321,16 +2321,6 @@
         }
       }
     },
-    "Highlight color": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Markierungsfarbe"
-          }
-        }
-      }
-    },
     "HTML": {
       "localizations": {
         "de": {
@@ -2437,6 +2427,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Markieren"
+          }
+        }
+      }
+    },
+    "Highlight color": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markierungsfarbe"
           }
         }
       }
@@ -2682,22 +2682,22 @@
         }
       }
     },
-    "Larger than %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Größer als %@"
-          }
-        }
-      }
-    },
     "LaTeX, e.g. E = mc^2": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "LaTeX, z. B. E = mc^2"
+          }
+        }
+      }
+    },
+    "Larger than %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Größer als %@"
           }
         }
       }
@@ -3412,6 +3412,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noch keine Favoriten"
+          }
+        }
+      }
+    },
+    "No files": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Dateien"
           }
         }
       }
@@ -4965,6 +4975,26 @@
         }
       }
     },
+    "SharePoint": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SharePoint"
+          }
+        }
+      }
+    },
+    "SharePoint Folder": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SharePoint-Ordner"
+          }
+        }
+      }
+    },
     "Show as Card": {
       "localizations": {
         "de": {
@@ -5727,16 +5757,6 @@
         }
       }
     },
-    "This can't be placed there.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das lässt sich dort nicht einordnen."
-          }
-        }
-      }
-    },
     "This Space": {
       "localizations": {
         "de": {
@@ -5753,6 +5773,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieses Board ist nach keiner Auswahl- oder Status-Spalte gruppiert. Lege die Gruppierung im Web-Editor fest."
+          }
+        }
+      }
+    },
+    "This can't be placed there.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das lässt sich dort nicht einordnen."
           }
         }
       }
@@ -6003,6 +6033,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zu erledigen"
+          }
+        }
+      }
+    },
+    "Today": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute"
           }
         }
       }
@@ -6542,16 +6582,6 @@
         }
       }
     },
-    "Your sign-in is still saved, but the server didn't answer to confirm it. The app tries again when the network changes or when you come back to it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Anmeldung ist noch gespeichert, aber der Server hat nicht geantwortet, um sie zu bestätigen. Die App versucht es wieder, wenn sich das Netzwerk ändert oder du zu ihr zurückkehrst."
-          }
-        }
-      }
-    },
     "Your Spaces": {
       "localizations": {
         "de": {
@@ -6568,6 +6598,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Deine Sitzung läuft bald ab. Du musst dich dann neu anmelden."
+          }
+        }
+      }
+    },
+    "Your sign-in is still saved, but the server didn't answer to confirm it. The app tries again when the network changes or when you come back to it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Anmeldung ist noch gespeichert, aber der Server hat nicht geantwortet, um sie zu bestätigen. Die App versucht es wieder, wenn sich das Netzwerk ändert oder du zu ihr zurückkehrst."
           }
         }
       }

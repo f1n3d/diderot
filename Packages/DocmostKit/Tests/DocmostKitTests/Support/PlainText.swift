@@ -24,6 +24,8 @@ extension Block {
         case .tabs(let tabs):
             return tabs.map { ([$0.label] + $0.blocks.map(\.plainText)).joined(separator: "\n") }.joined(separator: "\n")
         case .integrationCard(let link): return link.url
+        case .microsoftFiles(let items): return items.map(\.title).joined(separator: "\n")
+        case .microsoftFolder(let item): return item.title
         case .horizontalRule, .subpages, .transclusionReference, .base, .pageBreak, .tooDeep: return ""
         }
     }
@@ -50,6 +52,8 @@ extension [Inline] {
             case .status(let text, _): return text
             case .footnoteReference(let number, _): return number.map { "[\($0)]" } ?? ""
             case .integrationMention(let link): return link.url
+            case .date(let value): return value ?? ""
+            case .templatePlaceholder(let hint): return hint
             case .marked(let atom, _): return [atom].plainText
             case .unknown: return ""
             }

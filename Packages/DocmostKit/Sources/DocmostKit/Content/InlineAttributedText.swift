@@ -294,6 +294,9 @@ public enum InlineAttributedText {
         case "mathInline", "status": return nonEmpty(node.string("text"))
         case "footnoteReference": return "[\(node.string("referenceNumber") ?? "?")]"
         case "integrationMention": return IntegrationLinks.describe(node.string("url") ?? "").inline
+        // A date the web can't read shows as "Date" there; the kit has no texts of its own.
+        case "date": return CalendarDay(node.string("date"))?.label() ?? "📅"
+        case "templatePlaceholder": return nonEmpty(node.string("hint"))
         default: return "\u{FFFC}"
         }
     }

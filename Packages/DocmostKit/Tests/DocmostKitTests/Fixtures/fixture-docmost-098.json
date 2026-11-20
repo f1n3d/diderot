@@ -1,0 +1,145 @@
+{
+  "title": "Fixture: Docmost 0.98",
+  "icon": "📅",
+  "content": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "fixtureheaddates"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Dates"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Due on "
+          },
+          {
+            "type": "date",
+            "attrs": {
+              "date": "2026-11-20"
+            }
+          },
+          {
+            "type": "text",
+            "text": ", reviewed on "
+          },
+          {
+            "type": "date",
+            "attrs": {
+              "date": "2027-01-31"
+            },
+            "marks": [
+              {
+                "type": "bold"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": "."
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "fixtureheadhints"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Template hints"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "templatePlaceholder",
+            "attrs": {
+              "hint": "Describe the goal"
+            }
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Owner: "
+          },
+          {
+            "type": "templatePlaceholder",
+            "attrs": {
+              "hint": "Name the owner"
+            }
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "id": "fixtureheadmicrosoft"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Microsoft 365"
+          }
+        ]
+      },
+      {
+        "type": "microsoftFile",
+        "attrs": {
+          "items": [
+            {
+              "driveId": "fixturedrive",
+              "itemId": "fixtureplan",
+              "webUrl": "https://contoso.sharepoint.com/sites/team/Shared%20Documents/Plan.docx",
+              "name": "Plan.docx"
+            },
+            {
+              "driveId": "fixturedrive",
+              "itemId": "fixturebudget",
+              "webUrl": "https://contoso.sharepoint.com/sites/team/Shared%20Documents/Budget.xlsx",
+              "name": "Budget.xlsx"
+            }
+          ]
+        }
+      },
+      {
+        "type": "microsoftFolder",
+        "attrs": {
+          "driveId": "fixturedrive",
+          "itemId": "fixturefolder",
+          "webUrl": "https://contoso.sharepoint.com/sites/team/Shared%20Documents",
+          "name": "Shared Documents"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "End of the fixture."
+          }
+        ]
+      }
+    ]
+  }
+}

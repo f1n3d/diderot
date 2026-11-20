@@ -5,10 +5,12 @@
     Tools/seed-fixtures.py            # creates the root node "Fixtures" if it is missing
     Tools/seed-fixtures.py --reset    # deletes the root node first (including subpages)
 
-Fixtures named `fixture-docmost-097*.json` hold content Docmost 0.97 introduced (tabs, integration links) and are
-left out on older servers, which would drop it; they get three child pages (Banana, apple, Cherry) for sorting.
+Fixtures named `fixture-docmost-0NN*.json` hold content Docmost 0.NN introduced (0.97: tabs, integration links;
+0.98: dates, template hints, Microsoft 365 blocks) and are left out on older servers, which would drop it. The 0.97 one
+gets three child pages (Banana, apple, Cherry) for sorting.
 
     DOCMOST_SEED_URL=http://localhost:3001 Tools/seed-fixtures.py --reset    # the 0.97 dev instance
+    DOCMOST_SEED_URL=http://localhost:3002 Tools/seed-fixtures.py --reset    # the 0.98 dev instance
 
 Placeholders in the JSON files: {{USER_ID}}, {{USER_NAME}}, {{PAGE_ID}}, {{PAGE_SLUGID}}, {{PAGE_SLUG}},
 {{PAGE_TITLE}} (page "Handbuch"), {{SELF_ID}} (the fixture page itself), {{IMAGE_*}} and {{FILE_*}}
@@ -16,6 +18,7 @@ Placeholders in the JSON files: {{USER_ID}}, {{USER_NAME}}, {{PAGE_ID}}, {{PAGE_
 10 sign-ins/min).
 """
 import json
+import re
 import struct
 import sys
 import zlib
@@ -63,7 +66,7 @@ def main():
         return
 
     version = api.call("version").get("currentVersion") or "0.0"
-    docmost_097 = tuple(int(part) for part in version.lstrip("v").split(".")[:2]) >= (0, 97)
+    server = tuple(int(part) for part in version.lstrip("v").split(".")[:2])
 
     target = next((p for p in root_pages if p["title"] == "Handbuch"), root_pages[0])
     target_page = api.call("pages/info", {"pageId": target["id"]})
@@ -73,8 +76,9 @@ def main():
     print(f"Root page \"{ROOT_TITLE}\" created ({root['id']}).")
 
     for path in sorted(FIXTURES.glob("fixture-*.json")):
-        if path.name.startswith("fixture-docmost-097") and not docmost_097:
-            print(f"  {path.name} left out: Docmost {version} is older than 0.97")
+        needed = re.match(r"fixture-docmost-0(\d\d)", path.name)
+        if needed and server < (0, int(needed.group(1))):
+            print(f"  {path.name} left out: Docmost {version} is older than 0.{needed.group(1)}")
             continue
         text = path.read_text()
         spec = json.loads(text)
