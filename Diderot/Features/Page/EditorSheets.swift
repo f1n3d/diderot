@@ -12,6 +12,8 @@ struct EditorSheetView: View {
             StatusSheet(model: model, target: target, text: text, color: color)
         case .mathInline(let target, let latex):
             MathSheet(model: model, kind: .inline(target), latex: latex)
+        case .date(let target, let day):
+            DateSheet(model: model, target: target, day: day)
         case .mathBlock(let slot, let latex):
             MathSheet(model: model, kind: .block(slot), latex: latex)
         case .embed(let slot, let provider, let link):
@@ -125,6 +127,69 @@ private struct StatusSheet: View {
         let node = PMNode(type: "status", attrs: ["text": .string(trimmed), "color": .string(color)])
         Task { await model.applyAtom(node, type: "status", target: target) }
         dismiss()
+    }
+}
+
+// MARK: - Date
+
+/// A date (Docmost 0.98) as the web's picker offers it: a calendar, with Today, and removing it.
+private struct DateSheet: View {
+    let model: DocumentModel
+    let target: EditorSheet.AtomTarget
+    @State private var selection: Date
+    @Environment(\.dismiss) private var dismiss
+
+    init(model: DocumentModel, target: EditorSheet.AtomTarget, day: CalendarDay) {
+        self.model = model
+        self.target = target
+        // The picker works in the device's calendar: the stored day as a local date.
+        _selection = State(initialValue: Self.localDate(of: day))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Date", selection: $selection, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .accessibilityIdentifier("date-picker")
+                Section {
+                    Button("Today") { selection = .now }
+                    Button("Remove Date", role: .destructive) {
+                        Task { await model.applyAtom(nil, type: "date", target: target) }
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("Date")
+            .toolbarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", action: apply).accessibilityIdentifier("date-apply")
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func apply() {
+        let day = JSONValue.string(CalendarDay(containing: selection).value)
+        // A changed date keeps what else it had: its formatting, link or comment, and its other attributes.
+        var node = PMNode(type: "date", attrs: ["date": day])
+        if case .edit(_, _, let atom) = target {
+            var attrs = atom.attrs ?? [:]
+            attrs["date"] = day
+            node = PMNode(type: "date", attrs: attrs, content: atom.content, marks: atom.marks, text: atom.text)
+        }
+        Task { await model.applyAtom(node, type: "date", target: target) }
+        dismiss()
+    }
+
+    private static func localDate(of day: CalendarDay) -> Date {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = .gmt
+        let parts = utc.dateComponents([.year, .month, .day], from: day.date)
+        return Calendar.current.date(from: parts) ?? day.date
     }
 }
 

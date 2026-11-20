@@ -27,7 +27,8 @@ public enum ContentParser {
     public static let maxDepth = 32
 
     private static let inlineTypes: Set<String> = [
-        "text", "hardBreak", "mention", "mathInline", "status", "footnoteReference", "integrationMention",
+        "text", "hardBreak", "mention", "mathInline", "status", "footnoteReference", "integrationMention", "date",
+        "templatePlaceholder",
     ]
 
     // MARK: - Blocks
@@ -133,6 +134,17 @@ public enum ContentParser {
 
         case "integrationCard":
             return Block(id: id, kind: .integrationCard(integrationLink(node)))
+
+        case "microsoftFile":
+            let items = node.attr("items")?.arrayValue ?? []
+            return Block(id: id, kind: .microsoftFiles(items.compactMap { item -> MicrosoftItem? in
+                let file = MicrosoftItem(name: item["name"]?.stringValue ?? "", webUrl: item["webUrl"]?.stringValue)
+                // The web leaves out a file without a SharePoint address.
+                return file.webURL == nil ? nil : file
+            }))
+
+        case "microsoftFolder":
+            return Block(id: id, kind: .microsoftFolder(MicrosoftItem(name: node.string("name") ?? "", webUrl: node.string("webUrl"))))
 
         case "transclusionSource":
             if let anchor = node.string("id") {
@@ -295,6 +307,10 @@ public enum ContentParser {
                 result.append(marked(.footnoteReference(number: child.string("referenceNumber"), dataId: child.string("data-id")), child))
             case "integrationMention":
                 result.append(marked(.integrationMention(integrationLink(child)), child))
+            case "date":
+                result.append(marked(.date(child.string("date")), child))
+            case "templatePlaceholder":
+                result.append(marked(.templatePlaceholder(hint: child.string("hint") ?? ""), child))
             default:
                 // An unknown node's content, as deep as blocks show.
                 if !child.children.isEmpty, depth < maxDepth {

@@ -369,6 +369,57 @@ struct ContentParserTests {
         #expect(doc.blocks[5].kind == .subpages(sortBy: .manual))
     }
 
+    @Test func docmost098Content() {
+        let sharePoint = "https://contoso.sharepoint.com/sites/team"
+        let json: JSONValue = ["type": "doc", "content": [
+            ["type": "paragraph", "content": [
+                ["type": "text", "text": "due "],
+                ["type": "date", "attrs": ["date": "2026-11-20"], "marks": [["type": "bold"]]],
+                ["type": "templatePlaceholder", "attrs": ["hint": "Name the owner"]],
+                ["type": "date"],
+            ]],
+            ["type": "microsoftFile", "attrs": ["items": [
+                ["driveId": "d", "itemId": "i", "webUrl": .string("\(sharePoint)/Plan.docx"), "name": "Plan.docx"],
+                // Not SharePoint, credentials, plain http: the web leaves these out.
+                ["driveId": "d", "itemId": "j", "webUrl": "https://example.com/x.docx", "name": "x.docx"],
+                ["driveId": "d", "itemId": "k", "webUrl": "https://me:pw@contoso.sharepoint.com/y", "name": "y"],
+                ["driveId": "d", "itemId": "l", "webUrl": "http://contoso.sharepoint.com/z", "name": "z"],
+            ]]],
+            ["type": "microsoftFolder", "attrs": ["driveId": "d", "itemId": "f", "webUrl": .string("\(sharePoint)/Shared"), "name": ""]],
+            ["type": "microsoftFolder", "attrs": ["webUrl": "https://evil.sharepoint.com.example.org/", "name": "Evil"]],
+            ["type": "audio", "attrs": ["src": "/api/files/a/memo.m4a", "name": "memo.m4a"]],
+        ]]
+        let doc = ContentDocument(json: json)
+        guard case .paragraph(let text) = doc.blocks[0].kind else { Issue.record("expected paragraph"); return }
+        var bold = InlineStyle()
+        bold.bold = true
+        #expect(text.inlines[1] == .marked(.date("2026-11-20"), bold))
+        #expect(text.inlines[2] == .templatePlaceholder(hint: "Name the owner"))
+        #expect(text.inlines[3] == .date(nil))
+        guard case .microsoftFiles(let files) = doc.blocks[1].kind else { Issue.record("expected files"); return }
+        #expect(files.map(\.name) == ["Plan.docx"])
+        #expect(files.first?.webURL?.absoluteString == "\(sharePoint)/Plan.docx")
+        guard case .microsoftFolder(let folder) = doc.blocks[2].kind else { Issue.record("expected folder"); return }
+        #expect(folder.title == "\(sharePoint)/Shared")
+        guard case .microsoftFolder(let evil) = doc.blocks[3].kind else { Issue.record("expected folder"); return }
+        #expect(evil.webURL == nil)
+        guard case .media(let audio) = doc.blocks[4].kind else { Issue.record("expected audio"); return }
+        #expect(audio.name == "memo.m4a")
+    }
+
+    @Test func calendarDays() {
+        #expect(CalendarDay("2026-11-20")?.value == "2026-11-20")
+        for invalid in ["2026-02-30", "2026-11-20T10:00:00Z", "20.11.2026", "2026-1-2", "", "0000-01-01"] {
+            #expect(CalendarDay(invalid) == nil, "\(invalid)")
+        }
+        #expect(CalendarDay(nil) == nil)
+        #expect(CalendarDay("2026-11-20")?.label(locale: Locale(identifier: "en_US")) == "Nov 20, 2026")
+        // The day the calendar shows where the user is, not in UTC.
+        let lateEvening = Date(timeIntervalSince1970: 1_795_726_800) // 2026-11-26 21:00 UTC
+        #expect(CalendarDay(containing: lateEvening, in: TimeZone(identifier: "Europe/Berlin")!).value == "2026-11-26")
+        #expect(CalendarDay(containing: lateEvening, in: TimeZone(identifier: "Asia/Tokyo")!).value == "2026-11-27")
+    }
+
     @Test func emptyAndStringContent() {
         #expect(ContentDocument(json: nil).isEmpty)
         #expect(ContentDocument(json: .string("# markdown")).isEmpty)

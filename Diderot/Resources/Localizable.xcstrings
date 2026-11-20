@@ -3416,6 +3416,16 @@
         }
       }
     },
+    "No files": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Dateien"
+          }
+        }
+      }
+    },
     "No matches": {
       "localizations": {
         "de": {
@@ -4697,6 +4707,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zeile"
+          }
+        }
+      }
+    },
+    "SharePoint": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SharePoint"
+          }
+        }
+      }
+    },
+    "SharePoint Folder": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SharePoint-Ordner"
           }
         }
       }
@@ -6003,6 +6033,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zu erledigen"
+          }
+        }
+      }
+    },
+    "Today": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute"
           }
         }
       }

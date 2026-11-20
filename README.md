@@ -2,7 +2,7 @@
 
 <img src="Docs/icon.png" width="96" height="96" align="right" alt="Diderot app icon">
 
-A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0 and v0.97.0. Diderot is an independent project, not affiliated with Docmost. It collects no data: see the [privacy policy](Docs/Privacy.md).
+A native SwiftUI app (iPhone and iPad, iOS 27+) for self-hosted [Docmost](https://github.com/docmost/docmost) instances, tested with Docmost v0.96.0, v0.97.0 and v0.98.0. Diderot is an independent project, not affiliated with Docmost. It collects no data: see the [privacy policy](Docs/Privacy.md).
 
 ## Goals
 
@@ -29,7 +29,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - A space view with search within the space, the page tree and recently changed pages.
   - The workspace menu: members, profile, appearance, web settings, servers.
 - Page actions: copy link, favorite, export (Markdown or HTML, share sheet), duplicate, move or copy to another space, trash. The page's attachments as on the web: searchable, open in Quick Look (share, save); space admins delete them on Docmost 0.97. Reorder the page tree or nest pages by holding and dragging, with the web client's drop zones: a collapsed page opens while a page is held over it (positions by fractional indexing, like the web client). A trash per space to restore or delete for good. Deep links: `diderot://open?url=…`.
-- A native reader for every Docmost content type (text, lists, code, callouts, tables, images, math, Mermaid, diagrams, video, PDF, attachments, subpages, synced blocks, footnotes), with the web layout as a fallback. Nested numbered lists count 1., a., i. by level, as on the web. Images and draw.io or Excalidraw diagrams open full screen as in the web's lightbox: swipe through the page's images, zoom up to 4×, share or save the file.
+- A native reader for every Docmost content type (text, lists, code, callouts, tables, images, math, Mermaid, diagrams, video, PDF, attachments, subpages, synced blocks, footnotes; from Docmost 0.98 dates, a template's hints, which show dimmed, and SharePoint files and folders as cards that open in the browser), with the web layout as a fallback. Nested numbered lists count 1., a., i. by level, as on the web. Images and draw.io or Excalidraw diagrams open full screen as in the web's lightbox: swipe through the page's images, zoom up to 4×, share or save the file.
 - Links open as from the web in a browser: pages and database entries in the app, web pages in the in-app browser, mail, phone and messages through the system, another app only after asking, scripts and files never. Links in comments, versions, database fields, PDFs, the web layout and the web editor leave the app the same way; the web editor itself stays on the server.
 - Comments like on the web:
   - A button with the number of open comments, tabs for open and resolved ones.
@@ -68,7 +68,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
   - text blocks, divider, page break, subpages, table
   - columns (2–5; stacked when narrow, as on the web and in Notion; a bar for count, layout and deleting)
   - toggle, callout, code, Mermaid (a code block, the page shows the diagram), Draw.io and Excalidraw (a placeholder; drawing happens in the app's web editor)
-  - math block and inline math (LaTeX with a preview), status (text and color), date, time, emoji (emoji keyboard)
+  - math block and inline math (LaTeX with a preview), status (text and color), date (on Docmost 0.98 a date in the reader's language, changed with a tap; on older servers the date as text), time, emoji (emoji keyboard)
   - footnotes (text at the end of the page, tapping the number jumps there)
   - database and Kanban (a new database as a subpage; needs the license)
   - image or video from the library, camera, audio, PDF or file attachments from the Files app (several at once); photos and videos upload without their location, which the photo picker otherwise passes on
@@ -126,6 +126,7 @@ You need:
 
   For tests on an iPhone, the instance must be reachable on the network: set its `APP_URL` to `http://<your-mac>.local:3000`. The database tests need a Docmost license with databases.
 - **A second instance with Docmost 0.97** (the image `docmost/docmost:0.97.0`, e.g. a copy of the first one's database with the workspace renamed: the server menu tells the two apart by name) at `http://localhost:3001` for the tests of content 0.97 introduced (`PORT=3001 Tools/run-uitests.sh`); on 0.96 they are skipped. Block GitHub in its container (Compose: `extra_hosts: ['api.github.com:127.0.0.1']`): Docmost tells its version only when its check of GitHub's latest release succeeds or can't connect at all, and GitHub refuses after 60 requests an hour from one address, fewer than the app starts of a test run; without the version the 0.97 tests skip or fail.
+- **A third instance with Docmost 0.98** (the image `docmost/docmost:0.98.0`, a copy of the second one's database with the workspace renamed) at `http://localhost:3002` (`PORT=3002 Tools/run-uitests.sh`). From 0.98 the official image has no shell and no `curl`, so a health check runs with `node`. 0.98 names its version without asking anyone; `DISABLE_VERSION_CHECK=true` keeps it from asking for the latest release too.
 - **Node 24 with Corepack**, only to rebuild the editor engine.
 
 ```sh
@@ -167,6 +168,7 @@ Tools/run-uitests.sh
 ONLY=EditorUITests/test16_ExitListKeepsKeyboard,HomeUITests Tools/run-uitests.sh   # selected tests and their API checks
 AREA=schnell Tools/run-uitests.sh   # one area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
 PORT=3001 Tools/run-uitests.sh      # against a second dev instance with a newer Docmost (tests of its content skip on older servers)
+PORT=3002 Tools/run-uitests.sh      # against a third with Docmost 0.98
 
 # Check the editor engine against Docmost's format, type-check it and rebuild it
 Tools/build-engine.sh
@@ -187,6 +189,7 @@ Tools/dev_api.py call pages/sidebar-pages spaceId=<spaceId> limit:=5
 Tools/seed-dev.sh                 # the space "Demo" with nested pages (--reset recreates it)
 Tools/seed-fixtures.py            # fixture pages with every node type (--reset recreates them)
 DOCMOST_SEED_URL=http://localhost:3001 Tools/seed-fixtures.py --reset   # the same on the second dev instance, with the Docmost 0.97 fixture
+DOCMOST_SEED_URL=http://localhost:3002 Tools/seed-fixtures.py --reset   # and on the third, with the 0.98 fixture too
 Tools/seed-notifications.py <pageId> [--count 3]   # "Test-Kollegin" mentions the admin in comments (notifications)
 Tools/seed-bases.py <pageId>      # databases "Kanban-Test" (three cards) and "Datenbank-Test" (every property type, 30 rows, table and board), page "Datenbank-Einbettung" (needs the license)
 DOCMOST_DEBUG_PAGE=<baseId> DOCMOST_DEBUG_BASE_VIEW=Board Tools/run-sim.sh   # open a database in a given view

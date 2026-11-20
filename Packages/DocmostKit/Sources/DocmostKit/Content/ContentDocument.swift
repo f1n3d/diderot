@@ -76,6 +76,10 @@ public struct Block: Sendable, Hashable, Identifiable {
         case tabs([TabItem])
         /// A link to another service shown as a card (Docmost 0.97).
         case integrationCard(IntegrationLink)
+        /// Files in SharePoint or OneDrive (Docmost 0.98, Microsoft 365): the ones with an address the web keeps.
+        case microsoftFiles([MicrosoftItem])
+        /// A folder in SharePoint or OneDrive (Docmost 0.98).
+        case microsoftFolder(MicrosoftItem)
         case transclusionSource([Block])
         case transclusionReference(sourcePageId: String?, transclusionId: String?)
         case base(pageId: String?)
@@ -140,6 +144,31 @@ public struct IntegrationLink: Sendable, Hashable {
         self.url = url
         self.provider = provider
     }
+}
+
+/// A file or folder in SharePoint or OneDrive (Docmost 0.98's Microsoft 365 blocks).
+public struct MicrosoftItem: Sendable, Hashable {
+    public let name: String
+    /// Only an `https` address on `sharepoint.com` or a subdomain, without credentials, as the web keeps them.
+    public let webURL: URL?
+
+    public init(name: String, webUrl: String?) {
+        self.name = name
+        webURL = Self.sharePointURL(webUrl)
+    }
+
+    /// The web's `sanitizeMicrosoftFolderUrl`: anything else is no address at all.
+    static func sharePointURL(_ value: String?) -> URL? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), value.hasPrefix("https://"),
+              let components = URLComponents(string: value), components.scheme == "https",
+              let host = components.host?.lowercased(), host == "sharepoint.com" || host.hasSuffix(".sharepoint.com"),
+              components.user == nil, components.password == nil
+        else { return nil }
+        return components.url
+    }
+
+    /// What the block shows: the name, else the address.
+    public var title: String { name.isEmpty ? (webURL?.absoluteString ?? "") : name }
 }
 
 /// The order of a sub-pages block's pages, as the web offers it.
@@ -237,6 +266,10 @@ public enum Inline: Sendable, Hashable {
     case footnoteReference(number: String?, dataId: String?)
     /// A link to another service shown inline (Docmost 0.97).
     case integrationMention(IntegrationLink)
+    /// A day (Docmost 0.98): `YYYY-MM-DD` as stored, which `CalendarDay` reads.
+    case date(String?)
+    /// A template's hint (Docmost 0.98), shown in its place until one types there.
+    case templatePlaceholder(hint: String)
     /// An atom (mention, formula, status …) with marks: the web keeps formatting, links and comments on the whole atom.
     indirect case marked(Inline, InlineStyle)
     case unknown(type: String)

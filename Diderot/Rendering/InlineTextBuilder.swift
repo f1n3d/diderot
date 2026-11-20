@@ -56,6 +56,19 @@ struct InlineTextBuilder {
             run.backgroundColor = Color.accentColor.opacity(0.12)
             if let url = ContentLinkRouter.contentURL(link.url) { run.link = url }
             return run
+        case .date(let value):
+            // A chip as on the web, in the reader's language; one the web can't read says "Date" there too.
+            var run = AttributedString(" \(CalendarDay(value)?.label() ?? String(localized: "Date")) ")
+            run.font = font.weight(.medium)
+            run.backgroundColor = StatusPalette.background(for: "gray")
+            run.foregroundColor = StatusPalette.foreground(for: "gray")
+            return run
+        case .templatePlaceholder(let hint):
+            // The web shows the hint dimmed where one would type.
+            var run = AttributedString(hint)
+            run.font = font
+            run.foregroundColor = Color(.placeholderText)
+            return run
         case .footnoteReference(let number, let dataId):
             var run = AttributedString("[\(number ?? "?")]")
             run.font = .caption2
@@ -268,6 +281,7 @@ private extension Inline {
         case .status: "status"
         case .mathInline: "mathInline"
         case .integrationMention: "integrationMention"
+        case .date: "date"
         case .marked(let atom, _): atom.atomType
         default: nil
         }

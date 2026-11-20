@@ -1132,7 +1132,13 @@ final class DocumentModel {
 
     private func insertInline(_ command: InsertCommand, at offset: Int) {
         switch command {
-        case .date: insertIntoActiveText(AttributedString(Date.now.formatted(.dateTime.day().month(.wide).year())), offset: offset)
+        case .date:
+            // Docmost 0.98 inserts today as a date the reader sees in their language and changes with a tap.
+            if dependencies.hasDocmost098Features {
+                insertAtom(PMNode(type: "date", attrs: ["date": .string(CalendarDay(containing: .now).value)]), offset: offset)
+            } else {
+                insertIntoActiveText(AttributedString(Date.now.formatted(.dateTime.day().month(.wide).year())), offset: offset)
+            }
         case .time: insertIntoActiveText(AttributedString(Date.now.formatted(.dateTime.hour().minute())), offset: offset)
         case .emoji:
             emojiTarget = .text(offset: offset)
@@ -2034,6 +2040,8 @@ final class DocumentModel {
             editorSheet = .status(.edit(ref: ref, index: index, atom: node), text: node.string("text") ?? "", color: node.string("color") ?? "gray")
         case "mathInline":
             editorSheet = .mathInline(.edit(ref: ref, index: index, atom: node), latex: node.string("text") ?? "")
+        case "date":
+            editorSheet = .date(.edit(ref: ref, index: index, atom: node), day: CalendarDay(node.string("date")) ?? CalendarDay(containing: .now))
         case "integrationMention":
             var target = MentionTarget(ref: ref, index: index, url: node.string("url") ?? "", provider: node.string("provider") ?? "")
             Task {

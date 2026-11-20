@@ -64,6 +64,21 @@ struct InlineAttributedTextTests {
 
     /// A line break in an atom's text (a formula written with Shift-Return) or in a text node never reaches the editor as
     /// "\n", which would count as Return: the atom shows a space and stays whole, the text gets a hardBreak.
+    /// Docmost 0.98's date and template hint survive editing like the other atoms, with a text to show each.
+    @Test func keepsDocmost098Atoms() {
+        let nodes = [
+            PMNode(type: "text", text: "by "),
+            PMNode(type: "date", attrs: ["date": "2026-11-20"]),
+            PMNode(type: "templatePlaceholder", attrs: ["hint": "Who"]),
+            PMNode(type: "templatePlaceholder", attrs: ["hint": ""]),
+            PMNode(type: "date", attrs: ["date": "not a day"]),
+        ]
+        let text = InlineAttributedText.attributedString(from: nodes)
+        #expect(String(text.characters).contains("Who"))
+        #expect(!String(text.characters).contains("\u{FFFC}"))
+        #expect(InlineAttributedText.inlines(from: text) == nodes)
+    }
+
     @Test func lineBreaksNeverReachTheEditorAsReturn() {
         let formula = PMNode(type: "mathInline", attrs: ["text": "a \\\\\nb"])
         let text = InlineAttributedText.attributedString(from: [formula])

@@ -18,6 +18,8 @@ extension DocumentModel {
         /// The server is Docmost 0.97 or newer: tabs, integration links and sorted sub-pages can be added (an older
         /// server's web couldn't show them).
         var hasDocmost097Features = false
+        /// The server is Docmost 0.98 or newer: "/date" adds a date the web shows as a chip (older ones get the text).
+        var hasDocmost098Features = false
         /// Suggestions for mentions and page links.
         var suggest: (@MainActor (String) async throws -> SearchSuggestions)?
         /// The page a link of this server points to (page mentions, database links).

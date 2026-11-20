@@ -9,6 +9,7 @@
 #   SHOTS_DIR=Tools/.cache/shots Tools/run-uitests.sh                                 # screenshots as files too
 #   AREA=schnell Tools/run-uitests.sh   # one app area: schnell (10 core tests), editor, bloecke, seiten, datenbanken, server
 #   PORT=3001 Tools/run-uitests.sh      # against the Docmost 0.97 dev instance (~/Repositories/docmost-dev-097)
+#   PORT=3002 Tools/run-uitests.sh      # against the Docmost 0.98 dev instance (~/Repositories/docmost-dev-098)
 #
 # Each run makes its test page anew: "Editor-Test" at the root of the space "demo" (DOCMOST_UITEST_PAGE_TITLE,
 # DOCMOST_UITEST_SPACE_SLUG). A page of that title there from an earlier run is deleted for good, with its subpages.
@@ -78,6 +79,10 @@ INTEGRATIONS=$(api integrations 2>/dev/null | python3 -c 'import json, sys; prin
 echo "Docmost ${SERVER_VERSION:-(version unknown)} on port $PORT${INTEGRATIONS:+, integrations: $INTEGRATIONS}"
 docmost_097() {
   python3 -c 'import sys; v = sys.argv[1].split("."); sys.exit(0 if len(v) > 1 and (int(v[0]), int(v[1])) >= (0, 97) else 1)' \
+    "$SERVER_VERSION" 2>/dev/null
+}
+docmost_098() {
+  python3 -c 'import sys; v = sys.argv[1].split("."); sys.exit(0 if len(v) > 1 and (int(v[0]), int(v[1])) >= (0, 98) else 1)' \
     "$SERVER_VERSION" 2>/dev/null
 }
 
@@ -389,7 +394,7 @@ case "${AREA:-}" in
   "") ;;
   schnell) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test5_ReturnAndBackspace,$E/test6_CreatePageFromSpace,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test42_EditAfterReturningToPage,HomeUITests/test19_SearchTabShowsHomeThenResults,HomeUITests/test50_TrashConfirmationAtRow,BaseUITests/test22_BasePageFromTree,BaseUITests/test25_BaseKanbanColumnsAndCard" ;;
   editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test87_ReturnAtLineStartKeepsText,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test88_TrashDeletesListItem,$E/test90_BackspaceLeavesCodeAndList,$E/test92_IndentAndOutdentListItems,$E/test93_BackspaceLeavesQuoteCalloutAndToggle,$E/test94_MarkdownMarksTurnLines,$E/test95_FormatMenuOffersOnlyKeptFormats,$E/test96_EmptyLineShowsPlaceholder,$E/test97_AlignAndIndentParagraph,$E/test98_TextAndHighlightColors,$E/test99_HardwareKeysAsOnTheWeb,$E/test100_ArrowsMoveBetweenBlocks,$E/test101_SystemUndoThroughTheHistory,$E/test102_NestedReturnAndBackspaceAfterList,$E/test104_ToggleKeyWrapsTheLine,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly,$E/test106_PageShowsTheEngineAsAVisiblePage" ;;
-  bloecke) ONLY="$E/test7_DragBlock,$E/test91_ListItemsMoveAndDuplicateAlone,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test89_BlockMenuDeletesListAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink,$E/test84_PreviewStaysOpenWhenABlockComesInAbove,$E/test103_CalloutIcon" ;;
+  bloecke) ONLY="$E/test7_DragBlock,$E/test91_ListItemsMoveAndDuplicateAlone,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test89_BlockMenuDeletesListAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink,$E/test84_PreviewStaysOpenWhenABlockComesInAbove,$E/test103_CalloutIcon,$E/test109_Dates" ;;
   seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test107_FindCentersAMatchDeepInALongList,$E/test108_FindAsksAgainForABlockThatWasntBuilt,$E/test33_Comments,$E/test105_ShowOnPageAboveTheKeyboard,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test85_AppendNoteKeptAcrossLaunches,$E/test86_AppendNoteRefusedOnAPageWithFootnotes,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
   server) ONLY="ServerUITests" ;;
@@ -826,6 +831,9 @@ def after(predicate):
     index = next((i for i, b in enumerate(blocks) if predicate(b)), -1)
     return blocks[index + 1] if 0 <= index < len(blocks) - 1 else {}
 year = str(__import__("datetime").date.today().year)
+def dated(block):
+    """The block holds this year's date: as text, or from Docmost 0.98 on as a date node (`YYYY-MM-DD`)."""
+    return year in text(block) or any((attrs(n).get("date") or "").startswith(year + "-") for n in nodes(block, "date"))
 
 # test34: divider, typing continued after it.
 hr_then = [blocks[i + 1] for i, b in enumerate(blocks[:-1]) if b.get("type") == "horizontalRule"]
@@ -862,7 +870,7 @@ E = "EditorUITests/"
 checks = [
     (E + "test34_InsertMenuListsWebCommands", "Slash: divider via \"/trenn\" + Return, followed by NachTrenn" + stamp,
      any(b.get("type") == "paragraph" and text(b) == "NachTrenn" + stamp for b in hr_then)),
-    (E + "test35_InlineCommands", "Slash: date (" + year + ") and time in the text", year in text(inline) and re.search(r"\d{1,2}:\d{2}", text(inline)) is not None),
+    (E + "test35_InlineCommands", "Slash: date (" + year + ") and time in the text", dated(inline) and re.search(r"\d{1,2}:\d{2}", text(inline)) is not None),
     (E + "test35_InlineCommands", "Slash: status Offen" + stamp + " (red after the tap)", attrs(status).get("text") == "Offen" + stamp and attrs(status).get("color") == "red"),
     (E + "test35_InlineCommands", "Slash: inline math x^2", attrs(math).get("text") == "x^2"),
     (E + "test35_InlineCommands", "Slash: emoji before Fest" + stamp, ("🎉Fest" + stamp) in text(inline)),
@@ -880,7 +888,7 @@ checks = [
     (E + "test38_SyncedBlocks", "Synced: \"Text ▾\" turns Wrap" + stamp + " into a synced block", bool(wrapped)),
     (E + "test39_PlusMenusAndDatabase", "Plus: heading 2 PlusH2" + stamp + " right after Plus" + stamp,
      plus_next.get("type") == "heading" and attrs(plus_next).get("level") == 2 and text(plus_next) == "PlusH2" + stamp),
-    (E + "test39_PlusMenusAndDatabase", "Plus: date from the floating \"+\" (FabDatum" + stamp + ")", year in text(fab_date)),
+    (E + "test39_PlusMenusAndDatabase", "Plus: date from the floating \"+\" (FabDatum" + stamp + ")", dated(fab_date)),
     (E + "test39_PlusMenusAndDatabase", "Plus: FabDatum" + stamp + " right after PlusH2" + stamp + " (no empty paragraph between)",
      ("FabDatum" + stamp) in text(after(lambda b: text(b) == "PlusH2" + stamp))),
     (E + "test39_PlusMenusAndDatabase", "Plus: database (inline) embedded", len(bases) >= 1),
@@ -955,6 +963,32 @@ if "github" in integrations:
         (E + "test72_PasteIntegrationLink", "Integration: mention shown as a link with integrationProvider github",
          not mentions and any(l.get("integrationProvider") == "github" for l in links)),
     ]
+sys.exit(0 if report(checks) else 1)
+PY
+fi
+
+# Content Docmost 0.98 introduced (EditorUITests test109), on 0.98 and newer only.
+if docmost_098; then
+  python3 - "$STAMP" "$PAGE" <<'PY' || CHECKS_FAILED=1
+import datetime, sys
+from dev_api import session
+from uitest_checks import report
+stamp, page = sys.argv[1], sys.argv[2]
+doc = session().call("pages/info", {"pageId": page, "format": "json"})["content"]
+def text(node):
+    return (node.get("text") or "") + "".join(text(child) for child in node.get("content") or [])
+def nodes(node, kind):
+    found = [node] if node.get("type") == kind else []
+    for child in node.get("content") or []:
+        found += nodes(child, kind)
+    return found
+# test109: two dates inserted, the second removed through its sheet: one left, today's (the device's day, as the web's).
+termin = next((b for b in nodes(doc, "paragraph") if ("Termin" + stamp) in text(b)), {})
+dates = [(n.get("attrs") or {}).get("date") for n in nodes(termin, "date")]
+today = datetime.date.today().isoformat()
+checks = [
+    ("EditorUITests/test109_Dates", "Date: one date node, " + today + ", in Termin" + stamp + " (" + str(dates) + ")", dates == [today]),
+]
 sys.exit(0 if report(checks) else 1)
 PY
 fi

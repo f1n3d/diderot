@@ -125,6 +125,19 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
     - Seen in Docmost's web editor, not reported yet: Return never leaves a toggle there (its `detailsContent` compares the empty line with a paragraph without an id, and every line on a page has one), and Backspace in an empty code block after another block fails (Tiptap's `clearNodes` takes the footnotes for the page's default block there). The app leaves a toggle with Return and turns an empty code block into a paragraph.
 - Engine on TipTap 3.35: Docmost 0.98's web client has TipTap 3.35.0, y-tiptap 3.3.1 and Hocuspocus 4.9.0; the engine keeps 3.31.3, 3.0.7 and 4.5.0, the versions of Docmost 0.96 and 0.97. Tried on November 20, 2026 in a copy of the engine on 0.98's versions: `pnpm run observe` recorded the same `spec/` and `pnpm run compare` found no difference, `pnpm run compare-keys` found Backspace right after a quote alike in five cases it lists as kept (0.98's web puts the cursor where the texts meet, as the app does), and the engine's own `guards-check` failed in one case ("a hook in a block"). Moving up means finding out what TipTap changed there, running the checks and the UI tests on 0.96 and 0.97 servers too (their Hocuspocus is 4.5.0), and taking those five cases out of compare-keys' list.
 
+## Docmost 0.98
+
+Supported since November 21, 2026: the engine knows its format, pages are editable, and dates, hints and SharePoint cards show (#193, #194). Left for later, where the app now differs from 0.98's web:
+
+- Typing over a template's hint: the web puts what is typed at a hint in its place (and Tab in a table cell jumps to the cell's first hint); in the app the hint shows dimmed, typing goes beside it, and Backspace removes it.
+- Page covers (`coverPhoto`, `coverPosition`, `coverAttribution` on pages): presets, uploads and Unsplash photos above the title. The app shows none and can't set one.
+- A space's home page (`spaces/info` `homePage`): the web opens the space on it. The app opens the space's tree.
+- User profiles (`users/info`, `users/spaces`, `users/recent-pages`) and the profile card on a mention.
+- Announcements (`announcements/visible`, the license feature `announcements`): the web's banner across the workspace.
+- Chemistry in formulas (`\ce{…}`, KaTeX's mhchem): the app's KaTeX island lacks the extension, so such a formula shows its error.
+- Embeds of Google Docs, Sheets and Slides as previews (the web's new Google patterns); the app's embed check knows the old ones.
+- The workspace's default language (`workspace/public` `defaultLocale`) and the user's time zone (`users/update` `timezone`, which the web sends on load).
+
 ## Presentation mode
 
 - A presenter view for an external display: the slides on the TV, controls and the next slide on the iPhone (decided on October 26, 2026, for later). Today iOS mirrors the screen.
