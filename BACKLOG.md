@@ -137,6 +137,8 @@ Supported since November 21, 2026: the engine knows its format, pages are editab
 - Chemistry in formulas (`\ce{…}`, KaTeX's mhchem): the app's KaTeX island lacks the extension, so such a formula shows its error.
 - Embeds of Google Docs, Sheets and Slides as previews (the web's new Google patterns); the app's embed check knows the old ones.
 - The workspace's default language (`workspace/public` `defaultLocale`) and the user's time zone (`users/update` `timezone`, which the web sends on load).
+- Verified pages (license feature `page:verification`): on 0.98 any edit or rename of a page that is verified, expiring, approved or in approval takes the approval back (the server sets it to draft or invalidated and tells the verifiers; Append Note counts too). The web opens such a page read-only (`pages/verification-info` `status`) and asks before editing ("Edit approved page?" / "Edit page in approval?" / "Edit verified page?"). The app edits them without asking. Doing it as the web does needs the status before the page's engine connects, also when the page opens from the cache, so it waits for its own change (decided on November 21, 2026, before the TestFlight build of 0.98 support).
+- Exports turned off (license feature `export:controls`: `settings.export.disabled` of the workspace in `users/me` or of the space in `spaces/info`): the server refuses `pages/export` with its message, which the app shows; the web also hides Export, Copy as Markdown and printing, which the app still offers (Copy as Markdown goes through `pages/info` and works).
 
 ## Presentation mode
 
