@@ -121,6 +121,12 @@ struct NotificationRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 sentence
                     .lineLimit(3)
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 HStack(spacing: 4) {
                     if let space = notification.space?.name {
                         Text(space)
@@ -154,6 +160,7 @@ struct NotificationRow: View {
         let actor = Text(notification.actor?.name ?? String(localized: "Someone")).bold()
         let target = Text(notification.page?.displayTitle ?? notification.space?.name ?? String(localized: "a page")).bold()
         let destination = Text(notification.data?["destinationName"]?.stringValue ?? "").bold()
+        let file = Text(notification.data?["fileName"]?.stringValue ?? "").bold()
         let type = notification.type
         switch type {
         case "comment.user_mention": return Text("\(actor) mentioned you in a comment on \(target)")
@@ -165,16 +172,47 @@ struct NotificationRow: View {
         case "page.verified": return Text("\(actor) verified \(target)")
         case "page.approval_requested": return Text("\(actor) submitted \(target) for your approval")
         case "page.approval_rejected": return Text("\(actor) returned \(target) for revision")
+        // Docmost 0.98: a change cost the page its verification or approval.
+        case "page.verification_invalidated":
+            if notification.data?["verificationType"]?.stringValue == "qms" {
+                return notification.data?["previousStatus"]?.stringValue == "in_approval"
+                    ? Text("\(actor) changed \(target) while it was in approval")
+                    : Text("\(actor) changed the approved page \(target)")
+            }
+            return Text("\(actor) changed the verified page \(target)")
         // System notices: the server sends them without an actor.
         case "page.verification_expiring": return Text("Verification of \(target) expires soon")
         case "page.verification_expired": return Text("Verification of \(target) has expired")
         case "siem_destination.failing": return Text("SIEM destination \(destination) is failing")
         case "siem_destination.disabled": return Text("SIEM destination \(destination) was disabled after 24 hours of failures")
         case "siem_destination.recovered": return Text("SIEM destination \(destination) recovered")
+        // How a CSV import into a database went (Docmost 0.98, on the web).
+        case "base.import_completed":
+            guard let rows = notification.data?["importedRows"]?.intValue else { return Text("Imported \(file)") }
+            return Text("Imported \(rows) rows from \(file)")
+        case "base.import_failed": return Text("Couldn't import \(file)")
         default:
             if type.hasPrefix("page.verification") { return Text("\(actor) changed the verification of \(target)") }
             if type.hasPrefix("page.approval") { return Text("\(actor) changed the approval of \(target)") }
             return Text("\(actor) \(type.replacingOccurrences(of: ".", with: " ").replacingOccurrences(of: "_", with: " ")) \(target)")
+        }
+    }
+
+    /// A line below the sentence, as on the web: why a SIEM destination fails, what a database import left empty or why
+    /// it failed.
+    var detail: String? {
+        let data = notification.data
+        func text(_ key: String) -> String? { data?[key]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
+        switch notification.type {
+        case "siem_destination.failing", "siem_destination.disabled":
+            return text("lastError")
+        case "base.import_failed":
+            return text("error") ?? String(localized: "Nothing was imported. Please try again.")
+        case "base.import_completed":
+            guard let skipped = data?["skippedValues"]?.intValue, skipped > 0 else { return nil }
+            return String(localized: "\(skipped) values couldn't be read and were left empty.")
+        default:
+            return nil
         }
     }
 }

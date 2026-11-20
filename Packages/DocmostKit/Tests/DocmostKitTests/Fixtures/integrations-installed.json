@@ -1,0 +1,19 @@
+{
+    "data": [
+        {
+            "id": "01a172c2-6382-7d3f-b043-e1d3faba47c4",
+            "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+            "type": "github",
+            "settings": {},
+            "installedById": null,
+            "createdAt": "2026-10-25T11:11:44.513Z",
+            "updatedAt": "2026-10-25T11:11:44.513Z",
+            "deletedAt": null,
+            "unfurlHosts": [
+                "github.com"
+            ]
+        }
+    ],
+    "success": true,
+    "status": 200
+}

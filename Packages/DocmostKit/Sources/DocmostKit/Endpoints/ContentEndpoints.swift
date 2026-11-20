@@ -2,9 +2,21 @@ import Foundation
 
 extension Endpoints {
     public enum Spaces {
-        /// Spaces the user is a member of, sorted by name.
-        public static func list(_ pagination: PaginationOptions = PaginationOptions()) -> Endpoint<Paginated<Space>> {
-            .post("spaces", body: pagination)
+        /// Which of the user's spaces a list holds. Docmost 0.98 archives spaces and lists only active ones unless
+        /// asked otherwise; older servers ignore it and list all.
+        public enum Status: String, Encodable, Sendable {
+            case active, archived, all
+        }
+
+        public struct ListBody: Encodable, Sendable {
+            public var limit: Int?
+            public var cursor: String?
+            public var status: Status
+        }
+
+        /// Spaces the user is a member of, sorted by name; archived ones too unless `status` says otherwise.
+        public static func list(_ pagination: PaginationOptions = PaginationOptions(), status: Status = .all) -> Endpoint<Paginated<Space>> {
+            .post("spaces", body: ListBody(limit: pagination.limit, cursor: pagination.cursor, status: status))
         }
 
         public struct SpaceIdBody: Encodable, Sendable {

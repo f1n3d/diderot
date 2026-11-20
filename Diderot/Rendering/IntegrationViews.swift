@@ -46,7 +46,7 @@ final class LinkPreviewStore {
     func loadInstalled() async {
         if let installedAskedAt, installedAskedAt.timeIntervalSinceNow > -600 { return }
         installedAskedAt = .now
-        if let answer = try? await client.send(Endpoints.Integrations.installed) {
+        if let answer = try? await client.installedIntegrations() {
             installed = answer
         } else if installed == nil {
             installedAskedAt = nil
