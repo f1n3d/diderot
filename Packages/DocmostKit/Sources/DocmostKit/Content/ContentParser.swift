@@ -28,7 +28,7 @@ public enum ContentParser {
 
     private static let inlineTypes: Set<String> = [
         "text", "hardBreak", "mention", "mathInline", "status", "footnoteReference", "integrationMention", "date",
-        "templatePlaceholder",
+        "templatePlaceholder", "templateVariable",
     ]
 
     // MARK: - Blocks
@@ -311,6 +311,8 @@ public enum ContentParser {
                 result.append(marked(.date(child.string("date")), child))
             case "templatePlaceholder":
                 result.append(marked(.templatePlaceholder(hint: child.string("hint") ?? ""), child))
+            case "templateVariable":
+                result.append(marked(.templateVariable(name: child.string("name") ?? ""), child))
             default:
                 // An unknown node's content, as deep as blocks show.
                 if !child.children.isEmpty, depth < maxDepth {

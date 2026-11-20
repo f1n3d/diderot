@@ -407,6 +407,45 @@ import XCTest
         snapshot(app, "78-filled")
     }
 
+    /// A template with fields (Docmost 0.98): the script makes "Vorlage<stamp> Felder" with a text field "Kunde" and a
+    /// choice "Stand" (offen, fertig). "Use" asks for their values, and "Create Page" makes the page with them as text.
+    /// The server check expects "Kunde: ACME<stamp>" and "Stand: fertig" on the page.
+    func test110_TemplateFields() throws {
+        try requireDocmost098()
+        try XCTSkipIf((environment["DOCMOST_UITEST_TEMPLATES"] ?? "").split(separator: ",").count < 3, "No template with fields")
+        let app = launch(openPage: false)
+        let space = app.buttons["space-\(environment["DOCMOST_UITEST_SPACE_SLUG"] ?? "demo")"]
+        XCTAssertTrue(space.waitForExistence(timeout: 30), "Space card missing")
+        space.tap()
+        let fab = app.buttons["space-new-page"]
+        XCTAssertTrue(fab.waitForExistence(timeout: 20), "“+” missing")
+        fab.press(forDuration: 1.2)
+        let fromTemplate = button(app, labels: ["New Page from Template", "Neue Seite aus Vorlage"])
+        XCTAssertTrue(fromTemplate.waitForExistence(timeout: 5), "Holding “+” offers no template")
+        fromTemplate.tap()
+        let use = app.buttons["template-use-Vorlage\(stamp) Felder"]
+        XCTAssertTrue(use.waitForExistence(timeout: 10), "The template with fields isn't listed")
+        XCTAssertTrue(scrollTo(use, in: app), "The template with fields doesn't come into view")
+        use.tap()
+
+        let customer = element(app, "template-field-Kunde")
+        XCTAssertTrue(customer.waitForExistence(timeout: 10), "“Use” doesn't ask for the template's fields")
+        customer.tap()
+        customer.typeText("ACME\(stamp)")
+        element(app, "template-field-Stand").tap()
+        let done = button(app, labels: ["fertig"])
+        XCTAssertTrue(done.waitForExistence(timeout: 5), "The choice field doesn't offer its options")
+        done.tap()
+        snapshot(app, "110-fields")
+        app.buttons["template-fields-use"].tap()
+
+        let title = element(app, "page-title")
+        XCTAssertTrue(title.waitForExistence(timeout: 20), "The page from the template doesn't open")
+        let filled = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "ACME\(stamp)")).firstMatch
+        XCTAssertTrue(filled.waitForExistence(timeout: 20), "The new page lacks the field's value")
+        snapshot(app, "110-page")
+    }
+
     /// Long-press a block and drag it onto the heading: "Letzter Absatz" lands before "Überschrift".
     func test7_DragBlock() {
         let app = launchPage()

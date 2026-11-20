@@ -270,6 +270,8 @@ public enum Inline: Sendable, Hashable {
     case date(String?)
     /// A template's hint (Docmost 0.98), shown in its place until one types there.
     case templatePlaceholder(hint: String)
+    /// A template's field (Docmost 0.98, templates only), filled in when a page is made from the template.
+    case templateVariable(name: String)
     /// An atom (mention, formula, status …) with marks: the web keeps formatting, links and comments on the whole atom.
     indirect case marked(Inline, InlineStyle)
     case unknown(type: String)

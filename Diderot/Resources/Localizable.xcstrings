@@ -1385,6 +1385,16 @@
         }
       }
     },
+    "Create Page": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seite erstellen"
+          }
+        }
+      }
+    },
     "Creating database…": {
       "localizations": {
         "de": {
@@ -2154,6 +2164,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exportieren …"
+          }
+        }
+      }
+    },
+    "Failed to load template": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlage konnte nicht geladen werden"
           }
         }
       }
@@ -4711,6 +4731,16 @@
         }
       }
     },
+    "Select an Option": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Option wählen"
+          }
+        }
+      }
+    },
     "SharePoint": {
       "localizations": {
         "de": {
@@ -5753,6 +5783,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "In der Zwischenablage liegt kein synchronisierter Block."
+          }
+        }
+      }
+    },
+    "These values become editable text on the page.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Werte werden zu bearbeitbarem Text auf der Seite."
           }
         }
       }
