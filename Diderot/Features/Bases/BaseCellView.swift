@@ -13,6 +13,8 @@ struct BaseCellView: View {
     let users: [String: UserRef]
     let pages: [String: PageRef]
     var style: Style = .compact
+    /// A checkbox (or a yes/no formula) shows its property's name beside it, as a board's cards show them on the web.
+    var namesCheckbox = false
     /// Page reference tapped (detail style only).
     var onOpenPage: ((PageRef) -> Void)?
 
@@ -32,7 +34,8 @@ struct BaseCellView: View {
         case .multiSelect:
             pills(BaseLayout.stringArray(value) ?? [])
         case .date:
-            text(value?.stringValue.map { BaseFormat.date($0, options: property.typeOptions) })
+            // Text that isn't a date (older servers took any) shows as it is.
+            text(dateText(options: property.typeOptions) ?? value?.stringValue)
         case .person:
             people(BaseValue.personIds(value))
         case .page:
@@ -161,10 +164,29 @@ struct BaseCellView: View {
         }
     }
 
+    @ViewBuilder
     private func checkbox(_ checked: Bool) -> some View {
-        Image(systemName: checked ? "checkmark.square.fill" : "square")
+        let box = Image(systemName: checked ? "checkmark.square.fill" : "square")
             .foregroundStyle(checked ? Color.accentColor : .secondary)
             .accessibilityLabel(checked ? Text("Yes") : Text("No"))
+        if namesCheckbox {
+            HStack(spacing: 6) {
+                box
+                Text(property.name).lineLimit(1)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(property.name))
+            .accessibilityValue(checked ? Text("Yes") : Text("No"))
+        } else {
+            box
+        }
+    }
+
+    /// A date cell in either form (`BaseDateCell`); nil if it holds none. `options`: the date property's format, nil for
+    /// a formula.
+    private func dateText(options: JSONValue?) -> String? {
+        guard let kind = BaseDateKind(of: property), let cell = BaseDateCell(value) else { return nil }
+        return BaseFormat.date(cell, kind: kind, options: options)
     }
 
     @ViewBuilder
@@ -178,19 +200,24 @@ struct BaseCellView: View {
         }
     }
 
+    /// The result by its type; a date (an ISO string before Docmost 0.98, `{start}` since) as a date property shows one.
     @ViewBuilder
     private var formula: some View {
-        switch value {
-        case .number(let number):
-            Text(BaseFormat.number(number, options: nil)).monospacedDigit()
-        case .string(let string):
-            text(property.typeOptions?["resultType"]?.stringValue == "date" ? BaseFormat.date(string, options: nil) : string)
-        case .bool(let flag):
-            checkbox(flag)
-        case .object(let object) where object["__err"] != nil:
+        if case .object(let object)? = value, object["__err"] != nil {
             Text("#ERROR").foregroundStyle(.red).help(object["msg"]?.stringValue ?? "")
-        default:
-            EmptyView()
+        } else if let date = dateText(options: nil) {
+            text(date)
+        } else {
+            switch value {
+            case .number(let number):
+                Text(BaseFormat.number(number, options: nil)).monospacedDigit()
+            case .string(let string):
+                text(string)
+            case .bool(let flag):
+                checkbox(flag)
+            default:
+                EmptyView()
+            }
         }
     }
 }

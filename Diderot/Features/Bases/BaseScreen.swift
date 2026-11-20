@@ -214,8 +214,8 @@ struct BaseEmbedCard: View {
         switch info.state {
         case .failed(let error):
             return error.userMessage
-        case .loaded(let base) where !base.views.isEmpty:
-            return String(localized: "Database · \(base.views.map(\.name).joined(separator: ", "))")
+        case .loaded(let base) where !base.shownViews.isEmpty:
+            return String(localized: "Database · \(base.shownViews.map(\.name).joined(separator: ", "))")
         default:
             return String(localized: "Database")
         }

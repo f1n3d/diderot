@@ -81,6 +81,10 @@ final class BaseModel {
     /// The server this database was opened on; its file uploads are staged in that server's folder (`UploadFile`).
     var serverURL: URL? { owner?.server.url }
 
+    /// Docmost 0.98 or newer, as the sign-in this database was opened with names it: dates are written in 0.98's form
+    /// (`BaseValue.date`).
+    var hasDocmost098Features: Bool { owner?.hasDocmost098Features ?? false }
+
     /// A field's typed text in a save (`setCell`'s `typed`).
     private struct TypedInput {
         let propertyId: String
@@ -100,10 +104,8 @@ final class BaseModel {
 
     var base: Base? { state.value }
 
-    /// Views in Docmost order.
-    var views: [BaseView] {
-        (base?.views ?? []).sorted { ($0.position ?? "") < ($1.position ?? "") }
-    }
+    /// Views in Docmost order, without the form views the web hides too (`Base.shownViews`).
+    var views: [BaseView] { base?.shownViews ?? [] }
 
     var selectedView: BaseView? {
         views.first { $0.id == selectedViewId } ?? views.first
@@ -240,6 +242,8 @@ final class BaseModel {
             table.cursor = page.meta.nextCursor
             table.hasMore = page.meta.hasNextPage
             merge(page.references)
+        } catch let error as APIError where error.isStaleBaseCursor {
+            await restartAfterStaleCursor(in: view)
         } catch {
             if selectedView == view { toast = error.userMessage }
         }
@@ -261,9 +265,20 @@ final class BaseModel {
             columns[current].list.cursor = page.meta.nextCursor
             columns[current].list.hasMore = page.meta.hasNextPage
             merge(page.references)
+        } catch let error as APIError where error.isStaleBaseCursor {
+            await restartAfterStaleCursor(in: view)
         } catch {
             if selectedView == view { toast = error.userMessage }
         }
+    }
+
+    /// The row the cursor refers to changed or went since its page loaded (Docmost 0.98): the view loads again from its
+    /// first page, as on the web, instead of failing with that cursor on every try. Pending and saved changes stay over
+    /// the answer (`loadRows`); should it fail too, it says so.
+    private func restartAfterStaleCursor(in view: BaseView) async {
+        guard selectedView == view else { return }
+        AppLog.ui.info("Rows cursor stale: loading the view again")
+        await loadRows()
     }
 
     /// Kanban cards sort by position (web parity: plain string comparison of the keys).
@@ -271,8 +286,10 @@ final class BaseModel {
         rows.sorted { ($0.position ?? "") < ($1.position ?? "") }
     }
 
+    /// A page of rows; Docmost 0.98 resolves the view's date filters ("today", "this week") in the device's time zone and
+    /// week, as the web's in the browser's.
     private func fetch(filter: JSONValue?, sorts: JSONValue?, cursor: String?) async throws -> BaseRowsPage {
-        try await send(Endpoints.Bases.rows(pageId: pageId, filter: filter, sorts: sorts, cursor: cursor))
+        try await send(Endpoints.Bases.rows(pageId: pageId, filter: filter, sorts: sorts, cursor: cursor, viewer: ViewerDateContext()))
     }
 
     /// One request with the sign-in this database was opened with (`AppSession.send(_:on:)`); each request checks it
@@ -589,7 +606,7 @@ final class BaseModel {
 
     /// Failed-save message; on "Cell validation failed" it says which value is invalid, not the server's English text.
     private func failureMessage(_ error: Error, cells: [String: JSONValue]) -> String {
-        guard case .validation(let messages)? = error as? APIError, messages.contains("Cell validation failed"),
+        guard case .validation(let messages, _)? = error as? APIError, messages.contains("Cell validation failed"),
               cells.count == 1, let property = base?.properties.first(where: { $0.id == cells.keys.first })
         else { return error.userMessage }
         switch property.kind {

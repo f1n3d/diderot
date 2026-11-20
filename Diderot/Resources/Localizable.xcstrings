@@ -2038,6 +2038,16 @@
         }
       }
     },
+    "End: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende: %@"
+          }
+        }
+      }
+    },
     "Enter %@ link to embed": {
       "localizations": {
         "de": {

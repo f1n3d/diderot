@@ -324,39 +324,58 @@ struct BaseLongTextEditor: View {
 
 // MARK: - Date
 
-/// Day picker with a remove button; no time even with "include time" (web parity).
+/// The date's start with a remove button: its day, and its time where the property includes time on Docmost 0.98 (the
+/// web's picker on older servers has days only). A range's end shows below; it is set on the web, and stays while the
+/// start moves before it (`BaseValue.date`).
 struct BaseDateEditor: View {
     let model: BaseModel
     let rowId: String
     let property: BaseProperty
     let stored: JSONValue?
 
+    private var kind: BaseDateKind { BaseDateKind(of: property) ?? .date }
+
     var body: some View {
-        if let date = BaseValue.pickerDate(stored) {
-            HStack {
-                DatePicker("Date", selection: Binding { date } set: { set($0) }, displayedComponents: .date)
-                    .labelsHidden()
-                    .accessibilityIdentifier("base-date-\(property.id)")
-                Spacer(minLength: 0)
-                Button {
-                    Task { await model.setCell(rowId: rowId, propertyId: property.id, to: nil) }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+        if let cell = BaseDateCell(stored) {
+            let withTime = kind == .datetime
+                && BaseValue.writesDateObject(onDocmost098: model.hasDocmost098Features, replacing: cell)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    DatePicker("Date", selection: Binding {
+                        BaseValue.pickerDate(cell, withTime: withTime)
+                    } set: { picked in
+                        save(BaseValue.date(picked, kind: kind, replacing: cell, onDocmost098: model.hasDocmost098Features))
+                    }, displayedComponents: withTime ? [.date, .hourAndMinute] : .date)
+                        .labelsHidden()
+                        .accessibilityIdentifier("base-date-\(property.id)")
+                    Spacer(minLength: 0)
+                    Button {
+                        save(nil)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Remove Date")
+                    .accessibilityIdentifier("base-clear-\(property.id)")
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Remove Date")
-                .accessibilityIdentifier("base-clear-\(property.id)")
+                if let end = cell.end {
+                    Text("End: \(BaseFormat.date(BaseDateCell(start: end), kind: kind, options: property.typeOptions))")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("base-date-end-\(property.id)")
+                }
             }
         } else {
-            Button("Add Date", systemImage: "calendar.badge.plus") { set(.now) }
-                .buttonStyle(.borderless)
-                .accessibilityIdentifier("base-add-date-\(property.id)")
+            Button("Add Date", systemImage: "calendar.badge.plus") {
+                save(BaseValue.today(kind: kind, onDocmost098: model.hasDocmost098Features))
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("base-add-date-\(property.id)")
         }
     }
 
-    private func set(_ date: Date) {
-        let value = BaseValue.date(date)
+    private func save(_ value: JSONValue?) {
         Task { await model.setCell(rowId: rowId, propertyId: property.id, to: value) }
     }
 }
