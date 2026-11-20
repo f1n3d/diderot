@@ -18,18 +18,30 @@ export const newBlockId = customAlphabet("abcdefghijklmnopqrstuvwxyz", 12);
 /** The blocks UniqueID gives an id (`attrs.id`), as Docmost's editor does. */
 export const uniqueIdTypes = ["heading", "paragraph", "transclusionSource"];
 
-const required: Partial<Attribute> = { isRequired: true };
+/** Attributes given as a whole spec rather than as a default value (`required`, `string`). */
+const attributeSpecs = new WeakSet<Partial<Attribute>>();
+function attributeSpec(spec: Partial<Attribute>) {
+  attributeSpecs.add(spec);
+  return spec;
+}
+
+const required = attributeSpec({ isRequired: true });
+/** A string attribute with its default; ProseMirror refuses other values (the attribute's `validate`). */
+const string = (value: string) => attributeSpec({ default: value, validate: "string" });
 
 /**
  * A node type with its schema fields and attributes, in the order they appear in the JSON: a default value each
- * (`undefined`: none, so the attribute stays out of the JSON until set), or `required`.
+ * (`undefined`: none, so the attribute stays out of the JSON until set), `required` or `string(…)`.
  */
 function docmostNode(name: string, fields: Partial<NodeConfig>, attributes: Record<string, unknown> = {}) {
   return Node.create({
     name,
     ...fields,
     addAttributes: () =>
-      Object.fromEntries(Object.entries(attributes).map(([key, value]) => [key, value === required ? required : { default: value }])),
+      Object.fromEntries(Object.entries(attributes).map(([key, value]) => [
+        key,
+        typeof value === "object" && value !== null && attributeSpecs.has(value) ? value : { default: value },
+      ])),
     renderHTML: ({ HTMLAttributes }) => [
       fields.inline ? "span" : "div",
       mergeAttributes({ "data-type": name }, HTMLAttributes),
@@ -203,7 +215,8 @@ export const Image = docmostNode("image", { ...media, inline: false }, {
 export const Video = docmostNode("video", media, {
   src: "", alt: undefined, attachmentId: undefined, width: null, height: null, size: null, align: "center", aspectRatio: null, placeholder: null,
 });
-export const Audio = docmostNode("audio", media, { src: "", attachmentId: undefined, size: null, placeholder: null });
+/** `name`: the file's name (Docmost 0.98; older audio blocks have none, the web then shows the name in `src`). */
+export const Audio = docmostNode("audio", media, { src: "", name: undefined, attachmentId: undefined, size: null, placeholder: null });
 export const Pdf = docmostNode("pdf", media, { src: "", name: undefined, attachmentId: undefined, size: null, width: 800, height: 600, placeholder: null });
 export const Attachment = docmostNode("attachment", { ...media, inline: false }, { url: "", name: undefined, mime: undefined, size: null, attachmentId: undefined, placeholder: null });
 export const Drawio = docmostNode("drawio", { ...media, inline: false }, diagram);
@@ -220,6 +233,28 @@ export const Mention = docmostNode("mention", { ...inline, priority: 101, select
 });
 export const MathInline = docmostNode("mathInline", inline, { text: "" });
 export const Status = docmostNode("status", { ...inline, selectable: true, draggable: true }, { text: "", color: "gray" });
+
+/**
+ * A calendar date (Docmost 0.98): `date` as `YYYY-MM-DD`. As text it is the date the way Docmost's server writes it
+ * (US English, "Nov 20, 2026"), nothing for anything else.
+ */
+export const DateNode = docmostNode("date", inline, { date: null }).extend({
+  extendNodeSchema: (extension) => (extension.name === "date" ? { leafText: (node: PMNode) => dateLabel(node.attrs.date) } : {}),
+});
+
+/** A day as `YYYY-MM-DD`, in the US English short form; "" for anything else (as Docmost's `formatDateLabel`). */
+export function dateLabel(value: unknown): string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+  const day = new Date(value);
+  if (!Number.isFinite(day.getTime()) || day.getUTCFullYear() <= 0 || day.toISOString().slice(0, 10) !== value) return "";
+  return day.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * A template's hint (Docmost 0.98), such as "Describe the goal": the web shows `hint` in its place until one types
+ * there. It has no text of its own.
+ */
+export const TemplatePlaceholder = docmostNode("templatePlaceholder", inline, { hint: string("") });
 
 export const Link = TiptapLink.extend({
   inclusive: false,
@@ -242,6 +277,15 @@ export const Comment = Mark.create({
 /** A link to an issue, pull request, design, … shown as a card or, inline, as a chip; `provider` names the service. */
 export const IntegrationCard = docmostNode("integrationCard", { group: "block", inline: false, atom: true, draggable: true, defining: true, isolating: true }, { url: "", provider: "" });
 export const IntegrationMention = docmostNode("integrationMention", { group: "inline", inline: true, atom: true, selectable: true, draggable: false }, { url: "", provider: "" });
+
+const microsoftBlock = { group: "block", inline: false, atom: true, draggable: true, defining: true, isolating: true };
+/**
+ * Files in SharePoint or OneDrive (Docmost 0.98, Microsoft 365 integration): `items` holds `driveId`, `itemId`, `webUrl`
+ * and `name` of each.
+ */
+export const MicrosoftFile = docmostNode("microsoftFile", microsoftBlock, { items: [], width: 800, height: 600, align: "center", pendingKey: null });
+/** A folder in SharePoint or OneDrive (Docmost 0.98). */
+export const MicrosoftFolder = docmostNode("microsoftFolder", microsoftBlock, { driveId: "", itemId: "", webUrl: "", name: "" });
 
 // MARK: Footnotes
 

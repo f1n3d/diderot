@@ -3,9 +3,10 @@
 The engine edits a page through a ProseMirror document bound to the page's Yjs document. Whatever the engine's schema
 can't hold is lost when it writes back, so the schema must match the one the Docmost server and its web editor use,
 and the engine must make the same automatic changes to documents that the web editor makes. This file describes both
-for **Docmost v0.97.0**, the newest version the app supports (newer servers open pages read-only, see
-`AppSession.isNewerThanEditor`). Docmost 0.96 has the same format without tabs, integration links and the attributes
-`sortBy` (sub-pages) and `integrationProvider` (links); the app offers those only on servers that know them.
+for **Docmost v0.98.0**, the newest version the app supports (newer servers open pages read-only, see
+`ReadySession.isNewerThanEditor`). Docmost 0.97 has the same format without dates, template hints, Microsoft 365 files
+and folders and the audio's `name`; Docmost 0.96 also without tabs, integration links and the attributes `sortBy`
+(sub-pages) and `integrationProvider` (links). The app offers each only on servers that know it.
 
 ## How this was established
 
@@ -29,6 +30,11 @@ them; nothing of them goes into `engine.js`.
 
 The tools run Docmost's editor without a view. What its tabs extension does when an editor shows a document was observed
 once with a browser-like environment (jsdom) around the same extensions; see "Tab ids" below.
+
+They run Docmost's extensions on the engine's own TipTap packages: 3.31.3, as in Docmost 0.96 and 0.97. Docmost 0.98's
+client has TipTap 3.35.0 and y-tiptap 3.3.1. Observed on those once (November 20, 2026), 0.98 gave the same `spec/` and
+`pnpm run compare` the same result; `pnpm run compare-keys` differed in Backspace right after a quote, where 0.98's web
+puts the cursor where the texts meet, as the app does (BACKLOG.md, "Engine on TipTap 3.35").
 
 ## Documents
 
@@ -106,7 +112,8 @@ TipTap's StarterKit provides most of these unchanged; Docmost adds block ids and
   the table or synced block). `tabPanel` is "defining as context": content pasted or dropped out of a panel keeps its
   wrapping.
 - `integrationCard` shows a link to another service (an issue, a pull request, a design, …) as a card: `url` and
-  `provider`, the service's name. It comes last in the schema, with `integrationMention`.
+  `provider`, the service's name. It comes after the footnote types in the schema, with `integrationMention`; only the
+  Microsoft 365 types follow them.
 
 ### Tables
 
@@ -128,15 +135,23 @@ A cell holds one or more of `paragraph`, `heading`, `bulletList`, `orderedList`,
 |---|---|---|---|
 | `image` | block | atom, defining, draggable, isolating, not inline | `src` = `""`, `alt` *unset*, `attachmentId` *unset*, `width`, `height`, `aspectRatio`, `size`, `align` = `"center"`, `placeholder` |
 | `video` | block | atom, defining, draggable, isolating | as `image` |
-| `audio` | block | atom, defining, draggable, isolating | `src` = `""`, `attachmentId` *unset*, `size`, `placeholder` |
+| `audio` | block | atom, defining, draggable, isolating | `src` = `""`, `name` *unset*, `attachmentId` *unset*, `size`, `placeholder` |
 | `pdf` | block | atom, defining, draggable, isolating | `src` = `""`, `attachmentId` *unset*, `name` *unset*, `size`, `width` = 800, `height` = 600, `placeholder` |
 | `attachment` | block | atom, defining, draggable, isolating, not inline | `url` = `""`, `attachmentId` *unset*, `name` *unset*, `mime` *unset*, `size`, `placeholder` |
 | `drawio` | block | atom, defining, draggable, isolating, not inline | `src` = `""`, `alt` *unset*, `title` *unset*, `attachmentId` *unset*, `width`, `height`, `aspectRatio`, `size`, `align` = `"center"` |
 | `excalidraw` | block | as `drawio` | as `drawio` |
 | `embed` | block | atom, defining, draggable, isolating, not inline | `src` = `""`, `provider` = `""`, `width` = 800, `height` = 600, `align` = `"center"` |
 | `youtube` | block | draggable, not inline | TipTap's YouTube node: `src`, `start` = 0, `width` = 640, `height` = 480 |
+| `microsoftFile` | block | atom, defining, draggable, isolating, not inline | `items` = `[]`, `width` = 800, `height` = 600, `align` = `"center"`, `pendingKey` |
+| `microsoftFolder` | block | atom, defining, draggable, isolating, not inline | `driveId` = `""`, `itemId` = `""`, `webUrl` = `""`, `name` = `""` |
 
-Uploaded files point to their attachment (`attachmentId`) and its address (`src`, for attachments `url`).
+Uploaded files point to their attachment (`attachmentId`) and its address (`src`, for attachments `url`). Since 0.98 an
+audio block also has the file's name (`name`, *unset*: older ones have none, and the web then shows the last part of
+`src`).
+
+`microsoftFile` and `microsoftFolder` (0.98, Docmost's Microsoft 365 integration) show files and a folder in SharePoint or
+OneDrive: each of `items` has `driveId`, `itemId`, `webUrl` and `name`, and the folder has those four itself. The web
+keeps only `https://` addresses on `sharepoint.com` and its subdomains. They come last in the schema.
 
 ### Inline nodes
 
@@ -147,10 +162,19 @@ Uploaded files point to their attachment (`attachmentId`) and its address (`src`
 | `status` | | inline, atom, selectable, draggable | `text` = `""`, `color` = `"gray"` |
 | `footnoteReference` | `text*` | inline, atom, draggable | `data-id`, `referenceNumber`, `href`, `class` = `"footnote-ref"` |
 | `integrationMention` | | inline, atom, selectable, not draggable | `url` = `""`, `provider` = `""` |
+| `date` | | inline, atom | `date` |
+| `templatePlaceholder` | | inline, atom | `hint` = `""`, a string |
 
-All five are in the group `inline`. A mention points to a user or a page (`entityType` `"user"` or `"page"`,
+All seven are in the group `inline`. A mention points to a user or a page (`entityType` `"user"` or `"page"`,
 `entityId`, for pages also `slugId`). The mention node comes third in the schema, right after the code block.
 `integrationMention` is the inline form of `integrationCard`.
+
+`date` (0.98) holds a day as `YYYY-MM-DD`. Its text (ProseMirror's `leafText`) is that day in US English as the server
+writes it, "Nov 20, 2026"; the web shows it in the reader's language. `templatePlaceholder` (0.98) is a template's
+hint, such as "Describe the goal": the web shows `hint` in its place until one types there, and it has no text. `hint`
+must be a string (ProseMirror's `validate`). Both come right after `status` in the schema. Templates have one more
+inline node, `templateVariable` (a field filled in when a page is made from the template), which pages don't hold: the
+server's schema for pages lacks it and keeps one that reaches a page as its name, as text.
 
 ### Footnotes
 
@@ -277,10 +301,11 @@ reference (type a character, delete it); the engine doesn't, as it never makes s
 
 ## A newer Docmost
 
-1. Check out the new version next to this repository: `git -C ../docmost checkout v0.97.0`. (0.97.0 came without a Git
+1. Check out the new version next to this repository: `git -C ../docmost checkout v0.98.0`. (0.97.0 came without a Git
    tag at first: the tag was set locally on its release commit, `git -C ../docmost tag v0.97.0 e113d652`.)
 2. If the server's extension list changed (`apps/server/src/collaboration/collaboration.util.ts`), update
-   `tools/docmost-reference.ts`.
+   `tools/docmost-reference.ts`. A package the new extensions import goes into the development dependencies, in
+   Docmost's version (0.98's dates brought `date-fns`).
 3. `pnpm run observe` records the new version in `spec/`; `git diff spec` shows what changed.
 4. Describe the changes here, adapt `src/extensions.ts` until `pnpm run check` passes, and add scenarios to
    `tools/behaviors.ts` for new automatic changes.

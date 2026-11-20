@@ -16,10 +16,11 @@ import { TaskList, TaskItem } from "@tiptap/extension-list";
 import { Table, TableRow } from "@tiptap/extension-table";
 import { UniqueID } from "@tiptap/extension-unique-id";
 import {
-  Attachment, Audio, BaseEmbed, Callout, CodeBlock, Column, Columns, Comment, Details, DetailsContent, DetailsSummary,
-  Drawio, Embed, Excalidraw, Footnote, FootnoteReference, Footnotes, Highlight, Image, Indent, IntegrationCard,
-  IntegrationMention, Link, MathBlock, MathInline, Mention, PageBreak, Pdf, Status, Subpages, Tab, TabLabel, TabPanel,
-  Tabs, TableCell, TableHeader, TrailingNode, TransclusionReference, TransclusionSource, Video, newBlockId, uniqueIdTypes,
+  Attachment, Audio, BaseEmbed, Callout, CodeBlock, Column, Columns, Comment, DateNode, Details, DetailsContent,
+  DetailsSummary, Drawio, Embed, Excalidraw, Footnote, FootnoteReference, Footnotes, Highlight, Image, Indent,
+  IntegrationCard, IntegrationMention, Link, MathBlock, MathInline, Mention, MicrosoftFile, MicrosoftFolder, PageBreak,
+  Pdf, Status, Subpages, Tab, TabLabel, TabPanel, Tabs, TableCell, TableHeader, TemplatePlaceholder, TrailingNode,
+  TransclusionReference, TransclusionSource, Video, newBlockId, uniqueIdTypes,
 } from "./extensions";
 
 /**
@@ -92,6 +93,8 @@ export const schemaExtensions: AnyExtension[] = [
   Columns,
   Column,
   Status,
+  DateNode,
+  TemplatePlaceholder,
   TransclusionSource,
   TransclusionReference,
   BaseEmbed,
@@ -100,4 +103,6 @@ export const schemaExtensions: AnyExtension[] = [
   FootnoteReference,
   IntegrationCard,
   IntegrationMention,
+  MicrosoftFile,
+  MicrosoftFolder,
 ];

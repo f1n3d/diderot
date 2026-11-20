@@ -36,6 +36,11 @@ const tabs = (...items: JSONContent[]) => ({ type: "tabs", content: items });
 const card = { type: "integrationCard", attrs: { url: "https://github.com/o/r/issues/1", provider: "github" } };
 const chip = { type: "integrationMention", attrs: { url: "https://linear.app/o/issue/A-1", provider: "linear" } };
 const providerLink = (text: string) => ({ type: "text", text, marks: [{ type: "link", attrs: { href: "https://gitlab.com/o/r/-/issues/2", integrationProvider: "gitlab" } }] });
+const date = (day: string) => ({ type: "date", attrs: { date: day } });
+const hint = (text: string) => ({ type: "templatePlaceholder", attrs: { hint: text } });
+const sharePoint = "https://contoso.sharepoint.com/sites/team";
+const microsoftFile = { type: "microsoftFile", attrs: { items: [{ driveId: "d1", itemId: "i1", webUrl: `${sharePoint}/Plan.docx`, name: "Plan.docx" }] } };
+const microsoftFolder = { type: "microsoftFolder", attrs: { driveId: "d1", itemId: "f1", webUrl: `${sharePoint}/Shared`, name: "Shared" } };
 const fixtures = "../Packages/DocmostKit/Tests/DocmostKitTests/Fixtures";
 const documents: JSONContent[] = [
   ...fs.readdirSync(fixtures).filter((name) => name.startsWith("fixture-")).map((name) => JSON.parse(fs.readFileSync(`${fixtures}/${name}`, "utf8"))),
@@ -58,6 +63,22 @@ const documents: JSONContent[] = [
     card,
     { type: "subpages", attrs: { sortBy: "recent" } },
     { type: "columns", content: [{ type: "column", content: [tabs(tab("In a column", "tc", p(t("c"))))] }, { type: "column", content: [p(t("d"))] }] },
+    p(t("after")),
+    { type: "footnotes", content: [{ type: "footnote", attrs: { id: "f1", "data-id": "f1" }, content: [p(t("note"))] }] },
+  ] },
+  // Docmost 0.98: dates, a template's hints (also as a heading's only content and in a cell), Microsoft 365 files and
+  // folders, audio with its file's name.
+  { type: "doc", content: [
+    p(t("due "), date("2026-11-20"), t(" by "), hint("the owner")),
+    { type: "heading", attrs: { level: 2 }, content: [hint("Name the goal")] },
+    { type: "table", content: [{ type: "tableRow", content: [
+      { type: "tableCell", content: [p(hint("Who"))] },
+      { type: "tableCell", content: [p(date("2027-01-31"), ref("f1"))] },
+    ] }] },
+    { type: "audio", attrs: { src: "/api/files/a1/memo.m4a", name: "memo.m4a", attachmentId: "a1", size: 1200 } },
+    microsoftFile,
+    microsoftFolder,
+    { type: "bulletList", content: [{ type: "listItem", content: [p(t("on "), date("2026-12-24"))] }] },
     p(t("after")),
     { type: "footnotes", content: [{ type: "footnote", attrs: { id: "f1", "data-id": "f1" }, content: [p(t("note"))] }] },
   ] },
@@ -87,6 +108,11 @@ const newBlocks: JSONContent[] = [
   card,
   p(t("chip "), chip),
   { type: "subpages", attrs: { sortBy: "title-asc" } },
+  p(t("by "), date("2026-11-21"), t(" ")),
+  p(hint("Describe it")),
+  microsoftFile,
+  microsoftFolder,
+  { type: "audio", attrs: { src: "/api/files/a2/talk.mp3", name: "talk.mp3" } },
 ];
 
 type Change = [label: string, apply: (tr: Transaction, schema: Schema) => void];

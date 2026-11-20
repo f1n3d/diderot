@@ -260,6 +260,9 @@ importers:
       '@types/node':
         specifier: 24.19.2
         version: 24.19.2
+      date-fns:
+        specifier: 4.1.0
+        version: 4.1.0
       esbuild:
         specifier: 0.27.3
         version: 0.27.3
@@ -720,6 +723,9 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  date-fns@4.1.0:
+    resolution: {integrity: sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg==}
 
   dequal@2.0.3:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
@@ -1224,6 +1230,8 @@ snapshots:
   '@types/use-sync-external-store@0.0.6': {}
 
   csstype@3.2.3: {}
+
+  date-fns@4.1.0: {}
 
   dequal@2.0.3: {}
 
