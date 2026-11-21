@@ -1,7 +1,7 @@
 // Builds the islands' libraries in Diderot/Resources/Islands from their npm packages (versions in Tools/islands.mjs):
 //
 // - KaTeX: its script and license as they are, its fonts as woff2 only (what WebKit loads), and its stylesheet loading
-//   only those, from its own folder: the app's resources are one flat folder.
+//   only those, from its own folder: the app's resources are one flat folder. Its mhchem extension as it is.
 // - Mermaid: its license, and mermaid.min.js without the ELK layout engine: elkjs is EPL-2.0, whose terms for passing it
 //   on Apple's standard license agreement doesn't meet, and takes 1.6 MB. A diagram that asks for ELK (`layout: elk`,
 //   `flowchart-elk`) is laid out by Mermaid's default engine, dagre, instead: Mermaid loads each layout engine as a
@@ -42,7 +42,10 @@ if (sources !== fonts.length || css.includes("fonts/")) {
   throw new Error(`KaTeX's stylesheet lists its fonts in another way (${sources} of ${fonts.length} rewritten)`);
 }
 fs.writeFileSync(path.join(islands, "katex.min.css"), css);
-console.log(`Diderot/Resources/Islands: KaTeX ${versions.katex} with ${fonts.length} fonts`);
+// mhchem, KaTeX's chemistry (`\ce{…}`, `\pu{…}`), as Docmost 0.98's web loads it. Its notice and Apache license, which
+// it keeps from MathJax's mhchem, are in katex-mhchem-license.txt beside it.
+fs.copyFileSync(path.join(katex, "dist/contrib/mhchem.min.js"), path.join(islands, "katex-mhchem.min.js"));
+console.log(`Diderot/Resources/Islands: KaTeX ${versions.katex} with ${fonts.length} fonts and mhchem`);
 
 // Mermaid
 const output = path.join(islands, "mermaid.min.js");
