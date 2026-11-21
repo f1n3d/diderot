@@ -93,7 +93,7 @@ struct PageCoverBand: View {
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .task(id: LoadKey(url: imageURL, width: size.width, gate: gate)) { await load() }
         .onDisappear { stopRepositioning() }
-        .sheet(isPresented: Binding { picking != nil } set: { if !$0 { picking = nil } }) {
+        .linkSheet(isPresented: Binding { picking != nil } set: { if !$0 { picking = nil } }) {
             if let actions, let picking {
                 CoverPickerSheet(page: page, edit: edit, actions: actions, opened: picking)
                     .environment(\.renderContext, context)
