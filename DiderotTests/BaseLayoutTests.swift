@@ -92,6 +92,17 @@ struct BaseLayoutTests {
 
     // MARK: Board
 
+    /// "Created by" (Docmost 0.98) is the row's creator, read-only and empty for a row without one, as on the web; it
+    /// showed as "Only in the web app".
+    @Test func createdByIsTheRowsCreator() throws {
+        let property: BaseProperty = try Self.decode(["id": "creator", "name": "Created by", "type": "createdBy"])
+        #expect(property.kind == .createdBy)
+        let created: BaseRow = try Self.decode(["id": "r1", "cells": [:], "creatorId": "u1", "lastUpdatedById": "u2"])
+        let unknown: BaseRow = try Self.decode(["id": "r2", "cells": [:]])
+        #expect(BaseLayout.hasValue(property, in: created))
+        #expect(!BaseLayout.hasValue(property, in: unknown))
+    }
+
     @Test func boardSnapsFromTheFirstToTheLastColumn() {
         let board: CGFloat = 402
         let content = 2 * KanbanBoardLayout.padding + 4 * KanbanBoardLayout.columnWidth(board: board) + 3 * KanbanBoardLayout.spacing
