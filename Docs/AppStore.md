@@ -47,7 +47,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Changes made offline go out once you're back online
 >
 > DATABASES, SEARCH, ACTIVITY
-> • Tables and boards of Docmost databases, with editing and new entries (needs a Docmost license with databases, Business and up)
+> • Tables, boards and calendars of Docmost databases, with editing and new entries (needs a Docmost license with databases, Business and up)
 > • Search across your spaces, favorites, recently opened pages, and the trash
 > • The activity feed with mentions and comments
 >
@@ -56,14 +56,29 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Your sign-in stays in the Keychain; copies for offline reading can be read only while the device is unlocked
 > • Several servers side by side; sign in with a password, LDAP or single sign-on
 >
-> Diderot is open source (MIT) and works with Docmost 0.96 and 0.97. It is an independent project, not affiliated with Docmost.
+> Diderot is open source (MIT) and works with Docmost 0.96, 0.97 and 0.98. It is an independent project, not affiliated with Docmost.
 
 **Keywords** (100 at most, separated by commas)
 
 > docmost,wiki,notes,knowledge base,documentation,self-hosted,editor,team,pages,markdown
 
-**What's New in This Version** (4000 at most; version 1.2.5, with 1.2.4's, 1.2.3's and 1.2.2's below it for those who skip them; older lists are left out for the limit)
+**What's New in This Version** (4000 at most; version 1.2.6, with 1.2.5's and 1.2.4's below it for those who skip them; older lists are left out for the limit)
 
+> Docmost 0.98: Diderot works with it as with 0.96 and 0.97, and brings its new features to iPhone and iPad.
+> • Pages on Docmost 0.98 open for editing, with its new blocks: dates ("/date") that show as a chip in your language and change with a calendar, SharePoint files and folders as cards, chemistry in formulas, and Google Docs, Sheets and Slides embeds
+> • Page covers above the title: add one, pick colors, gradients or textures or upload a photo, move it and remove it
+> • Verified and approved pages open read-only, as on the web: "Edit" asks first, as a change takes the approval back
+> • Templates with fields ask for their values, and typing replaces a template's hint
+> • Databases: a calendar view with the chosen day's entries and "New Entry" on that day; dates with an end and a time, filters like "today" in your time zone, and "Created by" with its person
+> • Profiles: an @mention or a member opens the person's profile with their recently edited pages and shared spaces
+> • A space shows its home page first; archived spaces are marked, and admins can restore them
+> • Workspace announcements show at the top of Home
+> • Comments: "Resolve" works without a license, as on the web, and also changes the mark in the text
+> • Integration links (GitHub, Jira, Linear …) work on 0.98 too
+> • New notifications: a verified or approved page was changed, a database import finished or failed
+> • Where exports are disabled, Export and "Copy as Markdown" are turned off
+>
+> New in 1.2.5:
 > • "Color" above the keyboard: the web's text and highlight colors; "Default" takes them away again
 > • "Alignment" above the keyboard aligns paragraphs and headings left, center or right; "Indent" and "Outdent" indent them step by step, as Tab does on the web
 > • "Comment" is in the menu of selected text
@@ -83,28 +98,6 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > New in 1.2.4:
 > • Back in the app after a while, a page goes back to "Saved" by itself: before, it stayed at "Connecting" until you typed
 > • A Markdown mark typed quickly with text right after it ("- Shopping") keeps every letter in its place
->
-> New in 1.2.3:
-> • Lists as on the web: each item of a bullet list, numbered list or checklist is dragged, arranged and duplicated on its own
-> • List items go a level in and out with two new buttons above the keyboard
-> • Markdown marks turn a line as you type: "- " a list, "1. " a numbered list, "[] " a checklist, "# " a heading, "> " a quote, "``` " a code block, "---" a divider
-> • Code blocks show in syntax colors
-> • Checklists and toggles show as plain rows, without a card
-> • The trash in a list item removes the item instead of emptying it
-> • Backspace as on the web: it turns an empty code block into text, takes a list's first item and a quote's first line out, removes an empty callout and dissolves a toggle from its title
-> • Lists and code blocks have a "…" to duplicate or delete the whole block
-> • Bullet lists, and numbered lists, that come to lie next to each other become one
->
-> New in 1.2.2:
-> • Large files take far less memory: opening an attachment, exporting a page, and pages with large PDFs or many photos
-> • A PDF, image or diagram that didn't load says why and loads again on a tap
-> • A PDF, image or diagram over 25 MB waits for a tap instead of loading by itself
-> • Return at the start of a line, then a tap into the new line above it, no longer empties the text below
-> • "Edit in Web Editor" says why the editor didn't load and offers to try again
-> • A file deleted on the server stops showing in the app
-> • Scrolling past photos no longer downloads all of them
-> • On an iPad, the pointer hides under the presentation's laser pointer
-> • More reliable: formulas and diagrams no longer stay cut off, errors read plainly, and many rare problems are fixed
 
 ## Deutsch
 
@@ -135,7 +128,7 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Offline gemachte Änderungen gehen raus, sobald du wieder online bist
 >
 > DATENBANKEN, SUCHE, AKTIVITÄT
-> • Tabellen und Boards von Docmost-Datenbanken, mit Bearbeiten und neuen Einträgen (braucht eine Docmost-Lizenz mit Datenbanken, ab Business)
+> • Tabellen, Boards und Kalender von Docmost-Datenbanken, mit Bearbeiten und neuen Einträgen (braucht eine Docmost-Lizenz mit Datenbanken, ab Business)
 > • Suche über deine Bereiche, Favoriten, zuletzt geöffnete Seiten und der Papierkorb
 > • Die Aktivität mit Erwähnungen und Kommentaren
 >
@@ -144,14 +137,29 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > • Deine Anmeldung bleibt im Schlüsselbund; Kopien zum Offline-Lesen sind nur bei entsperrtem Gerät lesbar
 > • Mehrere Server nebeneinander; Anmeldung per Passwort, LDAP oder Single Sign-on
 >
-> Diderot ist Open Source (MIT) und funktioniert mit Docmost 0.96 und 0.97. Es ist ein unabhängiges Projekt und nicht mit Docmost verbunden.
+> Diderot ist Open Source (MIT) und funktioniert mit Docmost 0.96, 0.97 und 0.98. Es ist ein unabhängiges Projekt und nicht mit Docmost verbunden.
 
 **Schlüsselwörter** (höchstens 100, durch Kommas getrennt)
 
 > docmost,wiki,notizen,wissensdatenbank,dokumentation,selbst gehostet,editor,team,seiten,markdown
 
-**Neu in dieser Version** (höchstens 4000; Version 1.2.5, darunter die von 1.2.4, 1.2.3 und 1.2.2 für alle, die sie überspringen; ältere sind wegen der Grenze weggelassen)
+**Neu in dieser Version** (höchstens 4000; Version 1.2.6, darunter die von 1.2.5 und 1.2.4 für alle, die sie überspringen; ältere sind wegen der Grenze weggelassen)
 
+> Docmost 0.98: Diderot funktioniert damit wie mit 0.96 und 0.97 und bringt die Neuerungen auf iPhone und iPad.
+> • Seiten auf Docmost 0.98 lassen sich bearbeiten, mit den neuen Blöcken: Daten („/Datum“) als Chip in deiner Sprache, die sich per Kalender ändern lassen, SharePoint-Dateien und -Ordner als Karten, Chemie in Formeln und eingebettete Google Docs, Sheets und Slides
+> • Seitencover über dem Titel: eines hinzufügen, Farben, Verläufe oder Texturen wählen oder ein Foto hochladen, es verschieben und entfernen
+> • Verifizierte und freigegebene Seiten öffnen wie im Web nur zum Lesen: „Bearbeiten“ fragt vorher, denn eine Änderung nimmt die Freigabe zurück
+> • Vorlagen mit Feldern fragen nach den Werten, und Tippen ersetzt einen Hinweis der Vorlage
+> • Datenbanken: eine Kalenderansicht mit den Einträgen des gewählten Tages und „Neuer Eintrag“ an diesem Tag; Daten mit Enddatum und Uhrzeit, Filter wie „heute“ in deiner Zeitzone und „Erstellt von“ mit der Person
+> • Profile: Eine @-Erwähnung oder ein Mitglied öffnet das Profil mit zuletzt bearbeiteten Seiten und gemeinsamen Bereichen
+> • Ein Bereich zeigt zuerst seine Startseite; archivierte Bereiche sind markiert, und Admins können sie wiederherstellen
+> • Ankündigungen des Workspace erscheinen oben auf der Startseite
+> • Kommentare: „Erledigt“ geht wie im Web ohne Lizenz und ändert auch die Markierung im Text
+> • Integrationslinks (GitHub, Jira, Linear …) funktionieren auch auf 0.98
+> • Neue Benachrichtigungen: Eine verifizierte oder freigegebene Seite wurde geändert, ein Datenbank-Import ist fertig oder gescheitert
+> • Wo der Export gesperrt ist, sind Export und „Als Markdown kopieren“ ausgegraut
+>
+> Neu in 1.2.5:
 > • „Farbe“ über der Tastatur: die Text- und Markierungsfarben des Webs; „Standard“ nimmt sie wieder weg
 > • „Ausrichtung“ über der Tastatur richtet Absätze und Überschriften links, zentriert oder rechts aus; „Einrücken“ und „Ausrücken“ rücken sie stufenweise ein, wie Tab im Web
 > • „Kommentieren“ steht im Menü eines markierten Texts
@@ -171,35 +179,13 @@ The texts for App Store Connect, in English and German, with the limits Apple se
 > Neu in 1.2.4:
 > • Zurück in der App nach einer Weile geht eine Seite von selbst wieder auf „Gespeichert“: Bisher blieb sie bei „Verbinde“, bis man etwas tippte
 > • Ein zügig getipptes Markdown-Kürzel mit Text direkt dahinter („- Einkauf“) behält jeden Buchstaben an seiner Stelle
->
-> Neu in 1.2.3:
-> • Listen wie im Web: Jeder Punkt einer Aufzählung, nummerierten Liste oder Checkliste lässt sich einzeln ziehen, anordnen und duplizieren
-> • Listenpunkte rücken mit zwei neuen Knöpfen über der Tastatur ein und aus
-> • Markdown-Kürzel wandeln eine Zeile beim Tippen um: „- “ in eine Liste, „1. “ in eine nummerierte Liste, „[] “ in eine Checkliste, „# “ in eine Überschrift, „> “ in ein Zitat, „``` “ in einen Codeblock, „---“ in einen Trenner
-> • Codeblöcke erscheinen in Syntaxfarben
-> • Checklisten und Toggles erscheinen als schlichte Zeilen, ohne Karte
-> • Der Papierkorb in einem Listenpunkt entfernt den Punkt, statt ihn nur zu leeren
-> • Backspace wie im Web: Es macht aus einem leeren Codeblock Text, nimmt den ersten Listenpunkt und die erste Zeile eines Zitats heraus, entfernt einen leeren Callout und löst einen Toggle von seinem Titel aus auf
-> • Listen und Codeblöcke haben ein „…“ zum Duplizieren oder Löschen des ganzen Blocks
-> • Aufzählungen und nummerierte Listen, die nebeneinander zu liegen kommen, werden zu einer
->
-> Neu in 1.2.2:
-> • Große Dateien brauchen weit weniger Speicher: einen Anhang öffnen, eine Seite exportieren, Seiten mit großen PDFs oder vielen Fotos
-> • Ein PDF, Bild oder Diagramm, das nicht geladen wurde, sagt warum und lädt auf Tipp erneut
-> • Ein PDF, Bild oder Diagramm über 25 MB wartet auf einen Tipp, statt von selbst zu laden
-> • Return am Anfang einer Zeile und danach ein Tipp in die neue Zeile darüber leeren den Text darunter nicht mehr
-> • „Im Web-Editor bearbeiten“ sagt, warum der Editor nicht geladen wurde, und bietet einen neuen Versuch an
-> • Eine auf dem Server gelöschte Datei erscheint in der App nicht mehr
-> • Beim Scrollen an Fotos vorbei werden nicht mehr alle heruntergeladen
-> • Auf dem iPad verschwindet der Zeiger unter dem Laserpointer der Präsentation
-> • Zuverlässiger: Formeln und Diagramme bleiben nicht mehr abgeschnitten, Fehler lesen sich verständlich, und viele seltene Probleme sind behoben
 
 ## App Review
 
 Notes for Apple's reviewers (English, 4000 characters at most). They answer the six points App Review asks new developer accounts (Guideline 2.1, Information Needed, October 2026), and the same text goes into the reply in App Store Connect. The demo account's email and password go into the "Sign-in required" fields, never into this file. App Store Connect takes one attachment here: `Diderot-AppReview.mp4`, the screen recording of the release build on an iPhone (launch to sign-out), then the databases on a licensed server.
 
 > 1. Screen recording
-> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight; version 1.2.5 works the same in these steps. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
+> The attached "Diderot-AppReview.mp4" has two parts. Part 1 (0:00–3:13) was recorded on an iPhone 16 Pro Max with iOS 27.0.1, running build 1.0.0 (12) from TestFlight; version 1.2.6 works the same in these steps. It starts with launching the app and shows connecting to a Docmost server, signing in, reading and editing pages, comments, search, creating a page and signing out. The few seconds in which the password manager fills in the sign-in are cut out, as it shows private entries. Part 2 (from 3:16) shows databases on a licensed server, recorded in the iOS Simulator (see 3).
 > • Accounts: the app doesn't create accounts. Accounts belong to the Docmost server that an organization or person runs, and its administrators invite and remove members. The app only signs in to existing accounts, so it has no registration or deletion flow.
 > • User-generated content: pages and comments come only from members of the same private workspace, on a server their own organization runs. There is no public content and no way to reach people outside the workspace. The workspace's administrators decide who is a member and can deactivate or remove members; space administrators can delete any page or comment.
 > • Paid content: none. The app is free, with no in-app purchases, subscriptions, ads or links to buy anything.
