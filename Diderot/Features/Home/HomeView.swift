@@ -234,7 +234,7 @@ private struct SpaceGridCard: View {
 }
 
 /// Beside an archived space's name (Docmost 0.98), as the web marks it.
-private struct ArchivedBadge: View {
+struct ArchivedBadge: View {
     var body: some View {
         Text("Archived")
             .font(.caption2.weight(.semibold))
