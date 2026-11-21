@@ -22,6 +22,12 @@ public actor UnsentStore {
         try store(encoder.encode(value), at: fileURL(for: key, kind: "json"))
     }
 
+    /// JSON that comes encoded already (the engine's document), kept as it is: `read` finds the value it encodes. Not
+    /// checked here; a reader of a value that may be malformed reads it with `try?`.
+    public func writeJSON(_ json: Data, key: String) throws {
+        try store(json, at: fileURL(for: key, kind: "json"))
+    }
+
     /// Changes the value (`initial` if there is none) in one step: nothing else reaches this store between the read and
     /// the write. Throws, changing nothing, if the stored value can't be read or the new one can't be written.
     @discardableResult
