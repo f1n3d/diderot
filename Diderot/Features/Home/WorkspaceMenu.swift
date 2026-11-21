@@ -133,10 +133,12 @@ struct WorkspaceLogoView: View {
     }
 }
 
-/// The user's own profile (read-only; edits happen in the web client).
+/// The user's own profile (read-only; edits happen in the web client). On Docmost 0.98 with the own recent pages and
+/// spaces below, as the web's profile page shows them.
 struct ProfileView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.openURL) private var openURL
+    @State private var activity: UserProfileModel?
 
     var body: some View {
         if let ready = session.ready {
@@ -162,14 +164,24 @@ struct ProfileView: View {
                         openURL(ready.server.url.appending(path: "settings/account/profile"))
                     }
                 }
+                if let activity {
+                    ProfileActivitySections(model: activity)
+                }
             }
             .navigationTitle("My Profile")
             .toolbarTitleDisplayMode(.inline)
+            .toast(Binding { activity?.toast } set: { activity?.toast = $0 })
+            .task {
+                guard ready.hasDocmost098Features else { return }
+                let model = activity ?? UserProfileModel(userId: user.id, session: session)
+                activity = model
+                await model.loadListsIfNeeded()
+            }
         }
     }
 }
 
-/// Workspace members (read-only).
+/// Workspace members (read-only). On Docmost 0.98 a member opens their profile, as on the web.
 struct WorkspaceMembersView: View {
     @Environment(AppSession.self) private var session
     @State private var members = RemoteValue<[WorkspaceMember]>()
@@ -179,22 +191,13 @@ struct WorkspaceMembersView: View {
         AsyncContentView(state: members.state, retry: load) { members in
             let shown = filtered(members)
             List(shown) { member in
-                HStack(spacing: 12) {
-                    AvatarView(name: member.displayName, avatarUrl: member.avatarUrl, baseURL: session.server?.url)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(member.displayName)
-                        if let email = member.email {
-                            Text(email).font(.caption).foregroundStyle(.secondary)
-                        }
+                if session.ready?.hasDocmost098Features == true {
+                    NavigationLink(value: UserProfileRoute(userId: member.id, name: member.displayName)) {
+                        row(member)
                     }
-                    Spacer()
-                    if let role = member.role {
-                        Text(WorkspaceRole(rawValue: role).map { String(localized: $0.title) } ?? role.capitalized)
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(.quaternary, in: Capsule())
-                    }
+                    .accessibilityIdentifier("member-\(member.id)")
+                } else {
+                    row(member)
                 }
             }
             .overlay {
@@ -207,6 +210,20 @@ struct WorkspaceMembersView: View {
         .navigationTitle("Members")
         .toolbarTitleDisplayMode(.inline)
         .task { if members.value == nil { await load() } }
+    }
+
+    private func row(_ member: WorkspaceMember) -> some View {
+        HStack(spacing: 12) {
+            AvatarView(name: member.displayName, avatarUrl: member.avatarUrl, baseURL: session.server?.url)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(member.displayName)
+                if let email = member.email {
+                    Text(email).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if let role = member.role { RoleBadge(role: role) }
+        }
     }
 
     private func filtered(_ members: [WorkspaceMember]) -> [WorkspaceMember] {
@@ -228,6 +245,19 @@ struct WorkspaceMembersView: View {
 }
 
 // MARK: - Role names
+
+/// A workspace role beside a member or on a profile; an unknown one (a newer server's) as it is named.
+struct RoleBadge: View {
+    let role: String
+
+    var body: some View {
+        Text(WorkspaceRole(rawValue: role).map { String(localized: $0.title) } ?? role.capitalized)
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(.quaternary, in: Capsule())
+    }
+}
 
 /// Role names as the web shows them.
 extension WorkspaceRole {

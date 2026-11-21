@@ -151,7 +151,7 @@ struct PresentationView: View {
             switch LinkTarget.of(url, serverURL: session.server?.url) {
             case .anchor(let anchor): show(anchor: anchor)
             case .outside(let external): outside(external)
-            case .none: break
+            case .user, .none: break
             case .page:
                 dismiss()
                 openLink(url)

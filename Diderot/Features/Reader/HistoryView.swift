@@ -125,7 +125,7 @@ private struct HistoryDetailView: View {
             switch LinkTarget.of(url, serverURL: session.server?.url) {
             case .page(let selection, _): navigation.open(selection)
             case .anchor(let target): anchor = target
-            case .none: break
+            case .user, .none: break
             case .outside(let external): outside(external)
             }
         }

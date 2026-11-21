@@ -129,6 +129,9 @@ struct MainTabView: View {
                     case .profile: ProfileView()
                     }
                 }
+                .navigationDestination(for: UserProfileRoute.self) { route in
+                    UserProfileView(route: route)
+                }
         }
         .environment(navigation)
     }

@@ -1,11 +1,13 @@
 import Foundation
 
 /// What a link tapped in shown content opens, wherever it shows (a page, a version, a presentation, a template): a page,
-/// a database entry or a page's comment; an anchor in what shows; a link that leaves the app; or nothing (a user).
-/// Where it shows decides what it does with each (`PageLinkAction` for a page).
+/// a database entry or a page's comment; an anchor in what shows; a person (a mention); a link that leaves the app; or
+/// nothing. Where it shows decides what it does with each (`PageLinkAction` for a page).
 enum LinkTarget: Equatable {
     case page(PageSelection, anchor: String?)
     case anchor(String)
+    /// A user mention's person, by id.
+    case user(String)
     case outside(URL)
     case none
 
@@ -15,7 +17,7 @@ enum LinkTarget: Equatable {
         case .databaseEntry(let basePageId, let rowId): .page(PageSelection(pageId: basePageId, rowId: rowId), anchor: nil)
         case .comment(let slugId, let commentId): .page(PageSelection(pageId: slugId, commentId: commentId), anchor: nil)
         case .anchor(let anchor): .anchor(anchor)
-        case .user: .none
+        case .user(let id): .user(id)
         case .external(let external): .outside(external)
         }
     }
@@ -36,12 +38,14 @@ enum PageLinkAction: Equatable {
     case open(PageSelection)
     /// A link that leaves the app.
     case outside(URL)
-    /// A link to this page without an anchor, or to a user.
+    /// A user mention's person: their profile opens, as on the web.
+    case showProfile(String)
+    /// A link to this page without an anchor, or to a person where profiles aren't there.
     case none
 
     /// `pageIds`: this page's slug id and id, and the one it was opened with; a link to them never opens a second copy of
-    /// the page.
-    static func action(for url: URL, serverURL: URL?, pageIds: [String?]) -> PageLinkAction {
+    /// the page. `opensProfiles`: the server has profiles (Docmost 0.98); before, a mention opens nothing.
+    static func action(for url: URL, serverURL: URL?, pageIds: [String?], opensProfiles: Bool = false) -> PageLinkAction {
         if let commentId = CommentLink.commentId(from: url) { return .showComment(commentId) }
         if let atom = AtomLink.parse(url) { return .editAtom(block: atom.block, type: atom.type, index: atom.index) }
         switch LinkTarget.of(url, serverURL: serverURL) {
@@ -52,6 +56,8 @@ enum PageLinkAction: Equatable {
             return anchor.map { .scroll(to: $0) } ?? .none
         case .anchor(let anchor):
             return .anchor(anchor)
+        case .user(let id):
+            return opensProfiles ? .showProfile(id) : .none
         case .outside(let external):
             return .outside(external)
         case .none:

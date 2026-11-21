@@ -132,7 +132,7 @@ Supported since November 21, 2026: the engine knows its format, pages are editab
 - Typing over a template's hint: the web puts what is typed at a hint in its place (and Tab in a table cell jumps to the cell's first hint); in the app the hint shows dimmed, typing goes beside it, and Backspace removes it.
 - Page covers (`coverPhoto`, `coverPosition`, `coverAttribution` on pages): presets, uploads and Unsplash photos above the title. The app shows none and can't set one.
 - A space's home page (`spaces/info` `homePage`): the web opens the space on it. The app opens the space's tree.
-- User profiles (`users/info`, `users/spaces`, `users/recent-pages`) and the profile card on a mention.
+- User profiles: a user mention on a page or in its comments and a member in Members open the person's profile, and My Profile shows the own recent pages and spaces (November 21, 2026). Left as it is: a mention shows the name saved with it, where the web asks `users/info` for the member's current one (the saved name stays for someone no longer an active member), a request per person mentioned; a mention in a page's version or in the presentation opens nothing; a link to a profile on the web (`/people/<id>`, its "Copy link") opens the web page.
 - Announcements (`announcements/visible`, the license feature `announcements`): the web's banner across the workspace.
 - Chemistry in formulas (`\ce{…}`, KaTeX's mhchem): the app's KaTeX island lacks the extension, so such a formula shows its error.
 - Embeds of Google Docs, Sheets and Slides as previews (the web's new Google patterns); the app's embed check knows the old ones.
