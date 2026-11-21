@@ -112,7 +112,7 @@ const quoteLifts = "open (BACKLOG): Backspace at a quote's later line lifts it o
 const callouts = "open (BACKLOG): Return in a callout leaves it only from its last line on the web and keeps an empty one";
 const split = "open (BACKLOG): Return in an item with a nested list takes the list along into the new item on the web";
 const movesIn = "open (BACKLOG): the web moves the line into the block before, whose last block is no text line";
-const meet = "kept: the cursor stays where the texts meet, as for any join; Docmost's callout and Tiptap's quote put it at the end";
+const meet = "kept: the cursor stays where the texts meet, as for any join (and after Tiptap's quote since 3.35); Docmost's callout puts it at the end";
 const unselected = "kept: the web selects the block before; the app has no block selection";
 const atoms = "kept: Backspace never removes an image or a divider (src/keys.ts)";
 
@@ -215,12 +215,12 @@ const cases: Case[] = [
   { name: "a line after a list ending in an image", page: [list(item(p("A"), image)), p("Nach"), end()], at: [1], key: B, why: movesIn },
   { name: "a line in an item after its nested list", page: [list(item(p("A"), list(item(p("B"))), p("Nach"))), end()], at: [0, 0, 2], key: B, why: movesIn },
   { name: "a line after a list in a toggle in an item", page: [list(item(p("A"), toggle(true, "T", list(item(p("B"))), p("Nach")))), end()], at: [0, 0, 1, 1, 1], key: B, why: movesIn },
-  { name: "a line after a quote", page: [quote(p("Zitat")), p("Nach"), end()], at: [1], key: B, why: meet },
+  { name: "a line after a quote", page: [quote(p("Zitat")), p("Nach"), end()], at: [1], key: B },
   { name: "an empty line after a quote", page: [quote(p("Zitat")), p(), end()], at: [1], key: B },
-  { name: "a heading after a quote", page: [quote(p("Zitat")), h("Nach"), end()], at: [1], key: B, why: meet },
-  { name: "a line after a quote in a callout", page: [callout(quote(p("Z")), p("Nach")), end()], at: [0, 1], key: B, why: meet },
-  { name: "a line after a quote in a toggle", page: [toggle(true, "T", quote(p("Z")), p("Nach")), end()], at: [0, 1, 1], key: B, why: meet },
-  { name: "a line after a quote in an item", page: [list(item(p("A"), quote(p("Z")), p("Nach"))), end()], at: [0, 0, 2], key: B, why: meet },
+  { name: "a heading after a quote", page: [quote(p("Zitat")), h("Nach"), end()], at: [1], key: B },
+  { name: "a line after a quote in a callout", page: [callout(quote(p("Z")), p("Nach")), end()], at: [0, 1], key: B },
+  { name: "a line after a quote in a toggle", page: [toggle(true, "T", quote(p("Z")), p("Nach")), end()], at: [0, 1, 1], key: B },
+  { name: "a line after a quote in an item", page: [list(item(p("A"), quote(p("Z")), p("Nach"))), end()], at: [0, 0, 2], key: B },
   { name: "a line after a quote ending in a list", page: [quote(p("Z"), list(item(p("A")))), p("Nach"), end()], at: [1], key: B, why: movesIn },
   { name: "a line after a quote in a quote", page: [quote(quote(p("Z"))), p("Nach"), end()], at: [1], key: B, why: movesIn },
   { name: "a line after a callout", page: [callout(p("Hinweis")), p("Nach"), end()], at: [1], key: B, why: meet },

@@ -31,10 +31,12 @@ them; nothing of them goes into `engine.js`.
 The tools run Docmost's editor without a view. What its tabs extension does when an editor shows a document was observed
 once with a browser-like environment (jsdom) around the same extensions; see "Tab ids" below.
 
-They run Docmost's extensions on the engine's own TipTap packages: 3.31.3, as in Docmost 0.96 and 0.97. Docmost 0.98's
-client has TipTap 3.35.0 and y-tiptap 3.3.1. Observed on those once (November 20, 2026), 0.98 gave the same `spec/` and
-`pnpm run compare` the same result; `pnpm run compare-keys` differed in Backspace right after a quote, where 0.98's web
-puts the cursor where the texts meet, as the app does (BACKLOG.md, "Engine on TipTap 3.35").
+They run Docmost's extensions on the engine's own TipTap packages: 3.35.0 with y-tiptap 3.3.1 since November 21, 2026,
+as in Docmost 0.98 (0.96 and 0.97 have 3.31.3 and 3.0.7). Both y-tiptap versions read what the other writes as they read
+their own: every page of `spec/behaviors.json`, whole and edited into the next one through the binding, written by one
+and read by the other (a probe of that day, not kept). The Hocuspocus provider stays at 4.5.0, the version of 0.96 and
+0.97; 0.98's 4.9.0 reports a connection that died without notice as closed as well, which `connection-check` doesn't
+expect.
 
 ## Documents
 

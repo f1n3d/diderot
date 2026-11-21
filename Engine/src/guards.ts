@@ -89,6 +89,9 @@ export function unchanged(current: PMNode, expected: JSONContent): boolean {
  * every open, on the UI tests' page (6,718 clients) half a second in Node and more in the app.
  */
 export function bindingChanges(ydoc: Y.Doc, schema: Schema): boolean {
+  // No client writes hooks. y-tiptap 3.3 binds one inside a block without a word and drops it with the block's next
+  // edit (3.0 threw there, as it still does at the top level), so the copy below wouldn't show it.
+  if (holdsHook(ydoc.getXmlFragment("default"))) return true;
   let changed = false;
   try {
     const copy = copyContent(ydoc.getXmlFragment("default"));
@@ -103,6 +106,9 @@ export function bindingChanges(ydoc: Y.Doc, schema: Schema): boolean {
 }
 
 type XmlContent = Y.XmlElement | Y.XmlText | Y.XmlHook;
+
+const holdsHook = (type: Y.XmlFragment | Y.XmlElement): boolean =>
+  type.toArray().some((child) => child instanceof Y.XmlHook || (child instanceof Y.XmlElement && holdsHook(child)));
 
 /**
  * A document of its own with what `fragment` holds now: blocks, their attributes, and text with its formatting. The
