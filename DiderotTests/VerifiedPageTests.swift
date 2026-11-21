@@ -29,6 +29,17 @@ extension AppSessionRaceTests {
             #expect(reason(.unknown, newer: "0.99.0") == .newerServer("0.99.0"))
         }
 
+        /// A held connect asks the server before its changes go: a reconnect always, the first connect without an answer
+        /// of the last 5 s.
+        @Test func heldConnectsAskFirst() {
+            let now = Date(timeIntervalSince1970: 1_000_000)
+            let first = EngineHold(open: 1, connect: 1), again = EngineHold(open: 1, connect: 2)
+            #expect(!VerifiedPage.asksFirst(first, answeredAt: now.addingTimeInterval(-2), now: now))
+            #expect(VerifiedPage.asksFirst(first, answeredAt: now.addingTimeInterval(-6), now: now))
+            #expect(VerifiedPage.asksFirst(first, answeredAt: nil, now: now))
+            #expect(VerifiedPage.asksFirst(again, answeredAt: now, now: now))
+        }
+
         /// With the license feature the status comes from the server, at each opening; a server without enterprise code
         /// (404) has none. One that fails otherwise gives no answer, not one kept from before: as on the web, the page then
         /// waits for one before it edits (`PageLoader.Verification.unavailable`).

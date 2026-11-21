@@ -383,7 +383,9 @@ struct PageView: View {
         // Back online: a page opened offline (read-only) becomes editable by itself; before, it stayed read-only until
         // pulled down or opened again.
         .onChange(of: offline.isOffline) { _, isOffline in
-            if !isOffline, model?.readOnlyReason == .offline { Task { await load(force: true) } }
+            if !isOffline, model?.readOnlyReason == .offline || model?.readOnlyReason == .verificationUnavailable {
+                Task { await load(force: true) }
+            }
         }
         .onChange(of: titleEdit.text) { old, _ in
             // Only while the user types: a title shown with a line break would otherwise be saved without it.
@@ -396,6 +398,8 @@ struct PageView: View {
         // Back in the app: an editor that failed to open, or whose web process ended while opening, tries again.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, isOnScreen { model?.resume() }
+            // A page paused for its verification asks again, as the web does once the browser is back.
+            if phase == .active, isOnScreen, model?.readOnlyReason == .verificationUnavailable { Task { await load(force: true) } }
             // iOS may end the app in the background, and an app swiped away in the app switcher never gets there: keep
             // unsent changes as leaving the page would. A title being typed goes too (kept first, see `commitTitle`), also
             // on a database page.
@@ -830,7 +834,7 @@ struct PageView: View {
     private func verifyHeld(_ hold: EngineHold, of heldModel: DocumentModel) async {
         guard let page = state.value, let pageSession, model === heldModel else { return }
         if hold.connect > 1 { unlockedLock = nil }
-        if hold.connect > 1 || verifiedAt.map({ Date.now.timeIntervalSince($0) > 5 }) ?? true {
+        if VerifiedPage.asksFirst(hold, answeredAt: verifiedAt) {
             await checkVerification(of: page, with: PageLoader(pageId: selection.pageId, owner: pageSession, session: session))
         }
         guard model === heldModel, let page = state.value else { return }

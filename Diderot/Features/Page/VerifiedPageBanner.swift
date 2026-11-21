@@ -65,6 +65,13 @@ enum VerifiedPage {
         var id: String { "\(lock)-\(then)" }
     }
 
+    /// Whether a held connect (`EngineHold`) asks the server for the page's verification before its changes go: a
+    /// reconnect always (the page may have been verified again meanwhile), the first connect unless the last answer is
+    /// under 5 s old, as the web counts one that recent for a page being opened.
+    static func asksFirst(_ hold: EngineHold, answeredAt: Date?, now: Date = .now) -> Bool {
+        hold.connect > 1 || answeredAt.map { now.timeIntervalSince($0) > 5 } ?? true
+    }
+
     static func status(of verification: PageVerification) -> String {
         switch verification.status {
         case "expiring": String(localized: "Review needed")
