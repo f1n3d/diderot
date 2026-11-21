@@ -468,9 +468,10 @@ private struct KanbanCard: View {
                 .foregroundStyle(title.isEmpty ? .secondary : .primary)
                 .multilineTextAlignment(.leading)
                 .lineLimit(3)
+            // A checkbox shows also unchecked, with its name, as on the web (Docmost 0.98); so does a yes/no formula.
             ForEach(cardProperties) { property in
-                if BaseLayout.hasValue(property, in: row) {
-                    BaseCellView(property: property, row: row, users: model.users, pages: model.pages)
+                if property.kind == .checkbox || BaseLayout.hasValue(property, in: row) {
+                    BaseCellView(property: property, row: row, users: model.users, pages: model.pages, namesCheckbox: true)
                         .font(.caption)
                 }
             }

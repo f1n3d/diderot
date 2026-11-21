@@ -95,6 +95,23 @@ struct APIClientTests {
         }
     }
 
+    /// Docmost 0.98's answer to a rows request whose cursor's row changed (from the dev instance) names a code but not
+    /// the status: it is Docmost's own, and the stale cursor shows; it was a plain server error.
+    @Test func mapsDocmostsErrorCode() async throws {
+        MockURLProtocol.respond(with: .init(status: 400, body: try TestSupport.fixture("error-400-cursor-stale")))
+        let error = await #expect(throws: APIError.self) {
+            try await TestSupport.mockClient().send(Endpoints.Bases.rows(pageId: "p1", cursor: "c"))
+        }
+        #expect(error == .validation(messages: ["The row cursor is stale. Reload rows and try again."], code: "BASE_CURSOR_STALE"))
+        #expect(error?.isStaleBaseCursor == true)
+        #expect(APIError.validation(messages: ["Invalid cursor"], code: "INVALID_CURSOR").isStaleBaseCursor == false)
+        // A number in `code`, as some gateways send, is no code of Docmost's: the body still gives its message.
+        MockURLProtocol.respond(with: .init(status: 400, body: Data(#"{"code": 400, "message": "Bad gateway request"}"#.utf8)))
+        await #expect(throws: APIError.server(status: 400, message: "Bad gateway request")) {
+            try await TestSupport.mockClient().send(Endpoints.Users.me)
+        }
+    }
+
     /// A 403 or 404 counts as gone (the saved copy goes) only with Docmost's error body; a proxy's or captive portal's
     /// page is a plain server error.
     @Test func goneNeedsDocmostsErrorBody() async throws {

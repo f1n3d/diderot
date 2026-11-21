@@ -19,6 +19,11 @@ public struct Base: Codable, Sendable, Hashable, Identifiable {
 
     public var displayTitle: String { PageTitle.display(title) }
     public var canEdit: Bool { permissions?.canEdit ?? false }
+    /// The views to show, in Docmost's order. Form views (Docmost 0.98) stay hidden, as the web hides them while forms
+    /// are in beta (unless the server sets `BETA_BASE_FORMS`, which it tells only its own web client).
+    public var shownViews: [BaseView] {
+        views.filter { $0.type != "form" }.sorted { ($0.position ?? "") < ($1.position ?? "") }
+    }
     /// The title property of every row (always text).
     public var primaryProperty: BaseProperty? { properties.first { $0.isPrimary == true } }
 
@@ -63,7 +68,7 @@ public struct BaseView: Codable, Sendable, Hashable, Identifiable {
     public let position: String?
     public let config: JSONValue?
 
-    /// Unknown types and `calendar` (no UI in the web client, checked up to 0.96) render as a table (web parity).
+    /// Unknown types and calendars render as a table: the web draws calendars from Docmost 0.98, the app doesn't yet.
     public var kind: Kind { Kind(rawValue: type) == .kanban ? .kanban : .table }
 }
 

@@ -18,13 +18,21 @@ extension Endpoints {
             public var sorts: JSONValue?
             public var limit: Int?
             public var cursor: String?
+            public var timeZone: String
+            public var today: String
+            public var weekStart: Int
         }
 
-        /// Rows in position order, max 100 per call. The endpoint knows no views: pass a view's `filter` and `sorts`.
+        /// Rows in position order, max 100 per call. The endpoint knows no views: pass a view's `filter` and `sorts`. A
+        /// cursor whose row changed meanwhile fails (`APIError.isStaleBaseCursor`): the list starts again without one.
         public static func rows(
-            pageId: String, filter: JSONValue? = nil, sorts: JSONValue? = nil, cursor: String? = nil, limit: Int = 100
+            pageId: String, filter: JSONValue? = nil, sorts: JSONValue? = nil, cursor: String? = nil, limit: Int = 100,
+            viewer: ViewerDateContext = ViewerDateContext()
         ) -> Endpoint<BaseRowsPage> {
-            .post("bases/rows", body: RowsBody(pageId: pageId, filter: filter, sorts: sorts, limit: limit, cursor: cursor))
+            .post("bases/rows", body: RowsBody(
+                pageId: pageId, filter: filter, sorts: sorts, limit: limit, cursor: cursor,
+                timeZone: viewer.timeZone, today: viewer.today, weekStart: viewer.weekStart
+            ))
         }
 
         // MARK: Writing (license feature `bases`)
@@ -109,5 +117,35 @@ extension Endpoints {
         public static func updateProperty(pageId: String, propertyId: String, typeOptions: JSONValue) -> Endpoint<UpdatePropertyResult> {
             .post("bases/properties/update", body: UpdatePropertyBody(propertyId: propertyId, pageId: pageId, typeOptions: typeOptions))
         }
+    }
+}
+
+/// The reader's calendar, which a rows request names as the web's does (`useViewerDateContext`): from Docmost 0.98 the
+/// server resolves date filters in it ("today", "this week", a day in its time zone). Older servers drop the fields
+/// unread, as their validation drops every field it doesn't know.
+public struct ViewerDateContext: Sendable, Hashable {
+    /// IANA name; the server falls back to UTC for one it doesn't know.
+    public var timeZone: String
+    /// Today in that time zone, `YYYY-MM-DD`.
+    public var today: String
+    /// First day of the week, 0 for Sunday; the server refuses a number outside 0–6.
+    public var weekStart: Int
+
+    /// The device's time zone and first day of the week, today as of `now`.
+    public init(timeZone: TimeZone = .current, calendar: Calendar = .current, now: Date = .now) {
+        self.timeZone = timeZone.identifier
+        today = CalendarDay(containing: now, in: timeZone).value
+        // `firstWeekday` counts from 1 for Sunday.
+        weekStart = min(max(calendar.firstWeekday - 1, 0), 6)
+    }
+}
+
+extension APIError {
+    /// A rows request whose cursor refers to a row that changed or went since its page loaded (Docmost 0.98: a cursor
+    /// too large for the sort values it would hold names their row instead). The web starts the list again from its
+    /// first page; another try with the same cursor fails again.
+    public var isStaleBaseCursor: Bool {
+        guard case .validation(_, let code) = self else { return false }
+        return code == "BASE_CURSOR_STALE"
     }
 }

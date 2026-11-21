@@ -3,7 +3,8 @@ import Testing
 import DocmostKit
 @testable import Diderot
 
-/// Database view rules as on the web (column, card and choice order, number and date formats) and kanban snap points.
+/// Database view rules as on the web (column, card and choice order, number formats) and kanban snap points. Dates:
+/// `BaseDateTests`.
 @MainActor
 struct BaseLayoutTests {
     /// Listed as title, status, notes, price; their positions order them title, price, status, notes.
@@ -89,39 +90,6 @@ struct BaseLayoutTests {
         #expect(BaseFormat.number(2, options: ["precision": 2]) == 2.0.formatted(.number.grouping(.never).precision(.fractionLength(2))))
     }
 
-    @Test func dayWithoutTimeShowsTheStoredDay() throws {
-        var gmt = Date.FormatStyle(date: .abbreviated, time: .omitted)
-        gmt.timeZone = .gmt
-        let midnight = try utcMidnight()
-        #expect(BaseFormat.date("2026-10-09T00:00:00.000Z", options: nil) == midnight.formatted(gmt))
-        #expect(BaseFormat.date("2026-10-09", options: ["includeTime": false]) == midnight.formatted(gmt))
-        #expect(BaseFormat.date("2026-10-09", options: ["includeTime": true]) == midnight.formatted(date: .abbreviated, time: .shortened))
-    }
-
-    /// Midnight UTC shows the same day in every time zone; any other instant, such as now() in a formula, shows its local
-    /// day, as in the web client.
-    @Test func dayWithoutTimeIsLocalExceptAtMidnightUTC() throws {
-        var gmt = Date.FormatStyle(date: .abbreviated, time: .omitted)
-        gmt.timeZone = .gmt
-        let midnight = try utcMidnight()
-        for hours in [-10, 0, 2, 14] {
-            let zone = try #require(TimeZone(secondsFromGMT: hours * 3600))
-            #expect(BaseFormat.date("2026-10-09T00:00:00.000Z", options: nil, timeZone: zone) == midnight.formatted(gmt))
-        }
-        let utcPlusTwo = try #require(TimeZone(secondsFromGMT: 2 * 3600))
-        let nextDay = midnight.addingTimeInterval(86_400).formatted(gmt)
-        #expect(BaseFormat.date("2026-10-09T23:00:00.000Z", options: nil, timeZone: utcPlusTwo) == nextDay)
-    }
-
-    @Test func parsesTheStoredDateFormats() throws {
-        let midnight = try utcMidnight()
-        #expect(BaseFormat.parseDate("2026-10-09T13:45:30.250Z") == midnight.addingTimeInterval(49_530.25))
-        #expect(BaseFormat.parseDate("2026-10-09T13:45:30Z") == midnight.addingTimeInterval(49_530))
-        #expect(BaseFormat.parseDate("2026-10-09") == midnight)
-        #expect(BaseFormat.parseDate("next week") == nil)
-        #expect(BaseFormat.date("next week", options: nil) == "next week")
-    }
-
     // MARK: Board
 
     @Test func boardSnapsFromTheFirstToTheLastColumn() {
@@ -146,13 +114,6 @@ struct BaseLayoutTests {
 
     private func view(_ config: JSONValue) throws -> BaseView {
         try Self.decode(["id": "view", "name": "View", "type": "kanban", "config": config])
-    }
-
-    /// 2026-10-09 00:00 UTC.
-    private func utcMidnight() throws -> Date {
-        var utc = Calendar(identifier: .gregorian)
-        utc.timeZone = .gmt
-        return try #require(utc.date(from: DateComponents(year: 2026, month: 10, day: 9)))
     }
 
     /// The models have no public initializers; build them as the server sends them.

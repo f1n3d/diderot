@@ -33,4 +33,37 @@ struct BaseFixtureTests {
         let view = BaseView(id: "v", name: "Kalender", type: "calendar", position: nil, config: nil)
         #expect(view.kind == .table)
     }
+
+    /// Form views (Docmost 0.98) stay hidden, as on the web while forms are in beta; they showed as a table.
+    @Test func formViewsStayHidden() throws {
+        let base = try JSONDecoder().decode(Base.self, from: Data("""
+        {"id": "b", "properties": [], "views": [
+          {"id": "board", "name": "Board", "type": "kanban", "position": "a2"},
+          {"id": "form", "name": "Formular", "type": "form", "position": "a0"},
+          {"id": "table", "name": "Tabelle", "type": "table", "position": "a1"},
+          {"id": "calendar", "name": "Kalender", "type": "calendar", "position": "a3"}]}
+        """.utf8))
+        #expect(base.shownViews.map(\.id) == ["table", "board", "calendar"])
+    }
+
+    /// A rows request names the reader's time zone, day and week as the web's does (Docmost 0.98 resolves date filters in
+    /// them; older servers drop them unread).
+    @Test func rowsRequestNamesTheReadersCalendar() throws {
+        let berlin = try #require(TimeZone(identifier: "Europe/Berlin"))
+        var monday = Calendar(identifier: .gregorian)
+        monday.firstWeekday = 2
+        // 23:30 UTC on November 20 is November 21 in Berlin.
+        let now = try Date("2026-11-20T23:30:00Z", strategy: .iso8601)
+        let viewer = ViewerDateContext(timeZone: berlin, calendar: monday, now: now)
+        #expect(viewer == ViewerDateContext(timeZone: berlin, calendar: monday, now: now))
+        let endpoint = Endpoints.Bases.rows(pageId: "p1", cursor: "c", viewer: viewer)
+        #expect(endpoint.path == "bases/rows")
+        #expect(try body(of: endpoint) == [
+            "pageId": "p1", "cursor": "c", "limit": 100, "timeZone": "Europe/Berlin", "today": "2026-11-21", "weekStart": 1,
+        ])
+        var sunday = Calendar(identifier: .gregorian)
+        sunday.firstWeekday = 1
+        #expect(ViewerDateContext(timeZone: .gmt, calendar: sunday, now: now).weekStart == 0)
+        #expect(ViewerDateContext(timeZone: .gmt, calendar: sunday, now: now).today == "2026-11-20")
+    }
 }
