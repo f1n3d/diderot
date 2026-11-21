@@ -6,7 +6,10 @@ struct SpaceView: View {
     @Environment(AppSession.self) private var session
     @Environment(ContentChanges.self) private var changes
     @Environment(ReaderNavigation.self) private var navigation
+    @Environment(SpacesStore.self) private var spaces
     let space: Space
+    /// The space as `spaces/info` gives it, with what the list leaves out: its home page and who archived it.
+    @State private var info: Space?
     @State private var store: PageTreeStore
     @State private var runner: PageActionRunner?
     @State private var mode: Mode = .hierarchy
@@ -26,13 +29,21 @@ struct SpaceView: View {
     }
 
     private var canEdit: Bool { space.membership?.canEditPages ?? false }
+    private var exportOffReason: String? { ExportPolicy.offReason(workspace: session.ready?.currentUser.workspace, space: space) }
     /// Templates need the Enterprise feature; without it the web shows them disabled, the app not at all.
     private var offersTemplates: Bool { session.ready?.entitlements.has("templates") == true }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                let shown = info ?? space
+                if shown.isArchived {
+                    ArchivedSpaceNotice(space: shown, restore: shown.role == .admin ? { await restore() } : nil)
+                }
                 hero
+                if let home = shown.homePage, !search.isActive {
+                    homePageRow(home)
+                }
                 if search.isActive {
                     SearchResultsCard(search: search)
                 } else {
@@ -117,7 +128,10 @@ struct SpaceView: View {
             }
             await store.reload()
             if mode == .recent { await loadRecent() }
+            await loadInfo()
         }
+        // On every appearance, as the tree: a home page set or a space restored on the web meanwhile shows.
+        .task { await loadInfo() }
         .task {
             configureStoreIfNeeded()
             await store.loadRootIfNeeded()
@@ -197,6 +211,34 @@ struct SpaceView: View {
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
+    /// The page the web opens the space on (Docmost 0.98). The app shows it first instead, where the tree stays a tap
+    /// away: on a phone the web's sidebar is the step back.
+    private func homePageRow(_ home: SpaceHomePage) -> some View {
+        NavigationLink(value: PageSelection(pageId: home.id, title: home.title)) {
+            HStack(spacing: 12) {
+                PageIconView(icon: home.icon, size: 28, isBase: false)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Home Page")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(PageTitle.display(home.title))
+                        .font(.headline)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("space-home-page")
+    }
+
     // MARK: - Tree
 
     @ViewBuilder
@@ -209,7 +251,7 @@ struct SpaceView: View {
                 let rows = store.visibleRows
                 LazyVStack(spacing: 0) {
                     ForEach(rows) { row in
-                        TreeRow(row: row, store: store, runner: runner, canEdit: canEdit) {
+                        TreeRow(row: row, store: store, runner: runner, canEdit: canEdit, exportOffReason: exportOffReason) {
                             Task { await createPage(parentPageId: row.page.id) }
                         }
                         .modifier(TreeDragModifier(page: row.page, depth: row.depth, spaceId: space.id, enabled: canEdit, store: store) { draggedId, zone in
@@ -253,7 +295,7 @@ struct SpaceView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { PageActionsMenu(page: PageRef(page), runner: runner, canEdit: canEdit) }
+                        .contextMenu { PageActionsMenu(page: PageRef(page), runner: runner, canEdit: canEdit, exportOffReason: exportOffReason) }
                         .trashConfirmation(for: PageRef(page), runner: runner)
                         if page.id != pages.last?.id {
                             Divider().padding(.leading, 16)
@@ -267,6 +309,23 @@ struct SpaceView: View {
     }
 
     // MARK: - Loading
+
+    /// What the list leaves out of the space; the list's copy shows meanwhile and where it doesn't come.
+    private func loadInfo() async {
+        guard let ready = session.ready else { return }
+        if let loaded = try? await session.load(Endpoints.Spaces.info(spaceId: space.id), of: ready) { info = loaded }
+    }
+
+    /// "Restore Space" (its admins): the space is active again, here and in the Spaces tab.
+    private func restore() async {
+        do {
+            info = try await session.send(Endpoints.Spaces.unarchive(spaceId: space.id))
+            runner?.toast = String(localized: "Space restored")
+            await spaces.load()
+        } catch {
+            runner?.toast = error.userMessage
+        }
+    }
 
     /// The store needs the session and a loader, which exist only once the environment is available.
     private func configureStoreIfNeeded() {
@@ -342,6 +401,7 @@ private struct TreeRow: View {
     let store: PageTreeStore
     let runner: PageActionRunner
     let canEdit: Bool
+    let exportOffReason: String?
     let onAddSubpage: () -> Void
 
     private var page: SidebarPage { row.page }
@@ -368,7 +428,7 @@ private struct TreeRow: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("page-\(page.id)")
             Menu {
-                PageActionsMenu(page: PageRef(page), runner: runner, canEdit: canEdit && (page.canEdit ?? true))
+                PageActionsMenu(page: PageRef(page), runner: runner, canEdit: canEdit && (page.canEdit ?? true), exportOffReason: exportOffReason)
             } label: {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)

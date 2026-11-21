@@ -54,6 +54,8 @@ struct BaseCellView: View {
             text(row.updatedAt.map(BaseFormat.timestamp))
         case .lastEditedBy:
             people([row.lastUpdatedById ?? row.creatorId].compactMap { $0 })
+        case .createdBy:
+            people([row.creatorId].compactMap { $0 })
         case .formula:
             formula
         case nil:

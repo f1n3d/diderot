@@ -5,6 +5,9 @@ public struct Workspace: Codable, Sendable, Hashable, Identifiable {
     public let name: String
     public let logo: String?
     public let memberCount: Int?
+    /// The workspace's settings as `users/me` gives them, e.g. `export.disabled` (license feature `export:controls`,
+    /// Docmost 0.98); nil where none were set.
+    public let settings: JSONValue?
 }
 
 /// Response of `POST /api/workspace/public`; available without sign-in.

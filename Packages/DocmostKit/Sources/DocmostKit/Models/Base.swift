@@ -43,6 +43,8 @@ public struct BaseProperty: Codable, Sendable, Hashable, Identifiable {
     public enum Kind: String, Sendable {
         case text, longText, number, select, status, multiSelect, date, person, page, file, checkbox, url, email
         case createdAt, lastEditedAt, lastEditedBy, formula
+        /// The row's creator (Docmost 0.98), from the row's `creatorId` as "Last edited by" from its editor.
+        case createdBy
     }
 
     public let id: String

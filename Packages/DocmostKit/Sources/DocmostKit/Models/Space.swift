@@ -40,9 +40,22 @@ public struct Space: Codable, Sendable, Hashable, Identifiable {
     public let membership: SpaceMembership?
     /// When it was archived (Docmost 0.98); nil while active and on older servers. An archived space stays editable.
     public let archivedAt: Date?
+    /// Who archived it; `spaces/info` only.
+    public let archivedBy: UserRef?
+    /// The page the web opens the space on (Docmost 0.98); `spaces/info` only, and nil where none is set or the page is
+    /// gone or out of the person's reach.
+    public let homePage: SpaceHomePage?
 
     public var role: SpaceRole? { membership?.spaceRole }
     public var isArchived: Bool { archivedAt != nil }
+}
+
+/// A space's home page as `spaces/info` names it.
+public struct SpaceHomePage: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let slugId: String?
+    public let title: String?
+    public let icon: String?
 }
 
 /// Abbreviated space as embedded in pages.
@@ -50,4 +63,8 @@ public struct SpaceRef: Codable, Sendable, Hashable, Identifiable {
     public let id: String
     public let name: String?
     public let slug: String?
+    /// When it was archived (Docmost 0.98), as favorites name it.
+    public let archivedAt: Date?
+
+    public var isArchived: Bool { archivedAt != nil }
 }
