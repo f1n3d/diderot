@@ -156,6 +156,44 @@ enum BaseValue {
         return BaseDateCell(start: start, end: end).value(asObject: true)
     }
 
+    /// The cell after the end's picker set `picked` (Docmost 0.98, "End Date" on): the end is the picked day, or with time
+    /// the picked moment, while that comes after the start, else the cell keeps its start alone. A day before the start's
+    /// moves the start there instead, at its time of day, and the range ends where it ended (the web's `pickDay` and
+    /// `setTimeOfDay` for the end; a cell without an end ends at its old start then).
+    static func end(_ picked: Date, kind: BaseDateKind, of cell: BaseDateCell, timeZone: TimeZone = .current) -> JSONValue {
+        let day = CalendarDay(containing: picked, in: timeZone)
+        if day < cell.start.day(in: timeZone) {
+            return BaseDateCell(start: moved(cell.start, to: day, timeZone: timeZone), end: cell.end ?? cell.start).value(asObject: true)
+        }
+        let end: BaseDateCell.Part = kind == .datetime ? .instant(picked) : .day(day)
+        return BaseDateCell(start: cell.start, end: end).value(asObject: true)
+    }
+
+    /// The cell once "End Date" is turned on or off (Docmost 0.98), nil where nothing changes: off ends a range; on gives
+    /// a moment without an end one an hour later, as the web's picker does, while a day waits for its end to be picked.
+    static func endShown(_ on: Bool, kind: BaseDateKind, of cell: BaseDateCell) -> JSONValue? {
+        guard on else {
+            // Not `cell.end == nil ? nil : …`: there `nil` is JSONValue's null, which would empty the cell.
+            guard cell.end != nil else { return nil }
+            return BaseDateCell(start: cell.start).value(asObject: true)
+        }
+        guard kind == .datetime, cell.end == nil, case .instant(let start) = cell.start else { return nil }
+        return BaseDateCell(start: cell.start, end: .instant(start.addingTimeInterval(3_600))).value(asObject: true)
+    }
+
+    /// `part` on another day: a day is that day, a moment keeps its time of day in `timeZone` (the web's `moveToDay`).
+    private static func moved(_ part: BaseDateCell.Part, to day: CalendarDay, timeZone: TimeZone) -> BaseDateCell.Part {
+        guard case .instant(let date) = part else { return .day(day) }
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = timeZone
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = .gmt
+        var components = local.dateComponents([.hour, .minute, .second, .nanosecond], from: date)
+        let ymd = utc.dateComponents([.year, .month, .day], from: day.date)
+        (components.year, components.month, components.day) = (ymd.year, ymd.month, ymd.day)
+        return .instant(local.date(from: components) ?? date)
+    }
+
     /// The date "Add Date" sets: today; with time on Docmost 0.98 at 9:00, where the web's picker starts a new date.
     static func today(kind: BaseDateKind, onDocmost098: Bool, now: Date = .now, timeZone: TimeZone = .current) -> JSONValue {
         var calendar = Calendar(identifier: .gregorian)

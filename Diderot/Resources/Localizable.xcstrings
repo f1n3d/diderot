@@ -2168,12 +2168,22 @@
         }
       }
     },
-    "End: %@": {
+    "End": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende: %@"
+            "value": "Ende"
+          }
+        }
+      }
+    },
+    "End Date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enddatum"
           }
         }
       }

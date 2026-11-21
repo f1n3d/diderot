@@ -85,11 +85,11 @@ struct BaseDateTests {
 
     /// A range shows both ends; within one day the end as its time.
     @Test func rangeShowsStartAndEnd() {
-        #expect(show(["start": "2026-10-01", "end": "2026-10-03"], kind: .date) == "1. Okt. 2026 – 3. Okt. 2026")
+        #expect(show(["start": "2026-10-01", "end": "2026-10-03"], kind: .date) == "1. Okt. 2026 → 3. Okt. 2026")
         #expect(show(["start": "2026-10-09T07:00:00.000Z", "end": "2026-10-09T08:30:00.000Z"], kind: .datetime, in: berlin)
-            == "9. Okt. 2026 9:00 – 10:30")
+            == "9. Okt. 2026 9:00 → 10:30")
         #expect(show(["start": "2026-10-09T07:00:00.000Z", "end": "2026-10-10T08:30:00.000Z"], kind: .datetime, in: berlin)
-            == "9. Okt. 2026 9:00 – 10. Okt. 2026 10:30")
+            == "9. Okt. 2026 9:00 → 10. Okt. 2026 10:30")
         // Two moments of one day in a property without time (while the server converts it): that day.
         #expect(show(["start": "2026-10-09T07:00:00.000Z", "end": "2026-10-09T08:30:00.000Z"], kind: .date, in: berlin) == "9. Okt. 2026")
     }
@@ -196,6 +196,50 @@ struct BaseDateTests {
         #expect(try picked("2026-10-09T09:00:00.000Z") == ["start": "2026-10-09T09:00:00.000Z", "end": "2026-10-09T10:30:00.000Z"])
         #expect(try picked("2026-10-08T07:00:00.000Z") == ["start": "2026-10-08T07:00:00.000Z", "end": "2026-10-09T08:30:00.000Z"])
         #expect(try picked("2026-10-12T07:00:00.000Z") == ["start": "2026-10-12T07:00:00.000Z"])
+    }
+
+    /// The end's picker, as the web's: a later day makes a range, the start's day ends it, and a day before the start's
+    /// moves the start there, the range ending where it ended (a day without an end: at its old start).
+    @Test func pickedEndMakesARange() throws {
+        let single = try #require(BaseDateCell(["start": "2026-10-03"]))
+        let range = try #require(BaseDateCell(["start": "2026-10-03", "end": "2026-10-05"]))
+        func picked(_ day: Int, of cell: BaseDateCell) throws -> JSONValue {
+            let date = try #require(gregorian(in: berlin).date(from: DateComponents(year: 2026, month: 10, day: day)))
+            return BaseValue.end(date, kind: .date, of: cell, timeZone: berlin)
+        }
+        #expect(try picked(5, of: single) == ["start": "2026-10-03", "end": "2026-10-05"])
+        #expect(try picked(3, of: single) == ["start": "2026-10-03"])
+        #expect(try picked(1, of: single) == ["start": "2026-10-01", "end": "2026-10-03"])
+        #expect(try picked(4, of: range) == ["start": "2026-10-03", "end": "2026-10-04"])
+        #expect(try picked(1, of: range) == ["start": "2026-10-01", "end": "2026-10-05"])
+    }
+
+    /// With time the end is the picked moment while it comes after the start; a day before the start's moves the start
+    /// there at its time of day.
+    @Test func pickedEndWithTime() throws {
+        // 9:00 to 10:30 in Berlin on October 9.
+        let range = try #require(BaseDateCell(["start": "2026-10-09T07:00:00.000Z", "end": "2026-10-09T08:30:00.000Z"]))
+        func picked(_ moment: String) throws -> JSONValue {
+            BaseValue.end(try instant(moment), kind: .datetime, of: range, timeZone: berlin)
+        }
+        #expect(try picked("2026-10-09T10:00:00.000Z") == ["start": "2026-10-09T07:00:00.000Z", "end": "2026-10-09T10:00:00.000Z"])
+        #expect(try picked("2026-10-11T08:30:00.000Z") == ["start": "2026-10-09T07:00:00.000Z", "end": "2026-10-11T08:30:00.000Z"])
+        #expect(try picked("2026-10-09T06:00:00.000Z") == ["start": "2026-10-09T07:00:00.000Z"])
+        #expect(try picked("2026-10-07T08:30:00.000Z") == ["start": "2026-10-07T07:00:00.000Z", "end": "2026-10-09T08:30:00.000Z"])
+    }
+
+    /// "End Date" on gives a moment an end an hour later, as the web's picker does; a day waits for its end. Off ends the
+    /// range.
+    @Test func endDateSwitch() throws {
+        let moment = try #require(BaseDateCell(["start": "2026-10-09T07:00:00.000Z"]))
+        let day = try #require(BaseDateCell(["start": "2026-10-09"]))
+        let range = try #require(BaseDateCell(["start": "2026-10-03", "end": "2026-10-05"]))
+        #expect(BaseValue.endShown(true, kind: .datetime, of: moment)
+            == ["start": "2026-10-09T07:00:00.000Z", "end": "2026-10-09T08:00:00.000Z"])
+        #expect(BaseValue.endShown(true, kind: .date, of: day) == nil)
+        #expect(BaseValue.endShown(true, kind: .date, of: range) == nil)
+        #expect(BaseValue.endShown(false, kind: .date, of: range) == ["start": "2026-10-03"])
+        #expect(BaseValue.endShown(false, kind: .date, of: day) == nil)
     }
 
     /// A cell in 0.98's form gets its new value in that form also where the server's version is unknown: as a string, its
