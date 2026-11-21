@@ -10,6 +10,8 @@ struct FavoritesView: View {
         AsyncContentView(state: favorites.listState, retry: { await favorites.loadList() }) { items in
             let pages = items.compactMap { $0.favoriteType == .page ? $0.page : nil }
             let spaces = items.compactMap { $0.favoriteType == .space ? $0.space : nil }
+            // Favorites name each entry's space (Docmost 0.98): pages of an archived space are marked too, as on the web.
+            let archived = Set(items.compactMap { $0.space?.isArchived == true ? $0.pageId ?? $0.spaceId : nil })
             if pages.isEmpty && spaces.isEmpty {
                 ContentUnavailableView("No favorites yet", systemImage: "star", description: Text("Use the star in a page's menu to add it here."))
             } else {
@@ -21,6 +23,7 @@ struct FavoritesView: View {
                                     HStack(spacing: 10) {
                                         PageIconView(icon: page.icon, size: 22, isBase: page.isBase == true)
                                         Text(page.displayTitle).lineLimit(2)
+                                        if archived.contains(page.id) { ArchivedBadge() }
                                     }
                                 }
                                 .swipeActions {
@@ -40,6 +43,7 @@ struct FavoritesView: View {
                                             .foregroundStyle(.secondary)
                                             .frame(width: 28)
                                         Text(space.name ?? space.slug ?? "Space")
+                                        if space.isArchived { ArchivedBadge() }
                                     }
                                 }
                                 .swipeActions {
