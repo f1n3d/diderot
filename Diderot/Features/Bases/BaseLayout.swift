@@ -112,6 +112,8 @@ enum BaseLayout {
     static func hasValue(_ property: BaseProperty, in row: BaseRow) -> Bool {
         switch property.kind {
         case .createdAt, .lastEditedAt, .lastEditedBy: return true
+        // Empty for rows from before Docmost recorded their creator, as on the web.
+        case .createdBy: return row.creatorId != nil
         case .checkbox: return row.cells[property.id]?.boolValue == true
         default:
             guard let value = row.cells[property.id], !value.isNull else { return false }
@@ -162,7 +164,7 @@ enum BaseLayout {
         case .url: "link"
         case .email: "envelope"
         case .createdAt, .lastEditedAt: "clock"
-        case .lastEditedBy: "person.crop.circle"
+        case .lastEditedBy, .createdBy: "person.crop.circle"
         case .formula: "function"
         case nil: "questionmark.square.dashed"
         }
@@ -224,7 +226,7 @@ enum BaseFormat {
 
     /// A date cell as the web shows it (`ee/base/utils/date-format.ts`): each part in the property's date format
     /// (Docmost 0.98's `dateFormat`; month abbreviated without one), a moment with its time in the reader's time zone, on
-    /// the clock `timeFormat` names (else the locale's). A range shows as "start – end", its end on the start's day as
+    /// the clock `timeFormat` names (else the locale's). A range shows as "start → end", its end on the start's day as
     /// the time only. Formulas have no format options (web parity): pass nil.
     static func date(
         _ cell: BaseDateCell, kind: BaseDateKind, options: JSONValue?, timeZone: TimeZone = .current, locale: Locale = .current,
@@ -244,11 +246,11 @@ enum BaseFormat {
         guard let end = cell.end else { return start }
         if kind == .datetime, case .instant(let from) = cell.start, case .instant(let to) = end,
            CalendarDay(containing: from, in: timeZone) == CalendarDay(containing: to, in: timeZone) {
-            return start + " – " + time(to)
+            return start + " → " + time(to)
         }
         // Two moments of one day in a property without time show as that day.
         let endText = text(end)
-        return endText == start ? start : start + " – " + endText
+        return endText == start ? start : start + " → " + endText
     }
 
     /// A day in one of Docmost 0.98's date formats; one it doesn't know (older servers stored free text) is "medium".
