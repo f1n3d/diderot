@@ -216,7 +216,7 @@ Debug builds and tests talk to the dev instance (`http://localhost:3000`, from a
 - One change per pull request, small enough to read in one go.
 - A bug fix comes with a test that fails without it; a feature with tests of what it promises.
 - Before the pull request opens, someone reviews its diff: `/code-review` in Claude Code (medium for content, the engine or the session; low for small changes), or a person. What the review finds is fixed or answered in the pull request.
-- The touched area's UI tests run (`AREA=… Tools/run-uitests.sh`). The whole suite runs before a release (from 1.2.0 against Docmost 0.97, the version of the demo instance for Apple's App Review), or on both versions for a change that reaches across the app.
+- The touched area's UI tests run (`AREA=… Tools/run-uitests.sh`). The whole suite runs before a release, against the Docmost version of the demo instance for Apple's App Review (0.98 since 1.2.6: `PORT=3002 Tools/run-uitests.sh`). A change that reaches across the app runs it on 0.96 too.
 - CI passes before the merge (build, unit tests with the engine as the app calls it, the UI tests' build, engine and project checks).
 - A finding that waits goes to BACKLOG.md with why. A review of the whole code is for an occasion, such as a release or a big redesign, not for a schedule. Its document lives in `Docs/` while its fixes are open; once they are done it goes, and what waits is in BACKLOG.md.
 
