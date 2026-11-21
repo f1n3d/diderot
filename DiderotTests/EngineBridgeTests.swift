@@ -185,6 +185,8 @@ extension AppSessionRaceTests {
             let comment = PMMark(type: "comment", attrs: ["commentId": "c1", "resolved": false])
             let marked = PMNode(type: "paragraph", attrs: ["id": "m"], content: [PMNode(type: "text", marks: [comment], text: "markiert")])
             let markedPath = try #require(await engine.placeBlocks([marked], at: nil, position: .after, expected: nil).path)
+            #expect(await engine.setCommentResolved("c1", resolved: true) == .applied)
+            #expect(await block(at: markedPath, in: engine)?.children.first?.marks?.first?.attrs?["resolved"] == true, "the comment's mark isn't resolved")
             #expect(await engine.unsetComment("c1") == .applied)
             #expect(await block(at: markedPath, in: engine)?.children.first?.marks?.isEmpty ?? true, "the comment's mark stayed")
 

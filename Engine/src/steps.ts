@@ -303,3 +303,26 @@ export function unsetComment(tr: Transaction, commentId: string): boolean {
   for (const { from, to, mark } of marked) tr.removeMark(from, to, mark);
   return marked.length > 0;
 }
+
+/**
+ * Marks the passages of the comment `commentId` resolved or open again, as the web's `setCommentResolved` does after
+ * `comments/resolve`: Docmost sets the mark itself only for those who may comment but not edit, so a comment an editor
+ * resolved in the app stayed open on the page for everyone. False when there are none, or they are already so.
+ */
+export function setCommentResolved(tr: Transaction, commentId: string, resolved: boolean): boolean {
+  const type = tr.doc.type.schema.marks.comment;
+  if (!type) return false;
+  const marked: { from: number; to: number; mark: Mark }[] = [];
+  tr.doc.descendants((node, pos) => {
+    for (const mark of node.marks) {
+      if (mark.type === type && mark.attrs.commentId === commentId && mark.attrs.resolved !== resolved) {
+        marked.push({ from: pos, to: pos + node.nodeSize, mark });
+      }
+    }
+  });
+  for (const { from, to, mark } of marked) {
+    tr.removeMark(from, to, mark);
+    tr.addMark(from, to, type.create({ ...mark.attrs, resolved }));
+  }
+  return marked.length > 0;
+}
