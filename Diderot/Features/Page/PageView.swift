@@ -49,6 +49,9 @@ struct PageView: View {
     @State private var pendingCommentId: String?
     /// A new page's title takes the cursor once the page has pushed in: focus asked for mid-push is dropped.
     @State private var focusesTitle = false
+    /// The new page's title had the cursor asked for: once, when it first shows editable, which may wait for the page's
+    /// verification.
+    @State private var askedTitleFocus = false
     /// The comment whose passage the page shows once the comments are gone ("Show on Page").
     @State private var revealsComment: String?
     /// A web page in the in-app browser (an integration mention's link).
@@ -813,7 +816,11 @@ struct PageView: View {
             }
             do {
                 let page = try await loader.fetch()
-                if PageLoader.checksVerification(on: ready) { learn(await loader.verification(of: page)) }
+                if PageLoader.checksVerification(on: ready) {
+                    // A page with no saved copy shows while its verification is asked for; only its editor waits.
+                    if state.value == nil { apply(page: page) }
+                    learn(await loader.verification(of: page))
+                }
                 apply(page: page)
                 recentlyOpened.record(page)
                 await loader.keep(page)
@@ -871,7 +878,8 @@ struct PageView: View {
         let isFirst = state.value == nil
         state = .loaded(page)
         titleEdit.show(page, typing: titleFocused)
-        if isFirst, selection.focusTitle, canEditMeta(page) {
+        if selection.focusTitle, !askedTitleFocus, canEditMeta(page) {
+            askedTitleFocus = true
             focusesTitle = true
         }
         // A link to a comment: show it once the page is there.
