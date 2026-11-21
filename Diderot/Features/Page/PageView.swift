@@ -464,6 +464,9 @@ struct PageView: View {
                     if case .verified(let lock) = model?.readOnlyReason, let verification {
                         VerifiedPageBanner(verification: verification) { verificationAsk = VerifiedPage.Ask(lock: lock, then: .edit) }
                     }
+                    if let space, space.isArchived {
+                        ArchivedSpaceNotice(space: space, restore: space.role == .admin ? { await restore(space) } : nil)
+                    }
                     header(page)
                     Divider()
                     if let model {
@@ -619,6 +622,12 @@ struct PageView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("page-space")
+                }
+                // The page the space opens on (Docmost 0.98), as the web's badge says.
+                if space?.homePage?.id == page.id {
+                    Chip(text: String(localized: "Home Page"), symbol: "house")
+                        .accessibilityHint("The page people see when they open this space.")
+                        .accessibilityIdentifier("page-home-badge")
                 }
                 if let editor = page.lastUpdatedBy?.name ?? page.creator?.name {
                     Text(editor)
@@ -896,6 +905,17 @@ struct PageView: View {
         // shows again (`onAppear`), not hidden.
         if isOnScreen {
             created.resume()
+        }
+    }
+
+    /// "Restore Space" above a page of an archived space (its admins).
+    private func restore(_ archived: Space) async {
+        do {
+            space = try await session.send(Endpoints.Spaces.unarchive(spaceId: archived.id))
+            toast = String(localized: "Space restored")
+            await spaces.load()
+        } catch {
+            toast = error.userMessage
         }
     }
 
