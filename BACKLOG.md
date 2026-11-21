@@ -171,6 +171,7 @@ Deliberately not yet like the web (found in the code review on October 13, 2026)
 - Postponed in the code review of November 6, 2026:
   - A new inline comment whose passage a collaborator deleted meanwhile is made without a mark, and the sheet closes without a word (V39). Rare.
   - An inline comment deleted while the page's engine takes no edits (still connecting, or failed and not back yet) keeps its passage's mark: the removal isn't kept for later (review of the pull request for package A, November 6, 2026). Rare: the comments sheet is open over a page whose engine is almost always there.
+  - The same for resolving: a comment an editor resolves or reopens while the page's engine takes no edits (offline, a verified page not unlocked, still connecting) keeps its passage's mark as it was; Docmost marks it itself only for those who may not edit (November 21, 2026).
 
 ## Templates
 
