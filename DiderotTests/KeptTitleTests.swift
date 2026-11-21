@@ -137,6 +137,106 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// A title saved while an older one is still on its way goes after it, and the older one's late answer changes
+        /// nothing: both went at once, and the older one failing after the newer had gone out marked the older as not sent,
+        /// so the field brought it back and the next focus loss sent it over the newer.
+        @Test(.timeLimit(.minutes(1))) func aTitleSavedWhileAnOlderIsOnItsWayGoesAfterIt() async throws {
+            let session = try await sessionOnA()
+            defer { UnsentChanges.removeAll(server: a) }
+            let onA = try #require(session.ready)
+            let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+            let edit = PageTitleEdit()
+            var reports: [String] = []
+            var loads = 0
+            func commit(_ text: String) -> Task<Void, Never>? {
+                edit.text = text
+                return edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: { loads += 1 }) { reports.append($0) }
+            }
+            func updates() -> Int { StubURLProtocol.requests.withLock { $0.filter { $0 == Self.titleUpdate }.count } }
+
+            StubURLProtocol.requests.withLock { $0 = [] }
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Plan Q4"}}"# }
+            let release = holdNextTitleRequest()
+            defer {
+                release.finish()
+                answerAsUsual()
+            }
+            let older = commit("Plan")
+            try await titleRequestHeld()
+            // The newer title's request is answered.
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { StubURLProtocol.status.withLock { $0 = 200 } } }
+            let newer = commit("Plan Q4")
+            // Time for the newer one to go out at once, as it used to.
+            for _ in 0..<30 where loads == 0 { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(updates() == 1, "the newer title waits for the older one's answer")
+
+            release.finish()
+            await older?.value
+            await newer?.value
+            for _ in 0..<100 where loads == 0 { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(edit.unsent == nil && reports.isEmpty)
+            #expect(await session.unsentTitle(pageId: "p1") == nil)
+            #expect(updates() == 2 && loads == 1)
+            let last = StubURLProtocol.bodies.withLock { $0[Self.titleUpdate] }.flatMap { String(data: $0, encoding: .utf8) }
+            #expect(last?.contains("Plan Q4") == true, "the server got the newer title last")
+            await removeCaches()
+        }
+
+        /// A title the app sent on its own (the network came back) while the page's request for it hung isn't marked as not
+        /// sent when that request then fails: the page said it goes to the server once it can be reached, though the
+        /// server had it, and showed it as the title from then on.
+        @Test(.timeLimit(.minutes(1))) func aTitleTheAppSentMeanwhileIsNotMarkedUnsent() async throws {
+            let session = try await sessionOnA()
+            defer { UnsentChanges.removeAll(server: a) }
+            let onA = try #require(session.ready)
+            let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+            let edit = PageTitleEdit()
+            var reports: [String] = []
+
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Plan"}}"# }
+            let release = holdNextTitleRequest()
+            defer {
+                release.finish()
+                answerAsUsual()
+            }
+            edit.text = "Plan"
+            let saving = edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: {}) { reports.append($0) }
+            try await titleRequestHeld()
+            #expect(await session.sendUnsentTitles().spaces == ["s1"])
+
+            release.finish()
+            await saving?.value
+            #expect(edit.unsent == nil && reports.isEmpty)
+            #expect(await session.unsentTitle(pageId: "p1") == nil)
+            await removeCaches()
+        }
+
+        static let titleUpdate = "a.example.com/api/pages/update"
+
+        /// Holds the next title request, as a network handover does, until the returned continuation finishes; then it
+        /// fails with a 503, an error after which a title waits on the device.
+        func holdNextTitleRequest() -> AsyncStream<Void>.Continuation {
+            let (released, release) = AsyncStream<Void>.makeStream()
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = Self.titleUpdate }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = {
+                for await _ in released {}
+                StubURLProtocol.status.withLock { $0 = 503 }
+            } }
+            return release
+        }
+
+        /// Returns once the request `holdNextTitleRequest` holds has come.
+        func titleRequestHeld() async throws {
+            while StubURLProtocol.beforeNextAnswer.withLock({ $0 != nil }) { try await Task.sleep(for: .milliseconds(10)) }
+        }
+
+        func answerAsUsual() {
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = nil }
+            StubURLProtocol.status.withLock { $0 = 200 }
+            StubURLProtocol.body.withLock { $0 = nil }
+        }
+
         /// A title typed on a page whose session a switch replaced waits for that server's next sign-in: it doesn't go to
         /// the server now current.
         @Test func aTypedTitleOfAReplacedSessionWaitsForItsServer() async throws {
