@@ -916,6 +916,43 @@ struct DocumentModelTests {
         #expect(savedBeforeImage?.last == "let y = 12")
     }
 
+    /// "+" → Image in a line, and a collaborator adds an empty line above while the upload runs: the images go after the
+    /// line where it is by then, or after its list. They went by its old place, and took the empty line's.
+    @Test(arguments: [false, true]) func uploadFollowsItsLineWhenABlockGoesInAbove(inList: Bool) async throws {
+        let above = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Oben")])
+        let line = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Hier")])
+        let block = inList ? PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [line])]) : line
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [above, block]))
+        let model = try Self.model(engine)
+        model.requestMedia(.images, placement: .afterTopLevel(NodeRef(path: inList ? [1, 0, 0] : [1], node: line)))
+        let target = model.takeMediaTarget()  // its picker closed, the upload runs
+        engine.sendDocument(PMNode(type: "doc", content: [above, PMNode(type: "paragraph", attrs: ["id": "n"]), block]))
+
+        await model.insertUploads([Attachment(id: "i", fileName: "i.png", mimeType: "image/png")], to: target)
+
+        #expect(engine.replaced.isEmpty)
+        #expect(engine.inserted.map(\.target) == [inList ? .path([2], type: "bulletList") : .id("b")])
+        #expect(engine.inserted.map(\.position) == [.after])
+    }
+
+    /// "+" → Math block in a line, and a collaborator adds an empty line above while the sheet is open: the formula goes
+    /// after the line, not in place of the empty one, which took the line's old place.
+    @Test(.timeLimit(.minutes(1))) func sheetBlockFollowsItsLineWhenABlockGoesInAbove() async throws {
+        let above = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Oben")])
+        let line = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Hier")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [above, line]))
+        let model = try Self.model(engine)
+        model.applyMathBlock("x^2", slot: .insert(.afterTopLevel(NodeRef(path: [1], node: line))))
+        engine.sendDocument(PMNode(type: "doc", content: [above, PMNode(type: "paragraph", attrs: ["id": "n"]), line]))
+
+        model.editorSheetDismissed()
+        while engine.inserted.isEmpty && engine.replaced.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.replaced.isEmpty)
+        #expect(engine.inserted.first?.node.type == "mathBlock")
+        #expect(engine.inserted.first?.target == .id("b"))
+    }
+
     /// A math block or embed from its sheet goes in only after the sheet has closed (switching editors while it slides
     /// away can leave a UIKit animation running), and only once: a later cancelled sheet adds nothing.
     @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func sheetBlockWaitsForDismissal(embed: Bool) async throws {

@@ -1736,7 +1736,7 @@ final class DocumentModel {
         case .replaceOrAfter(let ref):
             anchor = document.locate(ref).map { NodeRef(path: $0.path, node: $0.node) }
         case .afterTopLevel(let ref):
-            let top = [ref.path[0]]
+            let top = topLevelPath(of: ref)
             anchor = node(at: top).map { NodeRef(path: top, node: $0) }
         case .end:
             // The empty paragraph the editor keeps at the end becomes the new paragraph; other blocks go before it.
@@ -1853,6 +1853,14 @@ final class DocumentModel {
         return document.paths(where: { $0.string("id") == id }, limit: 2).count == 1
     }
 
+    /// Path of the top-level block that holds `ref` now, found by its id: a placement is held through an upload, a sheet
+    /// or the server's answer, while blocks added or removed above shift its path. By the old one, the new blocks went
+    /// beside another block or took the place of an empty line there. A block without an id (a toggle title, a code
+    /// block), or one gone by then, goes by the path it had.
+    private func topLevelPath(of ref: NodeRef) -> [Int] {
+        [document.locate(ref)?.path.first ?? ref.path[0]]
+    }
+
     /// Whether `nodes` fit where `insertBlocks` puts them (in place of an empty line, or after a block), as the engine
     /// says.
     private func fits(_ nodes: [PMNode], at placement: BlockPlacement) async -> Bool {
@@ -1864,7 +1872,7 @@ final class DocumentModel {
             let empty = node.type == "paragraph" && node.children.isEmpty
             place = BlockPlace(target: NodeRef(path: path, node: node).target, position: empty ? .replace : .after)
         case .afterTopLevel(let ref):
-            let top = [ref.path[0]]
+            let top = topLevelPath(of: ref)
             place = BlockPlace(target: node(at: top).map { NodeRef(path: top, node: $0).target } ?? .path(top), position: .after)
         case .end:
             place = BlockPlace(target: nil, position: .after)
