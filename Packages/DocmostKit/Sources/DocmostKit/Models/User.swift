@@ -10,6 +10,8 @@ public struct User: Codable, Sendable, Hashable, Identifiable {
     public let name: String?
     public let avatarUrl: String?
     public let role: String?
+    /// The time zone Docmost keeps for the user (an IANA name), which the web sets from the browser's; `users/me` only.
+    public let timezone: String?
 
     public var workspaceRole: WorkspaceRole {
         role.flatMap(WorkspaceRole.init(rawValue:)) ?? .member
