@@ -126,6 +126,16 @@
         }
       }
     },
+    "%@ from the top": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ von oben"
+          }
+        }
+      }
+    },
     "%@ gave you access to %@": {
       "localizations": {
         "de": {
@@ -526,6 +536,16 @@
         }
       }
     },
+    "Add Cover": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover hinzufügen"
+          }
+        }
+      }
+    },
     "Add Date": {
       "localizations": {
         "de": {
@@ -856,6 +876,16 @@
         }
       }
     },
+    "Aurora": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aurora"
+          }
+        }
+      }
+    },
     "A–Z": {
       "localizations": {
         "de": {
@@ -883,6 +913,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ungültige Anfrage."
+          }
+        }
+      }
+    },
+    "Berry": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beere"
           }
         }
       }
@@ -923,6 +963,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Blau"
+          }
+        }
+      }
+    },
+    "Blueprint": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blaupause"
           }
         }
       }
@@ -1063,6 +1113,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zentriert"
+          }
+        }
+      }
+    },
+    "Change Cover": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover ändern"
           }
         }
       }
@@ -1274,6 +1334,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Farbe und Ausrichtung"
+          }
+        }
+      }
+    },
+    "Colors": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farben"
           }
         }
       }
@@ -1541,6 +1611,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ konnte nicht importiert werden"
+          }
+        }
+      }
+    },
+    "Cover image not found": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover-Bild nicht gefunden"
+          }
+        }
+      }
+    },
+    "Cover position": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover-Position"
           }
         }
       }
@@ -2014,6 +2104,16 @@
         }
       }
     },
+    "Drag the image up or down": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehe das Bild nach oben oder unten"
+          }
+        }
+      }
+    },
     "Draw.io (diagrams.net)": {
       "localizations": {
         "de": {
@@ -2034,12 +2134,32 @@
         }
       }
     },
+    "Dune": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Düne"
+          }
+        }
+      }
+    },
     "Duplicate": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Duplizieren"
+          }
+        }
+      }
+    },
+    "Dusk": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dämmerung"
           }
         }
       }
@@ -2468,6 +2588,26 @@
         }
       }
     },
+    "Failed to update cover": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover konnte nicht aktualisiert werden"
+          }
+        }
+      }
+    },
+    "Failed to upload image": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild konnte nicht hochgeladen werden"
+          }
+        }
+      }
+    },
     "Favorites": {
       "localizations": {
         "de": {
@@ -2531,6 +2671,16 @@
         }
       }
     },
+    "Forest": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wald"
+          }
+        }
+      }
+    },
     "Format": {
       "localizations": {
         "de": {
@@ -2561,6 +2711,16 @@
         }
       }
     },
+    "Gallery": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Galerie"
+          }
+        }
+      }
+    },
     "Get started with": {
       "localizations": {
         "de": {
@@ -2577,6 +2737,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Global"
+          }
+        }
+      }
+    },
+    "Gradients": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verläufe"
+          }
+        }
+      }
+    },
+    "Graph paper": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Karopapier"
+          }
+        }
+      }
+    },
+    "Graphite": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Graphit"
           }
         }
       }
@@ -3202,6 +3392,16 @@
         }
       }
     },
+    "Linen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leinen"
+          }
+        }
+      }
+    },
     "Link": {
       "localizations": {
         "de": {
@@ -3539,6 +3739,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Weitere Textblöcke"
+          }
+        }
+      }
+    },
+    "Move Image Down": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild nach unten verschieben"
+          }
+        }
+      }
+    },
+    "Move Image Up": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild nach oben verschieben"
           }
         }
       }
@@ -4022,6 +4242,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keine Ansichten"
+          }
+        }
+      }
+    },
+    "Northern lights": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nordlichter"
           }
         }
       }
@@ -4971,6 +5201,16 @@
         }
       }
     },
+    "Remove Cover": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover entfernen"
+          }
+        }
+      }
+    },
     "Remove Date": {
       "localizations": {
         "de": {
@@ -5087,6 +5327,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Antwort an %@"
+          }
+        }
+      }
+    },
+    "Reposition": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu positionieren"
           }
         }
       }
@@ -5227,6 +5477,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zeile"
+          }
+        }
+      }
+    },
+    "Save Position": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position speichern"
           }
         }
       }
@@ -5675,6 +5935,26 @@
         }
       }
     },
+    "Sky": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Himmel"
+          }
+        }
+      }
+    },
+    "Slate": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schiefer"
+          }
+        }
+      }
+    },
     "Slide %lld of %lld": {
       "localizations": {
         "de": {
@@ -5804,6 +6084,16 @@
         }
       }
     },
+    "Split slate": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geteilte Tafel"
+          }
+        }
+      }
+    },
     "Status": {
       "localizations": {
         "de": {
@@ -5860,6 +6150,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Erfolg"
+          }
+        }
+      }
+    },
+    "Sunset": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sonnenuntergang"
           }
         }
       }
@@ -6034,6 +6334,16 @@
         }
       }
     },
+    "Teal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Petrol"
+          }
+        }
+      }
+    },
     "Template": {
       "localizations": {
         "de": {
@@ -6054,6 +6364,16 @@
         }
       }
     },
+    "Terrazzo": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terrazzo"
+          }
+        }
+      }
+    },
     "Text": {
       "localizations": {
         "de": {
@@ -6070,6 +6390,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Textfarbe"
+          }
+        }
+      }
+    },
+    "Textures": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texturen"
           }
         }
       }
@@ -6708,6 +7038,16 @@
         }
       }
     },
+    "Topography": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topografie"
+          }
+        }
+      }
+    },
     "Trash": {
       "localizations": {
         "de": {
@@ -6734,6 +7074,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zwei-Faktor-Authentifizierung"
+          }
+        }
+      }
+    },
+    "Upload": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hochladen"
+          }
+        }
+      }
+    },
+    "Upload Image": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild hochladen"
+          }
+        }
+      }
+    },
+    "Uploaded": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hochgeladen"
+          }
+        }
+      }
+    },
+    "Uploaded image": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hochgeladenes Bild"
           }
         }
       }
@@ -6899,6 +7279,26 @@
         }
       }
     },
+    "Use a JPG, PNG or WebP image.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwende ein Bild im JPG-, PNG- oder WebP-Format."
+          }
+        }
+      }
+    },
+    "Use an image at least 1200 pixels wide.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwende ein Bild mit einer Breite von mindestens 1200 Pixeln."
+          }
+        }
+      }
+    },
     "Use Template": {
       "localizations": {
         "de": {
@@ -7044,6 +7444,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Warnung"
+          }
+        }
+      }
+    },
+    "Waves": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wellen"
           }
         }
       }

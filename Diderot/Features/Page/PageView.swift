@@ -28,6 +28,8 @@ struct PageView: View {
     @State private var toast: String?
     @State private var titleEdit = PageTitleEdit()
     @FocusState private var titleFocused: Bool
+    /// The cover while it changes (`PageCoverBand`).
+    @State private var coverEdit = PageCoverEdit()
     /// The session the page loaded in: an edited title waits in its store when that session ends (401) or a link switches
     /// to another server, as the page's text does.
     @State private var pageSession: ReadySession?
@@ -465,6 +467,7 @@ struct PageView: View {
     private func document(_ page: Page) -> some View {
         ScrollView {
             VStack(spacing: 0) {
+                PageCoverBand(page: page, edit: coverEdit, actions: coverActions(for: page))
                 VStack(alignment: .leading, spacing: 14) {
                     if !breadcrumbs.isEmpty {
                         BreadcrumbsView(crumbs: breadcrumbs)
@@ -509,6 +512,8 @@ struct PageView: View {
         }
         .scrollPosition($position, anchor: .top)
         .scrollDismissesKeyboard(.interactively)
+        // A drag on the cover moves its image while it is being repositioned.
+        .scrollDisabled(coverEdit.isRepositioning)
         // Here, not with the page's other sheets: that chain is at the type checker's limit.
         .modifier(TemplatePickerSheet(isPresented: $showsTemplates, spaceId: page.spaceId) { template, values in
             try await fill(page, with: template, values: values)
@@ -574,6 +579,7 @@ struct PageView: View {
 
     private func header(_ page: Page) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            AddCoverButton(page: page, edit: coverEdit, actions: coverActions(for: page))
             HStack(alignment: .top, spacing: 10) {
                 Button {
                     titleFocused = false
@@ -1069,6 +1075,12 @@ struct PageView: View {
         } catch {
             toast = error.userMessage
         }
+    }
+
+    /// The cover changes as the title and icon do (`canEditMeta`), on Docmost 0.98, which has covers; nil otherwise.
+    private func coverActions(for page: Page) -> PageCoverActions? {
+        guard canEditMeta(page), pageSession?.hasDocmost098Features == true, let edits else { return nil }
+        return PageCoverActions(edits: edits, reload: { await load(force: true) }, report: { toast = $0 })
     }
 
     // MARK: - Media
