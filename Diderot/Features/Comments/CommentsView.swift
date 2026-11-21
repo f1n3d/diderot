@@ -19,6 +19,8 @@ struct CommentsView: View {
     var onShowInPage: ((PageComment) -> Void)?
     /// A comment was deleted: the page removes its passage's mark.
     var onDeleted: ((PageComment) async -> Void)?
+    /// A comment was resolved or opened again: the page marks its passage so.
+    var onResolved: ((PageComment, Bool) async -> Void)?
 
     private enum Tab: Hashable { case open, resolved }
     private typealias Composing = PageComments.Composing
@@ -175,9 +177,19 @@ struct CommentsView: View {
         }
         if comments.canResolve, canComment, !comment.isReply {
             if comment.isResolved {
-                Button("Reopen", systemImage: "arrow.uturn.backward.circle") { run { try await comments.setResolved(comment, false) } }
+                Button("Reopen", systemImage: "arrow.uturn.backward.circle") {
+                    run {
+                        try await comments.setResolved(comment, false)
+                        await onResolved?(comment, false)
+                    }
+                }
             } else {
-                Button("Resolve", systemImage: "checkmark.circle") { run { try await comments.setResolved(comment, true) } }
+                Button("Resolve", systemImage: "checkmark.circle") {
+                    run {
+                        try await comments.setResolved(comment, true)
+                        await onResolved?(comment, true)
+                    }
+                }
             }
         }
         // Docmost 0.97 opens these links at the comment.

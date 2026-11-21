@@ -170,6 +170,24 @@ final class DocumentModel {
         report(await engine.unsetComment(commentId))
     }
 
+    /// The comment `commentId` was resolved or opened again by someone who may edit the page: its passage says so, as the
+    /// web's editor sets it (`setCommentResolved`). Docmost sets the mark itself only for those who may comment but not
+    /// edit. In the text being edited too, saved first, as for a deleted comment's mark.
+    func markComment(_ commentId: String, resolved: Bool) async {
+        if active != nil {
+            let marked = activeText.runs[DocmostAttributes.CommentAttribute.self].filter { $0.0 == commentId }.map(\.1)
+            for range in marked {
+                activeText[range].docmost.commentResolved = resolved ? true : nil
+            }
+            if !marked.isEmpty {
+                activeTextChanged()
+                await flush()
+            }
+        }
+        guard let engine else { return }
+        report(await engine.setCommentResolved(commentId, resolved: resolved))
+    }
+
     /// Where the cursor goes once the document holds the block at `path`, read in that block.
     private var pendingFocus: (path: [Int], cursor: (PMNode) -> CursorRequest)?
     /// A table edit is under way. It puts the cursor into a cell itself, so a document event meanwhile neither ends

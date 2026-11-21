@@ -171,7 +171,6 @@ Deliberately not yet like the web (found in the code review on October 13, 2026)
 - Postponed in the code review of November 6, 2026:
   - A new inline comment whose passage a collaborator deleted meanwhile is made without a mark, and the sheet closes without a word (V39). Rare.
   - An inline comment deleted while the page's engine takes no edits (still connecting, or failed and not back yet) keeps its passage's mark: the removal isn't kept for later (review of the pull request for package A, November 6, 2026). Rare: the comments sheet is open over a page whose engine is almost always there.
-- An inline comment resolved or reopened in the app by someone who may edit the page keeps its passage's mark as it was (the mark's `resolved`), so the passage still shows as open, or as resolved, in the app and on the web (found in the code on November 21, 2026, when Docmost 0.98 made resolving free; not tried on a server). The web's editor sets the mark itself (`setCommentResolved`); the server sets it only for those who may comment but not edit (`updateYjsMark: !canEdit`, in 0.98's `comment.service.ts` and in the compiled enterprise code of 0.96 and 0.97). The app's engine has no command for it yet; it would be one like the removal of a deleted comment's mark (`unsetComment`), and `DocmostAttributes.CommentResolvedAttribute`'s note ("set by the server on resolve") would change with it.
 
 ## Templates
 

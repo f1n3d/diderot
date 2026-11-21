@@ -211,6 +211,10 @@ struct PageView: View {
                              onDeleted: { comment in
                                  // Only an inline comment marks a passage.
                                  if comment.isInline { await model?.removeMarks(ofComment: comment.id) }
+                             },
+                             onResolved: { comment, resolved in
+                                 // The server marks it for those who may comment but not edit.
+                                 if comment.isInline, page.canEdit { await model?.markComment(comment.id, resolved: resolved) }
                              })
                 .handlesLinks { url, outside in
                     // Pages and anchors open on the page, so the comments make way; web links open over them.

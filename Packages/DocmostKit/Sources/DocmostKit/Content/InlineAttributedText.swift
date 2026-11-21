@@ -32,7 +32,8 @@ public enum DocmostAttributes {
         public static let name = "docmost.comment"
     }
 
-    /// The comment here is resolved (set by the server on resolve); preserved while editing.
+    /// The comment here is resolved (set on resolving: by the server for those who may comment but not edit, else by
+    /// the client); preserved while editing.
     public enum CommentResolvedAttribute: CodableAttributedStringKey {
         public typealias Value = Bool
         public static let name = "docmost.commentResolved"
