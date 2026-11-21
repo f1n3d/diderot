@@ -23,6 +23,8 @@ final class PageTreeStore {
     private let loader: (@MainActor (_ parentPageId: String?, _ cursor: String?) async throws -> Paginated<SidebarPage>)?
     private let cache: DiskCache?
     @ObservationIgnored private var reloads = 0
+    /// The subpage loads running, by page (`loadChildren`).
+    @ObservationIgnored private var childLoads: [String: Task<Void, Never>] = [:]
 
     /// - Parameters:
     ///   - loader: loads one batch of children (`nil` = root); without one the tree stays local (tests).
@@ -74,8 +76,9 @@ final class PageTreeStore {
 
     /// Where `pageId` goes when dropped on `target` in `zone`, as the web's tree places it: its parent and position for
     /// `pages/move`, `nil` if it stays where it is or can't go there (onto itself or into its own subtree). Nesting loads
-    /// the target's subpages first, to go after the last. Throws `FractionalIndex.KeyError` if no position can be made.
-    /// The space view did this itself, without the cards' check for "already in place" and fallback for keys out of order.
+    /// the target's subpages first, or waits for their load if it runs, to go after the last. Throws
+    /// `FractionalIndex.KeyError` if no position can be made. The space view did this itself, without the cards' check
+    /// for "already in place" and fallback for keys out of order.
     func placement(of pageId: String, relativeTo target: SidebarPage, zone: TreeDropZone) async throws
         -> (parentPageId: String?, position: String)? {
         guard target.id != pageId, !isDescendant(target.id, of: pageId) else { return nil }
@@ -191,16 +194,27 @@ final class PageTreeStore {
         }
     }
 
+    /// Loads `pageId`'s subpages, one load per page at a time: a second call waits for the running one. It returned at
+    /// once, so a page dropped into a page the drag had just opened (`TreeDragModifier.openDelay`) found no subpages
+    /// yet and went before them. The load runs on a task of its own: the drop ends the drag's opening, and a load
+    /// cancelled with it failed and collapsed the page again.
     func loadChildren(of pageId: String) async {
-        guard !loadingParents.contains(pageId) else { return }
+        if let running = childLoads[pageId] { return await running.value }
         loadingParents.insert(pageId)
-        defer { loadingParents.remove(pageId) }
-        do {
-            children[pageId] = try await loadAll(parent: pageId)
-        } catch {
-            // Expanded with nothing below, it would look like a page without subpages; the next tap loads it again.
-            expanded.remove(pageId)
+        let load = Task {
+            defer {
+                loadingParents.remove(pageId)
+                childLoads[pageId] = nil
+            }
+            do {
+                children[pageId] = try await loadAll(parent: pageId)
+            } catch {
+                // Expanded with nothing below, it would look like a page without subpages; the next tap loads it again.
+                expanded.remove(pageId)
+            }
         }
+        childLoads[pageId] = load
+        await load.value
     }
 
     /// The levels below `parents`, up to four loading side by side; one that fails to load is left out. Starts no more

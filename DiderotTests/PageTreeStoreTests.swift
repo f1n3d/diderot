@@ -38,6 +38,47 @@ struct PageTreeStoreTests {
         #expect(FractionalIndex.KeyError.outOfRange.userMessage == String(localized: "This can't be placed there."))
     }
 
+    /// A page dropped into a page the drag has just opened goes after its subpages, also while they still load (test79,
+    /// once in the whole UI run before build 32). The drop found no subpages yet and put it first; and the drop ends the
+    /// opening, whose cancelled load collapsed the page again.
+    @Test func dropIntoAPageStillOpeningGoesAfterItsSubpages() async throws {
+        let gate = Gate()
+        let levels = ["root": [SidebarPage(id: "T", title: "T", position: "a0", hasChildren: true), SidebarPage(id: "Q", title: "Q", position: "a1")],
+                      // Above every "a0…" key: the key for an empty level is "a0" with a random suffix, after a K at "a0".
+                      "T": [SidebarPage(id: "K", title: "K", position: "a5", parentPageId: "T")]]
+        let store = PageTreeStore(spaceId: "s") { parent, _ in
+            if parent == "T" {
+                await gate.wait()
+                // As URLSession ends the request of a cancelled task.
+                try Task.checkCancellation()
+            }
+            return Paginated(items: levels[parent ?? "root"] ?? [], meta: PaginationMeta(hasNextPage: false, nextCursor: nil))
+        }
+        await store.loadRootIfNeeded()
+        let target = try #require(store.rootPages.first)
+
+        // Held over T for `openDelay`: the drag opens it, and its subpages start loading.
+        let opening = Task { await store.toggle("T") }
+        var turns = 0
+        while !gate.isWaiting && turns < 100 {
+            await Task.yield()
+            turns += 1
+        }
+        try #require(gate.isWaiting)
+        // The drop ends the opening, then places the page.
+        opening.cancel()
+        let drop = Task { try await store.placement(of: "Q", relativeTo: target, zone: .nest) }
+        for _ in 0..<10 { await Task.yield() }
+        gate.open()
+
+        let placement = try #require(try await drop.value)
+        #expect(placement.parentPageId == "T")
+        #expect(placement.position > "a5", "After K, not before it: \(placement.position)")
+        await opening.value
+        #expect(store.isExpanded("T"))
+        #expect(store.children(of: "T").map(\.id) == ["K"])
+    }
+
     @Test func flattensExpandedNodesDepthFirst() {
         let store = PageTreeStore(spaceId: "s")
         store.setChildren([page("A", children: true), page("B"), page("C", children: true)], of: nil)
@@ -351,6 +392,24 @@ struct PageTreeStoreTests {
     private final class StoreBox { var store: PageTreeStore? }
     private final class EventLog { var events: [String] = [] }
     private final class FailureBox { var error: APIError? }
+
+    /// Holds a load until `open`, also in a cancelled task: the test's load checks for that afterwards.
+    @MainActor private final class Gate {
+        private var waiting: [CheckedContinuation<Void, Never>] = []
+        private var isOpen = false
+        var isWaiting: Bool { !waiting.isEmpty }
+
+        func wait() async {
+            guard !isOpen else { return }
+            await withCheckedContinuation { waiting.append($0) }
+        }
+
+        func open() {
+            isOpen = true
+            waiting.forEach { $0.resume() }
+            waiting = []
+        }
+    }
 
     private actor Calls {
         var list: [String] = []
