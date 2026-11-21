@@ -117,24 +117,6 @@ struct BaseValueTests {
         #expect(BaseValue.parseNumber(BaseValue.numberDraft(-1.5, locale: locale), locale: locale) == .value(-1.5))
     }
 
-    /// The picked local day is stored as midnight UTC and shows as the same day in the picker, at any hour. The stored
-    /// day is Gregorian in every device calendar (without that, fails only in a region like TH: `-testRegion TH`).
-    @Test(arguments: [0, 23])
-    func pickedDayRoundTrips(hour: Int) throws {
-        let gregorian = Calendar(identifier: .gregorian)
-        let picked = try #require(gregorian.date(from: DateComponents(year: 2026, month: 10, day: 9, hour: hour, minute: 30)))
-        let stored = BaseValue.date(picked)
-        #expect(stored == .string("2026-10-09T00:00:00.000Z"))
-        let shown = gregorian.dateComponents([.year, .month, .day], from: try #require(BaseValue.pickerDate(stored)))
-        #expect([shown.year, shown.month, shown.day] == [2026, 10, 9])
-    }
-
-    /// A stored instant other than midnight UTC (from another client) opens on its local day, the day the cell shows.
-    @Test func pickerKeepsAnInstant() {
-        let instant = "2026-10-09T23:00:00.000Z"
-        #expect(BaseValue.pickerDate(.string(instant)) == BaseFormat.parseDate(instant))
-    }
-
     @Test func fileEntryLinksToTheEncodedName() {
         let entry = BaseValue.file(Attachment(id: "a", fileName: "a b(1).pdf", fileSize: 3), mimeType: "application/pdf")
         #expect(entry == [

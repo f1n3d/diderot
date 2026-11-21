@@ -1,0 +1,4 @@
+{
+    "message": "The row cursor is stale. Reload rows and try again.",
+    "code": "BASE_CURSOR_STALE"
+}

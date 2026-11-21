@@ -1,6 +1,7 @@
 import Foundation
 
-/// API client error. Server errors come without the envelope: `{statusCode, message: String | [String], error?}`.
+/// API client error. Server errors come without the envelope: `{statusCode, message: String | [String], error?}`, or
+/// `{message, code}` where Docmost names a reason for the client to act on.
 public enum APIError: Error, Sendable, Equatable {
     case network(URLError)
     case invalidResponse
@@ -10,8 +11,8 @@ public enum APIError: Error, Sendable, Equatable {
     case notFound(message: String?)
     /// 429: e.g. the sign-in rate limit (10/min per IP).
     case throttled
-    /// 400 with validation messages.
-    case validation(messages: [String])
+    /// 400 with validation messages, and Docmost's code for the reason where it gives one (`isStaleBaseCursor`).
+    case validation(messages: [String], code: String? = nil)
     /// All other status codes.
     case server(status: Int, message: String?)
     case decoding(String)
@@ -42,7 +43,7 @@ public enum APIError: Error, Sendable, Equatable {
         case .forbidden(let message): return message ?? String(localized: "You don't have permission to do that.", bundle: .main)
         case .notFound(let message): return message ?? String(localized: "Not found.", bundle: .main)
         case .throttled: return String(localized: "Too many requests. Please wait a moment and try again.", bundle: .main)
-        case .validation(let messages): return messages.joined(separator: "\n")
+        case .validation(let messages, _): return messages.joined(separator: "\n")
         case .server(let status, let message): return message ?? String(localized: "Server error (\(status)).", bundle: .main)
         case .decoding(let detail): return String(localized: "Could not read the server response (\(detail)).", bundle: .main)
         case .unexpectedPayload: return String(localized: "The server returned an empty response.", bundle: .main)
@@ -59,10 +60,12 @@ public enum APIError: Error, Sendable, Equatable {
         let first = messages.first
         // Only Docmost's own answer, whose body names the status: a 400, 401, 403 or 404 from a reverse proxy, a sign-in
         // gateway in front of Docmost or a captive portal must not sign out (the server session would stay valid), drop
-        // a kept title, or count as a page gone for good (that drops its saved copy).
+        // a kept title, or count as a page gone for good (that drops its saved copy). A 400 that names one of Docmost's
+        // codes is its own too: those come without the status (`{message, code}`, e.g. a stale cursor in 0.98).
         switch status {
-        case 400 where body?.statusCode == 400:
-            return .validation(messages: messages.isEmpty ? [String(localized: "Bad request.", bundle: .main)] : messages)
+        case 400 where body?.statusCode == 400 || body?.code != nil:
+            return .validation(messages: messages.isEmpty ? [String(localized: "Bad request.", bundle: .main)] : messages,
+                               code: body?.code)
         case 401 where body?.statusCode == 401:
             return .unauthorized(message: first)
         case 403 where body?.statusCode == 403:
@@ -80,6 +83,19 @@ public enum APIError: Error, Sendable, Equatable {
 struct ServerErrorBody: Decodable {
     let statusCode: Int?
     let message: Message?
+    /// Docmost's reason, such as `BASE_CURSOR_STALE`; nil when the body has none or names it otherwise (a proxy's number).
+    let code: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case statusCode, message, code
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        statusCode = try container.decodeIfPresent(Int.self, forKey: .statusCode)
+        message = try container.decodeIfPresent(Message.self, forKey: .message)
+        code = try? container.decodeIfPresent(String.self, forKey: .code)
+    }
 
     var messages: [String] {
         switch message {

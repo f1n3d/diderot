@@ -63,6 +63,13 @@ struct InlineTextBuilder {
             run.backgroundColor = StatusPalette.background(for: "gray")
             run.foregroundColor = StatusPalette.foreground(for: "gray")
             return run
+        case .templateVariable(let name):
+            // A template's field, as the web's template preview shows it: a tinted chip with its name.
+            var run = AttributedString(" \(name) ")
+            run.font = font.weight(.medium)
+            run.foregroundColor = .accentColor
+            run.backgroundColor = Color.accentColor.opacity(0.12)
+            return run
         case .templatePlaceholder(let hint):
             // The web shows the hint dimmed where one would type.
             var run = AttributedString(hint)

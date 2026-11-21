@@ -40,10 +40,10 @@ A safe, stable app with an editor as simple and robust as possible that still co
 - Page history, new pages, title and icon, append notes, trash, web editor.
 - Templates (with a Docmost license that has them), as on the web: holding the space's "+" makes a page from one; an empty page offers "Get started with" a template, or with a database or kanban board (database license). The templates themselves are made and edited on the web.
 - Databases (Docmost "bases"):
-  - **Views:** views as tabs. The table is a grid as in Notion or Airtable: it scrolls freely, column headers stay, and the view sets the columns, their order and widths.
+  - **Views:** views as tabs. The table is a grid as in Notion or Airtable: it scrolls freely, column headers stay, and the view sets the columns, their order and widths. Docmost 0.98's calendars show as a table; its forms stay hidden, as on the web while they are in beta.
   - **Kanban:** columns you swipe sideways, which snap to the middle so both neighbors peek out. The view sets grouping, column order, "No value" and card fields.
-  - **Values:** every property type including formulas and colors as on the web, with the view's filter and sort, loading more while scrolling, readable offline.
-  - **Editing in the detail sheet:** tapping a cell jumps to its field. This covers every writable type (the app adds `https://` to links without a scheme, the server takes only full URLs), new select options, people, page references and files.
+  - **Values:** every property type including formulas and colors as on the web, with the view's filter and sort, loading more while scrolling, readable offline. Dates and date ranges show in the property's format (Docmost 0.98), a time in the reader's time zone.
+  - **Editing in the detail sheet:** tapping a cell jumps to its field. This covers every writable type (the app adds `https://` to links without a scheme, the server takes only full URLs), new select options, people, page references and files. A date's picker sets its start, on Docmost 0.98 with the time where the property includes it; a range's end is set on the web.
   - **Rows and cards:** create and delete rows, and move cards by dragging (between and within columns) or with "Move to" in their menu.
   - Writing needs a Docmost license with databases (Business and up), as on the web; otherwise everything is read-only. Embedded databases appear as a card. Properties, views and filters are edited on the web.
 - The document view is the editor. Pages are editable directly, without a mode:
@@ -225,6 +225,7 @@ Debug builds and tests talk to the dev instance (`http://localhost:3000`, from a
 - `POST` calls without parameters need `{}` as their body.
 - "Append note" (`pages/update` with `operation: append`) needs Redis sync enabled on the server (`COLLAB_DISABLE_REDIS` not set). It inserts at the end of the document, also after a page's footnotes, which Docmost's schema keeps last (`block+ footnotes?`); editors can't hold such a page as it is. So the app appends to no page with footnotes and says why.
 - The web client's page view crashes while `localStorage.currentUser` is missing, so the web editor loads the home page first.
+- Database dates: Docmost 0.98 stores `{start, end?}`, a day as `YYYY-MM-DD` and with "include time" a UTC instant; older servers store one ISO string, which 0.98 still takes (midnight UTC for a day). `bases/rows` resolves date filters in the `timeZone`, `today` and `weekStart` the request names; older servers drop those fields. A sort cursor too large for its values names its row instead, and fails with `400 {code: "BASE_CURSOR_STALE"}` (without `statusCode`) once that row changed: the list starts again from its first page.
 
 ## License
 

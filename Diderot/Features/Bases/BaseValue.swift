@@ -128,20 +128,52 @@ enum BaseValue {
 
     // MARK: Date
 
-    /// The picked day as midnight UTC (`2026-10-09T00:00:00.000Z`), Gregorian whatever the device calendar; the web
-    /// client only has a day picker, even with "include time".
-    static func date(_ picked: Date) -> JSONValue {
-        let day = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: picked)
-        return .string(String(format: "%04d-%02d-%02dT00:00:00.000Z", day.year ?? 1970, day.month ?? 1, day.day ?? 1))
+    /// Whether a date is written as Docmost 0.98 stores it (`{start, end?}`, `BaseDateCell`) or as the string of older
+    /// servers. A cell that holds the new form is on 0.98 or newer, also where the server's version is unknown: a range
+    /// kept as a string would lose its end.
+    static func writesDateObject(onDocmost098: Bool, replacing current: BaseDateCell?) -> Bool {
+        onDocmost098 || current?.isLegacy == false
     }
 
-    /// Picker date on the day the cell shows: midnight UTC becomes local midnight of its UTC day, other instants stay.
-    static func pickerDate(_ stored: JSONValue?) -> Date? {
-        guard let text = stored?.stringValue, let date = BaseFormat.parseDate(text) else { return nil }
-        guard BaseFormat.isMidnightUTC(date) else { return date }
+    /// The cell after the picker set `picked` (`BaseDateEditor`). In the new form the start is the picked day, or with
+    /// time the picked moment; a range keeps its end while that comes after the new start, and moves with the start when
+    /// only its time changed (the web's `pickDay` and `setTimeOfDay`). Older servers store the picked day as a string at
+    /// midnight UTC: their web client picks days only, also with "include time". Days are Gregorian whatever the device
+    /// calendar.
+    static func date(
+        _ picked: Date, kind: BaseDateKind, replacing current: BaseDateCell?, onDocmost098: Bool, timeZone: TimeZone = .current
+    ) -> JSONValue {
+        let day = CalendarDay(containing: picked, in: timeZone)
+        guard writesDateObject(onDocmost098: onDocmost098, replacing: current) else {
+            return BaseDateCell(start: .day(day)).value(asObject: false)
+        }
+        let start: BaseDateCell.Part = kind == .datetime ? .instant(picked) : .day(day)
+        var end = current?.end
+        if case .instant(let old)? = current?.start, case .instant(let oldEnd)? = end, case .instant(let new) = start,
+           CalendarDay(containing: old, in: timeZone) == day {
+            end = .instant(oldEnd.addingTimeInterval(new.timeIntervalSince(old)))
+        }
+        return BaseDateCell(start: start, end: end).value(asObject: true)
+    }
+
+    /// The date "Add Date" sets: today; with time on Docmost 0.98 at 9:00, where the web's picker starts a new date.
+    static func today(kind: BaseDateKind, onDocmost098: Bool, now: Date = .now, timeZone: TimeZone = .current) -> JSONValue {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let picked = kind == .datetime && onDocmost098 ? calendar.date(bySettingHour: 9, minute: 0, second: 0, of: now) ?? now : now
+        return date(picked, kind: kind, replacing: nil, onDocmost098: onDocmost098, timeZone: timeZone)
+    }
+
+    /// The picker's date for a cell: its start, a moment as it is where the picker shows time, else the day the cell
+    /// shows (`BaseDateCell.Part.day(in:)`) at the device's midnight, where the picker shows it.
+    static func pickerDate(_ cell: BaseDateCell, withTime: Bool, timeZone: TimeZone = .current) -> Date {
+        if withTime, case .instant(let date) = cell.start { return date }
+        let day = cell.start.day(in: timeZone)
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = .gmt
-        return Calendar(identifier: .gregorian).date(from: utc.dateComponents([.year, .month, .day], from: date))
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = timeZone
+        return local.date(from: utc.dateComponents([.year, .month, .day], from: day.date)) ?? day.date
     }
 
     // MARK: File

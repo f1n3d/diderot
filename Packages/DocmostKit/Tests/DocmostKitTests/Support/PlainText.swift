@@ -54,6 +54,7 @@ extension [Inline] {
             case .integrationMention(let link): return link.url
             case .date(let value): return value ?? ""
             case .templatePlaceholder(let hint): return hint
+            case .templateVariable(let name): return name
             case .marked(let atom, _): return [atom].plainText
             case .unknown: return ""
             }

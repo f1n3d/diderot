@@ -297,6 +297,7 @@ public enum InlineAttributedText {
         // A date the web can't read shows as "Date" there; the kit has no texts of its own.
         case "date": return CalendarDay(node.string("date"))?.label() ?? "📅"
         case "templatePlaceholder": return nonEmpty(node.string("hint"))
+        case "templateVariable": return nonEmpty(node.string("name"))
         default: return "\u{FFFC}"
         }
     }

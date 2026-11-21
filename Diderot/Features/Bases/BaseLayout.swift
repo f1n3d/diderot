@@ -222,30 +222,84 @@ enum BaseFormat {
         options?["format"]?.stringValue == "progress"
     }
 
-    /// With time: local time, as in the web client. Without time: the local day, except at midnight UTC (a day stored
-    /// without time), which would otherwise show as the previous day west of UTC.
-    static func date(_ text: String, options: JSONValue?, timeZone: TimeZone = .current) -> String {
-        guard let date = parseDate(text) else { return text }
-        if options?["includeTime"]?.boolValue == true {
-            return date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, timeZone: timeZone))
+    /// A date cell as the web shows it (`ee/base/utils/date-format.ts`): each part in the property's date format
+    /// (Docmost 0.98's `dateFormat`; month abbreviated without one), a moment with its time in the reader's time zone, on
+    /// the clock `timeFormat` names (else the locale's). A range shows as "start – end", its end on the start's day as
+    /// the time only. Formulas have no format options (web parity): pass nil.
+    static func date(
+        _ cell: BaseDateCell, kind: BaseDateKind, options: JSONValue?, timeZone: TimeZone = .current, locale: Locale = .current,
+        now: Date = .now
+    ) -> String {
+        let format = options?["dateFormat"]?.stringValue
+        let clock = options?["timeFormat"]?.stringValue
+        let today = CalendarDay(containing: now, in: timeZone)
+        func time(_ date: Date) -> String { timeText(date, clock: clock, timeZone: timeZone, locale: locale) }
+        func text(_ part: BaseDateCell.Part) -> String {
+            guard kind == .datetime, case .instant(let date) = part else {
+                return dayText(part.day(in: timeZone), format: format, today: today, locale: locale)
+            }
+            return dayText(CalendarDay(containing: date, in: timeZone), format: format, today: today, locale: locale) + " " + time(date)
         }
-        var style = Date.FormatStyle(date: .abbreviated, time: .omitted)
-        style.timeZone = isMidnightUTC(date) ? .gmt : timeZone
-        return date.formatted(style)
+        let start = text(cell.start)
+        guard let end = cell.end else { return start }
+        if kind == .datetime, case .instant(let from) = cell.start, case .instant(let to) = end,
+           CalendarDay(containing: from, in: timeZone) == CalendarDay(containing: to, in: timeZone) {
+            return start + " – " + time(to)
+        }
+        // Two moments of one day in a property without time show as that day.
+        let endText = text(end)
+        return endText == start ? start : start + " – " + endText
     }
 
-    /// How date properties and today() store a day without time.
-    static func isMidnightUTC(_ date: Date) -> Bool {
-        date.timeIntervalSince1970.truncatingRemainder(dividingBy: 86_400) == 0
+    /// A day in one of Docmost 0.98's date formats; one it doesn't know (older servers stored free text) is "medium".
+    private static func dayText(_ day: CalendarDay, format: String?, today: CalendarDay, locale: Locale) -> String {
+        // The day's midnight in UTC, shown in UTC: the same day in every time zone. In the locale's calendar, which for
+        // the device's is the one chosen in Settings.
+        let style = Date.FormatStyle(date: format == "full" ? .long : .abbreviated, time: .omitted, locale: locale,
+                                     calendar: locale.calendar, timeZone: .gmt)
+        switch format {
+        case "relative":
+            // Yesterday, today and tomorrow by name, other days as "medium".
+            var utc = Calendar(identifier: .gregorian)
+            utc.timeZone = .gmt
+            let days = utc.dateComponents([.day], from: today.date, to: day.date).day ?? 0
+            guard abs(days) <= 1 else { break }
+            let formatter = RelativeDateTimeFormatter()
+            formatter.locale = locale
+            formatter.dateTimeStyle = .named
+            formatter.formattingContext = .beginningOfSentence
+            return formatter.localizedString(from: DateComponents(day: days))
+        case "monthDayYear", "dayMonthYear", "yearMonthDay":
+            let digits = Date.FormatStyle(locale: locale, calendar: locale.calendar, timeZone: .gmt)
+            let parts = [
+                "day": day.date.formatted(digits.day(.twoDigits)),
+                "month": day.date.formatted(digits.month(.twoDigits)),
+                "year": day.date.formatted(digits.year(.defaultDigits)),
+            ]
+            let order = switch format {
+            case "monthDayYear": ["month", "day", "year"]
+            case "dayMonthYear": ["day", "month", "year"]
+            default: ["year", "month", "day"]
+            }
+            return order.compactMap { parts[$0] }.joined(separator: "/")
+        default:
+            break
+        }
+        return day.date.formatted(style)
+    }
+
+    /// A moment's time of day in `timeZone`, on a 12- or 24-hour clock (`timeFormat`), else as the locale shows times.
+    private static func timeText(_ date: Date, clock: String?, timeZone: TimeZone, locale: Locale) -> String {
+        var locale = locale
+        if let cycle: Locale.HourCycle = clock == "12h" ? .oneToTwelve : clock == "24h" ? .zeroToTwentyThree : nil {
+            var components = Locale.Components(locale: locale)
+            components.hourCycle = cycle
+            locale = Locale(components: components)
+        }
+        return date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale, timeZone: timeZone))
     }
 
     static func timestamp(_ date: Date) -> String {
         date.formatted(date: .abbreviated, time: .shortened)
-    }
-
-    static func parseDate(_ text: String) -> Date? {
-        if let date = try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) { return date }
-        if let date = try? Date(text, strategy: .iso8601) { return date }
-        return try? Date(text, strategy: Date.ISO8601FormatStyle().year().month().day())
     }
 }
