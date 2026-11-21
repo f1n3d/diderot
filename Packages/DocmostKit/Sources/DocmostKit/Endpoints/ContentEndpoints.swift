@@ -27,6 +27,11 @@ extension Endpoints {
         public static func info(spaceId: String) -> Endpoint<Space> {
             .post("spaces/info", body: SpaceIdBody(spaceId: spaceId))
         }
+
+        /// Restores an archived space (Docmost 0.98), for its admins; the answer is the space without its archive.
+        public static func unarchive(spaceId: String) -> Endpoint<Space> {
+            .post("spaces/unarchive", body: SpaceIdBody(spaceId: spaceId))
+        }
     }
 
     public enum Pages {
