@@ -2,8 +2,8 @@
 // connect's sync emits "synced", after a connection that ended with a close event and after one that died without
 // notice, which the socket closes itself as WebKit gives no close event then. The app shows "Saved" only after
 // "synced". A connection that holds the page's changes (`ChangeHold`) sends none until its connect is released, and
-// each reconnect holds again; the provider counts each change until the server confirms it. Exits with 1 on any
-// difference.
+// each reconnect holds again; it holds back only changes the server hasn't confirmed, and the provider counts each
+// change until the server confirms it. Exits with 1 on any difference.
 import * as Y from "yjs";
 import { ChangeHold, connection } from "../src/connection";
 
@@ -86,7 +86,8 @@ type Listener = (event: unknown) => void;
  * for what it lacks, takes changes and confirms them, and pings, as Docmost's server does, so a connection that works
  * stays open. `dies()` ends the connection without notice:
  * nothing goes through any more, and `close()` ends in no close event, as in WebKit (bug 247943). `ends()` ends it with
- * one, as when the server or the network closes it.
+ * one, as when the server or the network closes it. After `deafens()` what the page sends is lost and what the server
+ * sent still arrives, as when the connection breaks on the way to the server with its answers already on their way.
  */
 class StandInSocket {
   static readonly opened: StandInSocket[] = [];
@@ -101,6 +102,7 @@ class StandInSocket {
   readyState = 0;
   binaryType = "arraybuffer";
   private dead = false;
+  private deaf = false;
   private pings?: ReturnType<typeof setInterval>;
   private readonly listeners = new Map<string, Set<Listener>>();
 
@@ -124,7 +126,7 @@ class StandInSocket {
 
   send(data: Uint8Array) {
     // A pong is the message type alone.
-    if (this.dead || data.length === 1) return;
+    if (this.dead || this.deaf || data.length === 1) return;
     const message = new Reader(Uint8Array.from(data));
     const name = message.string();
     const type = message.uint();
@@ -153,6 +155,10 @@ class StandInSocket {
   dies() {
     this.dead = true;
     clearInterval(this.pings);
+  }
+
+  deafens() {
+    this.deaf = true;
   }
 
   ends(code = 1006) {
@@ -214,14 +220,14 @@ async function events(end: (socket: StandInSocket) => void): Promise<string[]> {
 /**
  * A connection to document `name` that holds the page's changes (`ChangeHold`), and what it saw: "synced" for each
  * sync, and for each `state` what reached the stand-in server's document, whether changes stay back and how many the
- * provider counts as on their way.
+ * provider counts as on their way. `changed` runs when `withheld` changes, `token` as the connection signs in.
  */
-function holding(name: string) {
+function holding(name: string, { changed, token }: { changed?: (hold: ChangeHold) => void; token?: () => string } = {}) {
   const seen: string[] = [];
-  const hold = new ChangeHold(() => {});
+  const hold: ChangeHold = new ChangeHold(() => changed?.(hold));
   const { socket, provider } = connection(
     "ws://collab.test/collab",
-    { name, token: "token", onSynced: () => seen.push("synced") },
+    { name, token: token ?? "token", onSynced: () => seen.push("synced") },
     { WebSocketPolyfill: StandInSocket, messageReconnectTimeout: 300, delay: 10, minDelay: 10, maxDelay: 100 },
     hold,
   );
@@ -282,6 +288,137 @@ async function held(): Promise<string[]> {
   return end();
 }
 
+/** A page without changes of its own on a connection that holds them, connected and then reconnected. */
+async function unchanged(): Promise<string[]> {
+  StandInSocket.document("page.unchanged").getText("t").insert(0, "theirs ");
+  const { hold, provider, state, start, end } = holding("page.unchanged");
+  start();
+  await until(() => provider.synced);
+  await pause(50);
+  state("connected");
+  hold.release(hold.connects, provider);
+  StandInSocket.opened.at(-1)!.ends();
+  await until(() => hold.connects === 2 && provider.synced);
+  await pause(50);
+  state("reconnected");
+  return end();
+}
+
+/**
+ * Changes that never reach the server: one made on a released connect whose connection has died without notice, and
+ * the sync after the next connect's release, which carries it, as the connection breaks on its way.
+ */
+async function lost(): Promise<string[]> {
+  let losesSync = false;
+  const page = holding("page.lost", {
+    changed: (hold) => {
+      // As the sync's answer goes out.
+      if (losesSync && !hold.withheld) StandInSocket.opened.at(-1)!.deafens();
+    },
+  });
+  const { hold, provider, text, state, has, start, end } = page;
+  start();
+  await until(() => provider.synced);
+  hold.release(hold.connects, provider);
+  await pause(50);
+  StandInSocket.opened.at(-1)!.dies();
+  text.insert(text.length, "lost ");
+  await until(() => hold.connects === 2 && provider.synced);
+  await pause(50);
+  state("reconnected");
+  losesSync = true;
+  hold.release(2, provider);
+  await pause(50);
+  state("released, its sync lost");
+  losesSync = false;
+  StandInSocket.opened.at(-1)!.ends();
+  await until(() => hold.connects === 3 && provider.synced);
+  await pause(50);
+  state("reconnected again");
+  hold.release(3, provider);
+  await has("lost");
+  state("released again");
+  return end();
+}
+
+/**
+ * A connect released before the server confirmed its empty answer, so that confirmation arrives after the sync the
+ * release starts has set the provider's count to 1. A change made right after that sync's answer went out never
+ * reaches the server, which confirms the answer: the provider then counts nothing on its way.
+ */
+async function lostAfterEarlyRelease(): Promise<string[]> {
+  let step = 0;
+  const page = holding("page.early", {
+    changed: (hold) => {
+      if (step === 0 && hold.withheld) {
+        step = 1;
+        // After the empty answer went out, before the server's confirmation of it comes in.
+        queueMicrotask(() => hold.release(hold.connects, page.provider));
+      } else if (step === 1 && !hold.withheld) {
+        step = 2;
+        queueMicrotask(() => {
+          StandInSocket.opened.at(-1)!.deafens();
+          page.text.insert(page.text.length, "lost ");
+        });
+      }
+    },
+  });
+  const { hold, provider, text, state, has, start, end } = page;
+  text.insert(0, "offline ");
+  start();
+  await until(() => step === 2 && !provider.hasUnsyncedChanges);
+  state("confirmed");
+  StandInSocket.opened.at(-1)!.ends();
+  await until(() => hold.connects === 2 && provider.synced);
+  await pause(50);
+  state("reconnected");
+  hold.release(2, provider);
+  await has("lost");
+  state("released");
+  return end();
+}
+
+/**
+ * A change made on a released connect whose connection has died without notice, and one made on the next connect,
+ * released before the connection signed in. The server confirms the second, which it keeps aside until it has the first
+ * that it builds on, before the page answered its sync, the answer that would carry the first; the connection breaks
+ * before that answer goes.
+ */
+async function releasedBeforeTheSync(): Promise<string[]> {
+  let releasesEarly = false;
+  const page = holding("page.before", {
+    token: () => {
+      if (releasesEarly) {
+        releasesEarly = false;
+        page.hold.release(page.hold.connects, page.provider);
+        page.text.insert(page.text.length, "early ");
+        // The server gets neither the token nor the sync that follow.
+        StandInSocket.opened.at(-1)!.deafens();
+      }
+      return "token";
+    },
+  });
+  const { hold, provider, text, state, has, start, end } = page;
+  start();
+  await until(() => provider.synced);
+  hold.release(hold.connects, provider);
+  await pause(50);
+  StandInSocket.opened.at(-1)!.dies();
+  text.insert(text.length, "lost ");
+  releasesEarly = true;
+  await until(() => hold.connects === 2);
+  await pause(50);
+  state("the second confirmed");
+  StandInSocket.opened.at(-1)!.ends();
+  await until(() => hold.connects === 3 && provider.synced);
+  await pause(50);
+  state("reconnected");
+  hold.release(3, provider);
+  await has("lost");
+  state("released");
+  return end();
+}
+
 async function main() {
   expect("a connection that ended: synced again after the reconnect", ["synced", "lost 1006", "closed 1006", "synced"],
     await events((socket) => socket.ends()));
@@ -300,8 +437,40 @@ async function main() {
     'reconnected: server "offline held quick live ", withheld true, unsynced 0',
     'released again: server "offline held quick live down ", withheld false, unsynced 0',
   ], await held());
+  // Before, withheld was true on each connect: its answer to the server's sync stayed back, empty or not.
+  expect("a page without changes of its own: nothing stays back on a connect or a reconnect", [
+    "synced",
+    'connected: server "theirs ", withheld false, unsynced 0',
+    "synced",
+    'reconnected: server "theirs ", withheld false, unsynced 0',
+  ], await unchanged());
+  expect("a change that never reached the server: each connect keeps it back until the server confirmed it", [
+    "synced",
+    "synced",
+    'reconnected: server "", withheld true, unsynced 0',
+    'released, its sync lost: server "", withheld false, unsynced 1',
+    "synced",
+    'reconnected again: server "", withheld true, unsynced 0',
+    'released again: server "lost ", withheld false, unsynced 0',
+  ], await lost());
+  // The provider's count, 0 at "confirmed", doesn't tell that the server has the page's changes.
+  expect("a change lost after an early release, while the provider counts nothing on its way: it goes after the next release", [
+    "synced",
+    'confirmed: server "offline ", withheld false, unsynced 0',
+    "synced",
+    'reconnected: server "offline ", withheld true, unsynced 0',
+    'released: server "offline lost ", withheld false, unsynced 0',
+  ], await lostAfterEarlyRelease());
+  expect("a change confirmed before the sync's answer went: the next connect still keeps back the one the answer carries", [
+    "synced",
+    "synced",
+    'the second confirmed: server "", withheld false, unsynced 0',
+    "synced",
+    'reconnected: server "", withheld true, unsynced 0',
+    'released: server "lost early ", withheld false, unsynced 0',
+  ], await releasedBeforeTheSync());
   console.log(differences > 0 ? `${differences} difference(s)`
-    : "Each connect syncs again, also after a connection that died without notice; a held connection sends nothing before its release.");
+    : "Each connect syncs again, also after a connection that died without notice; a held connection sends nothing before its release, and holds back only changes the server hasn't confirmed.");
   // The provider's own timers would keep Node running.
   process.exit(differences > 0 ? 1 : 0);
 }
