@@ -69,6 +69,8 @@ final class AppSession {
 
     /// Link previews of the signed-in session, made for its token; a new sign-in (or sign-out) starts afresh.
     @ObservationIgnored private var previewStore: (token: String, store: LinkPreviewStore)?
+    /// The time zone told to each server while the app runs (`syncTimeZone`).
+    @ObservationIgnored private var sentTimeZones: [ServerKey: String] = [:]
 
     /// The current server's link previews (Docmost 0.97 integration cards and mentions); nil before sign-in.
     var linkPreviews: LinkPreviewStore? {
@@ -553,6 +555,8 @@ final class AppSession {
             }
             // Also when unchanged: an offline start needs it, and iOS may have purged the cache meanwhile.
             await current.cache.write(user, key: CacheKey.currentUser)
+            // Back in the app, perhaps in another time zone.
+            await syncTimeZone(of: current)
         } catch let error as APIError where error.isSessionExpired {
             if isStillCurrent(session) { handleUnauthorized() }
         } catch {
@@ -653,6 +657,23 @@ final class AppSession {
             serverVersion: Self.reportedVersion(serverVersion)
         ))
         AppLog.session.info("Signed in as \(currentUser.user.email, privacy: .private) at \(server.url.absoluteString, privacy: .public)")
+        if case .ready(let ready) = state { Task { await syncTimeZone(of: ready) } }
+    }
+
+    /// Tells a Docmost 0.98 server the device's time zone where it keeps another one or none, as the web does once a load
+    /// (`use-sync-user-timezone.ts`); once a zone per server while the app runs, and without a word where it fails, as
+    /// there. 0.98 keeps it with the user; older servers know none.
+    func syncTimeZone(of session: ReadySession, zone: TimeZone = .current) async {
+        let key = ServerKey(session.server.url)
+        guard session.hasDocmost098Features, !zone.identifier.isEmpty, session.currentUser.user.timezone != zone.identifier,
+              sentTimeZones[key] != zone.identifier else { return }
+        sentTimeZones[key] = zone.identifier
+        do {
+            _ = try await session.client.send(Endpoints.Users.update(timezone: zone.identifier))
+        } catch {
+            sentTimeZones[key] = nil
+            AppLog.session.debug("Time zone not sent: \(error.userMessage, privacy: .public)")
+        }
     }
 
     /// `finishSignIn`, given up after `deadline` (`nil`: as long as the requests take): `false` if it was.
