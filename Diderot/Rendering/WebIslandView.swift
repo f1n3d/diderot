@@ -152,6 +152,7 @@ nonisolated enum IslandHTML {
         <!doctype html><html><head>\(baseStyle)
         <link rel="stylesheet" href="katex.min.css">
         <script src="katex.min.js"></script>
+        <script src="katex-mhchem.min.js"></script>
         <style>.katex-display { margin: 0; overflow-x: auto; overflow-y: hidden; } .error { color: #e03131; font-family: ui-monospace, monospace; }</style>
         </head><body><div id="m"></div>
         <script>

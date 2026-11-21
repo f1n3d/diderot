@@ -119,7 +119,11 @@ const sections = [
   { title: "Diderot", note: "The app itself.", entries: grouped([{ name: "Diderot", version: "", license: "MIT", text: fs.readFileSync(path.join(root, "LICENSE"), "utf8").trim() }]) },
   { title: "Editor engine", note: "Bundled into Diderot/Resources/Engine/engine.js.", entries: grouped(enginePackages) },
   { title: "Syntax colors", note: "Bundled into Diderot/Resources/Engine/highlight.js, for code blocks.", entries: grouped(highlightPackages) },
-  { title: "KaTeX", note: "Diderot/Resources/Islands/katex.min.js, katex.min.css and the KaTeX fonts.", entries: grouped([island("katex")]) },
+  { title: "KaTeX", note: "Diderot/Resources/Islands/katex.min.js, katex.min.css, the KaTeX fonts and katex-mhchem.min.js.", entries: grouped([
+    island("katex"),
+    // KaTeX's port of mhchem, MIT as KaTeX, keeps the Apache license of MathJax's mhchem it comes from.
+    { name: "mhchem", version: "3.3.0", license: "MIT, Apache-2.0", text: fs.readFileSync(path.join(islandFiles, "katex-mhchem-license.txt"), "utf8").trim() },
+  ]) },
   { title: "Mermaid", note: "Diderot/Resources/Islands/mermaid.min.js, with the packages it bundles.", entries: grouped([island("mermaid"), ...mermaidDependencies]) },
 ];
 

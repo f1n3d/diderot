@@ -15,7 +15,7 @@ import { backspaceEdit, backspacePlan, enterEdit, enterLinesEdit, type Backspace
 import { ListJoiner } from "./extensions";
 import { DocumentSchedule, documentDelay } from "./schedule";
 import { editorOptions, schemaExtensions } from "./schema";
-import { applyPlacement, applySteps, itemLevelSteps, locate, pathOf, unsetComment, type Placement, type Step, type Target } from "./steps";
+import { applyPlacement, applySteps, itemLevelSteps, locate, pathOf, setCommentResolved, unsetComment, type Placement, type Step, type Target } from "./steps";
 import { runTableCommand, tableAround, type TableCommand } from "./tables";
 
 declare global {
@@ -378,6 +378,19 @@ class DocmostEngine {
     return this.transact((editor) => {
       const tr = editor.state.tr;
       if (unsetComment(tr, commentId)) editor.view.dispatch(tr.setMeta("addToHistory", false));
+      return true;
+    });
+  }
+
+  /**
+   * Marks the passages of the comment `commentId` resolved or open (`setCommentResolved`) once the server took it; none
+   * there, or already so, is no change. Kept from the history, as a deleted comment's marks: Undo would show the
+   * passage open while its comment stays resolved.
+   */
+  setCommentResolved(commentId: string, resolved: boolean): boolean | null {
+    return this.transact((editor) => {
+      const tr = editor.state.tr;
+      if (setCommentResolved(tr, commentId, resolved)) editor.view.dispatch(tr.setMeta("addToHistory", false));
       return true;
     });
   }

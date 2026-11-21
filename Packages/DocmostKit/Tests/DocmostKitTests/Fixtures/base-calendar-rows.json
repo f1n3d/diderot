@@ -1,0 +1,93 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "01a1fd08-dbba-74c5-a355-4cb1464a864a",
+        "pageId": "01a1fd08-960b-72b0-8c56-0c462d9c5333",
+        "cells": {
+          "prpvsf6nojse": "Before window, into it",
+          "prpzchk68la9": {
+            "end": "2026-11-02",
+            "start": "2026-10-20"
+          }
+        },
+        "position": "a55pn",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": null,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-11-21T07:36:18.617Z",
+        "updatedAt": "2026-11-21T07:36:18.617Z",
+        "deletedAt": null
+      },
+      {
+        "id": "01a1fd08-db71-7781-8b51-112bfae4f863",
+        "pageId": "01a1fd08-960b-72b0-8c56-0c462d9c5333",
+        "cells": {
+          "prpvsf6nojse": "Legacy midnight",
+          "prpzchk68la9": {
+            "start": "2026-11-10"
+          }
+        },
+        "position": "a4BIw",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": null,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-11-21T07:36:18.545Z",
+        "updatedAt": "2026-11-21T07:36:18.545Z",
+        "deletedAt": null
+      },
+      {
+        "id": "01a1fd08-da53-7a35-a6fd-9885b54c6b2e",
+        "pageId": "01a1fd08-960b-72b0-8c56-0c462d9c5333",
+        "cells": {
+          "prpvsf6nojse": "Single day",
+          "prpzchk68la9": {
+            "start": "2026-11-21"
+          }
+        },
+        "position": "a07Jr",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": null,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-11-21T07:36:18.259Z",
+        "updatedAt": "2026-11-21T07:36:18.259Z",
+        "deletedAt": null
+      },
+      {
+        "id": "01a1fd08-da9b-747f-8be9-40761f41e3d3",
+        "pageId": "01a1fd08-960b-72b0-8c56-0c462d9c5333",
+        "cells": {
+          "prpvsf6nojse": "Three days",
+          "prpzchk68la9": {
+            "end": "2026-11-26",
+            "start": "2026-11-24"
+          }
+        },
+        "position": "a1Axm",
+        "creatorId": "01a11a90-f71c-707b-ba76-800020050b3d",
+        "lastUpdatedById": null,
+        "workspaceId": "01a11a90-f71d-748b-b589-2d4dd2aa3240",
+        "createdAt": "2026-11-21T07:36:18.331Z",
+        "updatedAt": "2026-11-21T07:36:18.331Z",
+        "deletedAt": null
+      }
+    ],
+    "references": {
+      "users": {
+        "01a11a90-f71c-707b-ba76-800020050b3d": {
+          "id": "01a11a90-f71c-707b-ba76-800020050b3d",
+          "name": "Dev Admin",
+          "avatarUrl": null
+        }
+      },
+      "pages": {}
+    },
+    "meta": {
+      "total": 4,
+      "truncated": false,
+      "timeZone": "Europe/Berlin"
+    }
+  },
+  "success": true,
+  "status": 200
+}

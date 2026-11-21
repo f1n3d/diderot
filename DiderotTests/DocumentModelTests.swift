@@ -1479,6 +1479,30 @@ struct DocumentModelTests {
         #expect(engine.unsetComments == ["c1", "c2"])
     }
 
+    /// A comment resolved by someone who may edit the page marks its passage so on the whole page (the engine's
+    /// `setCommentResolved`), and first in the text being edited, saved: Docmost marks it only for those who may not edit.
+    @Test(.timeLimit(.minutes(1))) func resolvedCommentMarksItsPassage() async throws {
+        let marked = PMNode(type: "paragraph", attrs: ["id": "a"], content: [
+            PMNode(type: "text", text: "Vor "),
+            PMNode(type: "text", marks: [PMMark(type: "comment", attrs: ["commentId": "c1"])], text: "markiert"),
+        ])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [marked]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: marked), node: marked)
+
+        await model.markComment("c1", resolved: true)
+        #expect(model.activeText.runs[DocmostAttributes.CommentResolvedAttribute.self].contains { $0.0 == true })
+        let mark = engine.saved.last?.children.last?.marks?.first { $0.type == "comment" }
+        #expect(mark?.attrs?["resolved"] == true)
+        #expect(engine.resolvedComments == ["c1": true])
+
+        model.deactivate()
+        let saves = engine.saved.count
+        await model.markComment("c1", resolved: false)
+        #expect(engine.saved.count == saves)
+        #expect(engine.resolvedComments == ["c1": false])
+    }
+
     /// Typing on doesn't push the save of unconfirmed changes back: it comes 2 s after the first change not kept, with
     /// the later ones. Pushed back by each document event, typing with pauses under 2 s kept nothing until a longer pause,
     /// and an ended web process or app lost all of it.
@@ -3050,6 +3074,12 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var unsetComments: [String] = []
     func unsetComment(_ commentId: String) async -> EngineResult {
         unsetComments.append(commentId)
+        return .applied
+    }
+    /// Comments whose marks `setCommentResolved` set, and how.
+    private(set) var resolvedComments: [String: Bool] = [:]
+    func setCommentResolved(_ commentId: String, resolved: Bool) async -> EngineResult {
+        resolvedComments[commentId] = resolved
         return .applied
     }
     /// What Backspace does, as the engine would tell the model in advance; nothing said by default.

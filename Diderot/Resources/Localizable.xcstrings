@@ -706,6 +706,16 @@
         }
       }
     },
+    "All day": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ganztägig"
+          }
+        }
+      }
+    },
     "All Templates": {
       "localizations": {
         "de": {
@@ -2208,6 +2218,16 @@
         }
       }
     },
+    "Entries will appear here once someone with edit access chooses a date property in the web editor.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einträge erscheinen hier, sobald jemand mit Schreibrechten im Web-Editor eine Datumsspalte wählt."
+          }
+        }
+      }
+    },
     "Entry not found": {
       "localizations": {
         "de": {
@@ -3616,6 +3636,16 @@
         }
       }
     },
+    "Next month": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächster Monat"
+          }
+        }
+      }
+    },
     "Next Slide": {
       "localizations": {
         "de": {
@@ -4521,6 +4551,16 @@
         }
       }
     },
+    "Previous month": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorheriger Monat"
+          }
+        }
+      }
+    },
     "Previous Slide": {
       "localizations": {
         "de": {
@@ -5017,6 +5057,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "SharePoint-Ordner"
+          }
+        }
+      }
+    },
+    "Showing the first %lld of %lld entries in this range": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es werden die ersten %lld von %lld Einträgen in diesem Zeitraum angezeigt"
           }
         }
       }
@@ -6073,6 +6123,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diese Werte werden zu bearbeitbarem Text auf der Seite."
+          }
+        }
+      }
+    },
+    "This calendar has no date property yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Kalender hat noch keine Datumsspalte."
+          }
+        }
+      }
+    },
+    "This calendar uses %@, not your time zone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Kalender verwendet %@, nicht deine Zeitzone"
+          }
+        }
+      }
+    },
+    "This calendar's date property is no longer available.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datumsspalte dieses Kalenders gibt es nicht mehr."
           }
         }
       }

@@ -4,12 +4,15 @@
 - "Kanban-Test": database with the Kanban template and three cards in the test page's space,
 - "Datenbank-Einbettung": page with a paragraph and the embedded "Kanban-Test" database,
 - "Datenbank-Test": all property types, 30 rows, table and board,
-- "Projekte" › "Projektplan": Kanban template with an emoji icon and a second view, under another page.
+- "Projekte" › "Projektplan": Kanban template with an emoji icon and a second view, under another page,
+- "Kalender-Test" (Docmost 0.98): calendar template, an entry today and one over three days from tomorrow.
 
-Prints the IDs as `KEY=value` (for Tools/run-uitests.sh). Signs in as the admin from .env (Tools/dev_api.py).
+Prints the IDs as `KEY=value` (for Tools/run-uitests.sh); the calendar's goes in DOCMOST_UITEST_BASE_IDS. Signs in as
+the admin from .env (Tools/dev_api.py).
 
     Tools/seed-bases.py <pageId of the editor test page>
 """
+import datetime
 import hashlib
 import json
 import sys
@@ -52,6 +55,14 @@ def main():
         pass  # not a favorite
     full, ids = ensure_full_base(api, space_id, test_page_id, bases)
     nested = ensure_nested_base(api, space_id, sidebar)
+    # On its own: should the calendar fail, the other databases' tests still get their data.
+    try:
+        calendar = ensure_calendar_base(api, space_id, bases)
+    except dev_api.ApiError as error:
+        print(f"Could not create the calendar test data: {error}", file=sys.stderr)
+        calendar = None
+    if calendar:
+        ids["base:Kalender-Test"] = calendar
     print(f"DOCMOST_UITEST_BASE={base['id']}")
     print(f"DOCMOST_UITEST_BASE_HOST={host['id']}")
     print(f"DOCMOST_UITEST_BASE_FULL={full}")
@@ -77,6 +88,39 @@ def ensure_nested_base(api, space_id, sidebar):
         for index, choice in enumerate(status["typeOptions"]["choices"][1:]):
             api.call("bases/rows/create", {"pageId": base["id"], "cells": {title["id"]: f"Aufgabe {index + 1}", status["id"]: choice["id"]}})
         api.call("bases/views/create", {"pageId": base["id"], "name": "Tabelle", "type": "table"})
+    return base["id"]
+
+
+def ensure_calendar_base(api, space_id, bases):
+    """\"Kalender-Test\" (Docmost 0.98; None on older servers, which have no calendars): the calendar template with
+    "Termin heute" today and "Drei Tage" over three days from tomorrow, set anew each run as the days go by (the
+    Mac's day, which the simulator shares). Rows an aborted UI test made go."""
+    version = api.call("version").get("currentVersion") or "0.0"
+    if tuple(int(part) for part in version.lstrip("v").split(".")[:2]) < (0, 98):
+        return None
+    base = next((b for b in bases if b.get("title") == "Kalender-Test"), None)
+    if base is None:
+        base = api.call("bases/create", {"spaceId": space_id, "name": "Kalender-Test", "template": "calendar"})
+    info = api.call("bases/info", {"pageId": base["id"]})
+    title = next(p for p in info["properties"] if p.get("isPrimary"))
+    view = next(v for v in info["views"] if v["type"] == "calendar")
+    date_id = view["config"]["calendar"]["datePropertyId"]
+    rows = api.call("bases/rows", {"pageId": base["id"], "limit": 100})["items"]
+    for row in rows:
+        if str(row["cells"].get(title["id"]) or "").startswith("UITest"):
+            api.call("bases/rows/delete", {"pageId": base["id"], "rowId": row["id"]})
+    today = datetime.date.today()
+    wanted = {
+        "Termin heute": {"start": today.isoformat()},
+        "Drei Tage": {"start": (today + datetime.timedelta(days=1)).isoformat(),
+                      "end": (today + datetime.timedelta(days=3)).isoformat()},
+    }
+    for name, value in wanted.items():
+        row = next((r for r in rows if r["cells"].get(title["id"]) == name), None)
+        if row is None:
+            api.call("bases/rows/create", {"pageId": base["id"], "cells": {title["id"]: name, date_id: value}})
+        elif row["cells"].get(date_id) != value:
+            api.call("bases/rows/update", {"pageId": base["id"], "rowId": row["id"], "cells": {date_id: value}})
     return base["id"]
 
 
