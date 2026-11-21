@@ -106,7 +106,8 @@ final class PageTitleEdit {
         if !typing() { text = kept }
         guard !isOffline() else { return false }
         let sent = await session.sendUnsentTitles(consented: consented.map { [page.id: $0] } ?? [:])
-        for spaceId in sent.spaces { changes.pageChanged(in: spaceId) }
+        // Every kept title goes, not only this page's: one change for all their spaces, or views see only the last one.
+        changes.pagesChanged(in: sent.spaces)
         if let notice = UnsentEdits.DroppedChange.notice(for: sent.dropped) { report(notice) }
         guard await session.unsentTitle(pageId: page.id) == nil else { return false }
         unsent = nil
