@@ -41,7 +41,9 @@ nonisolated enum TemplateHints {
         for run in text.runs {
             let length = text[run.range].characters.count
             defer { offset += length }
-            guard let value = run.docmost.inlineNode, InlineAttributedText.atom(of: value)?.type == "templatePlaceholder" else { continue }
+            // The string first: decoding every atom of the line on every key would cost more.
+            guard let value = run.docmost.inlineNode, value.contains("\"templatePlaceholder\""),
+                  InlineAttributedText.atom(of: value)?.type == "templatePlaceholder" else { continue }
             let range = offset..<(offset + length)
             if let index = found.firstIndex(where: { $0.value == value }) {
                 if let last = found[index].ranges.last, last.upperBound == range.lowerBound {
