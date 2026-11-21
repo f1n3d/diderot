@@ -1371,6 +1371,39 @@ struct DocumentModelTests {
         #expect(engine.lifecycle == ["save after 1"])
     }
 
+    /// The app saves the unsent changes when it becomes inactive and again in the background: the second save waits
+    /// for the first, as the scheduled save does. Side by side, the first one's late write of the page could land after
+    /// the second dropped what the server had confirmed, and the page opened offline showed it without its changes.
+    @Test(.timeLimit(.minutes(1))) func backgroundSavesRunOneAfterTheOther() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        engine.holdsNextUnsentSave = true
+        let first = Task { await model.saveUnsentChanges() }
+        while engine.heldUnsentSave == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let second = Task { await model.saveUnsentChanges() }
+        try await Task.sleep(for: .milliseconds(100))
+        engine.heldUnsentSave?.resume()
+        await first.value
+        await second.value
+        #expect(engine.lifecycle == ["save after 0", "saved", "save after 0"])
+    }
+
+    /// Leaving the page while the app's background save runs closes the engine after it: closed beside it, the save's
+    /// late writes could keep changes the close had found confirmed.
+    @Test(.timeLimit(.minutes(1))) func leavingDuringABackgroundSaveClosesAfterIt() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        engine.holdsNextUnsentSave = true
+        let save = Task { await model.saveUnsentChanges() }
+        while engine.heldUnsentSave == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let close = model.suspend()
+        try await Task.sleep(for: .milliseconds(100))
+        engine.heldUnsentSave?.resume()
+        await save.value
+        await close.value
+        #expect(engine.lifecycle == ["save after 0", "saved", "close"])
+    }
+
     /// Input the engine hadn't saved when its web process ended goes in once the engine is back; it used to be lost.
     @Test(.timeLimit(.minutes(1))) func inputBeforeTheEngineEndedIsSavedWhenItReturns() async throws {
         let first = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Eins")])
@@ -2790,6 +2823,10 @@ final class FakeDocumentEngine: DocumentEngine {
     /// The next save waits until the test resumes `heldSave`, like a slow engine roundtrip.
     var holdsNextSave = false
     private(set) var heldSave: CheckedContinuation<Void, Never>?
+    /// The next save of the unsent changes waits until the test resumes `heldUnsentSave`, like the engine's answer
+    /// that takes up to 2 s while the server hasn't confirmed them.
+    var holdsNextUnsentSave = false
+    private(set) var heldUnsentSave: CheckedContinuation<Void, Never>?
     /// Runs mid-insert or mid-replace (saves too): the test changes `document` and delivers events there.
     var whileInserting: (() -> Void)?
     /// Runs during `open`, e.g. to send the opened engine's first document.
@@ -2901,9 +2938,16 @@ final class FakeDocumentEngine: DocumentEngine {
         lifecycle.append("close")
         reportUnsentChanges()
     }
-    /// With the number of block saves before it.
+    /// With the number of block saves before it; a held one (`holdsNextUnsentSave`) adds "saved" once the test lets it
+    /// end.
     func saveUnsentChanges() async {
         lifecycle.append("save after \(saved.count)")
+        if holdsNextUnsentSave {
+            holdsNextUnsentSave = false
+            await withCheckedContinuation { heldUnsentSave = $0 }
+            heldUnsentSave = nil
+            lifecycle.append("saved")
+        }
         reportUnsentChanges()
     }
     /// As the engine reports a save that had something to keep.
