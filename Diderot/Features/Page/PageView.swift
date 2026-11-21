@@ -702,6 +702,8 @@ struct PageView: View {
                         showsAppendNote = true
                     }
                 }
+                // Until the verification is known it could be one.
+                .disabled(verificationGate == .unknown)
                 Button("Edit in Web Editor", systemImage: "pencil.and.scribble") { showsWebEditor = true }
                 Button("Move to Trash", systemImage: "trash", role: .destructive) { confirmsTrash = true }
             }
