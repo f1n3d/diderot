@@ -129,7 +129,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 
 Supported since November 21, 2026: the engine knows its format, pages are editable, and dates, hints and SharePoint cards show (#193, #194). Left for later, where the app now differs from 0.98's web:
 
-- Typing over a template's hint: the web puts what is typed at a hint in its place (and Tab in a table cell jumps to the cell's first hint); in the app the hint shows dimmed, typing goes beside it, and Backspace removes it.
+- A template's hints (Docmost 0.98) go when typing reaches them, as on the web, since November 21, 2026: typed into, Backspace or Delete on one, or typed right before one at a line's start or right after one at its end. Not yet as on the web: Tab in a table cell doesn't jump to the cell's first hint; a hint the caret was moved to with the arrow keys amid other text isn't replaced by typing there (the web remembers it); what is typed doesn't take the hint's formatting; and the page shows hints outside editing too, where the web shows them only while a page is editable.
 - Page covers (`coverPhoto`, `coverPosition`, `coverAttribution` on pages): presets, uploads and Unsplash photos above the title. The app shows none and can't set one.
 - A space's home page (`spaces/info` `homePage`, Docmost 0.98): the web opens the space on it, beside its tree in the sidebar. The app shows it first in the space, above the tree, and marks it on the page (since November 21, 2026): on a phone, opened at once, the tree would be a step back each time.
 - User profiles (`users/info`, `users/spaces`, `users/recent-pages`) and the profile card on a mention.
