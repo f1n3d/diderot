@@ -28,10 +28,63 @@ struct BaseFixtureTests {
     }
 
     @Test func unknownTypesStayReadable() {
-        let property = BaseProperty(id: "prpx", name: "Neu", type: "rollup", position: nil, isPrimary: false, typeOptions: nil)
+        let property = BaseProperty(
+            id: "prpx", name: "Neu", type: "rollup", position: nil, isPrimary: false, typeOptions: nil, pendingType: nil,
+            pendingTypeOptions: nil
+        )
         #expect(property.kind == nil)
-        let view = BaseView(id: "v", name: "Kalender", type: "calendar", position: nil, config: nil)
+        let view = BaseView(id: "v", name: "Zeitleiste", type: "timeline", position: nil, config: nil)
         #expect(view.kind == .table)
+    }
+
+    /// Calendar views (Docmost 0.98) are calendars; they showed as a table. A property the server converts says so, as
+    /// the web's "Converting…" badge does.
+    @Test func calendarViewsAndConvertingProperties() throws {
+        let base = try JSONDecoder().decode(Base.self, from: Data("""
+        {"id": "b", "views": [{"id": "v", "name": "Kalender", "type": "calendar", "position": "a0",
+                               "config": {"calendar": {"layout": "month", "datePropertyId": "prpd"}}}],
+         "properties": [{"id": "prpd", "name": "Date", "type": "date", "typeOptions": null, "pendingType": null,
+                         "pendingTypeOptions": null},
+                        {"id": "prpe", "name": "Due", "type": "date", "pendingType": "date",
+                         "pendingTypeOptions": {"includeTime": true}}]}
+        """.utf8))
+        #expect(base.views.first?.kind == .calendar)
+        #expect(base.views.first?.config?["calendar"]?["datePropertyId"] == "prpd")
+        #expect(base.properties.map(\.isConverting) == [false, true])
+    }
+
+    /// A calendar asks for its window's days, the view's filter and the reader's calendar, as the web's does; no sorts
+    /// or cursor, which the server drops.
+    @Test func calendarRowsRequest() throws {
+        let berlin = try #require(TimeZone(identifier: "Europe/Berlin"))
+        var monday = Calendar(identifier: .gregorian)
+        monday.firstWeekday = 2
+        let viewer = ViewerDateContext(timeZone: berlin, calendar: monday, now: try Date("2026-11-21T08:00:00Z", strategy: .iso8601))
+        let filter: JSONValue = ["op": "and", "children": [["propertyId": "prpt", "op": "contains", "value": "day"]]]
+        let endpoint = Endpoints.Bases.calendarRows(
+            pageId: "p1", propertyId: "prpd", from: try #require(CalendarDay("2026-10-26")), to: try #require(CalendarDay("2026-12-06")),
+            filter: filter, viewer: viewer
+        )
+        #expect(endpoint.path == "bases/rows/calendar")
+        #expect(try body(of: endpoint) == [
+            "pageId": "p1", "propertyId": "prpd", "from": "2026-10-26", "to": "2026-12-06", "filter": filter, "limit": 1000,
+            "timeZone": "Europe/Berlin", "today": "2026-11-21", "weekStart": 1,
+        ])
+        let unfiltered = Endpoints.Bases.calendarRows(
+            pageId: "p1", propertyId: "prpd", from: try #require(CalendarDay("2026-10-26")), to: try #require(CalendarDay("2026-12-06"))
+        )
+        #expect(try body(of: unfiltered)["filter"] == nil)
+    }
+
+    /// Docmost 0.98's answer (from the dev instance: November 2026's window of "Calendar probe"): the rows meeting the
+    /// window, a range that began before it first, and how many there are.
+    @Test func calendarAnswer() throws {
+        let answer = try TestSupport.decodeFixture(BaseCalendarRows.self, "base-calendar-rows")
+        #expect(answer.items.compactMap { $0.cells["prpvsf6nojse"]?.stringValue }
+            == ["Before window, into it", "Legacy midnight", "Single day", "Three days"])
+        #expect(answer.items.first?.cells["prpzchk68la9"] == ["start": "2026-10-20", "end": "2026-11-02"])
+        #expect(answer.meta == .init(total: 4, truncated: false, timeZone: "Europe/Berlin"))
+        #expect(answer.references?.users?.values.map(\.name) == ["Dev Admin"])
     }
 
     /// Form views (Docmost 0.98) stay hidden, as on the web while forms are in beta; they showed as a table.
