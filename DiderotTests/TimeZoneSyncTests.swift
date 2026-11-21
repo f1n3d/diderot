@@ -9,15 +9,17 @@ extension AppSessionRaceTests {
         let store = SessionStore(keychain: MemorySecretStore())
 
         /// A server that keeps another zone gets the device's once while the app runs; one that keeps it gets nothing.
+        /// The user keeps the test machine's zone, so the sync after signing in sends nothing of its own.
         @Test func anotherZoneIsSentOnce() async throws {
-            let session = try await signedIn(version: "0.98.0", keeps: "America/New_York")
+            let kept = TimeZone.current
+            let session = try await signedIn(version: "0.98.0", keeps: kept.identifier)
             let ready = try #require(session.ready)
-            let berlin = try #require(TimeZone(identifier: "Europe/Berlin"))
+            let other = try #require(TimeZone(identifier: kept.identifier == "Asia/Tokyo" ? "Europe/Berlin" : "Asia/Tokyo"))
             StubURLProtocol.requests.withLock { $0 = [] }
-            await session.syncTimeZone(of: ready, zone: berlin)
-            await session.syncTimeZone(of: ready, zone: berlin)
+            await session.syncTimeZone(of: ready, zone: other)
+            await session.syncTimeZone(of: ready, zone: other)
             #expect(updates() == 1)
-            await session.syncTimeZone(of: ready, zone: try #require(TimeZone(identifier: "America/New_York")))
+            await session.syncTimeZone(of: ready, zone: kept)
             #expect(updates() == 1)
             await removeCaches()
         }
