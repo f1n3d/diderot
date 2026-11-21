@@ -74,8 +74,8 @@ jobs:
         # Tools/check-project.sh: translations, project.yml against the Xcode project, shellcheck. The tools in the versions
         # it was last run with on the Mac (xcodegen --version, shellcheck --version), checked against their release files.
         env:
-          XCODEGEN_VERSION: "2.46.0"
-          XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+          XCODEGEN_VERSION: "2.47.0"
+          XCODEGEN_SHA256: 6ef12a3ef5327c2c713397f46d9160550f8b1cdc5c925cd884d65c77c9f696cd
           SHELLCHECK_VERSION: v0.11.0
           SHELLCHECK_SHA256_AARCH64: 56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79
           SHELLCHECK_SHA256_X86_64: 3c89db4edcab7cf1c27bff178882e0f6f27f7afdf54e859fa041fca10febe4c6
