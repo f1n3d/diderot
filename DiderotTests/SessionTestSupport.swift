@@ -166,13 +166,17 @@ nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         let target = (request.url?.host ?? "") + (request.url?.path ?? "")
         let isFor = Self.beforeNextAnswerFor.withLock { $0 }.map { $0 == target } ?? true
         let action = isFor ? Self.beforeNextAnswer.withLock { $0.take() } : nil
+        // The task gets the stub unchecked. The class is `@unchecked Sendable`, yet once the tests of #196 and #197 were in
+        // the target, Xcode 27.1 took `self` here for non-Sendable on every build ("passing closure as a 'sending'
+        // parameter risks causing data races … closure captures 'self'"), while each branch alone built.
+        nonisolated(unsafe) let stub = self
         Task {
             await action?()
-            let body = Self.body.withLock { $0 } ?? #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}}}"#
-            let status = Self.status.withLock { $0 }
-            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: Data(body.utf8))
-            client?.urlProtocolDidFinishLoading(self)
+            let body = StubURLProtocol.body.withLock { $0 } ?? #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}}}"#
+            let status = StubURLProtocol.status.withLock { $0 }
+            stub.client?.urlProtocol(stub, didReceive: HTTPURLResponse(url: stub.request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+            stub.client?.urlProtocol(stub, didLoad: Data(body.utf8))
+            stub.client?.urlProtocolDidFinishLoading(stub)
         }
     }
 
