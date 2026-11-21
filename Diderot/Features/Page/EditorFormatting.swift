@@ -48,7 +48,10 @@ nonisolated enum EditorText {
             }
             if let highlight = run.docmost.highlight { container.backgroundColor = highlightColor(highlight) }
             if let color = run.docmost.textColor.flatMap(Color.init(hex:)) { container.foregroundColor = color }
-            if run.docmost.inlineNode != nil { container.foregroundColor = .accentColor }
+            // Atoms in the accent color; a template's hint dimmed, as the web shows it (and as the page does outside editing).
+            if let atom = run.docmost.inlineNode {
+                container.foregroundColor = atom.contains("\"templatePlaceholder\"") ? .secondary : .accentColor
+            }
             result[run.range].mergeAttributes(container)
         }
         return result

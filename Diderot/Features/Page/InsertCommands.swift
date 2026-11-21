@@ -49,8 +49,8 @@ enum EmbedProvider: String, CaseIterable {
     }
 
     /// Whether a link has the form of the provider's share or embed links (`validated` has made sure it is http or https
-    /// with a host). Iframe takes any link.
-    func embeds(_ url: URL) -> Bool {
+    /// with a host). Iframe takes any link. `docmost098`: the server knows Docmost 0.98's Google links.
+    func embeds(_ url: URL, docmost098: Bool = false) -> Bool {
         let host = url.host()?.lowercased() ?? ""
         let https = url.scheme?.lowercased() == "https"
         let parts = url.pathComponents.filter { $0 != "/" }
@@ -93,13 +93,57 @@ enum EmbedProvider: String, CaseIterable {
                 && parts.contains { $0.unicodeScalars.allSatisfy(Self.digits.contains) }
         case .framer:
             return https && isHost("framer.com") && parts.first == "embed" && part(1, Self.identifier) != nil
-        // Google links: the document's ID, then what to do with it (`/view`, `/edit` …).
+        // Google links before Docmost 0.98: the document's ID, then what to do with it (`/view`, `/edit` …). From 0.98 on
+        // both take any Google file (`googleKind`), as the web's one pattern for both does.
         case .gdrive:
+            if docmost098 { return Self.googleKind(of: url) != nil }
             return isHost("drive.google.com", ["www", "m"]) && parts.starts(with: ["file", "d"]) && part(2, Self.identifier) != nil
                 && parts.count > 3
         case .gsheets:
+            if docmost098 { return Self.googleKind(of: url) != nil }
             return isHost("docs.google.com", ["www", "m"]) && parts.starts(with: ["spreadsheets", "d"])
                 && part(2, Self.identifier) != nil && parts.count > 3
+        }
+    }
+
+    /// A Google file as Docmost 0.98 reads a link to it (`embed-provider.ts`): a Drive file (`drive.google.com/file`) or
+    /// a document, spreadsheet or presentation (`docs.google.com/<kind>`), also of another signed-in account (`/u/1`)
+    /// and published (`/d/e/…`), by its ID; nil for other links, Drive folders and forms among them.
+    static func googleKind(of url: URL) -> GoogleKind? {
+        let host = url.host()?.lowercased() ?? ""
+        var parts = ArraySlice(url.pathComponents.filter { $0 != "/" })
+        let kind: GoogleKind
+        if ["drive.google.com", "www.drive.google.com", "m.drive.google.com"].contains(host), parts.first == "file" {
+            kind = .drive
+        } else if ["docs.google.com", "www.docs.google.com", "m.docs.google.com"].contains(host),
+                  let first = parts.first, let document = GoogleKind(rawValue: first), document != .drive {
+            kind = document
+        } else {
+            return nil
+        }
+        parts = parts.dropFirst()
+        if parts.first == "u", parts.dropFirst().first?.unicodeScalars.allSatisfy(digits.contains) == true {
+            parts = parts.dropFirst(2)
+        }
+        guard parts.first == "d" else { return nil }
+        parts = parts.dropFirst()
+        if parts.first == "e" { parts = parts.dropFirst() }
+        guard let id = parts.first, !id.isEmpty, id.unicodeScalars.allSatisfy(identifier.contains) else { return nil }
+        return kind
+    }
+
+    /// What a Google link holds, by the path Docmost 0.98 reads (`docs.google.com/<rawValue>`).
+    enum GoogleKind: String {
+        case drive, document, spreadsheets, presentation
+
+        /// The web's label for the embed (`embed-provider.ts`).
+        var name: String {
+            switch self {
+            case .drive: "Google Drive"
+            case .document: "Google Docs"
+            case .spreadsheets: "Google Sheets"
+            case .presentation: "Google Slides"
+            }
         }
     }
 
@@ -111,14 +155,14 @@ enum EmbedProvider: String, CaseIterable {
 
     /// Cleans and checks a link: http or https with a host, in the provider's form. Without a scheme, the app adds
     /// `https://` as for database links. `nil` = invalid for this provider.
-    func validated(_ input: String) -> String? {
+    func validated(_ input: String, docmost098: Bool = false) -> String? {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !text.contains(where: \.isWhitespace) else { return nil }
         if !text.contains("://") { text = "https://" + text.drop(while: { $0 == "/" }) }
         guard let url = URL(string: text), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               let host = url.host(), host.contains(".") || host == "localhost"
         else { return nil }
-        return embeds(url) ? text : nil
+        return embeds(url, docmost098: docmost098) ? text : nil
     }
 }
 
