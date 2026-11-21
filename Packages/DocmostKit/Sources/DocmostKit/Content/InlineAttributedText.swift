@@ -279,6 +279,12 @@ public enum InlineAttributedText {
         return merged
     }
 
+    /// The atom an `inlineNode` attribute holds, without its key.
+    public static func atom(of inlineNode: String) -> PMNode? {
+        guard let json = inlineNode.split(separator: atomKeySeparator).first else { return nil }
+        return try? JSONDecoder().decode(PMNode.self, from: Data(json.utf8))
+    }
+
     /// On one line: a line break in an atom's text (a formula written with Shift-Return) would count as Return and split
     /// the block. The atom's JSON keeps the real text.
     public static func displayText(for node: PMNode) -> String {
