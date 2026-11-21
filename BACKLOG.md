@@ -133,7 +133,7 @@ Supported since November 21, 2026: the engine knows its format, pages are editab
 - Page covers (`coverPhoto`, `coverPosition`, `coverAttribution` on pages): presets, uploads and Unsplash photos above the title. The app shows none and can't set one.
 - A space's home page (`spaces/info` `homePage`, Docmost 0.98): the web opens the space on it, beside its tree in the sidebar. The app shows it first in the space, above the tree, and marks it on the page (since November 21, 2026): on a phone, opened at once, the tree would be a step back each time.
 - User profiles (`users/info`, `users/spaces`, `users/recent-pages`) and the profile card on a mention.
-- Announcements (`announcements/visible`, the license feature `announcements`): the web's banner across the workspace.
+- Announcements (license feature `announcements`, Docmost 0.98) show at the top of Home since November 21, 2026, not across every screen as the web's bar: on a phone it would take each page's room. A link in one to a path on the server opens in the browser, not in the app.
 - Chemistry in formulas (`\ce{…}`, KaTeX's mhchem): the app's KaTeX island lacks the extension, so such a formula shows its error.
 - Embeds of Google Docs, Sheets and Slides as previews (the web's new Google patterns); the app's embed check knows the old ones.
 - The workspace's default language (`workspace/public` `defaultLocale`) and the user's time zone (`users/update` `timezone`, which the web sends on load).
