@@ -142,11 +142,15 @@ public actor APIClient {
         return try decode(Attachment.self, from: responseData, unwrapsEnvelope: false)
     }
 
-    private static func multipartFrame(boundary: String, pageId: String, fileName: String, mimeType: String) -> (head: Data, tail: Data) {
+    /// `type`: the attachment's kind (`page-cover`), before the file: the server reads only the fields that come first.
+    private static func multipartFrame(boundary: String, pageId: String, type: String? = nil, fileName: String, mimeType: String) -> (head: Data, tail: Data) {
         // A quote or a line break (any control character) would end the name, and what follows would count as headers.
         let safeName = String(fileName.unicodeScalars.map { $0 == "\"" || $0.properties.generalCategory == .control ? "_" : Character($0) })
-        let head = "--\(boundary)\r\nContent-Disposition: form-data; name=\"pageId\"\r\n\r\n\(pageId)\r\n"
-            + "--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeName)\"\r\nContent-Type: \(mimeType)\r\n\r\n"
+        var head = "--\(boundary)\r\nContent-Disposition: form-data; name=\"pageId\"\r\n\r\n\(pageId)\r\n"
+        if let type {
+            head += "--\(boundary)\r\nContent-Disposition: form-data; name=\"type\"\r\n\r\n\(type)\r\n"
+        }
+        head += "--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeName)\"\r\nContent-Type: \(mimeType)\r\n\r\n"
         return (Data(head.utf8), Data("\r\n--\(boundary)--\r\n".utf8))
     }
 
@@ -160,8 +164,19 @@ public actor APIClient {
 
     /// Uploads data in memory (small payloads, tests).
     public func uploadAttachment(pageId: String, fileName: String, mimeType: String, data: Data) async throws -> Attachment {
+        try await upload(data, pageId: pageId, type: nil, fileName: fileName, mimeType: mimeType)
+    }
+
+    /// Uploads an image for the page's cover (Docmost 0.98), which `Endpoints.Pages.setCover` then makes the cover; the
+    /// server deletes one that doesn't become it after an hour. It takes JPG, PNG and WebP by the name's extension, up
+    /// to 5 MB, so the data is held in memory.
+    public func uploadCover(pageId: String, fileName: String, mimeType: String, data: Data) async throws -> Attachment {
+        try await upload(data, pageId: pageId, type: "page-cover", fileName: fileName, mimeType: mimeType)
+    }
+
+    private func upload(_ data: Data, pageId: String, type: String?, fileName: String, mimeType: String) async throws -> Attachment {
         let boundary = "----DocmostBoundary" + UUID().uuidString
-        let (head, tail) = Self.multipartFrame(boundary: boundary, pageId: pageId, fileName: fileName, mimeType: mimeType)
+        let (head, tail) = Self.multipartFrame(boundary: boundary, pageId: pageId, type: type, fileName: fileName, mimeType: mimeType)
         var request = uploadRequest(boundary: boundary)
         request.httpBody = head + data + tail
         let (responseData, _) = try await execute(request, path: "files/upload")

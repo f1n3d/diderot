@@ -3259,6 +3259,35 @@ import XCTest
         Thread.sleep(forTimeInterval: 1.0)
     }
 
+    /// Covers: "Add Cover" above the title puts a gradient on the test page as a band; "Change Cover" picks red from the
+    /// gallery, which a color can't be repositioned; the bin removes the cover, and "Add Cover" is back. The test page
+    /// ends without a cover, as it began.
+    func test111_PageCover() throws {
+        try requireDocmost098()
+        let app = launchPage()
+        let add = element(app, "page-add-cover")
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "No “Add Cover” above the title")
+        add.tap()
+        let band = element(app, "page-cover")
+        XCTAssertTrue(band.waitForExistence(timeout: 10), "“Add Cover” shows no cover")
+        XCTAssertTrue(add.waitForNonExistence(timeout: 10), "“Add Cover” stays beside the cover")
+        snapshot(app, "111-gradient")
+
+        app.buttons["page-change-cover"].tap()
+        let red = app.buttons["cover-preset-color-red"]
+        XCTAssertTrue(red.waitForExistence(timeout: 5), "“Change Cover” shows no gallery")
+        red.tap()
+        XCTAssertTrue(red.wait(for: \.isSelected, toEqual: true, timeout: 10), "Red isn't marked as the cover")
+        snapshot(app, "111-gallery")
+        app.buttons["cover-picker-done"].tap()
+        XCTAssertTrue(red.waitForNonExistence(timeout: 5), "The gallery stays open")
+        XCTAssertFalse(app.buttons["page-reposition-cover"].exists, "A color offers “Reposition”")
+
+        app.buttons["page-remove-cover"].tap()
+        XCTAssertTrue(band.waitForNonExistence(timeout: 10), "The cover stays after removing it")
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "“Add Cover” doesn't come back")
+    }
+
     // MARK: - Docmost 0.97 (`PORT=3001 Tools/run-uitests.sh`; skipped on older servers)
 
     /// Tabs: "/reiter" inserts "Tab 1" and "Tab 2" with the cursor in the first; "+" adds a tab and asks for its name;

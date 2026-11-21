@@ -130,7 +130,7 @@ Finished on October 9, 2026: password, LDAP and SSO in the in-app browser; SSO t
 Supported since November 21, 2026: the engine knows its format, pages are editable, and dates, hints and SharePoint cards show (#193, #194). Left for later, where the app now differs from 0.98's web:
 
 - Typing over a template's hint: the web puts what is typed at a hint in its place (and Tab in a table cell jumps to the cell's first hint); in the app the hint shows dimmed, typing goes beside it, and Backspace removes it.
-- Page covers (`coverPhoto`, `coverPosition`, `coverAttribution` on pages): presets, uploads and Unsplash photos above the title. The app shows none and can't set one.
+- Page covers: the app shows them above the title and lets editors add, change (gallery, upload), reposition and remove them (November 21, 2026). Picking an Unsplash photo stays on the web, whose search goes through the server with a key the app can't see; Unsplash covers set there show in the app as other servers' images do. The gradients and textures look like the web's, not the same: the web's are image files of Docmost's (AGPL-3.0), which the app (MIT) doesn't copy, so it draws its own in each preset's colors (`CoverArt`).
 - A space's home page (`spaces/info` `homePage`): the web opens the space on it. The app opens the space's tree.
 - User profiles (`users/info`, `users/spaces`, `users/recent-pages`) and the profile card on a mention.
 - Announcements (`announcements/visible`, the license feature `announcements`): the web's banner across the workspace.

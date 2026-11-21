@@ -80,6 +80,11 @@ public struct Page: Codable, Sendable, Hashable, Identifiable {
     public let slugId: String?
     public let title: String?
     public let icon: String?
+    /// The page's cover (Docmost 0.98): `preset:<id>`, an uploaded file's path or an Unsplash photo's address; null on
+    /// older servers.
+    public let coverPhoto: String?
+    /// Where the cover image sits vertically, 0–100 as CSS's `object-position`; nil for the middle.
+    public let coverPosition: Double?
     public let spaceId: String?
     public let isBase: Bool?
     /// TipTap/ProseMirror JSON; a string when requested with `format: markdown|html`.
