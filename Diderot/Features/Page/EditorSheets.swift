@@ -354,7 +354,7 @@ private struct EmbedSheet: View {
     }
 
     private func apply() {
-        guard let valid = provider.validated(link) else {
+        guard let valid = provider.validated(link, docmost098: model.dependencies.hasDocmost098Features) else {
             isInvalid = true
             return
         }

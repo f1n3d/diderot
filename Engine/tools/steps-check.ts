@@ -6,7 +6,7 @@
 import { getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
-import { applyPlacement, applySteps, locate, unsetComment, type Placement, type Step } from "../src/steps";
+import { applyPlacement, applySteps, locate, setCommentResolved, unsetComment, type Placement, type Step } from "../src/steps";
 import { schemaExtensions } from "../src/schema";
 import { tabIds, withUniqueTabIds } from "../src/extensions";
 
@@ -309,6 +309,19 @@ const unmarked = EditorState.create({ schema, doc: commented }).tr;
 expect("a deleted comment's marks go, at any depth, others stay", [true, ["c2"], "Vor markiert andereauch hier"],
   [unsetComment(unmarked, "c1"), commentIds(unmarked.doc), unmarked.doc.textContent]);
 expect("…none there: nothing", false, unsetComment(EditorState.create({ schema, doc: commented }).tr, "c3"));
+
+// A resolved comment's marks say so everywhere, those of other comments stay as they are (the web's `setCommentResolved`).
+function resolvedOf(doc: PMNode): string[] {
+  const states: string[] = [];
+  doc.descendants((node) => { for (const mark of node.marks) if (mark.type.name === "comment") states.push(`${mark.attrs.commentId}:${mark.attrs.resolved}`); });
+  return states;
+}
+const resolving = EditorState.create({ schema, doc: commented }).tr;
+expect("a resolved comment's marks say so, at any depth, others stay", [true, ["c1:true", "c2:false", "c1:true"], "Vor markiert andereauch hier"],
+  [setCommentResolved(resolving, "c1", true), resolvedOf(resolving.doc), resolving.doc.textContent]);
+expect("…already so: nothing", false, setCommentResolved(EditorState.create({ schema, doc: resolving.doc }).tr, "c1", true));
+const reopening = EditorState.create({ schema, doc: resolving.doc }).tr;
+expect("…and open again", [true, ["c1:false", "c2:false", "c1:false"]], [setCommentResolved(reopening, "c1", false), resolvedOf(reopening.doc)]);
 
 console.log(differences ? `${differences} step difference(s)` : "The steps apply whole or not at all.");
 process.exitCode = differences ? 1 : 0;

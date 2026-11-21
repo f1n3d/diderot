@@ -706,6 +706,16 @@
         }
       }
     },
+    "All day": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ganztägig"
+          }
+        }
+      }
+    },
     "All Templates": {
       "localizations": {
         "de": {
@@ -2208,12 +2218,22 @@
         }
       }
     },
-    "End: %@": {
+    "End": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende: %@"
+            "value": "Ende"
+          }
+        }
+      }
+    },
+    "End Date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enddatum"
           }
         }
       }
@@ -2234,6 +2254,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gib den 6-stelligen Code aus deiner Authenticator-App oder einen deiner Backup-Codes ein. Der Code muss innerhalb von fünf Minuten eingegeben werden."
+          }
+        }
+      }
+    },
+    "Entries will appear here once someone with edit access chooses a date property in the web editor.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einträge erscheinen hier, sobald jemand mit Schreibrechten im Web-Editor eine Datumsspalte wählt."
           }
         }
       }
@@ -2314,6 +2344,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exportieren"
+          }
+        }
+      }
+    },
+    "Export has been disabled at the workspace level.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Export wurde für den Workspace deaktiviert."
+          }
+        }
+      }
+    },
+    "Export has been disabled for this space.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Export wurde für diesen Bereich deaktiviert."
           }
         }
       }
@@ -3626,6 +3676,16 @@
         }
       }
     },
+    "Next month": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächster Monat"
+          }
+        }
+      }
+    },
     "Next Slide": {
       "localizations": {
         "de": {
@@ -4581,6 +4641,16 @@
         }
       }
     },
+    "Previous month": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorheriger Monat"
+          }
+        }
+      }
+    },
     "Previous Slide": {
       "localizations": {
         "de": {
@@ -5097,6 +5167,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "SharePoint-Ordner"
+          }
+        }
+      }
+    },
+    "Showing the first %lld of %lld entries in this range": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es werden die ersten %lld von %lld Einträgen in diesem Zeitraum angezeigt"
           }
         }
       }
@@ -6163,6 +6243,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diese Werte werden zu bearbeitbarem Text auf der Seite."
+          }
+        }
+      }
+    },
+    "This calendar has no date property yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Kalender hat noch keine Datumsspalte."
+          }
+        }
+      }
+    },
+    "This calendar uses %@, not your time zone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Kalender verwendet %@, nicht deine Zeitzone"
+          }
+        }
+      }
+    },
+    "This calendar's date property is no longer available.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datumsspalte dieses Kalenders gibt es nicht mehr."
           }
         }
       }

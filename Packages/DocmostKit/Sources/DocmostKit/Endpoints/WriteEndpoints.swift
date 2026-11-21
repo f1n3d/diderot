@@ -84,7 +84,8 @@ extension Endpoints.Comments {
         public let resolved: Bool
     }
 
-    /// Resolves or reopens a comment (license feature `comment:resolution`); the server updates its `comment` mark.
+    /// Resolves or reopens a comment (license feature `comment:resolution` before Docmost 0.98). The server updates its
+    /// `comment` mark only for those who may comment but not edit; an editor's client marks the passage itself.
     public static func resolve(commentId: String, pageId: String, resolved: Bool) -> Endpoint<PageComment> {
         .post("comments/resolve", body: ResolveBody(commentId: commentId, pageId: pageId, resolved: resolved))
     }

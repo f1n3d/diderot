@@ -32,7 +32,8 @@ public enum DocmostAttributes {
         public static let name = "docmost.comment"
     }
 
-    /// The comment here is resolved (set by the server on resolve); preserved while editing.
+    /// The comment here is resolved (set on resolving: by the server for those who may comment but not edit, else by
+    /// the client); preserved while editing.
     public enum CommentResolvedAttribute: CodableAttributedStringKey {
         public typealias Value = Bool
         public static let name = "docmost.commentResolved"
@@ -277,6 +278,12 @@ public enum InlineAttributedText {
             }
         }
         return merged
+    }
+
+    /// The atom an `inlineNode` attribute holds, without its key.
+    public static func atom(of inlineNode: String) -> PMNode? {
+        guard let json = inlineNode.split(separator: atomKeySeparator).first else { return nil }
+        return try? JSONDecoder().decode(PMNode.self, from: Data(json.utf8))
     }
 
     /// On one line: a line break in an atom's text (a formula written with Shift-Return) would count as Return and split

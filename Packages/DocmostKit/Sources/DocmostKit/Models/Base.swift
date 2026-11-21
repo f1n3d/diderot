@@ -43,6 +43,8 @@ public struct BaseProperty: Codable, Sendable, Hashable, Identifiable {
     public enum Kind: String, Sendable {
         case text, longText, number, select, status, multiSelect, date, person, page, file, checkbox, url, email
         case createdAt, lastEditedAt, lastEditedBy, formula
+        /// The row's creator (Docmost 0.98), from the row's `creatorId` as "Last edited by" from its editor.
+        case createdBy
     }
 
     public let id: String
@@ -51,15 +53,25 @@ public struct BaseProperty: Codable, Sendable, Hashable, Identifiable {
     public let position: String?
     public let isPrimary: Bool?
     public var typeOptions: JSONValue?
+    /// The type and options a background job is converting the property to (Docmost 0.98); `type` stays the old one
+    /// until the job is done.
+    public let pendingType: String?
+    public let pendingTypeOptions: JSONValue?
 
     /// `nil` for types this app version doesn't know yet; the UI shows them as "Only in the web app".
     public var kind: Kind? { Kind(rawValue: type) }
+
+    /// While the server converts the property's cells (the web's `isPropertyConverting`).
+    public var isConverting: Bool { pendingType != nil || pendingTypeOptions != nil }
 }
 
-/// Saved database view. `config`: filters, sorting, visible properties and, for kanban boards, the grouping property.
+/// Saved database view. `config`: filters, sorting, visible properties, for kanban boards the grouping property and for
+/// calendars the date property (`calendar.datePropertyId`).
 public struct BaseView: Codable, Sendable, Hashable, Identifiable {
     public enum Kind: String, Sendable {
         case table, kanban
+        /// Entries by their date, a month at a time (Docmost 0.98).
+        case calendar
     }
 
     public let id: String
@@ -68,8 +80,8 @@ public struct BaseView: Codable, Sendable, Hashable, Identifiable {
     public let position: String?
     public let config: JSONValue?
 
-    /// Unknown types and calendars render as a table: the web draws calendars from Docmost 0.98, the app doesn't yet.
-    public var kind: Kind { Kind(rawValue: type) == .kanban ? .kanban : .table }
+    /// Unknown types render as a table.
+    public var kind: Kind { Kind(rawValue: type) ?? .table }
 }
 
 /// Database row: cells by property ID; system properties (created, last edited) come from row fields, not `cells`.
@@ -95,6 +107,22 @@ public struct BaseRowsPage: Decodable, Sendable {
     public let items: [BaseRow]
     public let meta: PaginationMeta
     public let references: BaseReferences?
+}
+
+/// Response of `bases/rows/calendar` (Docmost 0.98): a calendar window's rows by their date, the names they reference,
+/// and how many there are, as the limit may cut them short.
+public struct BaseCalendarRows: Decodable, Sendable {
+    public struct Meta: Decodable, Sendable, Hashable {
+        /// Rows in the window; more than the answer holds when `truncated`.
+        public let total: Int
+        public let truncated: Bool
+        /// The time zone the server read the window and the dates in: the request's, UTC for one it doesn't know.
+        public let timeZone: String?
+    }
+
+    public let items: [BaseRow]
+    public let references: BaseReferences?
+    public let meta: Meta
 }
 
 public struct BaseReferences: Codable, Sendable, Hashable {

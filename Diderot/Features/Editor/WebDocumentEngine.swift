@@ -113,6 +113,8 @@ protocol DocumentEngine: AnyObject, Observable {
     func replaceReference(at path: [Int], sourcePageId: String, transclusionId: String, with nodes: [PMNode]) async -> EngineResult
     /// Removes the marks of the deleted comment `commentId` from the whole page (`unsetComment` in Engine/src/steps.ts).
     func unsetComment(_ commentId: String) async -> EngineResult
+    /// Marks the passages of the comment `commentId` resolved or open on the whole page (`setCommentResolved`).
+    func setCommentResolved(_ commentId: String, resolved: Bool) async -> EngineResult
 }
 
 extension DocumentEngine {
@@ -662,6 +664,10 @@ final class WebDocumentEngine: DocumentEngine {
 
     func unsetComment(_ commentId: String) async -> EngineResult {
         await call("return window.DocmostEngine.unsetComment(commentId);", ["commentId": commentId])
+    }
+
+    func setCommentResolved(_ commentId: String, resolved: Bool) async -> EngineResult {
+        await call("return window.DocmostEngine.setCommentResolved(commentId, resolved);", ["commentId": commentId, "resolved": resolved])
     }
 
     func replaceReference(at path: [Int], sourcePageId: String, transclusionId: String, with nodes: [PMNode]) async -> EngineResult {

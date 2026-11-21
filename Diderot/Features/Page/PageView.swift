@@ -211,6 +211,10 @@ struct PageView: View {
                              onDeleted: { comment in
                                  // Only an inline comment marks a passage.
                                  if comment.isInline { await model?.removeMarks(ofComment: comment.id) }
+                             },
+                             onResolved: { comment, resolved in
+                                 // The server marks it for those who may comment but not edit.
+                                 if comment.isInline, page.canEdit { await model?.markComment(comment.id, resolved: resolved) }
                              })
                 .handlesLinks { url, outside in
                     // Pages and anchors open on the page, so the comments make way; web links open over them.
@@ -693,7 +697,14 @@ struct PageView: View {
         }
         Divider()
         Toggle("Web Layout", systemImage: "globe", isOn: $showsWebLayout)
-        Button("Copy as Markdown", systemImage: "doc.on.doc") { Task { await copyMarkdown() } }
+        let exportOff = ExportPolicy.offReason(workspace: session.ready?.currentUser.workspace, space: space)
+        Button {
+            Task { await copyMarkdown() }
+        } label: {
+            Label("Copy as Markdown", systemImage: "doc.on.doc")
+            if let exportOff { Text(exportOff) }
+        }
+        .disabled(exportOff != nil)
         if let url = webURL {
             Link(destination: url) { Label("Open in Browser", systemImage: "safari") }
             ShareLink(item: url) {

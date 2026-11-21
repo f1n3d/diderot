@@ -35,6 +35,34 @@ extension Endpoints {
             ))
         }
 
+        public struct CalendarRowsBody: Encodable, Sendable {
+            public let pageId: String
+            public let propertyId: String
+            public let from: String
+            public let to: String
+            public var filter: JSONValue?
+            public var limit: Int
+            public var timeZone: String
+            public var today: String
+            public var weekStart: Int
+        }
+
+        /// The most rows a calendar window gets, the server's limit, which the web asks for (`CALENDAR_WINDOW_LIMIT`).
+        public static let calendarRowLimit = 1000
+
+        /// A calendar's rows (Docmost 0.98): those whose date in `propertyId` (a date property, "Created" or "Last
+        /// edited"; another type fails) meets the days `from` to `to` in the reader's time zone, at most `limit`, with
+        /// the view's `filter`. No sorts and no cursor: the answer says how many rows there are.
+        public static func calendarRows(
+            pageId: String, propertyId: String, from: CalendarDay, to: CalendarDay, filter: JSONValue? = nil,
+            limit: Int = calendarRowLimit, viewer: ViewerDateContext = ViewerDateContext()
+        ) -> Endpoint<BaseCalendarRows> {
+            .post("bases/rows/calendar", body: CalendarRowsBody(
+                pageId: pageId, propertyId: propertyId, from: from.value, to: to.value, filter: filter, limit: limit,
+                timeZone: viewer.timeZone, today: viewer.today, weekStart: viewer.weekStart
+            ))
+        }
+
         // MARK: Writing (license feature `bases`)
 
         public struct CreateBody: Encodable, Sendable {

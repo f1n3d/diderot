@@ -84,7 +84,7 @@ struct BaseFieldRow: View {
             stacked { inlineEditor }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("base-field-\(property.id)")
-        case .formula, .createdAt, .lastEditedAt, .lastEditedBy, nil:
+        case .formula, .createdAt, .lastEditedAt, .lastEditedBy, .createdBy, nil:
             readOnly
         }
     }
@@ -325,20 +325,22 @@ struct BaseLongTextEditor: View {
 // MARK: - Date
 
 /// The date's start with a remove button: its day, and its time where the property includes time on Docmost 0.98 (the
-/// web's picker on older servers has days only). A range's end shows below; it is set on the web, and stays while the
-/// start moves before it (`BaseValue.date`).
+/// web's picker on older servers has days only). On 0.98 "End Date" makes it a range, with the end's own picker below
+/// (`BaseValue.end`); the start keeps a later end when it moves (`BaseValue.date`). Older servers know no ranges.
 struct BaseDateEditor: View {
     let model: BaseModel
     let rowId: String
     let property: BaseProperty
     let stored: JSONValue?
+    /// "End Date" turned on for a day without an end: its end comes with the first pick.
+    @State private var addingEnd = false
 
     private var kind: BaseDateKind { BaseDateKind(of: property) ?? .date }
 
     var body: some View {
         if let cell = BaseDateCell(stored) {
-            let withTime = kind == .datetime
-                && BaseValue.writesDateObject(onDocmost098: model.hasDocmost098Features, replacing: cell)
+            let asObject = BaseValue.writesDateObject(onDocmost098: model.hasDocmost098Features, replacing: cell)
+            let withTime = kind == .datetime && asObject
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     DatePicker("Date", selection: Binding {
@@ -350,6 +352,7 @@ struct BaseDateEditor: View {
                         .accessibilityIdentifier("base-date-\(property.id)")
                     Spacer(minLength: 0)
                     Button {
+                        addingEnd = false
                         save(nil)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -359,11 +362,23 @@ struct BaseDateEditor: View {
                     .accessibilityLabel("Remove Date")
                     .accessibilityIdentifier("base-clear-\(property.id)")
                 }
-                if let end = cell.end {
-                    Text("End: \(BaseFormat.date(BaseDateCell(start: end), kind: kind, options: property.typeOptions))")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("base-date-end-\(property.id)")
+                if asObject {
+                    let showsEnd = cell.end != nil || addingEnd
+                    Toggle("End Date", isOn: Binding { showsEnd } set: { on in
+                        addingEnd = on
+                        if let value = BaseValue.endShown(on, kind: kind, of: cell) { save(value) }
+                    })
+                    .font(.subheadline)
+                    .accessibilityIdentifier("base-date-end-toggle-\(property.id)")
+                    if showsEnd {
+                        DatePicker("End", selection: Binding {
+                            BaseValue.pickerDate(BaseDateCell(start: cell.end ?? cell.start), withTime: withTime)
+                        } set: { picked in
+                            save(BaseValue.end(picked, kind: kind, of: cell))
+                        }, displayedComponents: withTime ? [.date, .hourAndMinute] : .date)
+                            .font(.subheadline)
+                            .accessibilityIdentifier("base-date-end-\(property.id)")
+                    }
                 }
             }
         } else {
