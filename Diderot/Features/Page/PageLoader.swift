@@ -75,27 +75,20 @@ struct PageLoader {
         owner.entitlements.has("page:verification") && owner.hasDocmost098Features
     }
 
-    /// The page's verification from the server (`checksVerification`), kept for the next time; none where the server has
-    /// no enterprise code (404). Where it didn't answer otherwise, the kept one, else none: an editor that waited for a
-    /// server in trouble would never start.
-    func verification(of page: Page) async -> PageVerification {
+    /// The page's verification from the server (`checksVerification`); none where the server has no enterprise code
+    /// (404), nil where it didn't answer. Not kept with the saved copy: as on the web, only an answer since the page
+    /// opened lets it edit (`PageView.checkVerification`).
+    func verification(of page: Page) async -> PageVerification? {
         let none = PageVerification(status: "none")
         guard Self.checksVerification(on: owner) else { return none }
         do {
-            let info = try await session.load(Endpoints.Pages.verificationInfo(pageId: page.id), of: owner)
-            await cache.write(info, key: CacheKey.verification(page.id))
-            return info
+            return try await session.load(Endpoints.Pages.verificationInfo(pageId: page.id), of: owner)
         } catch APIError.notFound {
-            await cache.write(none, key: CacheKey.verification(page.id))
             return none
         } catch {
-            return await savedVerification(of: page.id) ?? none
+            AppLog.session.error("Page verification not checked: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
-    }
-
-    /// The verification kept with the page's saved copy; nil where the server was never asked.
-    func savedVerification(of pageId: String) async -> PageVerification? {
-        await cache.read(PageVerification.self, key: CacheKey.verification(pageId))
     }
 
     /// Where the page's verification stands when its model is made.
@@ -105,6 +98,9 @@ struct PageLoader {
         case locked(PageVerification.Lock)
         /// Not known yet on a server with the license feature: the engine waits, as its first sync sends unsent changes.
         case unknown
+        /// The server didn't answer since the page opened: editing waits for it, as on the web, where only the first
+        /// answer can pause it ("Editing is paused…").
+        case unavailable
     }
 
     /// Why the page is read-only, nil where it can be edited.
@@ -117,6 +113,7 @@ struct PageLoader {
         case .open: nil
         case .locked(let lock): .verified(lock)
         case .unknown: .checkingVerification
+        case .unavailable: .verificationUnavailable
         }
     }
 
@@ -131,7 +128,9 @@ struct PageLoader {
         let liveOwner = LiveDocuments.Owner(owner)
         let live = LiveDocuments.document(for: page.id, owner: liveOwner, newerThan: page.updatedAt, serverClockOffset: owner.client.serverClockOffset)
         let engine = reason == nil ? WebDocumentEngine(session: session) : nil
-        let showsUnsent = reason == nil || reason == .offline || reason == .checkingVerification
+        // Each connect's sync waits for the page's verification, also a reconnect's (`PageView.verifyHeld`).
+        engine?.holdsChanges = Self.checksVerification(on: owner)
+        let showsUnsent = reason == nil || reason == .offline || reason == .checkingVerification || reason == .verificationUnavailable
         return DocumentModel(page: page, initialDocument: live ?? (showsUnsent ? unsent : nil), engine: engine,
                              readOnlyReason: reason, dependencies: dependencies(of: page, liveOwner: liveOwner, notices: notices, changes: changes))
     }

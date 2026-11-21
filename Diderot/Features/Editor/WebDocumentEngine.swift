@@ -26,8 +26,16 @@ protocol DocumentEngine: AnyObject, Observable {
     /// The page the engine runs in, for the page view to show out of sight (`EngineHost`); nil while closed and for an
     /// engine without one.
     var webPage: WebPage? { get }
+    /// The page's own changes wait from each connect until `release` lets them go (`ChangeHold` in
+    /// Engine/src/connection.ts): set before `open`, where an edit takes a page's verification back (Docmost 0.98).
+    var holdsChanges: Bool { get set }
+    /// A connect whose changes wait (`holdsChanges`): the page asks for its verification, then releases it.
+    var onHeld: (@MainActor (EngineHold) -> Void)? { get set }
 
     func open(pageId: String) async throws
+    /// The page's changes may go out on `hold`'s connect; one of an engine opened again since, or an earlier connect,
+    /// changes nothing.
+    func release(_ hold: EngineHold) async
     /// Keeps changes the server hasn't confirmed (e.g. made offline); the page's next `open` sends them.
     func close() async
     /// Keeps them like `close` while the page stays open: iOS may end the app in the background.
@@ -146,6 +154,14 @@ enum EngineResult: Equatable {
 enum EngineStatus: Equatable {
     case idle, loading, connecting, connected, synced, disconnected
     case failed(String)
+}
+
+/// A connect of the engine that holds the page's changes (`DocumentEngine.holdsChanges`) until `release`.
+struct EngineHold: Equatable, Sendable {
+    /// Which opening of the engine it belongs to: a release for an engine opened again since goes nowhere.
+    let open: Int
+    /// The connect's number since that opening: 1 for the first.
+    let connect: Int
 }
 
 enum EngineFailure {
@@ -321,6 +337,8 @@ final class WebDocumentEngine: DocumentEngine {
     @ObservationIgnored var onFailure: (@MainActor (EngineFailure) -> Void)?
     @ObservationIgnored var onTerminated: (@MainActor () -> Void)?
     @ObservationIgnored var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)?
+    @ObservationIgnored var holdsChanges = false
+    @ObservationIgnored var onHeld: (@MainActor (EngineHold) -> Void)?
 
     private let session: AppSession
     /// Scripts the engine's page runs before the engine: `EngineBridgeTests` stand in for the collab server with one.
@@ -434,6 +452,7 @@ final class WebDocumentEngine: DocumentEngine {
             "token": token,
             "user": ["id": user.id, "name": user.displayName, "avatarUrl": user.avatarUrl ?? "", "color": "#0a84ff"],
             "unsent": unsent?.base64EncodedString() ?? "",
+            "holds": holdsChanges,
         ]
         do {
             _ = try await page.callJavaScript("window.DocmostEngine.open(options);", arguments: ["options": options])
@@ -441,6 +460,15 @@ final class WebDocumentEngine: DocumentEngine {
             status = .failed(error.localizedDescription)
             AppLog.ui.error("Engine open failed: \(error.localizedDescription, privacy: .public)")
             throw APIError.server(status: 0, message: error.localizedDescription)
+        }
+    }
+
+    func release(_ hold: EngineHold) async {
+        guard let page, hold.open == opens else { return }
+        do {
+            _ = try await page.callJavaScript("window.DocmostEngine.release(connect);", arguments: ["connect": hold.connect])
+        } catch {
+            AppLog.ui.error("Engine release failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -771,6 +799,8 @@ final class WebDocumentEngine: DocumentEngine {
             if let document = event.document { onDocument?(document) }
         case "unconfirmed":
             unconfirmedChanges = event.count ?? 0
+        case "held":
+            if let connect = event.connect { onHeld?(EngineHold(open: opens, connect: connect)) }
         case "awareness":
             // The engine omits its own client.
             let me = session.ready?.currentUser.user
@@ -854,6 +884,8 @@ struct EngineEvent: Decodable {
     let synced: Bool?
     /// "unconfirmed": changes the server hasn't confirmed.
     let count: Int?
+    /// "held": the connect whose changes wait for the app's release, 1 for the first since the engine opened.
+    let connect: Int?
     let error: String?
     let document: PMNode?
     let participants: Participants?

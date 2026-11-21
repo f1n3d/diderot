@@ -95,6 +95,7 @@ struct StatusPill: View {
             case .noPermission, .newerServer: return ("lock", "Read only", .secondary)
             case .verified: return ("checkmark.seal", "Read only", .secondary)
             case .checkingVerification: return ("arrow.triangle.2.circlepath.icloud", "Connecting", .secondary)
+            case .verificationUnavailable: return ("pause.circle", "Read only", .secondary)
             }
         }
         switch model.status {

@@ -16,6 +16,8 @@ final class DocumentModel {
         case verified(PageVerification.Lock)
         /// The page's verification hasn't come yet; the engine waits for it.
         case checkingVerification
+        /// The server didn't say the page's verification since it opened: editing waits for it (`VerificationPausedBanner`).
+        case verificationUnavailable
     }
 
     struct Active: Equatable {
@@ -284,6 +286,15 @@ final class DocumentModel {
     /// The app went to the background: keeps unsent changes as leaving the page would, with pending input.
     func saveUnsentChanges() async {
         await connection.saveUnsentChanges()
+    }
+
+    /// A connect of the engine holds the page's changes until `releaseChanges` (`DocumentEngine.holdsChanges`): the page
+    /// asks for its verification first.
+    @ObservationIgnored var onChangesHeld: ((EngineHold) -> Void)?
+
+    /// The page's changes may go out on `hold`'s connect.
+    func releaseChanges(_ hold: EngineHold) {
+        connection.release(hold)
     }
 
     /// Shows the engine's document with local input over it.
@@ -2776,6 +2787,10 @@ extension DocumentModel: EngineConnectionOwner {
 
     func connectionSays(_ message: String?) {
         errorMessage = message
+    }
+
+    func connectionHeld(_ hold: EngineHold) {
+        onChangesHeld?(hold)
     }
 }
 

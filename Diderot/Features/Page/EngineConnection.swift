@@ -17,6 +17,9 @@ protocol EngineConnectionOwner: AnyObject {
     func connectionKeepsInput()
     /// The page's message about the connection; nil takes it away.
     func connectionSays(_ message: String?)
+    /// A connect holds the page's changes (`DocumentEngine.holdsChanges`): the page asks for its verification, then lets
+    /// them go (`release`).
+    func connectionHeld(_ hold: EngineHold)
 }
 
 /// The page's engine from opening to closing (code review S2): where it is, why the page is read-only, opening and closing
@@ -70,6 +73,7 @@ final class EngineConnection {
         engine?.onUnsentChangesKept = { [weak self] error in if let self, serves { unsentChangesKept(error) } }
         engine?.onFailure = { [weak self] failure in if let self, serves { failed(failure) } }
         engine?.onTerminated = { [weak self] in if let self, serves { terminated() } }
+        engine?.onHeld = { [weak self] hold in if let self, serves { owner?.connectionHeld(hold) } }
     }
 
     /// The page this serves is still there.
@@ -155,6 +159,12 @@ final class EngineConnection {
     /// (inserts, moves, undo), and the engine counts it as unconfirmed before.
     func documentShown() {
         if let engine, engine.unconfirmedChanges > 0 { scheduleUnsentSave() }
+    }
+
+    /// The page's changes may go out on `hold`'s connect (`DocumentEngine.release`); a later connect holds again.
+    func release(_ hold: EngineHold) {
+        guard let engine else { return }
+        Task { await engine.release(hold) }
     }
 
     /// An upload for this page started (`DocumentModel.upload`).

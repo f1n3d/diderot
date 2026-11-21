@@ -462,12 +462,28 @@ final class AppSession {
 
     /// Sends the kept titles (`UnsentEdits.sendTitles`). Returns the spaces whose pages got theirs, and the titles that
     /// can never go, which it dropped; after another error the rest waits for the next try (going online, back in the
-    /// app, opening a page).
-    func sendUnsentTitles() async -> (spaces: [String], dropped: [UnsentEdits.DroppedChange]) {
+    /// app, opening a page). A rename takes a verified or approved page's verification back (Docmost 0.98, license
+    /// feature `page:verification`), so such a page's title waits for "Edit" on the page, as its text does: `consented`
+    /// holds the lock the person chose to edit a page through.
+    func sendUnsentTitles(consented: [String: PageVerification.Lock] = [:]) async -> (spaces: [String], dropped: [UnsentEdits.DroppedChange]) {
         guard let session = ready else { return ([], []) }
+        let checksVerification = PageLoader.checksVerification(on: session)
         return await unsentEdits.sendTitles(in: session.unsentChanges) { pageId, title in
+            if checksVerification, let lock = try await verificationLock(of: pageId, on: session), consented[pageId] != lock {
+                throw UnsentEdits.WaitsForEdit()
+            }
             // Another account's pages don't exist on its server: after a switch nothing more goes out.
             _ = try await send(Endpoints.Pages.update(pageId: pageId, title: title), on: session)
+        }
+    }
+
+    /// The page's lock (`PageVerification.lock`) as the server says it now; nil without one, also where the server has
+    /// no enterprise code (404).
+    private func verificationLock(of pageId: String, on session: ReadySession) async throws -> PageVerification.Lock? {
+        do {
+            return try await send(Endpoints.Pages.verificationInfo(pageId: pageId), on: session).lock
+        } catch APIError.notFound {
+            return nil
         }
     }
 

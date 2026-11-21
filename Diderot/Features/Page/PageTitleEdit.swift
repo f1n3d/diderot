@@ -69,9 +69,10 @@ final class PageTitleEdit {
     }
 
     /// Shows the page's kept title, and sends it right away if the server answers again. Returns whether it went out:
-    /// the page then loads again, with it.
-    func showUnsent(of page: Page?, typing: () -> Bool, isOffline: () -> Bool, session: AppSession, changes: ContentChanges,
-                    report: (String) -> Void) async -> Bool {
+    /// the page then loads again, with it. `consented`: the lock the person chose to edit the page through, if any; a
+    /// verified page's title waits for it (`AppSession.sendUnsentTitles`).
+    func showUnsent(of page: Page?, consented: PageVerification.Lock?, typing: () -> Bool, isOffline: () -> Bool,
+                    session: AppSession, changes: ContentChanges, report: (String) -> Void) async -> Bool {
         guard let page, let kept = await session.unsentTitle(pageId: page.id) else {
             unsent = nil
             return false
@@ -79,7 +80,7 @@ final class PageTitleEdit {
         unsent = kept
         if !typing() { text = kept }
         guard !isOffline() else { return false }
-        let sent = await session.sendUnsentTitles()
+        let sent = await session.sendUnsentTitles(consented: consented.map { [page.id: $0] } ?? [:])
         for spaceId in sent.spaces { changes.pageChanged(in: spaceId) }
         if let notice = UnsentEdits.DroppedChange.notice(for: sent.dropped) { report(notice) }
         guard await session.unsentTitle(pageId: page.id) == nil else { return false }

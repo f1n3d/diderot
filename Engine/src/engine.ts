@@ -7,7 +7,7 @@ import { Node as PMNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 import { ySyncPluginKey } from "@tiptap/y-tiptap";
 import * as Y from "yjs";
-import { connection } from "./connection";
+import { ChangeHold, connection } from "./connection";
 import { fits, type Place } from "./fits";
 import { bindingChanges } from "./guards";
 import { columnCountEdit, conversions, convertEdit, referenceEdit, toggleDetailsEdit, unsyncEdit, type Kind } from "./conversions";
@@ -37,6 +37,11 @@ type OpenOptions = {
   user?: { id: string; name: string; avatarUrl?: string | null; color?: string };
   /** Changes the server hadn't confirmed when the page last closed (see `unsentChanges`). */
   unsent?: string;
+  /**
+   * The page's own changes wait from each connect until `release` names it (`ChangeHold`): on a server whose edits take
+   * a page's verification back, the app asks for the page's status first.
+   */
+  holds?: boolean;
 };
 
 function emit(type: string, payload: Record<string, unknown> = {}) {
@@ -55,6 +60,8 @@ class DocmostEngine {
   private host?: HTMLElement;
   /** Set by `fail`: edits are refused from then on. */
   private failed = false;
+  /** With `OpenOptions.holds`: what of the page's changes may go out. */
+  private hold?: ChangeHold;
 
   open(options: OpenOptions) {
     this.close();
@@ -66,6 +73,7 @@ class DocmostEngine {
     // connect on the app fetches a fresh one (keeping the last if it can't, e.g. offline).
     let token = options.token;
     let connects = 0;
+    this.hold = options.holds ? new ChangeHold(() => this.emitUnconfirmed()) : undefined;
     const { socket, provider } = connection(options.wsUrl, {
       name: `page.${options.pageId}`,
       token: async () => {
@@ -73,6 +81,10 @@ class DocmostEngine {
         return token;
       },
       onStatus: ({ status }) => emit("status", { status }),
+      // The app asks for the page's verification and then releases this connect (`release`).
+      onOpen: () => {
+        if (this.hold) emit("held", { connect: this.hold.connects });
+      },
       onSynced: ({ state }) => {
         if (state && !this.editor && !this.attachEditor()) return;
         emit("synced", { synced: state });
@@ -91,8 +103,8 @@ class DocmostEngine {
       onClose: ({ event }) => emit("closed", { code: event?.code, reason: event?.reason }),
       // Each change counts until the server confirms it, and so does the sync after each connect. "synced" comes once
       // per connect: on a connection that died without notice it stays until the provider notices, after 30 s.
-      onUnsyncedChanges: ({ number }) => emit("unconfirmed", { count: number }),
-    });
+      onUnsyncedChanges: ({ number }) => this.emitUnconfirmed(number),
+    }, {}, this.hold);
     this.socket = socket;
     this.provider = provider;
     // With the provider listening, so it counts them as unsent until the server confirms them; the sync sends them.
@@ -119,6 +131,20 @@ class DocmostEngine {
     this.socket = undefined;
     this.host = undefined;
     this.failed = false;
+    this.hold = undefined;
+  }
+
+  /**
+   * The page's changes may go out on connect `connect` (`held` named it): the app found the page editable after it. A
+   * later connect holds again; an earlier one's release changes nothing.
+   */
+  release(connect: number) {
+    if (this.hold && this.provider) this.hold.release(connect, this.provider);
+  }
+
+  /** Changes held back (`ChangeHold.withheld`) count as one more the server hasn't confirmed: none of them has it. */
+  private emitUnconfirmed(count = this.provider?.unsyncedChanges ?? 0) {
+    emit("unconfirmed", { count: count + (this.hold?.withheld ? 1 : 0) });
   }
 
   /**
@@ -140,11 +166,12 @@ class DocmostEngine {
     // A deadline, not a count of timeouts: timers may run late in a page no view shows, as when the app goes to the
     // background.
     const deadline = Date.now() + 2000;
-    while (Date.now() < deadline && this.provider?.hasUnsyncedChanges && this.socket?.status === WebSocketStatus.Connected) {
+    // Changes held back aren't on their way.
+    while (Date.now() < deadline && this.provider?.hasUnsyncedChanges && !this.hold?.withheld && this.socket?.status === WebSocketStatus.Connected) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     if (!this.provider) return undefined;
-    if (!this.provider.hasUnsyncedChanges) return "";
+    if (!this.provider.hasUnsyncedChanges && !this.hold?.withheld) return "";
     return btoa(Array.from(Y.encodeStateAsUpdate(this.provider.document), (byte) => String.fromCharCode(byte)).join(""));
   }
 
