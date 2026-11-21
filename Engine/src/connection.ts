@@ -116,8 +116,11 @@ export class ChangeHold {
     if (!sync || (sync.step !== syncStep2 && sync.step !== syncUpdate)) return message;
     if (open && !this.holds) {
       if (this.kept && sync.step === syncUpdate) {
-        // It may build on a change that stayed back: the sync sends them all, this one with them.
-        this.resync(provider);
+        // It may build on a change that stayed back: the sync sends them all, this one with them. The provider counted
+        // this one as on its way, and the server confirms the sync once for all it carries. A sync that starts here, or
+        // once the server took the token, sets the count to 1 anew; with one already on its way, the count goes back.
+        if (this.resyncing) provider.decrementUnsyncedChanges();
+        else this.resync(provider);
         return null;
       }
       this.resyncing = false;
