@@ -75,5 +75,11 @@ extension Endpoints {
         public static func info(pageId: String, format: String? = nil) -> Endpoint<Page> {
             .post("pages/info", body: InfoBody(pageId: pageId, format: format))
         }
+
+        /// A page's verification or approval (license feature `page:verification`), `{status: "none"}` without one; 404
+        /// where the server has no enterprise code. `pageId` is the page's UUID: servers refuse a slug id with 400.
+        public static func verificationInfo(pageId: String) -> Endpoint<PageVerification> {
+            .post("pages/verification-info", body: PageIdBody(pageId: pageId))
+        }
     }
 }

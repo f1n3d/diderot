@@ -55,6 +55,16 @@ struct PageView: View {
     @State private var browsing: URL?
     /// The page's space; its settings say whether readers may comment.
     @State private var space: Space?
+    /// The page's verification as last known (license feature `page:verification`). With a lock the page opens read-only
+    /// and asks before editing, as the web does; until it is known there, the engine waits.
+    @State private var verification: PageVerification?
+    /// The lock the person chose to edit through ("Edit"), for as long as the page stays open, as on the web. A status
+    /// that turns into another lock asks again.
+    @State private var unlockedLock: PageVerification.Lock?
+    @State private var verificationAsk: VerifiedPage.Ask?
+    /// The saved copy's unsent document, for a model made once the verification is known: until the engine's first sync
+    /// it is what the page shows.
+    @State private var keptUnsent: PMNode?
     @State private var showsHistory = PageView.launchRoute == "history"
     @State private var showsEmojiPicker = false
     @State private var showsAppendNote = false
@@ -451,6 +461,9 @@ struct PageView: View {
                     if page.isInTrash {
                         TrashBanner(page: page)
                     }
+                    if case .verified(let lock) = model?.readOnlyReason, let verification {
+                        VerifiedPageBanner(verification: verification) { verificationAsk = VerifiedPage.Ask(lock: lock, then: .edit) }
+                    }
                     header(page)
                     Divider()
                     if let model {
@@ -487,6 +500,14 @@ struct PageView: View {
             try await fill(page, with: template, values: values)
         })
         .modifier(CentersAboveKeyboard(model: $model, find: find, position: $position, scrollHeight: $scrollHeight))
+        .alert(verificationAsk.map { VerifiedPage.title($0.lock) } ?? "", isPresented: Binding { verificationAsk != nil } set: {
+            if !$0 { verificationAsk = nil }
+        }, presenting: verificationAsk) { ask in
+            Button("Edit") { unlock(ask) }
+            Button("Cancel", role: .cancel) {}
+        } message: { ask in
+            Text(VerifiedPage.message(ask.lock))
+        }
         .refreshable {
             if model?.isEditable != true {
                 await load(force: true)
@@ -673,7 +694,14 @@ struct PageView: View {
                 if model?.isEditable == true {
                     Button("Arrange Blocks", systemImage: "arrow.up.arrow.down") { showsArrange = true }
                 }
-                Button("Append Note", systemImage: "text.append") { showsAppendNote = true }
+                Button("Append Note", systemImage: "text.append") {
+                    // An appended note takes a verification back like any edit.
+                    if case .locked(let lock) = verificationGate {
+                        verificationAsk = VerifiedPage.Ask(lock: lock, then: .appendNote)
+                    } else {
+                        showsAppendNote = true
+                    }
+                }
                 Button("Edit in Web Editor", systemImage: "pencil.and.scribble") { showsWebEditor = true }
                 Button("Move to Trash", systemImage: "trash", role: .destructive) { confirmsTrash = true }
             }
@@ -706,9 +734,34 @@ struct PageView: View {
     }
 
     /// Title and icon go through REST and need no engine.
-    /// Offline the title and icon are read-only, like the text: a change couldn't be saved.
+    /// Offline the title and icon are read-only, like the text: a change couldn't be saved. On a verified page they wait
+    /// for "Edit", as the text does: a rename takes the verification back too.
     private func canEditMeta(_ page: Page) -> Bool {
-        page.canEdit && !page.isInTrash && !offline.isOffline
+        page.canEdit && !page.isInTrash && !offline.isOffline && verificationGate == .open
+    }
+
+    // MARK: - Verification
+
+    /// Where the page's verification stands for its editor (`PageLoader.Verification`).
+    private var verificationGate: PageLoader.Verification {
+        guard let ready = session.ready, PageLoader.checksVerification(on: ready) else { return .open }
+        guard let verification else { return .unknown }
+        guard let lock = verification.lock, lock != unlockedLock else { return .open }
+        return .locked(lock)
+    }
+
+    /// Takes the page's verification as the server or the saved copy says it. One that turns into another lock (verified
+    /// again since, say) asks again, as the web's does.
+    private func learn(_ new: PageVerification) {
+        if new.lock != verification?.lock { unlockedLock = nil }
+        verification = new
+    }
+
+    /// "Edit" confirmed: the page becomes editable for as long as it stays open; a note goes on to its sheet.
+    private func unlock(_ ask: VerifiedPage.Ask) {
+        unlockedLock = ask.lock
+        if let page = state.value { apply(page: page) }
+        if ask.then == .appendNote { showsAppendNote = true }
     }
 
     /// What the header and menu change, in the session the page loaded in.
@@ -732,6 +785,8 @@ struct PageView: View {
         if state.value == nil || force {
             if state.value == nil {
                 if let saved = await loader.saved() {
+                    if let kept = await loader.savedVerification(of: saved.page.id) { learn(kept) }
+                    keptUnsent = saved.unsent
                     apply(page: saved.page, unsent: saved.unsent)
                     breadcrumbs = saved.breadcrumbs
                 } else {
@@ -740,6 +795,7 @@ struct PageView: View {
             }
             do {
                 let page = try await loader.fetch()
+                if PageLoader.checksVerification(on: ready) { learn(await loader.verification(of: page)) }
                 apply(page: page)
                 recentlyOpened.record(page)
                 await loader.keep(page)
@@ -762,6 +818,11 @@ struct PageView: View {
             } catch is CancellationError {
                 return
             } catch {
+                // The saved copy stays; it waits no longer for a verification the server didn't give.
+                if verificationGate == .unknown, let page = state.value {
+                    learn(PageVerification(status: "none"))
+                    apply(page: page)
+                }
                 if state.value == nil {
                     state = .failed(error)
                 } else if offline.isOffline || ready.restoredOffline {
@@ -813,13 +874,16 @@ struct PageView: View {
             return
         }
         if let model, model.engine != nil {
-            if page.canEdit && !page.isInTrash { return }
-            // Trashed or edit rights lost since the cached state: the collab server drops every edit, so rebuild read-only.
+            if page.canEdit && !page.isInTrash && verificationGate == .open { return }
+            // Trashed, edit rights lost since the cached state, or verified meanwhile: the collab server drops every edit,
+            // or an edit would take the verification back, so rebuild read-only.
             model.suspend()
         }
         // A database page gets none: no document and no engine; its content is rows, not text.
         guard let pageSession, let created = PageLoader(pageId: selection.pageId, owner: pageSession, session: session)
-            .model(for: page, unsent: unsent, isOffline: offline.isOffline, notices: notices, changes: changes) else { return }
+            .model(for: page, unsent: unsent ?? keptUnsent, isOffline: offline.isOffline, verification: verificationGate,
+                   notices: notices, changes: changes) else { return }
+        if created.engine != nil { keptUnsent = nil }
         created.canComment = canComment(on: page)
         if created.dependencies.hasDocmost097Features, let previews = session.linkPreviews {
             // A pasted link is recognized only with the workspace's integrations known.

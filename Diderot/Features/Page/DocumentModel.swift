@@ -12,6 +12,10 @@ final class DocumentModel {
         case noPermission, trash, offline, notConnected
         /// The server runs this Docmost version, newer than the bundled editor (`ReadySession.newerServerVersion`).
         case newerServer(String)
+        /// A verified or approved page: editing takes that back, so the page asks first (`VerifiedPageBanner`).
+        case verified(PageVerification.Lock)
+        /// The page's verification hasn't come yet; the engine waits for it.
+        case checkingVerification
     }
 
     struct Active: Equatable {
