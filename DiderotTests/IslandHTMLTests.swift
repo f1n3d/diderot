@@ -20,6 +20,14 @@ struct IslandHTMLTests {
         #expect(!html.contains("<!--"))
     }
 
+    /// Chemistry renders, as on Docmost 0.98's web, which loads KaTeX's mhchem: `\ce{…}` showed KaTeX's error before.
+    @Test func chemistryRenders() async throws {
+        let page = WebPage()
+        for try await _ in page.load(html: IslandHTML.math(#"\ce{2H2 + O2 -> 2H2O}"#, displayMode: true), baseURL: IslandHTML.baseURL) {}
+        let rendered = try await page.callJavaScript("return document.querySelector('.katex') !== null && document.querySelector('.katex-error') === null;")
+        #expect(rendered as? Bool == true)
+    }
+
     /// A formula's sizes are capped (KaTeX's `maxSize`): `\rule{1em}{100000em}` asked for a web view about 1.7 million
     /// points tall (code review R34).
     @Test func formulaSizesAreCapped() async throws {

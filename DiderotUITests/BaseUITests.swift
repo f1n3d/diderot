@@ -1,7 +1,8 @@
 import XCTest
 
-/// Databases (bases): database pages (table, board), embedded databases (cards), editing, creating, moving and deleting
-/// rows. `Tools/run-uitests.sh` seeds data via `Tools/seed-bases.py`, then verifies the written values on the server.
+/// Databases (bases): database pages (table, board, calendar), embedded databases (cards), editing, creating, moving
+/// and deleting rows. `Tools/run-uitests.sh` seeds data via `Tools/seed-bases.py`, then verifies the written values on
+/// the server.
 @MainActor final class BaseUITests: XCTestCase {
     override func setUpWithError() throws {
         try requireEnvironment(["DOCMOST_UITEST_BASE", "DOCMOST_UITEST_BASE_HOST", "DOCMOST_UITEST_BASE_FULL"])
@@ -219,7 +220,7 @@ import XCTest
         let app = launch(page: base)
         openView(app, "Board")
         let web = "\(server)/p/\(base)?row=\(row)&rowBase=\(base)"
-        app.open(try XCTUnwrap(URL(string: "diderot://open?url=" + (web.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""))))
+        openAsLink(try XCTUnwrap(URL(string: "diderot://open?url=" + (web.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""))), in: app)
         // iOS may ask whether to open the link in the app.
         let confirm = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons
             .matching(NSPredicate(format: "label IN %@", ["Open", "Öffnen"])).firstMatch
@@ -504,6 +505,81 @@ import XCTest
         let last = visibleColumns(columns, in: board)
         XCTAssertEqual(last.last?.maxX ?? 0, board.frame.maxX - edge, accuracy: 2, "Last column isn't flush right")
         snapshot(app, "30-last")
+    }
+
+    /// Calendar view (Docmost 0.98; "Kalender-Test" from `Tools/seed-bases.py`): today's entry in the chosen day's
+    /// list, the next month and back with "Today", the three-day entry on its middle day opening its detail, and "New
+    /// Entry" on that day, deleted again in its detail sheet.
+    func test111_BaseCalendarMonthAndDay() throws {
+        try requireDocmost098()
+        guard let calendar = ids["base:Kalender-Test"] else { throw XCTSkip("Calendar database missing (Tools/seed-bases.py)") }
+        let app = launch(page: calendar)
+        XCTAssertTrue(element(app, "base-calendar").waitForExistence(timeout: 30), "Calendar view missing")
+        // The day chosen in an earlier run stays, as on the web: back to today first.
+        let today = element(app, "base-calendar-today")
+        XCTAssertTrue(today.waitForExistence(timeout: 15), "“Today” missing")
+        today.tap()
+        let todayCell = element(app, "base-calendar-day-\(calendarDay(0))")
+        XCTAssertTrue(todayCell.waitForExistence(timeout: 5), "Today missing from the month")
+        XCTAssertTrue(waitFor(todayCell, "isSelected == true"), "Today isn't the chosen day")
+        XCTAssertTrue(calendarEntry(app, "Termin heute").waitForExistence(timeout: 15), "Today's entry missing from the day's list")
+        snapshot(app, "111-calendar-today")
+
+        let month = element(app, "base-calendar-month")
+        let shown = month.label
+        element(app, "base-calendar-next").tap()
+        XCTAssertTrue(waitFor(month, "label != %@", shown), "“Next month” doesn't show the next month")
+        snapshot(app, "111-calendar-next-month")
+        today.tap()
+        XCTAssertTrue(waitFor(month, "label == %@", shown), "“Today” doesn't go back to this month")
+
+        // The day after tomorrow lies in the three-day entry (in the next month's first days, which tapping shows).
+        element(app, "base-calendar-day-\(calendarDay(2))").tap()
+        let threeDays = calendarEntry(app, "Drei Tage")
+        XCTAssertTrue(threeDays.waitForExistence(timeout: 15), "The three-day entry is missing from its middle day")
+        threeDays.tap()
+        XCTAssertTrue(element(app, "base-row-detail").waitForExistence(timeout: 10), "Entry doesn't open")
+        snapshot(app, "111-calendar-detail")
+        closeDetailIfOpen(app)
+
+        let title = "UITest-Termin\(stamp)"
+        let add = element(app, "base-new-entry")
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "“New Entry” missing on the calendar")
+        add.tap()
+        let titleField = element(app, "base-row-title")
+        XCTAssertTrue(titleField.waitForExistence(timeout: 10), "New entry's detail sheet doesn't open")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Title doesn't get the cursor for a new entry")
+        titleField.typeText(title + "\n")
+        closeDetailIfOpen(app)
+        let created = calendarEntry(app, title)
+        XCTAssertTrue(created.waitForExistence(timeout: 10), "New entry missing from the chosen day")
+        snapshot(app, "111-calendar-new-entry")
+
+        created.tap()
+        XCTAssertTrue(element(app, "base-row-detail").waitForExistence(timeout: 10), "Detail sheet doesn't open")
+        element(app, "base-row-menu").tap()
+        let delete = button(app, labels: ["Delete Entry", "Eintrag löschen"])
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "Detail sheet menu without “Delete Entry”")
+        delete.tap()
+        confirmDelete(app)
+        XCTAssertTrue(created.waitForNonExistence(timeout: 10), "New entry still on the calendar after deletion")
+    }
+
+    /// The day `offset` days from today as the calendar's day cells name it (`YYYY-MM-DD`, in the device's time zone).
+    private func calendarDay(_ offset: Int) -> String {
+        let day = Calendar.current.date(byAdding: .day, value: offset, to: Date()) ?? Date()
+        let parts = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: day)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    /// An entry of the calendar's day list, by its title.
+    private func calendarEntry(_ app: XCUIApplication, _ title: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'base-calendar-entry-' AND label CONTAINS %@", title)).firstMatch
+    }
+
+    private func waitFor(_ element: XCUIElement, _ format: String, _ arguments: Any..., timeout: TimeInterval = 10) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: format, argumentArray: arguments), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     /// Frames of the columns at least partly visible in the board, left to right.

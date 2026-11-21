@@ -148,12 +148,17 @@ nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     static let status = Mutex(200)
     /// Host and path of every request, for tests that check where requests went (they empty it first).
     static let requests = Mutex<[String]>([])
+    /// The last request body by host and path, for tests that check what went out.
+    static let bodies = Mutex<[String: Data]>([:])
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         Self.requests.withLock { $0.append((request.url?.host ?? "") + (request.url?.path ?? "")) }
+        if let body = Self.body(of: request) {
+            Self.bodies.withLock { $0[(request.url?.host ?? "") + (request.url?.path ?? "")] = body }
+        }
         if Self.offline.withLock({ $0 }) {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return
@@ -181,4 +186,20 @@ nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override func stopLoading() {}
+
+    /// A request's body, which URLSession hands over as a stream.
+    private static func body(of request: URLRequest) -> Data? {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: buffer.count)
+            guard read > 0 else { break }
+            data.append(buffer, count: read)
+        }
+        return data
+    }
 }

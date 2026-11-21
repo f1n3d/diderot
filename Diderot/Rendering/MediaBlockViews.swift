@@ -310,13 +310,13 @@ struct EmbedBlockView: View {
 
     private var url: URL? { media.src.flatMap(ContentLinkRouter.contentURL) }
 
-    /// `nil` for an iframe without a host: then it is just "Embed".
+    /// `nil` for an iframe without a host: then it is just "Embed". A Google file is named by its link, as Docmost 0.98's
+    /// web names it (Docs, Sheets, Slides or Drive).
     private var providerName: String? {
         let provider = media.provider ?? (media.kind == .youtube ? "youtube" : "")
         switch provider {
         case "youtube": return "YouTube"
-        case "gdrive": return "Google Drive"
-        case "gsheets": return "Google Sheets"
+        case "gdrive", "gsheets": return url.flatMap(EmbedProvider.googleKind)?.name ?? (provider == "gdrive" ? "Google Drive" : "Google Sheets")
         case "iframe", "": return url?.host()
         default: return provider.capitalized
         }

@@ -305,4 +305,79 @@ import XCTest
         let text = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Permission is hereby granted")).firstMatch
         XCTAssertTrue(text.waitForExistence(timeout: 5), "TipTap's license text missing")
     }
+
+    // MARK: - Docmost 0.98 (`PORT=3002 Tools/run-uitests.sh`; skipped on older servers)
+
+    /// A user mention in a comment opens the person's profile on the page's stack, and the comments make way; a space
+    /// on the profile opens. Test-Kollegin's comments on the test page mention the admin (`Tools/seed-notifications.py`),
+    /// who made the test page this run, in the test space.
+    func test111_MentionOpensProfile() throws {
+        try requireDocmost098()
+        let app = launchApp(extraEnvironment: environment.filter { ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"].contains($0.key) })
+        waitForPage(app, "The test page doesn't open")
+        let comments = app.buttons["page-comments"]
+        XCTAssertTrue(comments.waitForExistence(timeout: 10), "Comments button missing")
+        comments.tap()
+        // The one in the sheet: the page below it stays in the tree.
+        let mentions = app.links.matching(NSPredicate(format: "label BEGINSWITH '@'"))
+        XCTAssertTrue(mentions.firstMatch.waitForExistence(timeout: 10), "No mention in Test-Kollegin's comments (Tools/seed-notifications.py)")
+        (mentions.allElementsBoundByIndex.first(where: \.isHittable) ?? mentions.firstMatch).tap()
+        let header = element(app, "profile-header")
+        XCTAssertTrue(header.waitForExistence(timeout: 15), "The mention doesn't open the profile")
+        XCTAssertTrue(element(app, "comments-sheet").waitForNonExistence(timeout: 5), "The comments stay over the profile")
+        let email = environment["DOCMOST_DEBUG_EMAIL"] ?? ""
+        XCTAssertTrue(header.label.contains(email), "The profile isn't the admin's: “\(header.label)”")
+        let page = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'profile-page-' AND label CONTAINS %@", pageTitle)).firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 15), "“\(pageTitle)” missing from the admin's recent pages")
+        snapshot(app, "111-profile")
+        let space = app.buttons["profile-space-\(slug)"]
+        for _ in 0..<5 where !space.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(space.isHittable, "“\(slug)” missing from the spaces on the profile")
+        space.tap()
+        XCTAssertTrue(app.textFields["space-search"].waitForExistence(timeout: 20), "A space on the profile doesn't open")
+    }
+
+    /// Members open their profile: the admin's own lists the test page, which opens from there and leads back to the
+    /// profile; Test-Kollegin's shows her email and the test space, which both share (the script adds her to it).
+    func test112_MemberOpensProfile() throws {
+        try requireDocmost098()
+        let app = launchHome()
+        let menu = app.buttons["workspace-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 20), "Workspace menu missing")
+        let members = button(app, labels: ["Members", "Mitglieder"])
+        for _ in 0..<3 where !members.exists {
+            menu.tap()
+            _ = members.waitForExistence(timeout: 3)
+        }
+        members.tap()
+        func member(_ email: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'member-' AND label CONTAINS %@", email)).firstMatch
+        }
+        let admin = member(environment["DOCMOST_DEBUG_EMAIL"] ?? "")
+        XCTAssertTrue(admin.waitForExistence(timeout: 15), "The admin's row missing from the members, or it opens nothing")
+        admin.tap()
+        let header = element(app, "profile-header")
+        XCTAssertTrue(header.waitForExistence(timeout: 15), "A member doesn't open their profile")
+        let page = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'profile-page-' AND label CONTAINS %@", pageTitle)).firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 15), "“\(pageTitle)” missing from the admin's recent pages")
+        page.tap()
+        waitForPage(app, "A recent page doesn't open")
+        backButton(app).tap()
+        XCTAssertTrue(header.waitForExistence(timeout: 10), "“Back” from the page doesn't return to the profile")
+        backButton(app).tap()
+
+        let colleague = member("kollegin@docmost.local")
+        XCTAssertTrue(colleague.waitForExistence(timeout: 10), "Test-Kollegin missing from the members (Tools/seed-notifications.py)")
+        colleague.tap()
+        XCTAssertTrue(header.waitForExistence(timeout: 15), "Test-Kollegin's row doesn't open her profile")
+        XCTAssertTrue(header.label.contains("kollegin@docmost.local"), "The profile isn't Test-Kollegin's: “\(header.label)”")
+        let shared = app.buttons["profile-space-\(slug)"]
+        for _ in 0..<5 where !shared.isHittable {
+            app.swipeUp()
+        }
+        snapshot(app, "112-member-profile")
+        XCTAssertTrue(shared.isHittable, "“\(slug)” missing from the spaces both share")
+    }
 }

@@ -25,6 +25,33 @@ public enum Endpoints {
 
     public enum Users {
         public static var me: Endpoint<CurrentUser> { .post("users/me") }
+
+        public struct UserIdBody: Encodable, Sendable {
+            public let userId: String
+        }
+
+        /// A person's profile (Docmost 0.98; older servers answer 404). The server answers 400 for an id that is no
+        /// UUID, 404 for one it doesn't know.
+        public static func info(userId: String) -> Endpoint<UserProfile> {
+            .post("users/info", body: UserIdBody(userId: userId))
+        }
+
+        public struct ProfileListBody: Encodable, Sendable {
+            public let userId: String
+            public var limit: Int?
+            public var cursor: String?
+        }
+
+        /// The active spaces both the user and this person are members of (Docmost 0.98), by name; `limit` is at most
+        /// 100. The web asks for 10 at a time.
+        public static func spaces(userId: String, cursor: String? = nil, limit: Int = 10) -> Endpoint<Paginated<UserProfileSpace>> {
+            .post("users/spaces", body: ProfileListBody(userId: userId, limit: limit, cursor: cursor))
+        }
+
+        /// The pages this person created or edited last, newest first (Docmost 0.98); 10 at a time, as the web asks.
+        public static func recentPages(userId: String, cursor: String? = nil, limit: Int = 10) -> Endpoint<Paginated<UserRecentPage>> {
+            .post("users/recent-pages", body: ProfileListBody(userId: userId, limit: limit, cursor: cursor))
+        }
     }
 
     public enum Workspace {
