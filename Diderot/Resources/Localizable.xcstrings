@@ -1515,6 +1515,16 @@
         }
       }
     },
+    "Created %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstellt %@"
+          }
+        }
+      }
+    },
     "Creating database…": {
       "localizations": {
         "de": {
@@ -1591,6 +1601,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Datum"
+          }
+        }
+      }
+    },
+    "Deactivated": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deaktiviert"
           }
         }
       }
@@ -1781,6 +1801,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "„%@“ löschen?"
+          }
+        }
+      }
+    },
+    "Deleted": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gelöscht"
           }
         }
       }
@@ -2040,6 +2070,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Im Web-Editor bearbeiten"
+          }
+        }
+      }
+    },
+    "Edited %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeitet %@"
           }
         }
       }
@@ -3806,12 +3846,42 @@
         }
       }
     },
+    "No recent pages": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine letzten Seiten"
+          }
+        }
+      }
+    },
     "No resolved comments": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Keine erledigten Kommentare"
+          }
+        }
+      }
+    },
+    "No shared spaces": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine gemeinsamen Spaces"
+          }
+        }
+      }
+    },
+    "No spaces yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Spaces"
           }
         }
       }
@@ -4261,6 +4331,26 @@
         }
       }
     },
+    "Pages they create or edit in your spaces will show up here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seiten, die diese Person in deinen Spaces erstellt oder bearbeitet, erscheinen hier."
+          }
+        }
+      }
+    },
+    "Pages you create or edit will show up here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seiten, die du erstellst oder bearbeitest, erscheinen hier."
+          }
+        }
+      }
+    },
     "PDF could not be loaded.": {
       "localizations": {
         "de": {
@@ -4581,6 +4671,16 @@
         }
       }
     },
+    "Profile not found": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profil nicht gefunden"
+          }
+        }
+      }
+    },
     "Project": {
       "localizations": {
         "de": {
@@ -4677,6 +4777,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zuletzt"
+          }
+        }
+      }
+    },
+    "Recent Pages": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letzte Seiten"
           }
         }
       }
@@ -5584,6 +5694,16 @@
     "Spaces": {
       "shouldTranslate": false
     },
+    "Spaces you join will show up here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spaces, denen du beitrittst, erscheinen hier."
+          }
+        }
+      }
+    },
     "Split cell": {
       "localizations": {
         "de": {
@@ -6163,6 +6283,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das lässt sich dort nicht einordnen."
+          }
+        }
+      }
+    },
+    "This profile doesn't exist or isn't available to you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Profil gibt es nicht oder es ist für dich nicht verfügbar."
           }
         }
       }
@@ -6968,6 +7098,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dazu hast du keine Berechtigung."
+          }
+        }
+      }
+    },
+    "You don't share any spaces.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ihr habt keine gemeinsamen Spaces."
           }
         }
       }

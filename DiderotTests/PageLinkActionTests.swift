@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import DocmostKit
 @testable import Diderot
 
 /// What a link tapped on a page does: a link to the page itself scrolls or opens its comments, never a second copy of
@@ -42,10 +43,29 @@ struct PageLinkActionTests {
         let other = try #require(URL(string: "https://docmost.com/s/demo/p/x-Ab12Cd34Ef"))
         #expect(action(other) == .outside(other))
     }
+
+    /// A user mention, on a page or in a comment, links to its person: on Docmost 0.98 the link opens the profile, as
+    /// on the web; before, profiles aren't there and it opens nothing, as it always did.
+    @Test func userMentionsOpenTheProfileOnDocmost098() throws {
+        let mention = PMNode(type: "mention", attrs: ["id": "m1", "label": "Grace", "entityType": "user", "entityId": "01a169f1-6b44"])
+        let link = try #require(shownLink(of: mention))
+        let pageIds = ["Ab12Cd34Ef", "p1"]
+        #expect(PageLinkAction.action(for: link, serverURL: server, pageIds: pageIds, opensProfiles: true) == .showProfile("01a169f1-6b44"))
+        #expect(PageLinkAction.action(for: link, serverURL: server, pageIds: pageIds, opensProfiles: false) == .none)
+        // A page mention stays a page's link.
+        let page = PMNode(type: "mention", attrs: ["id": "m2", "label": "Handbuch", "entityType": "page", "slugId": "Zz99Yy88Xx"])
+        let pageLink = try #require(shownLink(of: page))
+        #expect(opened(pageLink) == ["Zz99Yy88Xx", nil, nil])
+    }
+
+    /// The link of `inline` as a page shows it, alone in a paragraph.
+    private func shownLink(of inline: PMNode) -> URL? {
+        InlineTextBuilder().attributedString(for: ContentParser.inlines(of: PMNode(type: "paragraph", content: [inline]))).runs.first?.link
+    }
 }
 
 /// What a link in shown content opens wherever it shows (`LinkTarget`): a page with its anchor, a database entry or a
-/// page's comment; an anchor in what shows; a link that leaves the app; nothing for a user.
+/// page's comment; an anchor in what shows; a mention's person; a link that leaves the app.
 struct LinkTargetTests {
     private let server = URL(string: "https://wiki.example.com")!
 
@@ -61,7 +81,7 @@ struct LinkTargetTests {
         #expect(try page(ContentLinkRouter.commentWebURL(server: server, slugId: "Ab12Cd34Ef", commentId: "c1").absoluteString)
             == ["Ab12Cd34Ef", nil, "c1", nil])
         #expect(LinkTarget.of(try #require(ContentLinkRouter.url(for: "#fn-1", baseURL: server)), serverURL: server) == .anchor("fn-1"))
-        #expect(LinkTarget.of(ContentLinkRouter.userURL(id: "u1"), serverURL: server) == LinkTarget.none)
+        #expect(LinkTarget.of(ContentLinkRouter.userURL(id: "u1"), serverURL: server) == .user("u1"))
         let other = try #require(URL(string: "https://docmost.com/s/demo/p/x-Ab12Cd34Ef"))
         #expect(LinkTarget.of(other, serverURL: server) == .outside(other))
     }

@@ -3,12 +3,25 @@ import DocmostKit
 
 /// Space logo, or its initial in the app's forest green (Docmost has no colors for spaces).
 struct SpaceLogoView: View {
-    let space: Space
+    let name: String
+    let logo: String?
     let baseURL: URL?
     var size: CGFloat = 36
 
+    init(space: Space, baseURL: URL?, size: CGFloat = 36) {
+        self.init(name: space.name, logo: space.logo, baseURL: baseURL, size: size)
+    }
+
+    /// A space known by its name and logo alone (a profile's).
+    init(name: String, logo: String?, baseURL: URL?, size: CGFloat = 36) {
+        self.name = name
+        self.logo = logo
+        self.baseURL = baseURL
+        self.size = size
+    }
+
     var body: some View {
-        RemoteThumbnail(url: baseURL.flatMap { ImageURL.resolve(space.logo, kind: .spaceIcon, baseURL: $0) }, server: baseURL,
+        RemoteThumbnail(url: baseURL.flatMap { ImageURL.resolve(logo, kind: .spaceIcon, baseURL: $0) }, server: baseURL,
                         size: size, shape: RoundedRectangle(cornerRadius: size * 0.25)) { initial }
     }
 
@@ -17,7 +30,7 @@ struct SpaceLogoView: View {
             .fill(Color.accentColor.opacity(0.18))
             .frame(width: size, height: size)
             .overlay {
-                Text(String(space.name.prefix(1)).uppercased())
+                Text(String(name.prefix(1)).uppercased())
                     .font(.system(size: size * 0.45, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
             }

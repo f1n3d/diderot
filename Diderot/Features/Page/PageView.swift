@@ -222,7 +222,11 @@ struct PageView: View {
                     case .page, .anchor:
                         showsComments = false
                         handle(url, outside: outside)
-                    case .none: break
+                    case .user where session.ready?.hasDocmost098Features == true:
+                        // A mention's profile (Docmost 0.98) opens on the page's stack too.
+                        showsComments = false
+                        handle(url, outside: outside)
+                    case .user, .none: break
                     case .outside(let external): outside(external)
                     }
                 }
@@ -1054,7 +1058,8 @@ struct PageView: View {
     /// A tapped link: pages, anchors, comments and atoms open here; links that leave the app go `outside`.
     private func handle(_ url: URL, outside: OpenURLAction) {
         let pageIds = [state.value?.slugId, state.value?.id, selection.pageId]
-        switch PageLinkAction.action(for: url, serverURL: session.server?.url, pageIds: pageIds) {
+        switch PageLinkAction.action(for: url, serverURL: session.server?.url, pageIds: pageIds,
+                                     opensProfiles: session.ready?.hasDocmost098Features == true) {
         case .showComment(let commentId):
             openComments(focus: commentId)
         case .editAtom(let block, let type, let index):
@@ -1066,6 +1071,8 @@ struct PageView: View {
             scroll(to: anchor)
         case .open(let selection):
             navigation.open(selection)
+        case .showProfile(let userId):
+            navigation.path.append(UserProfileRoute(userId: userId))
         case .outside(let external):
             outside(external)
         case .none:
