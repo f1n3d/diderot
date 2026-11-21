@@ -1325,6 +1325,29 @@ struct DocumentModelTests {
         #expect(model.errorMessage != nil)
     }
 
+    /// A block left before its last keys were saved (↓ right after typing, a tap elsewhere, the keyboard closed) shows
+    /// them at once, and a tap straight back edits them. It showed its text from before them until the save's document
+    /// came back, and editing it again in that time started from there, so the rebase misplaced what was typed then.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func aLeftBlockShowsItsLastKeysAtOnce(endsEditing: Bool) async throws {
+        let first = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Hello wor")])
+        let second = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Zwei")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
+        let model = try Self.model(engine)
+        model.dependencies.clock = TestClock()
+        model.activate(NodeRef(path: [0], node: first), node: first)
+        model.activeText.append(AttributedString("ld"))
+        model.activeTextChanged()
+
+        if endsEditing { model.deactivate() } else { model.activate(NodeRef(path: [1], node: second), node: second) }
+        #expect(model.node(at: [0])?.plainText == "Hello world")
+
+        let left = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: left), node: left)
+        #expect(String(model.activeText.characters) == "Hello world")
+        while engine.saved.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.saved.map(\.plainText) == ["Hello world"])
+    }
+
     /// Return the engine refuses (its line is gone or changed meanwhile) leaves the line as typed, without the line break,
     /// and says so until a later save succeeds; saved at once, the line hid the message.
     @Test(.timeLimit(.minutes(1))) func refusedReturnKeepsTheLineAndSaysSo() async throws {

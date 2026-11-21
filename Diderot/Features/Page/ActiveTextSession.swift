@@ -10,7 +10,8 @@ protocol ActiveTextSessionOwner: AnyObject {
     var dependencies: DocumentModel.Dependencies { get }
     /// Shows whether a save applied, as the page shows every edit's result; true if it did.
     func sessionReports(_ result: EngineResult) -> Bool
-    /// Input the engine couldn't take: the page shows it over its blocks meanwhile, also for a block no longer edited.
+    /// Input not in the page's document yet (a block just left, input the engine couldn't take): the page shows it over
+    /// its blocks meanwhile, also for a block no longer edited.
     func sessionShowsInput()
     /// A save refused for a block no longer edited: the page shows the engine's block again.
     func sessionShowsEngineDocument()
@@ -148,6 +149,10 @@ final class ActiveTextSession {
         let ref = active.ref
         // Taken now: the block activated next brings its own.
         let base = takeBase(of: ref, sending: node)
+        // The page's document holds the input only as far as its last engine event: the block left shows the last keys
+        // now, not once the save's document is back, and a tap straight back edits them, not the text before them. Only
+        // here: a switch with nothing pending doesn't rebuild the page.
+        owner?.sessionShowsInput()
         Task { await commit(ref, node: node, base: base) }
     }
 
