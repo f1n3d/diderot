@@ -95,6 +95,34 @@ struct InsertCommandTests {
         #expect(EmbedProvider.iframe.validated("   ") == nil)
     }
 
+    /// Docmost 0.98 reads any Google file for both Google embeds (one pattern, `embed-provider.ts`) and names it by its
+    /// link; older servers keep their two patterns, whose web would frame other links as they are.
+    @Test func googleLinksOfDocmost098() {
+        for link in [
+            "https://docs.google.com/document/d/1abc_DEF/edit",
+            "https://docs.google.com/spreadsheets/d/1abc/edit#gid=0",
+            "https://docs.google.com/presentation/d/1abc/pub?start=false",
+            "https://docs.google.com/document/u/1/d/1abc/edit",
+            "https://docs.google.com/spreadsheets/d/e/2PACX-1vabc/pubhtml",
+            "https://drive.google.com/file/d/1abc/view",
+            "https://drive.google.com/file/d/1abc",
+        ] {
+            #expect(EmbedProvider.gdrive.validated(link, docmost098: true) == link, "\(link)")
+            #expect(EmbedProvider.gsheets.validated(link, docmost098: true) == link, "\(link)")
+        }
+        for link in [
+            "https://drive.google.com/drive/folders/1abc", "https://docs.google.com/forms/d/1abc/viewform",
+            "https://docs.google.com.example.com/document/d/1abc/edit", "https://docs.google.com/document/1abc",
+        ] {
+            #expect(EmbedProvider.gdrive.validated(link, docmost098: true) == nil, "\(link)")
+        }
+        #expect(EmbedProvider.gsheets.validated("https://docs.google.com/document/d/1abc/edit") == nil)
+        let names = ["https://docs.google.com/document/d/1/edit", "https://docs.google.com/spreadsheets/d/1/edit",
+                     "https://docs.google.com/presentation/d/1/edit", "https://drive.google.com/file/d/1/view"]
+            .compactMap { URL(string: $0).flatMap(EmbedProvider.googleKind)?.name }
+        #expect(names == ["Google Docs", "Google Sheets", "Google Slides", "Google Drive"])
+    }
+
     @Test func readsSyncedBlocksInTheWebFormat() {
         let reference = SyncedBlockClipboard.Reference(sourcePageId: "page-1", transclusionId: "abcdefghijkl")
         let html = SyncedBlockClipboard.html(for: reference)
