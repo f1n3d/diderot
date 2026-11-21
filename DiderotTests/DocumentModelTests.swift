@@ -2764,6 +2764,10 @@ final class FakeDocumentEngine: DocumentEngine {
     var onTerminated: (@MainActor () -> Void)?
     var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)?
     var webPage: WebPage? { nil }
+    var holdsChanges = false
+    var onHeld: (@MainActor (EngineHold) -> Void)?
+    /// The connects let go with `release`, in order.
+    private(set) var released: [EngineHold] = []
     /// Why saving the unsent changes (`saveUnsentChanges`, `close`) fails, like a full disk; nil keeps them.
     var unsentChangesError: (any Error)?
     private(set) var opened: [String] = []
@@ -2889,6 +2893,9 @@ final class FakeDocumentEngine: DocumentEngine {
         opened.append(pageId)
         lifecycle.append("open")
         whileOpening?()
+    }
+    func release(_ hold: EngineHold) async {
+        released.append(hold)
     }
     func close() {
         lifecycle.append("close")

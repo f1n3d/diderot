@@ -25,6 +25,34 @@ struct VerifiedPageBanner: View {
     }
 }
 
+/// A page whose verification the server didn't say since it opened (license feature `page:verification`): editing waits
+/// for an answer, as on the web, where the editor says so with "Try again" (`full-editor.tsx`). An edit could take a
+/// verification back that the app doesn't know of.
+struct VerificationPausedBanner: View {
+    let retrying: Bool
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label("Editing is paused because the page verification status could not be checked.", systemImage: "pause.circle")
+                .font(.subheadline)
+            Spacer(minLength: 0)
+            if retrying {
+                ProgressView()
+            } else {
+                Button("Try Again", action: retry)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("page-verification-retry")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("page-verification-paused")
+    }
+}
+
 /// The texts of a verified page, the web's (`verification-status.ts`, `use-page-edit-mode.tsx`).
 enum VerifiedPage {
     /// What "Edit" on a locked page was asked for: the page's text and title, or a note appended to it.
@@ -35,6 +63,13 @@ enum VerifiedPage {
         let then: Then
 
         var id: String { "\(lock)-\(then)" }
+    }
+
+    /// Whether a held connect (`EngineHold`) asks the server for the page's verification before its changes go: a
+    /// reconnect always (the page may have been verified again meanwhile), the first connect unless the last answer is
+    /// under 5 s old, as the web counts one that recent for a page being opened.
+    static func asksFirst(_ hold: EngineHold, answeredAt: Date?, now: Date = .now) -> Bool {
+        hold.connect > 1 || answeredAt.map { now.timeIntervalSince($0) > 5 } ?? true
     }
 
     static func status(of verification: PageVerification) -> String {

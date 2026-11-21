@@ -22,8 +22,6 @@ enum CacheKey {
     /// The note being written for the page in "Append Note" (`NoteDraft`).
     static func noteDraft(_ pageId: String) -> String { "noteDraft/\(pageId)" }
     static func breadcrumbs(_ pageId: String) -> String { "breadcrumbs/\(pageId)" }
-    /// The page's verification as the server last said (`PageVerification`), for the next opening of its saved copy.
-    static func verification(_ pageId: String) -> String { "verification/\(pageId)" }
     static func base(_ pageId: String) -> String { "base/\(pageId)" }
     static func baseView(_ pageId: String, viewId: String) -> String { "base/\(pageId)/view/\(viewId)" }
     static func tree(spaceId: String, parentPageId: String?) -> String { "tree/\(spaceId)/\(parentPageId ?? "root")" }

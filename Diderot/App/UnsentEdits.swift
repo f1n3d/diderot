@@ -22,6 +22,10 @@ final class UnsentEdits {
         }
     }
 
+    /// A kept title that waits: its page is verified or approved, and a rename would take that back
+    /// (`AppSession.sendUnsentTitles`). It stays for "Edit" on the page.
+    struct WaitsForEdit: Error {}
+
     private var isSendingTitles = false
     private var isSendingCells = false
 
@@ -78,6 +82,8 @@ final class UnsentEdits {
             do {
                 try await send(pageId, kept.title)
                 if let spaceId = kept.spaceId { spaces.append(spaceId) }
+            } catch is WaitsForEdit {
+                continue
             } catch let error where UnsentChanges.isFinal(error) {
                 AppLog.session.error("Kept title dropped: \(error.userMessage, privacy: .public)")
                 dropped.append(DroppedChange(name: kept.title, reason: error.userMessage))

@@ -2284,6 +2284,16 @@
         }
       }
     },
+    "Editing is paused because the page verification status could not be checked.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Bearbeiten ist pausiert, weil sich der Verifizierungsstatus der Seite nicht prüfen ließ."
+          }
+        }
+      }
+    },
     "Edition": {
       "shouldTranslate": false
     },
@@ -4383,6 +4393,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noch nicht gesendet: Der Titel geht an den Server, sobald er erreichbar ist."
+          }
+        }
+      }
+    },
+    "Not sent yet: the title goes to the server once you choose Edit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht gesendet: Der Titel geht an den Server, sobald du „Bearbeiten“ wählst."
           }
         }
       }

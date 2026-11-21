@@ -60,9 +60,16 @@ struct PageView: View {
     @State private var browsing: URL?
     /// The page's space; its settings say whether readers may comment.
     @State private var space: Space?
-    /// The page's verification as last known (license feature `page:verification`). With a lock the page opens read-only
-    /// and asks before editing, as the web does; until it is known there, the engine waits.
+    /// The page's verification as the server last said it since the page opened (license feature `page:verification`).
+    /// With a lock the page opens read-only and asks before editing, as the web does; until an answer, the engine waits.
     @State private var verification: PageVerification?
+    /// When the server last said it: an engine's first connect within 5 s needs no other answer, as the web counts one
+    /// that recent for a page being opened (`verifyHeld`).
+    @State private var verifiedAt: Date?
+    /// The first answer didn't come: editing waits for one, as on the web (`PageLoader.Verification.unavailable`).
+    @State private var verificationUnavailable = false
+    /// "Try Again" on a paused page is on its way.
+    @State private var retriesVerification = false
     /// The lock the person chose to edit through ("Edit"), for as long as the page stays open, as on the web. A status
     /// that turns into another lock asks again.
     @State private var unlockedLock: PageVerification.Lock?
@@ -376,7 +383,9 @@ struct PageView: View {
         // Back online: a page opened offline (read-only) becomes editable by itself; before, it stayed read-only until
         // pulled down or opened again.
         .onChange(of: offline.isOffline) { _, isOffline in
-            if !isOffline, model?.readOnlyReason == .offline { Task { await load(force: true) } }
+            if !isOffline, model?.readOnlyReason == .offline || model?.readOnlyReason == .verificationUnavailable {
+                Task { await load(force: true) }
+            }
         }
         .onChange(of: titleEdit.text) { old, _ in
             // Only while the user types: a title shown with a line break would otherwise be saved without it.
@@ -389,6 +398,8 @@ struct PageView: View {
         // Back in the app: an editor that failed to open, or whose web process ended while opening, tries again.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, isOnScreen { model?.resume() }
+            // A page paused for its verification asks again, as the web does once the browser is back.
+            if phase == .active, isOnScreen, model?.readOnlyReason == .verificationUnavailable { Task { await load(force: true) } }
             // iOS may end the app in the background, and an app swiped away in the app switcher never gets there: keep
             // unsent changes as leaving the page would. A title being typed goes too (kept first, see `commitTitle`), also
             // on a database page.
@@ -477,6 +488,9 @@ struct PageView: View {
                     }
                     if case .verified(let lock) = model?.readOnlyReason, let verification {
                         VerifiedPageBanner(verification: verification) { verificationAsk = VerifiedPage.Ask(lock: lock, then: .edit) }
+                    }
+                    if model?.readOnlyReason == .verificationUnavailable {
+                        VerificationPausedBanner(retrying: retriesVerification) { Task { await retryVerification() } }
                     }
                     if let space, space.isArchived {
                         ArchivedSpaceNotice(space: space, restore: space.role == .admin ? { await restore(space) } : nil)
@@ -627,7 +641,14 @@ struct PageView: View {
                 }
             }
             if titleEdit.unsent != nil {
-                Label("Not sent yet: the title goes to the server once it can be reached.", systemImage: "icloud.and.arrow.up")
+                Group {
+                    if case .locked = verificationGate {
+                        // Sent, the title would take the verification back (`AppSession.sendUnsentTitles`).
+                        Label("Not sent yet: the title goes to the server once you choose Edit.", systemImage: "icloud.and.arrow.up")
+                    } else {
+                        Label("Not sent yet: the title goes to the server once it can be reached.", systemImage: "icloud.and.arrow.up")
+                    }
+                }
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("page-title-unsent")
@@ -729,7 +750,7 @@ struct PageView: View {
                     }
                 }
                 // Until the verification is known it could be one.
-                .disabled(verificationGate == .unknown)
+                .disabled(verificationGate == .unknown || verificationGate == .unavailable)
                 Button("Edit in Web Editor", systemImage: "pencil.and.scribble") { showsWebEditor = true }
                 Button("Move to Trash", systemImage: "trash", role: .destructive) { confirmsTrash = true }
             }
@@ -780,23 +801,65 @@ struct PageView: View {
     /// Where the page's verification stands for its editor (`PageLoader.Verification`).
     private var verificationGate: PageLoader.Verification {
         guard let ready = session.ready, PageLoader.checksVerification(on: ready) else { return .open }
-        guard let verification else { return .unknown }
+        guard let verification else { return verificationUnavailable ? .unavailable : .unknown }
         guard let lock = verification.lock, lock != unlockedLock else { return .open }
         return .locked(lock)
     }
 
-    /// Takes the page's verification as the server or the saved copy says it. One that turns into another lock (verified
-    /// again since, say) asks again, as the web's does.
+    /// Takes the page's verification as the server says it. One that turns into another lock (verified again since, say)
+    /// asks again, as the web's does.
     private func learn(_ new: PageVerification) {
         if new.lock != verification?.lock { unlockedLock = nil }
         verification = new
     }
 
-    /// "Edit" confirmed: the page becomes editable for as long as it stays open; a note goes on to its sheet.
+    /// Asks the server for the page's verification. Only the first answer since the page opened can pause editing: one
+    /// that doesn't come later keeps the last, as on the web.
+    private func checkVerification(of page: Page, with loader: PageLoader) async {
+        let answer = await loader.verification(of: page)
+        // The page left meanwhile: nothing was answered.
+        guard !Task.isCancelled else { return }
+        if let answer {
+            learn(answer)
+            verifiedAt = .now
+            verificationUnavailable = false
+        } else if verification == nil {
+            verificationUnavailable = true
+        }
+    }
+
+    /// A connect of the page's engine holds its changes (`DocumentEngine.holdsChanges`): they go if the page is still
+    /// editable. A reconnect asks the server again and takes back "Edit", as the web does after a lost connection: the
+    /// page may have been verified again meanwhile. The first connect counts an answer of the last 5 s.
+    private func verifyHeld(_ hold: EngineHold, of heldModel: DocumentModel) async {
+        guard let page = state.value, let pageSession, model === heldModel else { return }
+        if hold.connect > 1 { unlockedLock = nil }
+        if VerifiedPage.asksFirst(hold, answeredAt: verifiedAt) {
+            await checkVerification(of: page, with: PageLoader(pageId: selection.pageId, owner: pageSession, session: session))
+        }
+        guard model === heldModel, let page = state.value else { return }
+        if verificationGate == .open {
+            heldModel.releaseChanges(hold)
+        } else {
+            // Locked meanwhile, or "Edit" taken back: read-only, with its changes on the device until "Edit".
+            apply(page: page)
+        }
+    }
+
+    /// "Try Again" on a paused page: the page and its verification once more.
+    private func retryVerification() async {
+        retriesVerification = true
+        defer { retriesVerification = false }
+        await load(force: true)
+    }
+
+    /// "Edit" confirmed: the page becomes editable for as long as it stays open; a note goes on to its sheet, and a title
+    /// kept for it goes out.
     private func unlock(_ ask: VerifiedPage.Ask) {
         unlockedLock = ask.lock
         if let page = state.value { apply(page: page) }
         if ask.then == .appendNote { showsAppendNote = true }
+        if titleEdit.unsent != nil { Task { await showUnsentTitle() } }
     }
 
     /// What the header and menu change, in the session the page loaded in.
@@ -820,7 +883,6 @@ struct PageView: View {
         if state.value == nil || force {
             if state.value == nil {
                 if let saved = await loader.saved() {
-                    if let kept = await loader.savedVerification(of: saved.page.id) { learn(kept) }
                     keptUnsent = saved.unsent
                     apply(page: saved.page, unsent: saved.unsent)
                     breadcrumbs = saved.breadcrumbs
@@ -833,7 +895,7 @@ struct PageView: View {
                 if PageLoader.checksVerification(on: ready) {
                     // A page with no saved copy shows while its verification is asked for; only its editor waits.
                     if state.value == nil { apply(page: page) }
-                    learn(await loader.verification(of: page))
+                    await checkVerification(of: page, with: loader)
                 }
                 apply(page: page)
                 recentlyOpened.record(page)
@@ -857,9 +919,10 @@ struct PageView: View {
             } catch is CancellationError {
                 return
             } catch {
-                // The saved copy stays; it waits no longer for a verification the server didn't give.
+                // The saved copy stays, read-only until the server says the page's verification: as on the web, only an
+                // answer lets the page edit.
                 if verificationGate == .unknown, let page = state.value {
-                    learn(PageVerification(status: "none"))
+                    verificationUnavailable = true
                     apply(page: page)
                 }
                 if state.value == nil {
@@ -924,6 +987,10 @@ struct PageView: View {
             .model(for: page, unsent: unsent ?? keptUnsent, isOffline: offline.isOffline, verification: verificationGate,
                    notices: notices, changes: changes) else { return }
         if created.engine != nil { keptUnsent = nil }
+        created.onChangesHeld = { [weak created] hold in
+            guard let created else { return }
+            Task { await verifyHeld(hold, of: created) }
+        }
         created.canComment = canComment(on: page)
         if created.dependencies.hasDocmost097Features, let previews = session.linkPreviews {
             // A pasted link is recognized only with the workspace's integrations known.
@@ -1062,8 +1129,8 @@ struct PageView: View {
 
     /// Shows the page's kept title, and sends it right away if the server answers again.
     private func showUnsentTitle() async {
-        let sent = await titleEdit.showUnsent(of: state.value, typing: { titleFocused }, isOffline: { offline.isOffline },
-                                              session: session, changes: changes) { toast = $0 }
+        let sent = await titleEdit.showUnsent(of: state.value, consented: unlockedLock, typing: { titleFocused },
+                                              isOffline: { offline.isOffline }, session: session, changes: changes) { toast = $0 }
         if sent { await load(force: true) }
     }
 

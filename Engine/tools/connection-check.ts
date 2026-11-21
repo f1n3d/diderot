@@ -1,9 +1,10 @@
 // Checks the page's live connection (src/connection.ts) against a stand-in collab server over stand-in WebSockets: each
 // connect's sync emits "synced", after a connection that ended with a close event and after one that died without
 // notice, which the socket closes itself as WebKit gives no close event then. The app shows "Saved" only after
-// "synced". Exits with 1 on any difference.
+// "synced". A connection that holds the page's changes (`ChangeHold`) sends none until its connect is released, and
+// each reconnect holds again. Exits with 1 on any difference.
 import * as Y from "yjs";
-import { connection } from "../src/connection";
+import { ChangeHold, connection } from "../src/connection";
 
 let differences = 0;
 
@@ -74,18 +75,27 @@ const ping = 9;
 const authenticated = 2;
 const syncStep1 = 0;
 const syncStep2 = 1;
+const syncUpdate = 2;
+const syncStatus = 8;
 
 type Listener = (event: unknown) => void;
 
 /**
- * A WebSocket to the stand-in collab server, which authenticates any token, answers a sync with its document and pings
- * as Docmost's server does, so a connection that works stays open. `dies()` ends the connection without notice:
+ * A WebSocket to the stand-in collab server, which authenticates any token, answers a sync with its document, asks back
+ * for what it lacks, takes changes and confirms them, and pings, as Docmost's server does, so a connection that works
+ * stays open. `dies()` ends the connection without notice:
  * nothing goes through any more, and `close()` ends in no close event, as in WebKit (bug 247943). `ends()` ends it with
  * one, as when the server or the network closes it.
  */
 class StandInSocket {
   static readonly opened: StandInSocket[] = [];
-  static readonly document = new Y.Doc();
+  /** The server's document for each name. */
+  static readonly documents = new Map<string, Y.Doc>();
+
+  static document(name: string) {
+    if (!this.documents.has(name)) this.documents.set(name, new Y.Doc());
+    return this.documents.get(name)!;
+  }
 
   readyState = 0;
   binaryType = "arraybuffer";
@@ -119,9 +129,18 @@ class StandInSocket {
     const type = message.uint();
     if (type === auth) {
       this.answer(new Writer().string(name).uint(auth).uint(authenticated).string("read-write").done());
-    } else if (type === sync && message.uint() === syncStep1) {
-      const update = Y.encodeStateAsUpdate(StandInSocket.document, message.array());
-      this.answer(new Writer().string(name).uint(sync).uint(syncStep2).array(update).done());
+    } else if (type === sync) {
+      const document = StandInSocket.document(name);
+      const step = message.uint();
+      if (step === syncStep1) {
+        const update = Y.encodeStateAsUpdate(document, message.array());
+        this.answer(new Writer().string(name).uint(sync).uint(syncStep2).array(update).done());
+        this.answer(new Writer().string(name).uint(sync).uint(syncStep1).array(Y.encodeStateVector(document)).done());
+      } else if (step === syncStep2 || step === syncUpdate) {
+        Y.applyUpdate(document, message.array());
+        // Applied: lib0's signed 1 is the same byte as the unsigned one.
+        this.answer(new Writer().string(name).uint(syncStatus).uint(1).done());
+      }
     }
   }
 
@@ -154,7 +173,11 @@ class StandInSocket {
 
 async function until(condition: () => boolean, ms = 3000) {
   const deadline = Date.now() + ms;
-  while (!condition() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+  while (!condition() && Date.now() < deadline) await pause(5);
+}
+
+function pause(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -187,13 +210,71 @@ async function events(end: (socket: StandInSocket) => void): Promise<string[]> {
   return seen;
 }
 
+/**
+ * What reached the stand-in server's document when, on a connection that holds the page's changes (`ChangeHold`): one
+ * kept from before the connect ("offline"), one made while the connect holds ("held"), one after its release ("live"),
+ * one while the connection is down ("down"), released after the reconnect.
+ */
+async function held(): Promise<string[]> {
+  const seen: string[] = [];
+  const hold = new ChangeHold(() => {});
+  const { socket, provider } = connection(
+    "ws://collab.test/collab",
+    { name: "page.held", token: "token", onSynced: () => seen.push("synced") },
+    { WebSocketPolyfill: StandInSocket, messageReconnectTimeout: 300, delay: 10, minDelay: 10, maxDelay: 100 },
+    hold,
+  );
+  const server = () => StandInSocket.document("page.held").getText("t").toString();
+  const text = provider.document.getText("t");
+  const state = (step: string) => seen.push(`${step}: server "${server()}", withheld ${hold.withheld}`);
+  text.insert(0, "offline ");
+  provider.attach();
+  socket.connect();
+  await until(() => provider.synced);
+  await pause(50);
+  state("connected");
+  text.insert(text.length, "held ");
+  await pause(50);
+  state("changed while it holds");
+  hold.release(hold.connects, provider);
+  await until(() => server().includes("held"));
+  state("released");
+  text.insert(text.length, "live ");
+  await until(() => server().includes("live"));
+  state("changed after the release");
+  StandInSocket.opened.at(-1)!.ends();
+  text.insert(text.length, "down ");
+  await until(() => hold.connects === 2 && provider.synced);
+  // The first connect's release, late, changes nothing.
+  hold.release(1, provider);
+  await pause(50);
+  state("reconnected");
+  hold.release(2, provider);
+  await until(() => server().includes("down"));
+  state("released again");
+  provider.destroy();
+  socket.destroy();
+  return seen;
+}
+
 async function main() {
   expect("a connection that ended: synced again after the reconnect", ["synced", "lost 1006", "closed 1006", "synced"],
     await events((socket) => socket.ends()));
   // Before: ["synced", "lost 4408"], and the app said "Connecting" from then on.
   expect("a connection that died without notice: synced again after the reconnect", ["synced", "lost 4408", "synced"],
     await events((socket) => socket.dies()));
-  console.log(differences > 0 ? `${differences} difference(s)` : "Each connect syncs again, also after a connection that died without notice.");
+  expect("a connection that holds the page's changes: none goes before its connect's release, and each connect holds", [
+    "synced",
+    'connected: server "", withheld true',
+    'changed while it holds: server "", withheld true',
+    'released: server "offline held ", withheld false',
+    'changed after the release: server "offline held live ", withheld false',
+    "synced",
+    'reconnected: server "offline held live ", withheld true',
+    'released again: server "offline held live down ", withheld false',
+  ], await held());
+  console.log(differences > 0 ? `${differences} difference(s)`
+    : "Each connect syncs again, also after a connection that died without notice; a held connection sends nothing before its release.");
   // The provider's own timers would keep Node running.
   process.exit(differences > 0 ? 1 : 0);
 }

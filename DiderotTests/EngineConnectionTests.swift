@@ -10,6 +10,7 @@ struct EngineConnectionTests {
     final class Asked {
         var sent = 0, writes = 0, endings = 0, keeps = 0
         var messages: [String?] = []
+        var held: [EngineHold] = []
     }
 
     /// A stand-in for the page (`DocumentModel`).
@@ -26,6 +27,7 @@ struct EngineConnectionTests {
         func connectionEndsEditing() { asked.endings += 1 }
         func connectionKeepsInput() { asked.keeps += 1 }
         func connectionSays(_ message: String?) { asked.messages.append(message) }
+        func connectionHeld(_ hold: EngineHold) { asked.held.append(hold) }
     }
 
     /// A page the view lets go while its engine closes: the close still writes its input and keeps its last document
@@ -67,11 +69,32 @@ struct EngineConnectionTests {
         owner = nil
         engine.onTerminated?()
         engine.onFailure?(.engineError)
+        engine.onHeld?(EngineHold(open: 1, connect: 2))
         engine.sendDocument()
         try await Task.sleep(for: .milliseconds(100))
 
         #expect(engine.lifecycle.isEmpty)
-        #expect(asked.sent == 1 && asked.keeps == 0 && asked.endings == 0 && asked.messages.isEmpty)
+        #expect(asked.sent == 1 && asked.keeps == 0 && asked.endings == 0 && asked.messages.isEmpty && asked.held.isEmpty)
+    }
+
+    /// A connect that holds the page's changes (`DocumentEngine.holdsChanges`) reaches the page, which asks for its
+    /// verification; the release it sends then reaches the engine.
+    @Test(.timeLimit(.minutes(1))) func heldConnectsReachThePageAndTheirReleaseTheEngine() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph")]))
+        let connection = try Self.connection(engine)
+        let asked = Asked()
+        let owner = Owner(asked)
+        connection.owner = owner
+        let hold = EngineHold(open: 1, connect: 2)
+        engine.onHeld?(hold)
+        #expect(asked.held == [hold])
+
+        connection.release(hold)
+        for _ in 0..<100 where engine.released.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(engine.released == [hold])
+        withExtendedLifetime(owner) {}
     }
 
     private static func connection(_ engine: FakeDocumentEngine) throws -> EngineConnection {

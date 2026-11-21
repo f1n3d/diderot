@@ -41,15 +41,44 @@ extension AppSessionRaceTests {
             }
         }
 
-        /// An engine on a new page of the stand-in collab server for `body`, closed again however that ends.
-        @MainActor private func withEngine(_ body: (WebDocumentEngine, Seen) async throws -> Void) async throws {
+        /// With `holdsChanges` (a server whose edits take a page's verification back), nothing of the page's own reaches
+        /// the server before the app releases the connect: the engine says it holds, a change waits, and the release
+        /// sends it. Engine/tools/connection-check.ts checks the connection's part on its own.
+        @MainActor @Test(.timeLimit(.minutes(3))) func heldChangesWaitForTheRelease() async throws {
+            try await withEngine(holds: true) { engine, seen in
+                try #require(await until { engine.status == .synced }, "The engine didn't sync: \(engine.status)")
+                let hold = try #require(seen.held.first, "The engine didn't say it holds")
+                #expect(hold.connect == 1)
+                #expect(await engine.insertBlocks([paragraph("h", "Gehalten")], relativeTo: nil, position: .after) == .applied)
+                try await Task.sleep(for: .milliseconds(300))
+                #expect(await changesReceived(by: engine) == 0, "a change went out before the release")
+                await engine.release(hold)
+                var received = 0
+                for _ in 0..<100 where received == 0 {
+                    try await Task.sleep(for: .milliseconds(50))
+                    received = await changesReceived(by: engine)
+                }
+                #expect(received > 0, "the release sent nothing")
+            }
+        }
+
+        /// The page's changes the stand-in collab server got (`StandInCollab`): updates, and sync answers with content.
+        @MainActor private func changesReceived(by engine: WebDocumentEngine) async -> Int {
+            ((try? await engine.webPage?.callJavaScript("return window.standInChanges ?? 0;")) as? Int) ?? -1
+        }
+
+        /// An engine on a new page of the stand-in collab server for `body`, closed again however that ends; `holds`:
+        /// its changes wait for `release` (`holdsChanges`).
+        @MainActor private func withEngine(holds: Bool = false, _ body: (WebDocumentEngine, Seen) async throws -> Void) async throws {
             reached("its start")
             let session = try await sessionOnA()
             defer { UnsentChanges.removeAll(server: a) }
             let engine = WebDocumentEngine(session: session, pageScripts: [StandInCollab.script])
+            engine.holdsChanges = holds
             let seen = Seen()
             engine.onDocument = { _ in seen.documents += 1 }
             engine.onUnsentChangesKept = { seen.kept.append($0) }
+            engine.onHeld = { seen.held.append($0) }
             // WebKit starts its processes with the first page. On GitHub's runners, where this suite may open the run's
             // first page, the engine then didn't start within the app's 15 s; a page loaded first starts them, and the
             // engine gets a second try.
@@ -217,6 +246,7 @@ extension AppSessionRaceTests {
         @MainActor private final class Seen {
             var documents = 0
             var kept: [(any Error)?] = []
+            var held: [EngineHold] = []
         }
 
         private func paragraph(_ id: String?, _ text: String) -> PMNode {
@@ -263,8 +293,9 @@ extension AppSessionRaceTests {
 }
 
 /// A collab server in the engine's page: a WebSocket in its place that answers as Docmost's Hocuspocus server does for
-/// an empty page (sign-in accepted, the sync step with an empty document, pings) and confirms no change. After
-/// Engine/tools/connection-check.ts, which checks the connection against the same stand-in.
+/// an empty page (sign-in accepted, the sync step with an empty document and its own asking back, pings) and confirms
+/// no change. It counts the page's changes it gets in `window.standInChanges`. After Engine/tools/connection-check.ts,
+/// which checks the connection against the same stand-in.
 enum StandInCollab {
     static let script = #"""
     (() => {
@@ -299,9 +330,10 @@ enum StandInCollab {
         }
         string() { return new TextDecoder().decode(this.array()); }
       }
-      const sync = 0, auth = 2, ping = 9, authenticated = 2, syncStep1 = 0, syncStep2 = 1;
-      // An empty Yjs document's update.
+      const sync = 0, auth = 2, ping = 9, authenticated = 2, syncStep1 = 0, syncStep2 = 1, syncUpdate = 2;
+      // An empty Yjs document's update, and its state vector.
       const emptyDocument = Uint8Array.of(0, 0);
+      const emptyStateVector = Uint8Array.of(0);
       class StandInSocket {
         constructor(url) {
           this.url = url;
@@ -329,8 +361,14 @@ enum StandInCollab {
             const type = message.uint();
             if (type === auth) {
               this.answer(new Writer().string(name).uint(auth).uint(authenticated).string("read-write").done());
-            } else if (type === sync && message.uint() === syncStep1) {
-              this.answer(new Writer().string(name).uint(sync).uint(syncStep2).array(emptyDocument).done());
+            } else if (type === sync) {
+              const step = message.uint();
+              if (step === syncStep1) {
+                this.answer(new Writer().string(name).uint(sync).uint(syncStep2).array(emptyDocument).done());
+                this.answer(new Writer().string(name).uint(sync).uint(syncStep1).array(emptyStateVector).done());
+              } else if (step === syncUpdate || (step === syncStep2 && message.array().length > emptyDocument.length)) {
+                window.standInChanges = (window.standInChanges ?? 0) + 1;
+              }
             }
           } catch {
             // Not a message the server answers.
