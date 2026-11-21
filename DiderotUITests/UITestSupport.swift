@@ -52,6 +52,15 @@ import XCTest
         return app
     }
 
+    /// Opens `url` as a link from another app does. XCTest restarts the app for it with `app`'s launch environment:
+    /// without the page from there the link is all that opens. With it the app opened both pages after the restart, at
+    /// times the linked one first, and the other one then covered it with the comments or entry it showed (test71 on
+    /// November 21, 2026).
+    func openAsLink(_ url: URL, in app: XCUIApplication) {
+        app.launchEnvironment["DOCMOST_DEBUG_PAGE"] = nil
+        app.open(url)
+    }
+
     func snapshot(_ app: XCUIApplication, _ name: String) {
         let screenshot = app.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)
