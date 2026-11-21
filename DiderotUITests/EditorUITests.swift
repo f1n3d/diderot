@@ -521,7 +521,17 @@ import XCTest
         XCTAssertNotEqual(firstId, "page-\(pageId)", "Test page is already at the top – reset the test data")
         // Scrolling may have hidden the first row: scroll back up until it is hittable.
         for _ in 0..<8 where !first.isHittable { app.swipeDown() }
-        XCTAssertTrue(first.isHittable && source.exists, "Rows not visible at the same time")
+        // A drag that reaches the top edge scrolls the view up under the finger: the page then lands on the "Hierarchy |
+        // Recent" switcher above the tree and stays put. So the switcher comes into view first, a little at a time. A root
+        // page more than usual pushes the test page down far enough for `scrollTo` to hide it (test110's page from a
+        // template, which the script deletes only after the run, or pages a run that didn't end left).
+        let switcher = app.segmentedControls.firstMatch
+        XCTAssertTrue(switcher.exists, "No “Hierarchy | Recent” switcher")
+        for _ in 0..<6 where switcher.frame.minY < app.navigationBars.firstMatch.frame.maxY {
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 40)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        }
+        XCTAssertTrue(first.isHittable && source.isHittable, "Rows not visible at the same time")
         snapshot(app, "11-before")
         // The row's top quarter (the title's top would be its middle half already).
         let firstRow = element(app, "tree-row-" + firstId.dropFirst("page-".count))
@@ -831,18 +841,16 @@ import XCTest
         return ((editor.value as? String) ?? "").contains(fragment) == expected
     }
 
-    /// A tap at the start of a paragraph puts the caret there, as on the web; it used to go to the end. The script
-    /// checks that "Anfang<stamp>" starts the paragraph after the table.
-    /// A server newer than the app's editor (Docmost 0.98 via the debug override): the page opens read-only with a
-    /// notice, and tapping its text starts no editing.
+    /// A server newer than the app's editor (Docmost 0.99 via the debug override): the page opens read-only with a
+    /// notice, and tapping its text starts no editing. Until the app knew 0.98 (November 21, 2026) the test faked 0.98.
     func test58_NewerServerOpensPagesReadOnly() {
         var extra = environment.filter { ["DOCMOST_DEBUG_PAGE", "DOCMOST_DEBUG_SPACE"].contains($0.key) }
-        extra["DOCMOST_DEBUG_SERVER_VERSION"] = "0.98.0"
+        extra["DOCMOST_DEBUG_SERVER_VERSION"] = "0.99.0"
         let app = launchApp(extraEnvironment: extra)
         let pill = element(app, "page-status")
         XCTAssertTrue(pill.waitForExistence(timeout: 40), "Page didn't load")
         XCTAssertTrue(["Read only", "Nur lesen"].contains(pill.label), "Status is “\(pill.label)”")
-        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Docmost 0.98.0")).firstMatch
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Docmost 0.99.0")).firstMatch
         XCTAssertTrue(notice.exists, "No notice about the server version")
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Erster Absatz")).firstMatch.tap()
         XCTAssertFalse(app.buttons["format-bold"].waitForExistence(timeout: 3), "Editing started on a newer server")
@@ -863,6 +871,8 @@ import XCTest
         finishEditing(app)
     }
 
+    /// A tap at the start of a paragraph puts the caret there, as on the web; it used to go to the end. The script
+    /// checks that "Anfang<stamp>" starts the paragraph after the table.
     func test52_TapPlacesCaret() {
         let app = launchPage()
         let block = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nach der Tabelle")).firstMatch
