@@ -155,7 +155,7 @@ As of stage 2 (editing, creating, deleting, moving). Deliberately still on the w
 - Live updates when others change something (socket.io, `base:subscribe`). Until then, pulling down refreshes.
 - Showing embedded databases in the page itself (today a card that opens the database).
 - A date property's options (Docmost 0.98: "include time", date and time format) are set on the web, as the other property settings; the app shows dates in them. Both ends of a range are set in the app since November 21, 2026.
-- Calendar views (Docmost 0.98) show as a table. A month or week of entries by their date, as the web draws them from `bases/rows/calendar`, is a view of its own.
+- Calendar views (Docmost 0.98) show a month as the web does on a phone: a dot for each entry on its days, the chosen day's entries below, "New Entry" on that day. What the web offers only from 768 points stays there: the week layout, moving an entry to another day or stretching it by dragging, and making one by double-clicking a day or dragging across days. An iPad gets the phone's month too, where the web shows its desktop grid with the entries' titles in the days.
 - Form views (Docmost 0.98) stay hidden, as on the web while forms are in beta (`BETA_BASE_FORMS`, which the server tells only its own web client). Filling one in waits until they leave the beta.
 
 Also open: returning to a large table loads only its first 100 rows again and scrolls to the top (code review M37, October 28, 2026). Loading as many rows as were shown costs many requests on every return; weigh other ways first.

@@ -290,6 +290,11 @@ enum BaseFormat {
         return day.date.formatted(style)
     }
 
+    /// A moment's time of day in `timeZone`, on the clock the date property's `timeFormat` names, else the locale's.
+    static func time(_ date: Date, options: JSONValue?, timeZone: TimeZone = .current, locale: Locale = .current) -> String {
+        timeText(date, clock: options?["timeFormat"]?.stringValue, timeZone: timeZone, locale: locale)
+    }
+
     /// A moment's time of day in `timeZone`, on a 12- or 24-hour clock (`timeFormat`), else as the locale shows times.
     private static func timeText(_ date: Date, clock: String?, timeZone: TimeZone, locale: Locale) -> String {
         var locale = locale

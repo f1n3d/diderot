@@ -10,8 +10,9 @@ struct BaseRowRoute: Identifiable, Hashable {
     var id: String { rowId }
 }
 
-/// Database (base) page. In the table the header scrolls away so users move freely; kanban columns scroll on their own,
-/// so there the header stays, shrunk to the view tabs in landscape. Rows are edited in a sheet with all fields.
+/// Database (base) page. In the table and the calendar the header scrolls away so users move freely; kanban columns
+/// scroll on their own, so there the header stays, shrunk to the view tabs in landscape. Rows are edited in a sheet
+/// with all fields.
 struct BaseScreen<Header: View>: View {
     @Environment(AppSession.self) private var session
     @Environment(OfflineMonitor.self) private var offline
@@ -38,6 +39,10 @@ struct BaseScreen<Header: View>: View {
                     }
                 case .table:
                     BaseTableView(model: model, base: base, view: view) {
+                        topArea(model, showsHeader: true)
+                    } onOpen: { openRow = $0 }
+                case .calendar:
+                    BaseCalendarView(model: model, base: base, view: view) {
                         topArea(model, showsHeader: true)
                     } onOpen: { openRow = $0 }
                 }
@@ -72,9 +77,7 @@ struct BaseScreen<Header: View>: View {
             }
         }
         .toolbar {
-            if let model, model.canEdit, let view = model.selectedView,
-               view.kind != .kanban || model.groupByProperty != nil
-            {
+            if let model, model.canCreateRow {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("New Entry", systemImage: "plus") {
                         Task { await create(in: model) }
@@ -87,7 +90,8 @@ struct BaseScreen<Header: View>: View {
         .toast(Binding { model?.toast } set: { model?.toast = $0 })
     }
 
-    /// "+" adds a row at the table's end or atop the board's first column, then opens it with the cursor in the title.
+    /// "+" adds a row at the table's end, atop the board's first column or on the calendar's chosen day, then opens it
+    /// with the cursor in the title.
     private func create(in model: BaseModel) async {
         guard !isCreating else { return }
         isCreating = true
@@ -140,7 +144,7 @@ struct BaseScreen<Header: View>: View {
                     Button {
                         Task { await model.select(view) }
                     } label: {
-                        Label(view.name, systemImage: view.kind == .kanban ? "rectangle.split.3x1" : "tablecells")
+                        Label(view.name, systemImage: Self.symbol(for: view.kind))
                             .font(.subheadline.weight(selected ? .semibold : .regular))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -154,6 +158,14 @@ struct BaseScreen<Header: View>: View {
             }
         }
         .scrollIndicators(.hidden)
+    }
+
+    private static func symbol(for kind: BaseView.Kind) -> String {
+        switch kind {
+        case .table: "tablecells"
+        case .kanban: "rectangle.split.3x1"
+        case .calendar: "calendar"
+        }
     }
 }
 

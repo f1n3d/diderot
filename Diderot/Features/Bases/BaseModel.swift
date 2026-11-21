@@ -22,16 +22,31 @@ nonisolated struct BaseKanbanColumn: Identifiable, Codable, Sendable, Equatable 
     var isNoValue: Bool { id == Self.noValueId }
 }
 
+/// Loaded rows of a calendar's window (Docmost 0.98) and what the server said of them.
+nonisolated struct BaseCalendarList: Codable, Sendable, Equatable {
+    /// The first day of the window the rows are of, `YYYY-MM-DD`; nil before an answer.
+    var from: String?
+    var rows: [BaseRow] = []
+    /// How many rows the window has: more than were loaded when `truncated`.
+    var total = 0
+    var truncated = false
+    /// The time zone the server read the dates in.
+    var timeZone: String?
+}
+
 /// View state for the offline cache.
 nonisolated struct BaseViewSnapshot: Codable, Sendable {
     var table: BaseRowList?
     var columns: [BaseKanbanColumn]?
+    /// A calendar's last window.
+    var calendar: BaseCalendarList?
     var users: [String: UserRef]
     var pages: [String: PageRef]
 }
 
 /// Database (base) of a page: schema, selected view and its rows; loads the cache first, then the server. Requests
-/// carry the view's filter (table requests also its sorts); each kanban column is queried separately (web parity).
+/// carry the view's filter (table requests also its sorts); each kanban column is queried separately (web parity), a
+/// calendar its month's window.
 @MainActor
 @Observable
 final class BaseModel {
@@ -40,6 +55,9 @@ final class BaseModel {
     private(set) var selectedViewId: String?
     private(set) var table = BaseRowList()
     private(set) var columns: [BaseKanbanColumn] = []
+    private(set) var calendar = BaseCalendarList()
+    /// The day each calendar view shows, chosen in this visit (`calendarDay`).
+    private var calendarDays: [String: CalendarDay] = [:]
     /// Rows outside what the view shows: board rows edited into a hidden column (or one added since loading), and an
     /// entry opened from a link that the table's loaded rows or filter leave out. Their open detail sheet keeps them.
     private var offBoardRows: [String: BaseRow] = [:]
@@ -102,6 +120,8 @@ final class BaseModel {
 
     private static func viewKey(_ pageId: String) -> String { "base.view.\(pageId)" }
 
+    private static func calendarDayKey(_ viewId: String) -> String { "base.calendar.\(viewId)" }
+
     var base: Base? { state.value }
 
     /// Views in Docmost order, without the form views the web hides too (`Base.shownViews`).
@@ -112,10 +132,53 @@ final class BaseModel {
     }
 
     /// Entry order for "previous / next" in the detail, as on the web: the table's rows; on a board every card by
-    /// position.
+    /// position; on a calendar its month's entries by date.
     var orderedRowIds: [String] {
-        guard selectedView?.kind == .kanban else { return table.rows.map(\.id) }
-        return Self.byPosition(columns.flatMap(\.list.rows)).map(\.id)
+        switch selectedView?.kind {
+        case .kanban: Self.byPosition(columns.flatMap(\.list.rows)).map(\.id)
+        case .calendar: calendarEntries.map(\.rowId)
+        default: table.rows.map(\.id)
+        }
+    }
+
+    // MARK: - Calendar
+
+    /// The day the selected calendar shows, whose month it shows: as last chosen, also in an earlier visit (as the web
+    /// keeps it, `base-calendar-date:<viewId>`), else today.
+    var calendarDay: CalendarDay {
+        guard let view = selectedView else { return CalendarDay(containing: .now) }
+        return calendarDays[view.id]
+            ?? CalendarDay(UserDefaults.standard.string(forKey: Self.calendarDayKey(view.id)))
+            ?? CalendarDay(containing: .now)
+    }
+
+    /// The month the calendar shows, its weeks starting on the device's first weekday (`ViewerDateContext`).
+    var calendarMonth: BaseCalendarMonth {
+        BaseCalendarMonth(containing: calendarDay, weekStart: ViewerDateContext().weekStart)
+    }
+
+    /// The calendar's date property (nil until the view names one that holds dates).
+    var calendarProperty: BaseProperty? {
+        guard let base, let view = selectedView, view.kind == .calendar else { return nil }
+        return BaseCalendarLayout.dateProperty(base: base, view: view)
+    }
+
+    /// The month's entries in the web's order; while another month's rows are shown, those of the days both share.
+    var calendarEntries: [BaseCalendarEntry] {
+        guard let property = calendarProperty else { return [] }
+        return BaseCalendarLayout.entries(of: calendar.rows, property: property, title: base?.primaryProperty, in: calendarMonth)
+    }
+
+    /// Whether the rows shown are those of the calendar's month, not yet those of a month moved to.
+    var showsCalendarMonth: Bool { calendar.from == calendarMonth.from.value }
+
+    /// Chooses a day of the calendar; one of another month shows that month, which then loads.
+    func chooseCalendarDay(_ day: CalendarDay) async {
+        guard let view = selectedView, view.kind == .calendar else { return }
+        let shown = calendarMonth
+        calendarDays[view.id] = day
+        UserDefaults.standard.set(day.value, forKey: Self.calendarDayKey(view.id))
+        if calendarMonth != shown { await loadRows() }
     }
 
     // MARK: - Loading
@@ -157,6 +220,7 @@ final class BaseModel {
         UserDefaults.standard.set(view.id, forKey: Self.viewKey(pageId))
         table = BaseRowList()
         columns = []
+        calendar = BaseCalendarList()
         offBoardRows = [:]
         await restoreSnapshot()
         await loadRows()
@@ -215,6 +279,24 @@ final class BaseModel {
                 for index in loaded.indices { loaded[index].list.rows.removeAll { deletedRowIds.contains($0.id) } }
                 columns = loaded
                 reapplyOwnChanges()
+            case .calendar:
+                guard let property = BaseCalendarLayout.dateProperty(base: base, view: view) else {
+                    calendar = BaseCalendarList()
+                    return
+                }
+                let month = calendarMonth
+                let answer = try await send(Endpoints.Bases.calendarRows(
+                    pageId: pageId, propertyId: property.id, from: month.from, to: month.to, filter: BaseLayout.filter(of: view),
+                    viewer: ViewerDateContext()
+                ))
+                // Moved to another month meanwhile: its own load shows its rows.
+                guard selectedView == view, calendarMonth == month else { return }
+                calendar = BaseCalendarList(
+                    from: month.from.value, rows: answer.items.filter { !deletedRowIds.contains($0.id) }, total: answer.meta.total,
+                    truncated: answer.meta.truncated, timeZone: answer.meta.timeZone
+                )
+                merge(answer.references)
+                reapplyOwnChanges()
             }
             await storeSnapshot()
         } catch is CancellationError {
@@ -223,11 +305,13 @@ final class BaseModel {
         }
     }
 
-    /// Saved rows stay visible (with a toast if `notice`); with none, the view shows the error with "Try Again".
+    /// Saved rows stay visible (with a toast if `notice`); with none, the view shows the error with "Try Again". A
+    /// calendar's rows count only for their own month.
     private func showRowsError(_ error: any Error, notice: Bool = true) {
         // Leaving the screen cancels the load: no error, it reloads on return.
         guard !Task.isCancelled else { return }
-        if table.rows.isEmpty && columns.isEmpty { rowsError = error } else if notice { toast = error.userMessage }
+        let showsRows = !table.rows.isEmpty || !columns.isEmpty || (showsCalendarMonth && !calendar.rows.isEmpty)
+        if !showsRows { rowsError = error } else if notice { toast = error.userMessage }
     }
 
     func loadMoreTable() async {
@@ -350,12 +434,13 @@ final class BaseModel {
         }
     }
 
-    /// Current state of a row from the table or board.
+    /// Current state of a row from the table, board or calendar.
     func row(id: String) -> BaseRow? {
         if let row = table.rows.first(where: { $0.id == id }) { return row }
         for column in columns {
             if let row = column.list.rows.first(where: { $0.id == id }) { return row }
         }
+        if let row = calendar.rows.first(where: { $0.id == id }) { return row }
         return offBoardRows[id]
     }
 
@@ -363,6 +448,23 @@ final class BaseModel {
     var groupByProperty: BaseProperty? {
         guard let base, let view = selectedView, view.kind == .kanban else { return nil }
         return BaseLayout.groupByProperty(base: base, view: view)
+    }
+
+    /// The calendar's date property where "New Entry" gives the chosen day: a date property that isn't being converted,
+    /// in a database the user can edit (the web's `editableDatePropertyId`).
+    var calendarEditableProperty: BaseProperty? {
+        guard canEdit, let property = calendarProperty, BaseCalendarLayout.isEditable(property) else { return nil }
+        return property
+    }
+
+    /// Whether "New Entry" can add a row to the selected view: a board needs its grouping, a calendar a date to give.
+    var canCreateRow: Bool {
+        guard canEdit, let view = selectedView else { return false }
+        switch view.kind {
+        case .table: return true
+        case .kanban: return groupByProperty != nil
+        case .calendar: return calendarEditableProperty != nil
+        }
     }
 
     /// Changes a cell optimistically; the response (with recomputed formulas and "Last edited") replaces the row, and a
@@ -418,7 +520,8 @@ final class BaseModel {
         await write(rowId: rowId, cells: cells, position: position)
     }
 
-    /// Creates a row (table: at the end; board: top or bottom of a column); `nil` on failure or if the view changed.
+    /// Creates a row (table: at the end; board: top or bottom of a column; calendar: on the chosen day); `nil` on
+    /// failure or if the view changed.
     func createRow(inColumn columnId: String? = nil, atTop: Bool = false) async -> BaseRow? {
         guard canEdit else { return nil }
         let view = selectedView
@@ -431,6 +534,9 @@ final class BaseModel {
             position = atTop
                 ? (try? FractionalIndex.jitteredKeyBetween(nil, rows.first?.position))
                 : (try? FractionalIndex.jitteredKeyBetween(rows.last?.position, nil))
+        } else if view?.kind == .calendar {
+            guard let property = calendarEditableProperty else { return nil }
+            cells[property.id] = BaseCalendarLayout.value(on: calendarDay, kind: BaseCalendarLayout.kind(of: property))
         }
         let pageId = pageId
         do {
@@ -441,6 +547,8 @@ final class BaseModel {
             guard selectedView == view else { return nil }
             if groupByProperty != nil {
                 place(created)
+            } else if view?.kind == .calendar {
+                calendar.rows.append(created)
             } else {
                 table.rows.append(created)
             }
@@ -458,10 +566,12 @@ final class BaseModel {
         guard canEdit, let old = row(id: rowId) else { return }
         let view = selectedView
         let tableIndex = table.rows.firstIndex { $0.id == rowId }
+        let calendarIndex = calendar.rows.firstIndex { $0.id == rowId }
         table.rows.removeAll { $0.id == rowId }
         for index in columns.indices {
             columns[index].list.rows.removeAll { $0.id == rowId }
         }
+        calendar.rows.removeAll { $0.id == rowId }
         offBoardRows[rowId] = nil
         deletedRowIds.insert(rowId)
         let pageId = pageId
@@ -478,6 +588,9 @@ final class BaseModel {
             }
             if let tableIndex, !table.rows.contains(where: { $0.id == rowId }) {
                 table.rows.insert(old, at: min(tableIndex, table.rows.count))
+            }
+            if let calendarIndex, !calendar.rows.contains(where: { $0.id == rowId }) {
+                calendar.rows.insert(old, at: min(calendarIndex, calendar.rows.count))
             }
             if groupByProperty != nil { place(old) }
             await storeSnapshot()
@@ -599,6 +712,7 @@ final class BaseModel {
     private func reapplyOwnChanges() {
         func shown(_ id: String) -> Bool {
             table.rows.contains { $0.id == id } || columns.contains { $0.list.rows.contains { $0.id == id } }
+                || calendar.rows.contains { $0.id == id }
         }
         for row in savedDuringLoad.values where shown(row.id) { place(row) }
         for rowId in pending.pendingRowIds where shown(rowId) { place(pending.overlay(rowId: rowId)) }
@@ -616,12 +730,16 @@ final class BaseModel {
         }
     }
 
-    /// Applies a row to table and board: in the table it keeps its place; on the board it moves to its grouping value's
-    /// column, ordered by position, or into `offBoardRows` if that column isn't shown.
+    /// Applies a row to table, board and calendar: in the table it keeps its place, on the calendar it shows by its new
+    /// date; on the board it moves to its grouping value's column, ordered by position, or into `offBoardRows` if that
+    /// column isn't shown.
     private func place(_ row: BaseRow?) {
         guard let row, !deletedRowIds.contains(row.id) else { return }
         if let index = table.rows.firstIndex(where: { $0.id == row.id }) {
             table.rows[index] = row
+        }
+        if let index = calendar.rows.firstIndex(where: { $0.id == row.id }) {
+            calendar.rows[index] = row
         }
         if offBoardRows[row.id] != nil { offBoardRows[row.id] = row }
         guard let groupBy = groupByProperty else { return }
@@ -722,7 +840,8 @@ final class BaseModel {
     private func storeSnapshot() async {
         guard let cache = ownSession?.cache, let key = snapshotKey(), let view = selectedView else { return }
         let snapshot = BaseViewSnapshot(
-            table: view.kind == .kanban ? nil : table, columns: view.kind == .kanban ? columns : nil, users: users, pages: pages
+            table: view.kind == .table ? table : nil, columns: view.kind == .kanban ? columns : nil,
+            calendar: view.kind == .calendar ? calendar : nil, users: users, pages: pages
         )
         await cache.write(snapshot, key: key)
     }
@@ -731,10 +850,14 @@ final class BaseModel {
         guard let cache = ownSession?.cache, let key = snapshotKey(),
               let snapshot = await cache.read(BaseViewSnapshot.self, key: key), key == snapshotKey()
         else { return }
-        if let cached = snapshot.table { table = cached }
+        // A calendar's copy from before the app showed calendars holds its rows as a table, which the calendar doesn't
+        // show.
+        if let cached = snapshot.table, selectedView?.kind != .calendar { table = cached }
         if let cached = snapshot.columns { columns = cached }
+        if let cached = snapshot.calendar { calendar = cached }
         table.rows.removeAll { deletedRowIds.contains($0.id) }
         for index in columns.indices { columns[index].list.rows.removeAll { deletedRowIds.contains($0.id) } }
+        calendar.rows.removeAll { deletedRowIds.contains($0.id) }
         users.merge(snapshot.users) { current, _ in current }
         pages.merge(snapshot.pages) { current, _ in current }
     }
