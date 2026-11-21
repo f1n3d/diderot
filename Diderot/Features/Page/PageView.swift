@@ -689,7 +689,14 @@ struct PageView: View {
         }
         Divider()
         Toggle("Web Layout", systemImage: "globe", isOn: $showsWebLayout)
-        Button("Copy as Markdown", systemImage: "doc.on.doc") { Task { await copyMarkdown() } }
+        let exportOff = ExportPolicy.offReason(workspace: session.ready?.currentUser.workspace, space: space)
+        Button {
+            Task { await copyMarkdown() }
+        } label: {
+            Label("Copy as Markdown", systemImage: "doc.on.doc")
+            if let exportOff { Text(exportOff) }
+        }
+        .disabled(exportOff != nil)
         if let url = webURL {
             Link(destination: url) { Label("Open in Browser", systemImage: "safari") }
             ShareLink(item: url) {

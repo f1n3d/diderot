@@ -29,6 +29,7 @@ struct SpaceView: View {
     }
 
     private var canEdit: Bool { space.membership?.canEditPages ?? false }
+    private var exportOffReason: String? { ExportPolicy.offReason(workspace: session.ready?.currentUser.workspace, space: space) }
     /// Templates need the Enterprise feature; without it the web shows them disabled, the app not at all.
     private var offersTemplates: Bool { session.ready?.entitlements.has("templates") == true }
 
@@ -250,7 +251,7 @@ struct SpaceView: View {
                 let rows = store.visibleRows
                 LazyVStack(spacing: 0) {
                     ForEach(rows) { row in
-                        TreeRow(row: row, store: store, runner: runner, canEdit: canEdit) {
+                        TreeRow(row: row, store: store, runner: runner, canEdit: canEdit, exportOffReason: exportOffReason) {
                             Task { await createPage(parentPageId: row.page.id) }
                         }
                         .modifier(TreeDragModifier(page: row.page, depth: row.depth, spaceId: space.id, enabled: canEdit, store: store) { draggedId, zone in
@@ -294,7 +295,7 @@ struct SpaceView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { PageActionsMenu(page: PageRef(page), runner: runner, canEdit: canEdit) }
+                        .contextMenu { PageActionsMenu(page: PageRef(page), runner: runner, canEdit: canEdit, exportOffReason: exportOffReason) }
                         .trashConfirmation(for: PageRef(page), runner: runner)
                         if page.id != pages.last?.id {
                             Divider().padding(.leading, 16)
@@ -400,6 +401,7 @@ private struct TreeRow: View {
     let store: PageTreeStore
     let runner: PageActionRunner
     let canEdit: Bool
+    let exportOffReason: String?
     let onAddSubpage: () -> Void
 
     private var page: SidebarPage { row.page }
@@ -426,7 +428,7 @@ private struct TreeRow: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("page-\(page.id)")
             Menu {
-                PageActionsMenu(page: PageRef(page), runner: runner, canEdit: canEdit && (page.canEdit ?? true))
+                PageActionsMenu(page: PageRef(page), runner: runner, canEdit: canEdit && (page.canEdit ?? true), exportOffReason: exportOffReason)
             } label: {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)

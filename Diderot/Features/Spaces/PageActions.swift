@@ -102,6 +102,9 @@ struct PageActionsMenu: View {
     let page: PageRef
     let runner: PageActionRunner
     let canEdit: Bool
+    /// Why exports are turned off here (`ExportPolicy`): "Export…" stays in the menu, turned off, with the reason below,
+    /// as the web's stays with it as a tooltip.
+    var exportOffReason: String?
 
     var body: some View {
         Button("Copy Link", systemImage: "link") { runner.copyLink(page) }
@@ -109,7 +112,13 @@ struct PageActionsMenu: View {
         Button(isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: isFavorite ? "star.fill" : "star") {
             Task { await favorites.togglePage(page.id) }
         }
-        Button("Export…", systemImage: "square.and.arrow.up") { runner.pending = .export(page) }
+        Button {
+            runner.pending = .export(page)
+        } label: {
+            Label("Export…", systemImage: "square.and.arrow.up")
+            if let exportOffReason { Text(exportOffReason) }
+        }
+        .disabled(exportOffReason != nil)
         if canEdit {
             Divider()
             Button("Duplicate", systemImage: "doc.on.doc") { Task { await runner.duplicate(page) } }
