@@ -803,6 +803,84 @@ struct DocumentModelTests {
         #expect(model.pendingMedia?.action == .attachment)
     }
 
+    /// An upload that finishes while the user writes in another block leaves that block's editor open, with what was
+    /// typed; the keyboard used to close mid-sentence. A paragraph is followed by its id where the image pushes it; a code
+    /// block, which has none, stays put above the image.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func uploadLeavesTheBlockBeingWrittenOpen(code: Bool) async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Oben")])
+        let written = code
+            ? PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let x = 1")])
+            : PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Ich schreibe")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: code ? [written, line] : [line, written]))
+        let model = try Self.model(engine)
+        // "+" → Image in the line; its picker closed, and the upload runs while the user writes in the other block.
+        model.requestMedia(.images, placement: .afterTopLevel(NodeRef(path: code ? [1] : [0], node: line)))
+        let target = model.takeMediaTarget()
+        model.activate(NodeRef(path: code ? [0] : [1], node: written), node: written)
+        if code {
+            model.activeCode += "2"
+            model.activeCodeChanged()
+        } else {
+            model.activeText.append(AttributedString(" weiter"))
+            model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+            model.activeTextChanged()
+        }
+        let image = Attachment(id: "i", fileName: "i.png", mimeType: "image/png")
+        let placed = image.contentNode(asAttachment: false)
+        engine.whileInserting = {
+            engine.sendDocument(PMNode(type: "doc", content: code ? [written, line, placed] : [line, placed, written]))
+        }
+
+        await model.insertUploads([image], to: target)
+
+        #expect(engine.inserted.map(\.node.type) == ["image"])
+        #expect(model.active?.ref == (code ? NodeRef(path: [0], node: written) : NodeRef(path: [2], id: "b")))
+        #expect(code ? model.activeCode == "let x = 12" : String(model.activeText.characters) == "Ich schreibe weiter")
+    }
+
+    /// An upload that finishes after the user went back into the empty line it was to take goes after the line instead:
+    /// put in its place, it took the line's editor, and the keyboard closed.
+    @Test(arguments: [false, true]) func uploadGoesAfterTheEmptyLineBeingWritten(fromSlash: Bool) async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line]))
+        let model = try Self.model(engine)
+        let ref = NodeRef(path: [0], node: line)
+        model.requestMedia(.images, placement: fromSlash ? .replaceOrAfter(ref) : .afterTopLevel(ref))
+        let target = model.takeMediaTarget()  // its picker closed, the upload runs
+        model.activate(ref, node: line)
+
+        await model.insertUploads([Attachment(id: "i", fileName: "i.png", mimeType: "image/png")], to: target)
+
+        #expect(engine.replaced.isEmpty)
+        #expect(engine.inserted.map(\.target) == [.id("a")])
+        #expect(engine.inserted.map(\.position) == [.after])
+        #expect(model.active?.ref == ref)
+    }
+
+    /// A code block below an upload's place still ends editing when the upload goes in: it has no id to be followed by,
+    /// and its path names the image then. What was typed reaches the engine first; saved by that path after the image,
+    /// it would be refused.
+    @Test(.timeLimit(.minutes(1))) func uploadAboveTheCodeBeingWrittenEndsItsEditing() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Oben")])
+        let code = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let x = 1")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line, code]))
+        let model = try Self.model(engine)
+        model.requestMedia(.images, placement: .afterTopLevel(NodeRef(path: [0], node: line)))
+        let target = model.takeMediaTarget()
+        model.activate(NodeRef(path: [1], node: code), node: code)
+        model.activeCode += "2"
+        model.activeCodeChanged()
+        var savedBeforeImage: [String]?
+        engine.whileInserting = {
+            if !engine.inserted.isEmpty, savedBeforeImage == nil { savedBeforeImage = engine.saved.map(\.plainText) }
+        }
+
+        await model.insertUploads([Attachment(id: "i", fileName: "i.png", mimeType: "image/png")], to: target)
+
+        #expect(model.active == nil)
+        #expect(savedBeforeImage == ["let x = 12"])
+    }
+
     /// A math block or embed from its sheet goes in only after the sheet has closed (switching editors while it slides
     /// away can leave a UIKit animation running), and only once: a later cancelled sheet adds nothing.
     @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func sheetBlockWaitsForDismissal(embed: Bool) async throws {

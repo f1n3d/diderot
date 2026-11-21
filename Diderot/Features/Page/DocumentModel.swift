@@ -1724,7 +1724,9 @@ final class DocumentModel {
 
     // MARK: Blocks
 
-    /// Inserts blocks at `placement`, then moves the cursor per `focus`; without `focus`, editing ends.
+    /// Inserts blocks at `placement`, then moves the cursor per `focus`. Without `focus` (uploads, which finish while the
+    /// user may be writing anywhere on the page), the cursor stays where it is: the blocks go after the line being edited
+    /// rather than in its place, and editing ends only if they move its block where it can't be followed.
     @discardableResult
     func insertBlocks(_ nodes: [PMNode], placement: BlockPlacement, focus: InsertFocus?) async -> EngineResult {
         guard let engine else { return .unavailable }
@@ -1755,7 +1757,9 @@ final class DocumentModel {
         let before = placement == .end
         var replace = false
         var replacedBlock: PMNode?
-        if !before, let candidate = anchor, let latest = latestNode(at: candidate.path), latest.type == "paragraph", latest.children.isEmpty {
+        // Without `focus`, not the line being edited: the user went back into it to write there.
+        if !before, let candidate = anchor, focus != nil || active?.ref.identity != candidate.identity,
+           let latest = latestNode(at: candidate.path), latest.type == "paragraph", latest.children.isEmpty {
             // Replaced only if empty in the engine too: a collaborator may just have typed there.
             guard let block = await currentBlock(candidate) else { return .refused }
             if block.latest.type == "paragraph", block.latest.children.isEmpty {
@@ -1802,6 +1806,15 @@ final class DocumentModel {
                 session.dropActive()
                 slashQuery = nil
                 showsPlusMenu = false
+            } else if focus == nil {
+                // The editor stays, unless the new blocks move its block where it can't be followed (`start` is where they
+                // go; without an anchor, at the end before the footnotes). Its save goes by path then, so it is written
+                // before they go in, while the path still names it: one started by `deactivate` would arrive after them.
+                let start = anchor.map { replace || before ? $0.path : Self.sibling(of: $0.path, offset: 1) } ?? [contentBlocks.count]
+                if !staysEditable(active, insertingAt: start) {
+                    await flush()
+                    deactivate()
+                }
             } else if focusTarget == nil {
                 deactivate()
             }
@@ -1820,6 +1833,15 @@ final class DocumentModel {
         var path = path
         path[path.count - 1] += offset
         return path
+    }
+
+    /// Whether the block being edited can stay so while blocks go in at `path`: it lies before them, or it has an id no
+    /// other block shares, by which `followMovedBlocks` finds it where they push it. A block without one (code, toggle
+    /// title) would keep its old path, which names another block then.
+    private func staysEditable(_ active: Active, insertingAt path: [Int]) -> Bool {
+        if active.ref.path.precedes(path) { return true }
+        guard let id = active.ref.id else { return false }
+        return document.paths(where: { $0.string("id") == id }, limit: 2).count == 1
     }
 
     /// Whether `nodes` fit where `insertBlocks` puts them (in place of an empty line, or after a block), as the engine
