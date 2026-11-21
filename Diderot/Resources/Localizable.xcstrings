@@ -766,6 +766,16 @@
         }
       }
     },
+    "Approved": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigegeben"
+          }
+        }
+      }
+    },
     "Archived": {
       "localizations": {
         "de": {
@@ -1097,6 +1107,26 @@
         }
       }
     },
+    "Changes remove the verification until a verifier verifies the page again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen heben die Verifizierung auf, bis die Seite erneut verifiziert wird."
+          }
+        }
+      }
+    },
+    "Changes return this page to draft. It has to be approved again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen machen die Seite wieder zum Entwurf. Sie muss erneut freigegeben werden."
+          }
+        }
+      }
+    },
     "Changes to “%@” may be lost: they couldn't be kept on this device.": {
       "localizations": {
         "de": {
@@ -1113,6 +1143,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Änderungen an „%@“ gehen vielleicht verloren: Der Speicher dieses Geräts ist voll."
+          }
+        }
+      }
+    },
+    "Changes withdraw the approval request and return this page to draft.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen ziehen die Freigabeanfrage zurück und machen die Seite wieder zum Entwurf."
           }
         }
       }
@@ -2014,6 +2054,16 @@
         }
       }
     },
+    "Edit approved page?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigegebene Seite bearbeiten?"
+          }
+        }
+      }
+    },
     "Edit Equation": {
       "localizations": {
         "de": {
@@ -2030,6 +2080,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Original bearbeiten"
+          }
+        }
+      }
+    },
+    "Edit page in approval?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seite in Freigabe bearbeiten?"
           }
         }
       }
@@ -2070,6 +2130,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Im Web-Editor bearbeiten"
+          }
+        }
+      }
+    },
+    "Edit verified page?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifizierte Seite bearbeiten?"
           }
         }
       }
@@ -2797,6 +2867,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "In approval": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Freigabe"
           }
         }
       }
@@ -5091,6 +5171,16 @@
         }
       }
     },
+    "Review needed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Überprüfung nötig"
+          }
+        }
+      }
+    },
     "Right": {
       "localizations": {
         "de": {
@@ -6875,6 +6965,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Die Verifizierung von %@ ist abgelaufen"
+          }
+        }
+      }
+    },
+    "Verified": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifiziert"
           }
         }
       }

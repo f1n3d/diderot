@@ -93,6 +93,8 @@ struct StatusPill: View {
             case .notConnected: return ("icloud.slash", "Not connected", .orange)
             case .trash: return ("trash", "In Trash", .secondary)
             case .noPermission, .newerServer: return ("lock", "Read only", .secondary)
+            case .verified: return ("checkmark.seal", "Read only", .secondary)
+            case .checkingVerification: return ("arrow.triangle.2.circlepath.icloud", "Connecting", .secondary)
             }
         }
         switch model.status {

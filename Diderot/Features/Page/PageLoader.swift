@@ -69,18 +69,70 @@ struct PageLoader {
         return try? await session.load(Endpoints.Spaces.info(spaceId: spaceId), of: owner)
     }
 
+    /// Whether pages of `owner` ask before an edit takes their verification back: with the license feature
+    /// `page:verification` on Docmost 0.98, whose edits take it back. 0.97 kept it, and its web didn't ask.
+    static func checksVerification(on owner: ReadySession) -> Bool {
+        owner.entitlements.has("page:verification") && owner.hasDocmost098Features
+    }
+
+    /// The page's verification from the server (`checksVerification`), kept for the next time; none where the server has
+    /// no enterprise code (404). Where it didn't answer otherwise, the kept one, else none: an editor that waited for a
+    /// server in trouble would never start.
+    func verification(of page: Page) async -> PageVerification {
+        let none = PageVerification(status: "none")
+        guard Self.checksVerification(on: owner) else { return none }
+        do {
+            let info = try await session.load(Endpoints.Pages.verificationInfo(pageId: page.id), of: owner)
+            await cache.write(info, key: CacheKey.verification(page.id))
+            return info
+        } catch APIError.notFound {
+            await cache.write(none, key: CacheKey.verification(page.id))
+            return none
+        } catch {
+            return await savedVerification(of: page.id) ?? none
+        }
+    }
+
+    /// The verification kept with the page's saved copy; nil where the server was never asked.
+    func savedVerification(of pageId: String) async -> PageVerification? {
+        await cache.read(PageVerification.self, key: CacheKey.verification(pageId))
+    }
+
+    /// Where the page's verification stands when its model is made.
+    enum Verification: Equatable {
+        /// Nothing to ask: no license feature, no lock, or the person chose to edit through it.
+        case open
+        case locked(PageVerification.Lock)
+        /// Not known yet on a server with the license feature: the engine waits, as its first sync sends unsent changes.
+        case unknown
+    }
+
+    /// Why the page is read-only, nil where it can be edited.
+    static func readOnlyReason(of page: Page, isOffline: Bool, newerServerVersion: String?, verification: Verification) -> DocumentModel.ReadOnlyReason? {
+        if page.isInTrash { return .trash }
+        if !page.canEdit { return .noPermission }
+        if isOffline { return .offline }
+        if let newerServerVersion { return .newerServer(newerServerVersion) }
+        return switch verification {
+        case .open: nil
+        case .locked(let lock): .verified(lock)
+        case .unknown: .checkingVerification
+        }
+    }
+
     /// The page's document model: editable with an engine, or read-only with the reason; nil for a database page, whose
     /// content is rows. `unsent`: the document with changes the server doesn't have yet, shown offline and until the
     /// engine's first sync (which sends them), not where they can't go. A page left open in the engine shortly before
     /// (`LiveDocuments`) starts from that document.
-    func model(for page: Page, unsent: PMNode?, isOffline: Bool, notices: AppNotices, changes: ContentChanges) -> DocumentModel? {
+    func model(for page: Page, unsent: PMNode?, isOffline: Bool, verification: Verification, notices: AppNotices,
+               changes: ContentChanges) -> DocumentModel? {
         if page.isBase == true { return nil }
-        let reason: DocumentModel.ReadOnlyReason? = page.isInTrash ? .trash : !page.canEdit ? .noPermission : isOffline ? .offline
-            : owner.newerServerVersion.map { .newerServer($0) }
+        let reason = Self.readOnlyReason(of: page, isOffline: isOffline, newerServerVersion: owner.newerServerVersion, verification: verification)
         let liveOwner = LiveDocuments.Owner(owner)
         let live = LiveDocuments.document(for: page.id, owner: liveOwner, newerThan: page.updatedAt, serverClockOffset: owner.client.serverClockOffset)
         let engine = reason == nil ? WebDocumentEngine(session: session) : nil
-        return DocumentModel(page: page, initialDocument: live ?? (reason == nil || reason == .offline ? unsent : nil), engine: engine,
+        let showsUnsent = reason == nil || reason == .offline || reason == .checkingVerification
+        return DocumentModel(page: page, initialDocument: live ?? (showsUnsent ? unsent : nil), engine: engine,
                              readOnlyReason: reason, dependencies: dependencies(of: page, liveOwner: liveOwner, notices: notices, changes: changes))
     }
 
