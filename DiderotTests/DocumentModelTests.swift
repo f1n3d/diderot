@@ -1637,6 +1637,29 @@ struct DocumentModelTests {
         #expect(engine.lifecycle == ["close", "open"])
     }
 
+    /// An engine that restarts while the page is away for an upload (its web process ended, or an error) still closes
+    /// after the upload: the restart counted as the page coming back, and the engine stayed open off-screen.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func leavingDuringAnUploadClosesAfterARestart(error: Bool) async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        let uploads = HeldUploads(model)
+
+        uploads.start()
+        model.leave()
+        // As the web engine does: it closes, then reports it.
+        engine.status = .idle
+        if error { engine.onFailure?(.engineError) } else { engine.onTerminated?() }
+        while !engine.lifecycle.contains("open") { try await Task.sleep(for: .milliseconds(10)) }
+        engine.status = .synced
+        engine.sendDocument()  // the reopened engine's first document
+        try await uploads.finish()
+        for _ in 0..<100 where engine.lifecycle.count < 3 { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.inserted.count == 1)
+        #expect(engine.lifecycle == ["close", "open", "close"])
+        #expect(!model.isLive)
+    }
+
     /// Lost write access (Docmost 0.97's `page.permissions`, or a connection the server lets only read) ends editing and
     /// makes the page read-only with a notice, for good: the page stayed editable and showed "Saved" while the server
     /// ignored every edit.

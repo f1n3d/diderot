@@ -59,6 +59,7 @@ final class EngineConnection {
     /// `suspend` calls whose close is still to come: the page stays closing until the last one is done, and an open
     /// queued between them doesn't make it live.
     @ObservationIgnored private var pendingCloses = 0
+    /// The page left while uploads ran (`leave`): the last one to end closes the engine.
     @ObservationIgnored private var suspendsAfterUploads = false
     /// The engine was opened again after an error (`EngineFailure.engineError`); another one leaves the page read-only.
     @ObservationIgnored private var restartedAfterError = false
@@ -247,8 +248,7 @@ final class EngineConnection {
             owner?.connectionKeepsInput()
             if isLive, !restartedAfterError {
                 restartedAfterError = true
-                suspend()
-                resume()
+                restart()
             } else {
                 owner?.connectionEndsEditing()
                 // It closed itself.
@@ -268,8 +268,16 @@ final class EngineConnection {
             if lifecycle == .opening { lifecycle = .closed }
             return
         }
+        restart()
+    }
+
+    /// Closes the live engine and opens it again, after an error or a web process that ended. A page that left during an
+    /// upload stays left: `resume` is for a page that appeared, and the engine stayed open off-screen after the upload.
+    private func restart() {
+        let leaving = suspendsAfterUploads
         suspend()
         resume()
+        suspendsAfterUploads = leaving
     }
 
     private func stop(_ owner: (any EngineConnectionOwner)?) async {
