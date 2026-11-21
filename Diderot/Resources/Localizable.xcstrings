@@ -2248,6 +2248,26 @@
         }
       }
     },
+    "Export has been disabled at the workspace level.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Export wurde für den Workspace deaktiviert."
+          }
+        }
+      }
+    },
+    "Export has been disabled for this space.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Export wurde für diesen Bereich deaktiviert."
+          }
+        }
+      }
+    },
     "Export Logs": {
       "localizations": {
         "de": {
