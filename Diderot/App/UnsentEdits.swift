@@ -26,8 +26,13 @@ final class UnsentEdits {
     /// (`AppSession.sendUnsentTitles`). It stays for "Edit" on the page.
     struct WaitsForEdit: Error {}
 
+    /// One send of titles, and one of fields, at a time. One asked for meanwhile goes after it, with what is kept by then,
+    /// and isn't dropped: a page's own send carries "Edit" for its verified page, which the app's send skips, and tells the
+    /// page afterwards whether its title still waits.
     private var isSendingTitles = false
     private var isSendingCells = false
+    private var waitingForTitles: [CheckedContinuation<Void, Never>] = []
+    private var waitingForCells: [CheckedContinuation<Void, Never>] = []
 
     /// Keeps a page title for `sendTitles`. False if it couldn't be kept (the kept titles can't be read, or not written):
     /// then nothing may promise it a later try.
@@ -64,9 +69,12 @@ final class UnsentEdits {
     /// Sends the titles kept in `store` with `send` (page id, title). Returns the spaces whose pages got theirs, and the
     /// titles that can never go, which it dropped; after another error the rest waits for the next try.
     func sendTitles(in store: UnsentStore, send: (String, String) async throws -> Void) async -> (spaces: [String], dropped: [DroppedChange]) {
-        guard !isSendingTitles else { return ([], []) }
+        while isSendingTitles { await withCheckedContinuation { waitingForTitles.append($0) } }
         isSendingTitles = true
-        defer { isSendingTitles = false }
+        defer {
+            isSendingTitles = false
+            Self.resume(&waitingForTitles)
+        }
         let titles: [String: UnsentTitle]
         do {
             titles = try await store.read([String: UnsentTitle].self, key: CacheKey.unsentTitles) ?? [:]
@@ -101,9 +109,12 @@ final class UnsentEdits {
     /// Sends the database fields kept in `store` (`UnsentCell`) with `send`, as `sendTitles` does titles. Returns the ones
     /// that can never go (entry deleted, access gone, value refused), which it dropped.
     func sendCells(in store: UnsentStore, send: (UnsentCell) async throws -> Void) async -> [DroppedChange] {
-        guard !isSendingCells else { return [] }
+        while isSendingCells { await withCheckedContinuation { waitingForCells.append($0) } }
         isSendingCells = true
-        defer { isSendingCells = false }
+        defer {
+            isSendingCells = false
+            Self.resume(&waitingForCells)
+        }
         let cells: [String: UnsentCell]
         do {
             cells = try await store.read([String: UnsentCell].self, key: CacheKey.unsentCells) ?? [:]
@@ -128,5 +139,12 @@ final class UnsentEdits {
             }
         }
         return dropped
+    }
+
+    /// Lets the sends that waited go on; the first takes the next turn, the others wait for it.
+    private static func resume(_ waiting: inout [CheckedContinuation<Void, Never>]) {
+        let resumed = waiting
+        waiting = []
+        for continuation in resumed { continuation.resume() }
     }
 }
