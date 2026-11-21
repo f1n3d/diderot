@@ -4,6 +4,8 @@ import DocmostKit
 /// Home: recently opened pages and all spaces; bell and workspace menu in the toolbar. In the Search tab it is the
 /// search backdrop: an active query replaces the content with results, like search in the space view.
 struct HomeView: View {
+    @Environment(AppSession.self) private var session
+    @Environment(AnnouncementsStore.self) private var announcements
     @Environment(NotificationsStore.self) private var notifications
     @Environment(SpacesStore.self) private var spaces
     @Environment(ReaderNavigation.self) private var navigation
@@ -19,6 +21,12 @@ struct HomeView: View {
                 if let search, search.isActive {
                     SearchResultsCard(search: search)
                 } else {
+                    // The web's bar across the workspace; here at the top of Home, where it doesn't take a page's room.
+                    if let announcement = announcements.shown {
+                        AnnouncementBanner(announcement: announcement, serverURL: session.server?.url) {
+                            announcements.dismiss(announcement)
+                        }
+                    }
                     RecentlyOpenedSection()
                     spacesSection
                 }
@@ -234,7 +242,7 @@ private struct SpaceGridCard: View {
 }
 
 /// Beside an archived space's name (Docmost 0.98), as the web marks it.
-private struct ArchivedBadge: View {
+struct ArchivedBadge: View {
     var body: some View {
         Text("Archived")
             .font(.caption2.weight(.semibold))

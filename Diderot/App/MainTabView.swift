@@ -19,6 +19,7 @@ struct MainTabView: View {
     @State private var notifications: NotificationsStore
     @State private var spaces: SpacesStore
     @State private var recentlyOpened: RecentlyOpenedStore
+    @State private var announcements: AnnouncementsStore
     @State private var changes = ContentChanges()
     @State private var offline = OfflineMonitor()
     @State private var notices = AppNotices()
@@ -28,6 +29,7 @@ struct MainTabView: View {
         self._notifications = State(initialValue: NotificationsStore(session: session))
         self._spaces = State(initialValue: SpacesStore(session: session))
         self._recentlyOpened = State(initialValue: RecentlyOpenedStore(cache: session.ready?.cache))
+        self._announcements = State(initialValue: AnnouncementsStore(session: session))
     }
 
     var body: some View {
@@ -50,6 +52,7 @@ struct MainTabView: View {
         .environment(notifications)
         .environment(spaces)
         .environment(recentlyOpened)
+        .environment(announcements)
         .environment(changes)
         .environment(offline)
         .environment(notices)
@@ -80,6 +83,20 @@ struct MainTabView: View {
             while !Task.isCancelled {
                 await notifications.refreshUnreadCount()
                 try? await Task.sleep(for: NotificationsStore.pollInterval)
+            }
+        }
+        // Announcements load when the app becomes active and every five minutes, and every 30 s the bar shows the one
+        // running then, as on the web.
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                await announcements.load()
+                let checks = Int(AnnouncementsStore.loadInterval / AnnouncementsStore.checkInterval)
+                for _ in 0..<checks {
+                    try? await Task.sleep(for: AnnouncementsStore.checkInterval)
+                    if Task.isCancelled { return }
+                    announcements.update()
+                }
             }
         }
         .task {
