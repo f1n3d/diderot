@@ -786,6 +786,26 @@
         }
       }
     },
+    "Archived by %@ on %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archiviert von %1$@ am %2$@."
+          }
+        }
+      }
+    },
+    "Archived on %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archiviert am %@."
+          }
+        }
+      }
+    },
     "Arrange Blocks": {
       "localizations": {
         "de": {
@@ -1954,6 +1974,16 @@
         }
       }
     },
+    "Dismiss Announcement": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ankündigung schließen"
+          }
+        }
+      }
+    },
     "Divider": {
       "localizations": {
         "de": {
@@ -2258,12 +2288,22 @@
         }
       }
     },
-    "End: %@": {
+    "End": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende: %@"
+            "value": "Ende"
+          }
+        }
+      }
+    },
+    "End Date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enddatum"
           }
         }
       }
@@ -2364,6 +2404,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exportieren"
+          }
+        }
+      }
+    },
+    "Export has been disabled at the workspace level.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Export wurde für den Workspace deaktiviert."
+          }
+        }
+      }
+    },
+    "Export has been disabled for this space.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Export wurde für diesen Bereich deaktiviert."
           }
         }
       }
@@ -2637,6 +2697,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Markierungsfarbe"
+          }
+        }
+      }
+    },
+    "Home Page": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startseite"
           }
         }
       }
@@ -5101,6 +5171,16 @@
         }
       }
     },
+    "Restore Space": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereich wiederherstellen"
+          }
+        }
+      }
+    },
     "Results": {
       "localizations": {
         "de": {
@@ -5721,6 +5801,16 @@
         }
       }
     },
+    "Space restored": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereich wiederhergestellt"
+          }
+        }
+      }
+    },
     "Spaces": {
       "shouldTranslate": false
     },
@@ -6185,6 +6275,16 @@
         }
       }
     },
+    "The page people see when they open this space.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Seite, die man beim Öffnen dieses Bereichs sieht."
+          }
+        }
+      }
+    },
     "The server accepted the note but the page did not change. Collaboration sync may be disabled on this server.": {
       "localizations": {
         "de": {
@@ -6493,6 +6593,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Server nutzt HTTP: Dein Passwort und deine Sitzung gehen unverschlüsselt durchs Netz. Fahre nur in einem Netz fort, dem du vertraust, etwa deinem eigenen."
+          }
+        }
+      }
+    },
+    "This space is archived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Bereich ist archiviert."
           }
         }
       }

@@ -131,14 +131,13 @@ Supported since November 21, 2026: the engine knows its format, pages are editab
 
 - Typing over a template's hint: the web puts what is typed at a hint in its place (and Tab in a table cell jumps to the cell's first hint); in the app the hint shows dimmed, typing goes beside it, and Backspace removes it.
 - Page covers: the app shows them above the title and lets editors add, change (gallery, upload), reposition and remove them (November 21, 2026). Picking an Unsplash photo stays on the web, whose search goes through the server with a key the app can't see; Unsplash covers set there show in the app as other servers' images do. The gradients and textures look like the web's, not the same: the web's are image files of Docmost's (AGPL-3.0), which the app (MIT) doesn't copy, so it draws its own in each preset's colors (`CoverArt`).
-- A space's home page (`spaces/info` `homePage`): the web opens the space on it. The app opens the space's tree.
+- A space's home page (`spaces/info` `homePage`, Docmost 0.98): the web opens the space on it, beside its tree in the sidebar. The app shows it first in the space, above the tree, and marks it on the page (since November 21, 2026): on a phone, opened at once, the tree would be a step back each time.
 - User profiles (`users/info`, `users/spaces`, `users/recent-pages`) and the profile card on a mention.
-- Announcements (`announcements/visible`, the license feature `announcements`): the web's banner across the workspace.
+- Announcements (license feature `announcements`, Docmost 0.98) show at the top of Home since November 21, 2026, not across every screen as the web's bar: on a phone it would take each page's room. A link in one to a path on the server opens in the browser, not in the app.
 - Chemistry in formulas (`\ce{…}`, KaTeX's mhchem): the app's KaTeX island lacks the extension, so such a formula shows its error.
 - Embeds of Google Docs, Sheets and Slides as previews (the web's new Google patterns); the app's embed check knows the old ones.
 - The workspace's default language (`workspace/public` `defaultLocale`) and the user's time zone (`users/update` `timezone`, which the web sends on load).
 - Verified pages (license feature `page:verification`): on 0.98 any edit or rename of a page that is verified, expiring, approved or in approval takes the approval back (the server sets it to draft or invalidated and tells the verifiers; Append Note counts too). The web opens such a page read-only (`pages/verification-info` `status`) and asks before editing ("Edit approved page?" / "Edit page in approval?" / "Edit verified page?"). The app edits them without asking. Doing it as the web does needs the status before the page's engine connects, also when the page opens from the cache, so it waits for its own change (decided on November 21, 2026, before the TestFlight build of 0.98 support).
-- Exports turned off (license feature `export:controls`: `settings.export.disabled` of the workspace in `users/me` or of the space in `spaces/info`): the server refuses `pages/export` with its message, which the app shows; the web also hides Export, Copy as Markdown and printing, which the app still offers (Copy as Markdown goes through `pages/info` and works).
 
 ## Presentation mode
 
@@ -154,10 +153,9 @@ As of stage 2 (editing, creating, deleting, moving). Deliberately still on the w
 - Reordering table rows by hand (web: dragging in a table without sorting, `bases/rows/reorder`).
 - Live updates when others change something (socket.io, `base:subscribe`). Until then, pulling down refreshes.
 - Showing embedded databases in the page itself (today a card that opens the database).
-- A date's end and a date property's options (Docmost 0.98: ranges, "include time", date and time format). The app's picker sets the start, with its time where the property includes time, and keeps a range's end while it comes after the start; the web's picker has both ends and the options.
+- A date property's options (Docmost 0.98: "include time", date and time format) are set on the web, as the other property settings; the app shows dates in them. Both ends of a range are set in the app since November 21, 2026.
 - Calendar views (Docmost 0.98) show as a table. A month or week of entries by their date, as the web draws them from `bases/rows/calendar`, is a view of its own.
 - Form views (Docmost 0.98) stay hidden, as on the web while forms are in beta (`BETA_BASE_FORMS`, which the server tells only its own web client). Filling one in waits until they leave the beta.
-- The "Created by" property (Docmost 0.98) shows "Only in the web app".
 
 Also open: returning to a large table loads only its first 100 rows again and scrolls to the top (code review M37, October 28, 2026). Loading as many rows as were shown costs many requests on every return; weigh other ways first.
 
@@ -219,7 +217,7 @@ Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the 
   - The page tree offers drags and new subpages on pages the user can't edit (Docmost 0.97's restricted pages); the server refuses them (V36).
   - A failed switch of the notification filter keeps the other filter's list, without a message (V37).
   - The app's own links (comments, atoms) are kept from page content where content becomes a URL: hrefs, cards, embeds, integration mentions and web views drop the app's schemes (R13, V30). A new place that forgets would open them again. One rule where the page handles links would end that: the app's own links carry a key of each launch, which content can't know (review of package C).
-- Archived spaces (Docmost 0.98, November 21, 2026): the Spaces tab lists them after the active ones, marked "Archived", and moving or copying a page doesn't offer them, as on the web; they stay editable, as the server keeps them. Not yet as on the web: a page or the home of an archived space says "This space is archived." there, with who archived it and when (and a button for space admins to restore it), and favorites mark an archived space.
+- Archived spaces (Docmost 0.98, November 21, 2026): the Spaces tab lists them after the active ones, marked "Archived", as favorites mark them and their pages; the space and its pages say "This space is archived." with who archived it and when, and "Restore Space" for its admins; moving or copying a page doesn't offer them, as on the web. They stay editable, as the server keeps them.
 - A notification about a page's review (`page.approval_requested`, and Docmost 0.98's `page.verification_invalidated`) opens the page; 0.98's web opens the page's review of the changes (`?review=changes`), which the app doesn't have (November 21, 2026).
 
 ## Accessibility
