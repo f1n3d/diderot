@@ -220,7 +220,7 @@ import XCTest
         let app = launch(page: base)
         openView(app, "Board")
         let web = "\(server)/p/\(base)?row=\(row)&rowBase=\(base)"
-        app.open(try XCTUnwrap(URL(string: "diderot://open?url=" + (web.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""))))
+        openAsLink(try XCTUnwrap(URL(string: "diderot://open?url=" + (web.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""))), in: app)
         // iOS may ask whether to open the link in the app.
         let confirm = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons
             .matching(NSPredicate(format: "label IN %@", ["Open", "Öffnen"])).firstMatch

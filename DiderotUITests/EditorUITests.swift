@@ -3452,7 +3452,7 @@ import XCTest
         deepLink.scheme = "diderot"
         deepLink.host = "open"
         deepLink.queryItems = [URLQueryItem(name: "url", value: link)]
-        app.open(try XCTUnwrap(deepLink.url))
+        openAsLink(try XCTUnwrap(deepLink.url), in: app)
         XCTAssertTrue(composer.waitForExistence(timeout: 20), "The comment link doesn't open the comments")
         XCTAssertTrue(reply.waitForExistence(timeout: 10), "The comments don't show the linked thread")
         snapshot(app, "71-comment-link")
