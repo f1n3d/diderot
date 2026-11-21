@@ -98,7 +98,9 @@ struct SpaceView: View {
             }
         }
         .linkSheet(isPresented: $showsTemplates) {
-            TemplatePickerView(spaceId: space.id) { template in try await createPage(from: template) }
+            TemplatePickerView(spaceId: space.id, action: "Create Page") { template, values in
+                try await createPage(from: template, values: values)
+            }
         }
         .modifier(OptionalPageActionSheets(runner: runner))
         .onChange(of: changes.version) { _, _ in
@@ -320,9 +322,10 @@ struct SpaceView: View {
             .frame(width: 56, height: 56)
     }
 
-    /// A new page from a template at the top of the space, as the web's space menu creates it; it opens.
-    private func createPage(from template: PageTemplate) async throws {
-        let created = try await session.send(Endpoints.Templates.use(templateId: template.id, spaceId: space.id))
+    /// A new page from a template at the top of the space, as the web's space menu creates it, with the values of its
+    /// fields (Docmost 0.98); it opens.
+    private func createPage(from template: PageTemplate, values: [String: String]?) async throws {
+        let created = try await session.send(Endpoints.Templates.use(template: template, spaceId: space.id, variableValues: values))
         changes.pageChanged(in: space.id)
         navigation.open(PageSelection(page: created))
     }

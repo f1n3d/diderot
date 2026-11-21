@@ -28,11 +28,32 @@ extension Endpoints {
             public let templateId: String
             public let spaceId: String
             public var parentPageId: String?
+            /// The template's revision the values are for (Docmost 0.98; older servers ignore it).
+            public var templateUpdatedAt: String?
+            /// Values of the template's fields by variable id (Docmost 0.98).
+            public var variableValues: [String: String]?
         }
 
-        /// A new page from a template in a space, under `parentPageId` or at the top.
-        public static func use(templateId: String, spaceId: String, parentPageId: String? = nil) -> Endpoint<Page> {
-            .post("templates/use", body: UseBody(templateId: templateId, spaceId: spaceId, parentPageId: parentPageId))
+        /// A new page from a template in a space, under `parentPageId` or at the top. Docmost 0.98 refuses a template
+        /// with fields without their values and the template's `revision` (400), or with an older revision (409).
+        public static func use(template: PageTemplate, spaceId: String, parentPageId: String? = nil,
+                               variableValues: [String: String]? = nil) -> Endpoint<Page> {
+            .post("templates/use", body: UseBody(templateId: template.id, spaceId: spaceId, parentPageId: parentPageId,
+                                                 templateUpdatedAt: template.revision, variableValues: variableValues))
+        }
+
+        public struct ApplyBody: Encodable, Sendable {
+            public let templateId: String
+            public let pageId: String
+            public var templateUpdatedAt: String?
+            public var variableValues: [String: String]?
+        }
+
+        /// The template's content for an empty page, its fields filled in and its files copied to the page (Docmost
+        /// 0.98; the page takes the returned content as the web's "Get started with" does).
+        public static func apply(template: PageTemplate, pageId: String, variableValues: [String: String]? = nil) -> Endpoint<PageTemplate> {
+            .post("templates/apply", body: ApplyBody(templateId: template.id, pageId: pageId,
+                                                     templateUpdatedAt: template.revision, variableValues: variableValues))
         }
     }
 }

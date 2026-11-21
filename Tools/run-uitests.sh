@@ -100,7 +100,7 @@ from dev_api import session
 slug, title = sys.argv[1], sys.argv[2]
 call = session().call
 space = call("spaces/info", {"spaceId": slug})["id"]
-left = re.compile(r"Neue Seite \d{6}|Vorlage\d{6} (Bereich|Global)")
+left = re.compile(r"Neue Seite \d{6}|Vorlage\d{6} (Bereich|Global|Felder)")
 # Every root page, however many: one of that title left behind would be found in its place by the tests that search.
 old, cursor = [], None
 while True:
@@ -175,17 +175,17 @@ done < <(Tools/seed-bases.py "$PAGE" || echo "Could not create database test dat
 # Templates for EditorUITests test78 (Enterprise feature `templates`): "Vorlage<stamp> Bereich" of the test page's space
 # and "Vorlage<stamp> Global"; their IDs for the check and clean-up below. Without the license nothing is made. Those
 # an earlier run left behind (it didn't end) go first: with two more pairs, test78's own lay off the screen (November
-# 11, 2026).
-TEMPLATES=$(python3 - "$STAMP" "$PAGE" <<'PY' || true
-import re, sys
+# 11, 2026). On Docmost 0.98 also "Vorlage<stamp> Felder" for test110, with a text and a choice field.
+TEMPLATES=$(python3 - "$STAMP" "$PAGE" "$SERVER_VERSION" <<'PY' || true
+import re, sys, uuid
 from dev_api import session
-stamp, page = sys.argv[1], sys.argv[2]
+stamp, page, version = sys.argv[1], sys.argv[2], sys.argv[3]
 call = session().call
 space = call("pages/info", {"pageId": page})["spaceId"]
 left, cursor = [], None
 while True:
     found = call("templates", {"limit": 100, **({"cursor": cursor} if cursor else {})})
-    left += [t for t in found["items"] if re.fullmatch(r"Vorlage\d{6} (Bereich|Global)", t.get("title") or "")]
+    left += [t for t in found["items"] if re.fullmatch(r"Vorlage\d{6} (Bereich|Global|Felder)", t.get("title") or "")]
     cursor = found["meta"].get("nextCursor") if found["meta"].get("hasNextPage") else None
     if not cursor:
         break
@@ -197,6 +197,14 @@ content = {"type": "doc", "content": [
     {"type": "paragraph", "content": [{"type": "text", "text": "Aus der Vorlage"}]}]}
 made = [call("templates/create", {"title": "Vorlage" + stamp + " Bereich", "spaceId": space, "content": content})["id"],
         call("templates/create", {"title": "Vorlage" + stamp + " Global", "icon": "📝", "content": content})["id"]]
+parts = [int(part) for part in version.split(".")[:2] if part.isdigit()]
+if len(parts) == 2 and tuple(parts) >= (0, 98):
+    def variable(name, kind, options=()):
+        return {"type": "templateVariable", "attrs": {"id": str(uuid.uuid4()), "name": name, "fieldType": kind, "options": list(options)}}
+    fields = {"type": "doc", "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "Kunde: "}, variable("Kunde", "text")]},
+        {"type": "paragraph", "content": [{"type": "text", "text": "Stand: "}, variable("Stand", "select", ["offen", "fertig"])]}]}
+    made.append(call("templates/create", {"title": "Vorlage" + stamp + " Felder", "spaceId": space, "content": fields})["id"])
 print(",".join(made))
 PY
 )
@@ -395,7 +403,7 @@ case "${AREA:-}" in
   schnell) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test5_ReturnAndBackspace,$E/test6_CreatePageFromSpace,$E/test8_TableInsertRow,$E/test9_SlashCommandQuote,$E/test42_EditAfterReturningToPage,HomeUITests/test19_SearchTabShowsHomeThenResults,HomeUITests/test50_TrashConfirmationAtRow,BaseUITests/test22_BasePageFromTree,BaseUITests/test25_BaseKanbanColumnsAndCard" ;;
   editor) ONLY="$E/test1_TapParagraphTypeAndBold,$E/test2_AddParagraphTypeAndBold,$E/test3_TapListItemAndType,$E/test4_NavigateAndEdit,$E/test5_ReturnAndBackspace,$E/test87_ReturnAtLineStartKeepsText,$E/test10_MentionPage,$E/test14_LongTypingKeepsCaretVisible,$E/test15_ToolbarActions,$E/test16_ExitListKeepsKeyboard,$E/test17_BackspaceAfterTableKeepsKeyboard,$E/test59_ReturnKeepsPagePosition,$E/test60_NewItemStartsWithCapital,$E/test61_VoiceOverEditsInTheBlock,$E/test42_EditAfterReturningToPage,$E/test44_BackspaceJoinsListItems,$E/test88_TrashDeletesListItem,$E/test90_BackspaceLeavesCodeAndList,$E/test92_IndentAndOutdentListItems,$E/test93_BackspaceLeavesQuoteCalloutAndToggle,$E/test94_MarkdownMarksTurnLines,$E/test95_FormatMenuOffersOnlyKeptFormats,$E/test96_EmptyLineShowsPlaceholder,$E/test97_AlignAndIndentParagraph,$E/test98_TextAndHighlightColors,$E/test99_HardwareKeysAsOnTheWeb,$E/test100_ArrowsMoveBetweenBlocks,$E/test101_SystemUndoThroughTheHistory,$E/test102_NestedReturnAndBackspaceAfterList,$E/test104_ToggleKeyWrapsTheLine,$E/test52_TapPlacesCaret,$E/test53_TableCellGrows,$E/test68_CalloutGrowsWithItsText,$E/test54_EmptyItemSplitsList,$E/test55_HeadingLeavesList,$E/test56_EmptyLineLeavesQuote,$E/test74_PastePageLink,$E/test83_PasteLines,$E/test75_LongPressWhileEditingBelongsToTheText,$E/test58_NewerServerOpensPagesReadOnly,$E/test106_PageShowsTheEngineAsAVisiblePage" ;;
   bloecke) ONLY="$E/test7_DragBlock,$E/test91_ListItemsMoveAndDuplicateAlone,$E/test8_TableInsertRow,$E/test80_TableToolbar,$E/test9_SlashCommandQuote,$E/test13_TableRowsCentered,$E/test34_InsertMenuListsWebCommands,$E/test35_InlineCommands,$E/test36_BlockCommands,$E/test37_Columns,$E/test38_SyncedBlocks,$E/test39_PlusMenusAndDatabase,$E/test40_CodeBlockLanguage,$E/test63_SwitchBetweenTextAndCode,$E/test89_BlockMenuDeletesListAndCode,$E/test41_ToggleContent,$E/test43_ReturnInToggleTitle,$E/test45_CollapseToggle,$E/test46_EditAfterOpeningEmbed,$E/test69_Tabs,$E/test73_TabDrag,$E/test70_SubpagesSort,$E/test72_PasteIntegrationLink,$E/test84_PreviewStaysOpenWhenABlockComesInAbove,$E/test103_CalloutIcon,$E/test109_Dates" ;;
-  seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test107_FindCentersAMatchDeepInALongList,$E/test108_FindAsksAgainForABlockThatWasntBuilt,$E/test33_Comments,$E/test105_ShowOnPageAboveTheKeyboard,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test85_AppendNoteKeptAcrossLaunches,$E/test86_AppendNoteRefusedOnAPageWithFootnotes,HomeUITests" ;;
+  seiten) ONLY="$E/test6_CreatePageFromSpace,$E/test11_TreeDragToTop,$E/test79_TreeDropZones,$E/test32_FindOnPage,$E/test107_FindCentersAMatchDeepInALongList,$E/test108_FindAsksAgainForABlockThatWasntBuilt,$E/test33_Comments,$E/test105_ShowOnPageAboveTheKeyboard,$E/test64_LinksLeaveTheAppAsInABrowser,$E/test66_WebLayoutStaysOnThePage,$E/test67_WebEditorStaysOnTheServer,$E/test49_HistoryVersionShowsImage,$E/test81_ImageViewer,$E/test62_PageEditableWhenBackOnline,$E/test71_CommentLink,$E/test76_PresentationMode,$E/test77_PageAttachments,$E/test78_Templates,$E/test110_TemplateFields,$E/test85_AppendNoteKeptAcrossLaunches,$E/test86_AppendNoteRefusedOnAPageWithFootnotes,HomeUITests" ;;
   datenbanken) ONLY="BaseUITests" ;;
   server) ONLY="ServerUITests" ;;
   *) echo "Unknown AREA '$AREA': schnell, editor, bloecke, seiten, datenbanken or server" >&2; exit 1 ;;
@@ -739,11 +747,18 @@ def plain(node):
 space = call("pages/info", {"pageId": page})["spaceId"]
 roots = call("pages/sidebar-pages", {"spaceId": space, "limit": 100})["items"]
 made = {title: next((p for p in roots if p.get("title") == title), None)
-        for title in ["Vorlage" + stamp + " Bereich", "Vorlage" + stamp + " Global"]}
+        for title in ["Vorlage" + stamp + " Bereich", "Vorlage" + stamp + " Global", "Vorlage" + stamp + " Felder"]}
 checks = []
-for title, found in made.items():
+for title, found in list(made.items())[:2]:
     content = call("pages/info", {"pageId": found["id"], "format": "json"})["content"] if found else None
     checks.append(("EditorUITests/test78_Templates", "Templates: page " + title + " with Agenda" + stamp, found is not None and ("Agenda" + stamp) in plain(content)))
+# test110 (Docmost 0.98): the fields' values as text on the page, no field left.
+if len(templates) > 2:
+    found = made["Vorlage" + stamp + " Felder"]
+    content = call("pages/info", {"pageId": found["id"], "format": "json"})["content"] if found else {}
+    text = plain(content)
+    checks.append(("EditorUITests/test110_TemplateFields", "Templates: fields filled in as text (Kunde: ACME" + stamp + ", Stand: fertig)",
+                   ("Kunde: ACME" + stamp) in text and "Stand: fertig" in text and "templateVariable" not in str(content)))
 passed = report(checks)
 for found in made.values():
     if found:

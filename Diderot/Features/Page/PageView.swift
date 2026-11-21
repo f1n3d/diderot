@@ -483,8 +483,8 @@ struct PageView: View {
         .scrollPosition($position, anchor: .top)
         .scrollDismissesKeyboard(.interactively)
         // Here, not with the page's other sheets: that chain is at the type checker's limit.
-        .modifier(TemplatePickerSheet(isPresented: $showsTemplates, spaceId: page.spaceId) { template in
-            try await fill(page, with: template)
+        .modifier(TemplatePickerSheet(isPresented: $showsTemplates, spaceId: page.spaceId) { template, values in
+            try await fill(page, with: template, values: values)
         })
         .modifier(CentersAboveKeyboard(model: $model, find: find, position: $position, scrollHeight: $scrollHeight))
         .refreshable {
@@ -926,10 +926,16 @@ struct PageView: View {
         }
     }
 
-    /// Fills the empty page with a template as the web does: its content, and its title if the page has none.
-    private func fill(_ page: Page, with template: PageTemplate) async throws {
+    /// Fills the empty page with a template as the web does: its content, and its title if the page has none. On Docmost
+    /// 0.98 the server fills in the fields and copies the template's files to the page first (`templates/apply`).
+    private func fill(_ page: Page, with template: PageTemplate, values: [String: String]?) async throws {
         guard let model else { return }
-        let full = template.content == nil ? try await session.send(Endpoints.Templates.info(templateId: template.id)) : template
+        let full: PageTemplate
+        if session.ready?.hasDocmost098Features == true {
+            full = try await session.send(Endpoints.Templates.apply(template: template, pageId: page.id, variableValues: values))
+        } else {
+            full = template.content == nil ? try await session.send(Endpoints.Templates.info(templateId: template.id)) : template
+        }
         guard await model.fill(with: full.content.flatMap(PMNode.init(json:))?.children ?? []) else {
             throw TemplateError.pageNotEmpty
         }
