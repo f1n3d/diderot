@@ -172,7 +172,8 @@ expect("an unknown attribute", keeps, binding(page(element("paragraph", [yText("
 // The binding joins neighboring texts only when its own client wrote them, which content from the server never is: Yjs
 // gives a client a new id when content from elsewhere carries its own.
 expect("neighboring texts", keeps, binding(page(element("paragraph", [yText("Hel"), yText("lo")]))));
-// y-tiptap writes no hooks; binding throws on one, at the top level as inside a block.
+// y-tiptap writes no hooks. Binding throws on one at the top level; inside a block y-tiptap 3.3 skips it and drops it
+// with the block's next edit, so the guard looks for hooks itself.
 expect("a hook", changes, binding(page(new Y.XmlHook("futureHook") as unknown as Y.XmlElement)));
 expect("a hook in a block", changes, binding(page(element("paragraph", [new Y.XmlHook("futureHook") as unknown as Y.XmlElement]))));
 // Values only other clients write: a shared type and a subdocument as attributes.

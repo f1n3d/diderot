@@ -60,8 +60,7 @@ jobs:
         # differences the tool lists as kept or open (compare-keys). Until November 19, 2026 only a Mac with a Docmost
         # checkout ran them. The tools look for Docmost's sources next to this repository; they need none of its
         # dependencies. v0.98.0 is the newest version the engine knows (tools/docmost-reference.ts loads its extensions).
-        # They run Docmost's extensions on the engine's TipTap (3.31.3), not on 0.98's own 3.35.0 (BACKLOG.md, "Engine on
-        # TipTap 3.35").
+        # They run Docmost's extensions on the engine's TipTap, 3.35.0 as in 0.98.
         working-directory: Engine
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"

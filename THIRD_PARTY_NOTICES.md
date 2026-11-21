@@ -63,7 +63,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ````
 
-### @tiptap/core 3.31.3, @tiptap/extension-blockquote 3.31.3, @tiptap/extension-bold 3.31.3, @tiptap/extension-code 3.31.3, @tiptap/extension-code-block 3.31.3, @tiptap/extension-collaboration 3.31.3, @tiptap/extension-document 3.31.3, @tiptap/extension-hard-break 3.31.3, @tiptap/extension-heading 3.31.3, @tiptap/extension-highlight 3.31.3, @tiptap/extension-horizontal-rule 3.31.3, @tiptap/extension-italic 3.31.3, @tiptap/extension-link 3.31.3, @tiptap/extension-list 3.31.3, @tiptap/extension-paragraph 3.31.3, @tiptap/extension-strike 3.31.3, @tiptap/extension-subscript 3.31.3, @tiptap/extension-superscript 3.31.3, @tiptap/extension-table 3.31.3, @tiptap/extension-text 3.31.3, @tiptap/extension-text-align 3.31.3, @tiptap/extension-text-style 3.31.3, @tiptap/extension-typography 3.31.3, @tiptap/extension-underline 3.31.3, @tiptap/extension-unique-id 3.31.3, @tiptap/extension-youtube 3.31.3, @tiptap/extensions 3.31.3, @tiptap/starter-kit 3.31.3
+### @tiptap/core 3.35.0, @tiptap/extension-blockquote 3.35.0, @tiptap/extension-bold 3.35.0, @tiptap/extension-code 3.35.0, @tiptap/extension-code-block 3.35.0, @tiptap/extension-collaboration 3.35.0, @tiptap/extension-document 3.35.0, @tiptap/extension-hard-break 3.35.0, @tiptap/extension-heading 3.35.0, @tiptap/extension-highlight 3.35.0, @tiptap/extension-horizontal-rule 3.35.0, @tiptap/extension-italic 3.35.0, @tiptap/extension-link 3.35.0, @tiptap/extension-list 3.35.0, @tiptap/extension-paragraph 3.35.0, @tiptap/extension-strike 3.35.0, @tiptap/extension-subscript 3.35.0, @tiptap/extension-superscript 3.35.0, @tiptap/extension-table 3.35.0, @tiptap/extension-text 3.35.0, @tiptap/extension-text-align 3.35.0, @tiptap/extension-text-style 3.35.0, @tiptap/extension-typography 3.35.0, @tiptap/extension-underline 3.35.0, @tiptap/extension-unique-id 3.35.0, @tiptap/extension-youtube 3.35.0, @tiptap/extensions 3.35.0, @tiptap/starter-kit 3.35.0
 
 License: MIT
 
@@ -91,7 +91,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### @tiptap/y-tiptap 3.0.7
+### @tiptap/y-tiptap 3.3.1
 
 License: MIT
 
