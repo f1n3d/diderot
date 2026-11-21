@@ -28,6 +28,23 @@ struct DocumentModelTests {
         #expect(engine.saved.map(\.plainText) == ["Hello!", "Hello!?"])
     }
 
+    /// A connect that holds the page's changes waits on the model until its page takes it, once. The model keeps no
+    /// callback of the page: a closure set by the page kept the page's state, and with it the model, alive after the page
+    /// was gone.
+    @Test func aHeldConnectWaitsOnTheModelUntilThePageTakesIt() throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph")]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        #expect(model.takeHeldChanges() == nil)
+
+        let hold = EngineHold(open: 1, connect: 2)
+        engine.onHeld?(hold)
+        #expect(model.heldChanges == hold)
+        #expect(model.takeHeldChanges() == hold)
+        #expect(model.takeHeldChanges() == nil)
+    }
+
     /// "Get started with" fills only a blank page (one empty line, as the web's `editor.isEmpty`): a template's blocks
     /// replace that line; on a page someone typed into meanwhile nothing changes.
     @Test func templateFillsOnlyABlankPage() async throws {
