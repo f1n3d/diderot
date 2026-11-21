@@ -14,10 +14,16 @@ final class MockURLProtocol: URLProtocol {
         var redirect: URL?
     }
 
-    private static let state = Mutex<(response: Response?, requests: [URLRequest])>((nil, []))
+    private static let state = Mutex<(response: Response?, byPath: [String: Response], requests: [URLRequest])>((nil, [:], []))
 
     static func respond(with response: Response) {
-        state.withLock { $0 = (response, []) }
+        state.withLock { $0 = (response, [:], []) }
+    }
+
+    /// Answers by the request's path (`/api/…`), for a test whose requests get different answers; a path not listed
+    /// fails as an invalid address does.
+    static func respond(byPath responses: [String: Response]) {
+        state.withLock { $0 = (nil, responses, []) }
     }
 
     static var recordedRequests: [URLRequest] {
@@ -46,7 +52,7 @@ final class MockURLProtocol: URLProtocol {
 
         let response = Self.state.withLock { state -> Response? in
             state.requests.append(request)
-            return state.response
+            return request.url.flatMap { state.byPath[$0.path] } ?? state.response
         }
         guard let response, let url = request.url else {
             client?.urlProtocol(self, didFailWithError: URLError(.badURL))

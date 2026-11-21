@@ -4,8 +4,13 @@ extension Endpoints {
     /// Links to other services (Docmost 0.97): the workspace's integrations, previews of links, connecting one's account.
     /// Installing integrations stays in the web's workspace settings.
     public enum Integrations {
-        /// The integrations installed in the workspace.
-        public static var installed: Endpoint<[Integration]> { .post("integrations") }
+        /// The integrations installed in the workspace, from Docmost 0.98 on; `APIClient.installedIntegrations()` asks
+        /// older servers too.
+        public static var installed: Endpoint<[Integration]> { .post("integrations/installed") }
+
+        /// The installed integrations on Docmost 0.97. Docmost 0.98 answers this path with the catalog of the
+        /// integrations it offers, which have no `id` and don't decode as installed ones.
+        public static var installedBefore098: Endpoint<[Integration]> { .post("integrations") }
 
         public struct UnfurlBody: Encodable, Sendable {
             public let url: String
@@ -26,6 +31,19 @@ extension Endpoints {
         /// browser comes back to `returnPath` on the server.
         public static func authorize(integrationId: String, returnPath: String?) -> Endpoint<IntegrationAuthorization> {
             .post("integrations/oauth/authorize", body: AuthorizeBody(integrationId: integrationId, returnPath: returnPath))
+        }
+    }
+}
+
+extension APIClient {
+    /// The integrations installed in the workspace: Docmost 0.98's path, else 0.97's where the server doesn't know the
+    /// new one (Docmost's own 404). Chosen by the answer rather than the version, which Docmost Cloud doesn't tell.
+    /// Docmost 0.96 knows neither and answers both with 404.
+    public func installedIntegrations() async throws -> [Integration] {
+        do {
+            return try await send(Endpoints.Integrations.installed)
+        } catch APIError.notFound {
+            return try await send(Endpoints.Integrations.installedBefore098)
         }
     }
 }

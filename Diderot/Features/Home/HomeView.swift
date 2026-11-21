@@ -118,7 +118,7 @@ struct HomeView: View {
                         .padding()
                 } else if showsGrid {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
-                        ForEach(items) { space in
+                        ForEach(SpacesStore.activeFirst(items)) { space in
                             NavigationLink(value: space) {
                                 SpaceGridCard(space: space)
                             }
@@ -130,7 +130,7 @@ struct HomeView: View {
                     }
                 } else {
                     LazyVStack(spacing: 10) {
-                        ForEach(items) { space in
+                        ForEach(SpacesStore.activeFirst(items)) { space in
                             SpaceCard(space: space, toast: $toast)
                         }
                     }
@@ -173,9 +173,12 @@ private struct SpaceCard: View {
                 HStack(spacing: 14) {
                     SpaceLogoView(space: space, baseURL: session.server?.url, size: 52)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(space.name)
-                            .font(.headline)
-                            .lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(space.name)
+                                .font(.headline)
+                                .lineLimit(1)
+                            if space.isArchived { ArchivedBadge() }
+                        }
                         Text(space.subtitle)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -211,7 +214,11 @@ private struct SpaceGridCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SpaceLogoView(space: space, baseURL: session.server?.url, size: 44)
+            HStack(alignment: .top) {
+                SpaceLogoView(space: space, baseURL: session.server?.url, size: 44)
+                Spacer(minLength: 0)
+                if space.isArchived { ArchivedBadge() }
+            }
             Text(space.name)
                 .font(.headline)
                 .lineLimit(2)
@@ -223,6 +230,19 @@ private struct SpaceGridCard: View {
         .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+/// Beside an archived space's name (Docmost 0.98), as the web marks it.
+private struct ArchivedBadge: View {
+    var body: some View {
+        Text("Archived")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.quaternary, in: Capsule())
+            .fixedSize()
     }
 }
 

@@ -73,9 +73,12 @@ api() { Tools/dev_api.py call "$@"; } # api <path> [key=value | key:=json … | 
 api users/me > /dev/null || { echo "Signing in failed" >&2; exit 1; }
 
 # The server's version and installed integrations: tests of content Docmost 0.97 introduced skip on older servers,
-# the paste test without a GitHub integration (a stand-in one will do, see README.md).
+# the paste test without a GitHub integration (a stand-in one will do, see README.md). Docmost 0.98 lists the installed
+# ones under integrations/installed and answers integrations, 0.97's path, with all it offers: those have no id, and
+# only the installed ones count.
 SERVER_VERSION=$(api version --field currentVersion 2>/dev/null || true)
-INTEGRATIONS=$(api integrations 2>/dev/null | python3 -c 'import json, sys; print(",".join(i["type"] for i in json.load(sys.stdin)))' 2>/dev/null || true)
+INTEGRATIONS=$({ api integrations/installed || api integrations; } 2>/dev/null |
+  python3 -c 'import json, sys; print(",".join(i["type"] for i in json.load(sys.stdin) if "id" in i))' 2>/dev/null || true)
 echo "Docmost ${SERVER_VERSION:-(version unknown)} on port $PORT${INTEGRATIONS:+, integrations: $INTEGRATIONS}"
 docmost_097() {
   python3 -c 'import sys; v = sys.argv[1].split("."); sys.exit(0 if len(v) > 1 and (int(v[0]), int(v[1])) >= (0, 97) else 1)' \

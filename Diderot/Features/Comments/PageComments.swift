@@ -65,8 +65,16 @@ final class PageComments {
         }
     }
 
-    /// Resolving is a licensed feature, as in the web client.
-    var canResolve: Bool { session.ready?.entitlements.has("comment:resolution") == true }
+    /// Resolving, as in the web client: free from Docmost 0.98 on, before a licensed feature.
+    var canResolve: Bool {
+        session.ready.map { Self.canResolve(serverVersion: $0.serverVersion, entitlements: $0.entitlements) } ?? false
+    }
+
+    /// Docmost 0.98 resolves without a license and no longer lists the feature; an older server, or one whose version
+    /// isn't known, resolves where the license has it.
+    static func canResolve(serverVersion: String?, entitlements: Entitlements) -> Bool {
+        ReadySession.supportsDocmost098(serverVersion) || entitlements.has("comment:resolution")
+    }
 
     func load() async {
         guard let ready = session.ready else { return }

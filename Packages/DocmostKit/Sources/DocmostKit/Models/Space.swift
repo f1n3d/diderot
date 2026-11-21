@@ -38,8 +38,11 @@ public struct Space: Codable, Sendable, Hashable, Identifiable {
     public let settings: JSONValue?
     public let memberCount: Int?
     public let membership: SpaceMembership?
+    /// When it was archived (Docmost 0.98); nil while active and on older servers. An archived space stays editable.
+    public let archivedAt: Date?
 
     public var role: SpaceRole? { membership?.spaceRole }
+    public var isArchived: Bool { archivedAt != nil }
 }
 
 /// Abbreviated space as embedded in pages.

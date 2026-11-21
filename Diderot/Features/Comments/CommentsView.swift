@@ -2,8 +2,8 @@ import SwiftUI
 import DocmostKit
 
 /// A page's comments as in the web client: open and resolved tabs, indented replies, inline comments with their
-/// selected text. Edit only for own comments, delete also for space admins (as on the web); resolving is a licensed
-/// feature.
+/// selected text. Edit only for own comments, delete also for space admins (as on the web); resolving is free from
+/// Docmost 0.98 on, a licensed feature before (`PageComments.canResolve`).
 struct CommentsView: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss

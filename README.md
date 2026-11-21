@@ -23,7 +23,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
 - Sign-in with a password, in the embedded browser (SSO, MFA) or via LDAP; manage device sessions. Passkeys at the identity provider work only in part, see [Sign-in](#sign-in).
 - Several servers: add more instances from the workspace menu or the settings and switch between them there. Each sign-in stays, cache and history are kept per server, and links to another saved server switch to it.
 - Tab bar app (Spaces, Favorites and search; a sidebar on the iPad):
-  - Home with recently opened pages and spaces as cards or tiles (menu via "…" or a long press).
+  - Home with recently opened pages and spaces as cards or tiles (menu via "…" or a long press); archived spaces (Docmost 0.98) come last, marked "Archived".
   - A bell with the unread count that opens notifications in a popover (swipe left marks them read, "Unread only" like on the web).
   - Search from the magnifier, with the search field in the tab bar and the home screen behind it (results replace the content as in a space).
   - A space view with search within the space, the page tree and recently changed pages.
@@ -33,7 +33,7 @@ A safe, stable app with an editor as simple and robust as possible that still co
 - Links open as from the web in a browser: pages and database entries in the app, web pages in the in-app browser, mail, phone and messages through the system, another app only after asking, scripts and files never. Links in comments, versions, database fields, PDFs, the web layout and the web editor leave the app the same way; the web editor itself stays on the server.
 - Comments like on the web:
   - A button with the number of open comments, tabs for open and resolved ones.
-  - Reply, edit, resolve and reopen, delete.
+  - Reply, edit, resolve and reopen (before Docmost 0.98 with a license that has it, as on the web), delete.
   - Comment on a text passage with "Comment" in the editor's selection menu; marked passages open their comment.
 - Find on page ("…" menu or ⌘F) with matches in text, tables and code, also in collapsed toggles, which show their content while they hold a match (as on the web, without opening them), and "Aa" for case sensitivity.
 - Presentation mode ("…" menu) as on the web: the title, then the page's blocks as slides in larger type (a heading 1 begins a slide, a divider ends one). Swiping, the bar below or an iPad keyboard's arrow keys move between slides; on an iPad a laser pointer follows the trackpad or mouse. The screen stays on meanwhile.

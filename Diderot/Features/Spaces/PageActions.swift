@@ -225,7 +225,7 @@ struct SpacePickerSheet: View {
     var body: some View {
         NavigationStack {
             AsyncContentView(state: spaces.state, retry: spaces.load) { spaces in
-                let candidates = spaces.filter { $0.id != excludedSpaceId && ($0.membership?.canEditPages ?? true) }
+                let candidates = Self.candidates(in: spaces, excluding: excludedSpaceId)
                 List(candidates) { space in
                     Button {
                         onPick(space)
@@ -252,5 +252,11 @@ struct SpacePickerSheet: View {
             // Full load on every open for current spaces and memberships.
             .task { await spaces.load() }
         }
+    }
+
+    /// The spaces whose pages the user may edit, but not `excludedSpaceId` and, as on the web (its space select lists
+    /// the active ones), no archived one.
+    static func candidates(in spaces: [Space], excluding excludedSpaceId: String?) -> [Space] {
+        spaces.filter { $0.id != excludedSpaceId && !$0.isArchived && ($0.membership?.canEditPages ?? true) }
     }
 }

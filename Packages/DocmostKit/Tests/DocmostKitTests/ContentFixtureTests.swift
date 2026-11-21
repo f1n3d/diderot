@@ -14,6 +14,27 @@ struct ContentFixtureTests {
         #expect(spaces.meta.hasNextPage == false)
     }
 
+    /// Docmost 0.98 lists only active spaces unless asked; the app needs the archived ones too, for roles and names.
+    /// Older servers drop the field they don't know.
+    @Test func spacesListAsksForArchivedOnesToo() throws {
+        let all = Endpoints.Spaces.list(PaginationOptions(limit: 100, cursor: "c1"))
+        #expect(all.path == "spaces")
+        #expect(try body(of: all) == ["limit": 100, "cursor": "c1", "status": "all"])
+        #expect(try body(of: Endpoints.Spaces.list(status: .active)) == ["status": "active"])
+    }
+
+    @Test func archivedSpace() throws {
+        #expect(try TestSupport.decodeFixture(Paginated<Space>.self, "spaces").items.allSatisfy { !$0.isArchived }, "Docmost 0.96")
+        let json = #"""
+            {"items": [{"id": "s1", "name": "Active", "slug": "active", "archivedAt": null, "archivedById": null},
+                       {"id": "s2", "name": "Old", "slug": "old", "archivedAt": "2026-11-18T10:15:00.000Z", "archivedById": "u1"}],
+             "meta": {"hasNextPage": false}}
+            """#
+        let spaces = try JSONDecoding.makeDecoder().decode(Paginated<Space>.self, from: Data(json.utf8)).items
+        #expect(spaces.map(\.isArchived) == [false, true])
+        #expect(spaces[1].archivedAt == JSONDecoding.parseDate("2026-11-18T10:15:00.000Z"))
+    }
+
     @Test func spaceInfoPermissions() throws {
         let space = try TestSupport.decodeFixture(Space.self, "space-info")
         let membership = try #require(space.membership)
