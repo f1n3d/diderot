@@ -157,6 +157,38 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// The sheet closes while a comment goes out and opens again with the same draft: Send there posted it a second
+        /// time, as the flag that blocks it lived in the closed sheet. Text the draft gets meanwhile stays: the answer
+        /// emptied it, and only what was there at Send went out.
+        @Test func aCommentGoesOutOnce() async throws {
+            let session = try await sessionOnA()
+            let comments = PageComments(pageId: "p1", session: session)
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"items": [], "meta": {"hasNextPage": false}}}"# }
+            await comments.load()
+            comments.draft = "Looks good "
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "c1", "creatorId": "u1"}}"# }
+            StubURLProtocol.requests.withLock { $0 = [] }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/comments/create" }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+                #expect(comments.isSending, "the sheet opened again shows the send")
+                #expect(await comments.send() == nil, "and Send there posts nothing")
+                comments.draft = "Looks good!"
+            } }
+            #expect(await comments.send() == .new(thread: "c1"))
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = nil }
+            #expect(StubURLProtocol.requests.withLock { $0 }.filter { $0.hasSuffix("/api/comments/create") }.count == 1)
+            #expect(comments.draft == "Looks good!" && !comments.isSending)
+            #expect(comments.state.value?.map(\.id) == ["c1"])
+            // A draft left as it was starts over.
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "c2", "creatorId": "u1"}}"# }
+            #expect(await comments.send() == .new(thread: "c2"))
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(comments.draft.isEmpty && comments.composing == .new)
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
         /// The user changes the query while "Load More" waits, and the new query's results arrive first.
         @Test func lateSearchPageKeepsTheNewQuery() async throws {
             let session = try await sessionOnA()
