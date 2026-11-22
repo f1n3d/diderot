@@ -85,8 +85,9 @@ final class AppSession {
 
     /// Link previews of the signed-in session, made for its token; a new sign-in (or sign-out) starts afresh.
     @ObservationIgnored private var previewStore: (token: String, store: LinkPreviewStore)?
-    /// The time zone told to each server while the app runs (`syncTimeZone`).
-    @ObservationIgnored private var sentTimeZones: [ServerKey: String] = [:]
+    /// The time zone told to each user on each server while the app runs (`syncTimeZone`): Docmost keeps it with the
+    /// user, so another one signing in there needs theirs too.
+    @ObservationIgnored private var sentTimeZones: [LiveDocuments.Owner: String] = [:]
 
     /// The current server's link previews (Docmost 0.97 integration cards and mentions); nil before sign-in.
     var linkPreviews: LinkPreviewStore? {
@@ -851,10 +852,10 @@ final class AppSession {
     }
 
     /// Tells a Docmost 0.98 server the device's time zone where it keeps another one or none, as the web does once a load
-    /// (`use-sync-user-timezone.ts`); once a zone per server while the app runs, and without a word where it fails, as
-    /// there. 0.98 keeps it with the user; older servers know none.
+    /// (`use-sync-user-timezone.ts`); once a zone per user and server while the app runs, and without a word where it
+    /// fails, as there. 0.98 keeps it with the user; older servers know none.
     func syncTimeZone(of session: ReadySession, zone: TimeZone = .current) async {
-        let key = ServerKey(session.server.url)
+        let key = LiveDocuments.Owner(session)
         guard session.hasDocmost098Features, !zone.identifier.isEmpty, session.currentUser.user.timezone != zone.identifier,
               sentTimeZones[key] != zone.identifier else { return }
         sentTimeZones[key] = zone.identifier
