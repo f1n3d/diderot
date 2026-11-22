@@ -250,6 +250,26 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// Try Again answering after another user signed in there leaves that user's data alone. The late answer emptied
+        /// the cache, removed the staged uploads and the web editor's storage with its unsynced edits, and left its own
+        /// user cached, so the next start or switch back removed them again.
+        @Test func lateRetryKeepsTheNextUsersData() async throws {
+            let removed = Mutex<[String]>([])
+            let session = try await uncheckedStartOnA {
+                $0.removeLocalData = { url, _ in removed.withLock { $0.append(url.host() ?? "") } }
+            }
+            let a = a
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in await Self.signInAnotherUser(to: session, at: a) } }
+            await session.retryUncheckedSignIn()
+            #expect(session.ready?.currentUser.user.id == "u2")
+            #expect(await cachedUserId(a) == "u2", "the late answer's user was cached")
+            #expect(removed.withLock { $0 }.isEmpty, "the late answer removed the local data")
+            try store.setPendingLogouts([])
+            await removeCaches()
+        }
+
         /// Another server's sign-in screen ends the unchecked sign-in: a retry there would have signed in with a's token as
         /// that server (code review R40).
         @Test func retryStaysWithItsServer() async throws {

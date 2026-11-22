@@ -115,6 +115,26 @@ extension SessionStubbing {
         return session
     }
 
+    /// Another user, u2, signs in to `server` through the in-app browser; afterwards the stub answers with u1 again.
+    static func signInAnotherUser(to session: AppSession, at server: URL) async {
+        let payload = Data(#"{"type":"access","exp":4102444800}"#.utf8).base64EncodedString()
+            .replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+        StubURLProtocol.body.withLock {
+            $0 = #"{"data": {"user": {"id": "u2", "email": "u2@example.com"}, "workspace": {"id": "w1", "name": "Docs"}}}"#
+        }
+        defer { StubURLProtocol.body.withLock { $0 = nil } }
+        do {
+            try await session.signIn(withToken: "e30.\(payload).sig", at: ServerInfo(url: server, workspace: nil))
+        } catch {
+            Issue.record("u2 didn't sign in: \(error)")
+        }
+    }
+
+    /// The user the server's offline cache holds.
+    func cachedUserId(_ server: URL) async -> String? {
+        await DiskCache(scope: server.absoluteString).read(CurrentUser.self, key: CacheKey.currentUser)?.user.id
+    }
+
     func removeCaches() async {
         for url in [a, b] { await DiskCache(scope: url.absoluteString).removeAll() }
     }

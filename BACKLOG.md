@@ -213,7 +213,6 @@ Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the 
   - One send at a time for pending sign-outs: a second request while one waits (30 s on an unreachable server) is dropped until the next activation or network change (V24). Kept titles and fields wait for the running send instead since the code review of November 21, 2026.
   - After an offline start with the network up, turning a VPN on doesn't reconnect; only returning to the app or a network change does (V25; the note above on servers that don't answer says "or of the network", which a VPN doesn't change).
   - With two iPad windows on the server setup, Continue in one and Cancel in the other can end on the new server's sign-in (V26).
-  - A late "Try Again" of a sign-in writes its user into the cache before it knows the sign-in still counts (V27, suspected: to confirm with a session test that delays the retry's `users/me`).
   - The web editor's website data likely has the app's default file protection and goes into backups, unlike the offline cache (V29, suspected: to read on a device).
   - A page dropped into a page whose children are still loading (slow network) lands near the top instead of last (V33).
   - When the newest of overlapping loads is cancelled, a screen without a saved copy can keep its spinner until a pull (V34, `RemoteValue`).

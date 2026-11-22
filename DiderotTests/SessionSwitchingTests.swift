@@ -197,6 +197,35 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// After an offline start, the user signs out and another user signs in there before the reconnect is answered:
+        /// the reconnect leaves that user's data alone. It emptied the cache, removed the staged uploads and the web
+        /// editor's storage with its unsynced edits, and left its own user cached.
+        @Test func lateReconnectKeepsTheNextUsersData() async throws {
+            try store.save(StoredSession(serverURL: a, token: "a"))
+            await AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self])).restore()
+            let removed = Mutex<[String]>([])
+            var environment = SessionEnvironment(protocolClasses: [StubURLProtocol.self])
+            environment.removeLocalData = { url, _ in removed.withLock { $0.append(url.host() ?? "") } }
+            StubURLProtocol.offline.withLock { $0 = true }
+            let session = AppSession(sessionStore: store, environment: environment)
+            await session.restore()
+            StubURLProtocol.offline.withLock { $0 = false }
+            try #require(session.ready?.restoredOffline == true)
+            let a = a
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+                await session.signOut()
+                await Self.signInAnotherUser(to: session, at: a)
+            } }
+            await session.reconnectIfNeeded()
+            #expect(session.ready?.currentUser.user.id == "u2")
+            #expect(await cachedUserId(a) == "u2", "the late reconnect's user was cached")
+            #expect(removed.withLock { $0 } == ["a.example.com", "a.example.com"], "signing out and u2's sign-in, nothing more")
+            try store.setPendingLogouts([])
+            await removeCaches()
+        }
+
         /// On an iPad, a second window opens while the first shows the sign-in screen after the session ended.
         @Test func secondWindowKeepsTheSignInScreen() async throws {
             try store.save(StoredSession(serverURL: a, token: "a"))
