@@ -174,5 +174,30 @@ extension AppSessionRaceTests {
             #expect(try store.loadAccounts().sessions.map(\.serverURL) == [a], "a's sign-in was saved for b")
             await removeCaches()
         }
+
+        /// What an earlier run left goes once per process, at its start. Each new session's start removed every server's
+        /// staged uploads, media loaders' files and running downloads again, this run's too: a test's session took the
+        /// files of tests running alongside.
+        @Test func aLaterStartLeavesThisRunsFiles() async throws {
+            // The process's first start removes what an earlier run left; normally the test host app's own did.
+            await AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self])).restoreAtLaunch()
+            let server = URL(string: "https://temp-\(UUID().uuidString).example.com")!
+            defer { TempFile.removeAll(server: server, uploads: true) }
+            let upload = try UploadFile.camera(Data("x".utf8), server: server)
+            let loaded = FileManager.default.temporaryDirectory.appending(path: "media-\(UUID().uuidString)")
+            try Data("x".utf8).write(to: loaded)
+            let media = try TempFile.move(loaded, into: TempFile.sessionMedia(server: server))
+            // A client's download as it loads (`APIClient.downloadFile`).
+            let download = APIClient.downloadsDirectory.appending(path: "\(UUID().uuidString)/\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: download.deletingLastPathComponent()) }
+            try FileManager.default.createDirectory(at: download.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("x".utf8).write(to: download)
+
+            await AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self])).restoreAtLaunch()
+            func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) }
+            #expect(exists(upload.fileURL), "a running upload reads it")
+            #expect(exists(media), "a media loader shows it")
+            #expect(exists(download), "a client loads it")
+        }
     }
 }

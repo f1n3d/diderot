@@ -67,12 +67,19 @@ nonisolated enum TempFile {
         return file
     }
 
-    /// Removes what media loaders of an earlier run left (the app was ended): for the app's start.
-    static func removeSessionMedia() {
-        let servers = FileManager.default.temporaryDirectory.appending(component: "servers", directoryHint: .isDirectory)
+    /// Removes what media loaders and uploads of an earlier run left when the app was ended (swiped away, or by iOS
+    /// while suspended): only they remove their files, and nothing resumes an upload. For the app's start, before a
+    /// media loader or an upload exists. `temporary` is the temporary folder (a test's own in tests).
+    static func removeAbandonedFiles(in temporary: URL = FileManager.default.temporaryDirectory) {
+        let servers = temporary.appending(component: "servers", directoryHint: .isDirectory)
         for server in (try? FileManager.default.contentsOfDirectory(at: servers, includingPropertiesForKeys: nil)) ?? [] {
-            try? FileManager.default.removeItem(at: server.appending(component: "media", directoryHint: .isDirectory))
+            // "uploads": staged files (`UploadFile.folder`) with their request bodies, a large video twice.
+            for folder in ["media", "uploads"] {
+                try? FileManager.default.removeItem(at: server.appending(component: folder, directoryHint: .isDirectory))
+            }
         }
+        // A library video's copy before it is staged (`UploadFile.incoming`).
+        try? FileManager.default.removeItem(at: temporary.appending(component: "incoming", directoryHint: .isDirectory))
     }
 
     /// Readable only while the device is unlocked, like the offline cache. Only a device has file protection: the
