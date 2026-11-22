@@ -32,7 +32,7 @@ struct ContentFixtureTests {
             """#
         let spaces = try JSONDecoding.makeDecoder().decode(Paginated<Space>.self, from: Data(json.utf8)).items
         #expect(spaces.map(\.isArchived) == [false, true])
-        #expect(spaces[1].archivedAt == JSONDecoding.parseDate("2026-11-18T10:15:00.000Z"))
+        #expect(spaces[1].archivedAt == Date(docmostISO: "2026-11-18T10:15:00.000Z"))
     }
 
     @Test func spaceInfoPermissions() throws {

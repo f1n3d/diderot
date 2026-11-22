@@ -7,7 +7,7 @@ enum JSONDecoding {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let raw = try container.decode(String.self)
-            guard let date = parseDate(raw) else {
+            guard let date = Date(docmostISO: raw) else {
                 throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(raw)")
             }
             return date
@@ -26,14 +26,15 @@ enum JSONDecoding {
         }
         return encoder
     }
+}
 
-    static func parseDate(_ raw: String) -> Date? {
-        if let date = try? Date(raw, strategy: fullDateStyle) {
-            return date
-        }
-        if let date = try? Date(raw, strategy: .iso8601) {
-            return date
-        }
-        return nil
+public extension Date {
+    /// An ISO 8601 instant as Docmost writes it, with milliseconds (`toISOString()`), else without fractional seconds;
+    /// in UTC or with an offset. Public so that the dates the app reads from JSON it decodes itself (a database cell, a
+    /// link preview's metadata) parse as the API's do.
+    init?(docmostISO text: String) {
+        guard let date = (try? Date(text, strategy: JSONDecoding.fullDateStyle))
+                ?? (try? Date(text, strategy: .iso8601)) else { return nil }
+        self = date
     }
 }

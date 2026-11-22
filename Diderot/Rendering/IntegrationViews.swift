@@ -391,7 +391,7 @@ enum IntegrationStyle {
         if let replies = preview.metadata?["replyCount"]?.intValue, replies > 0 {
             parts.append(String(localized: "\(replies) replies"))
         }
-        if let updated = preview.metadata?["updatedAt"]?.stringValue.flatMap(Self.date) {
+        if let updated = preview.metadata?["updatedAt"]?.stringValue.flatMap(Date.init(docmostISO:)) {
             parts.append(String(localized: "Updated \(updated.formatted(.relative(presentation: .named)))"))
         }
         return parts.joined(separator: " · ")
@@ -407,9 +407,5 @@ enum IntegrationStyle {
         if name.contains("yellow") || name.contains("orange") { return .orange }
         if name.contains("blue") && !name.contains("gray") { return .blue }
         return .secondary
-    }
-
-    private static func date(_ text: String) -> Date? {
-        (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(text)) ?? (try? Date.ISO8601FormatStyle().parse(text))
     }
 }
