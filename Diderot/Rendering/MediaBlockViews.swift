@@ -257,14 +257,17 @@ struct AttachmentBlockView: View {
     @State private var isDownloading = false
     @State private var errorMessage: String?
 
+    /// The file the card loads, for the page's downloads (`startDownload`).
+    private var file: String { media.attachmentId ?? media.src ?? "" }
+
     var body: some View {
         Button {
             // From the page where it can (`keepsDownloads`): leaving the page stops the download, and this view made
-            // anew (a collaborator's block above) doesn't.
-            if let startDownload { startDownload { await open() } } else { Task { await open() } }
+            // anew (a collaborator's block above) doesn't. The new one shows it and doesn't start it again.
+            if let startDownload { startDownload(file) { await open() } } else { Task { await open() } }
         } label: {
             PlaceholderCard(icon: "paperclip", title: media.name ?? String(localized: "Attachment"), detail: detail, titleLineLimit: 2) {
-                if isDownloading {
+                if startDownload?.isRunning(file) ?? isDownloading {
                     ProgressView()
                 } else {
                     Image(systemName: "arrow.down.circle").foregroundStyle(.secondary)

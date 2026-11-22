@@ -32,6 +32,35 @@ struct AttachmentDownloadTests {
         #expect(SlowFileURLProtocol.downloads(server).started == 1)
     }
 
+    /// A collaborator's block above makes the card anew while its file loads: the new card shows that the file loads,
+    /// and a tap on it doesn't download it again. It showed the download arrow, and the tap started a second download,
+    /// which replaced the file under the first one's preview.
+    @Test func aCardMadeAnewKeepsItsDownload() async throws {
+        let server = URL(string: "https://card-anew.docmost.invalid")!
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [Self.attachment]))
+        let (window, _) = try show(try page(server: server, engine: engine))
+        defer { window.isHidden = true }
+        let card = try #require(await element(in: window) { $0.hasPrefix("Film.mov") })
+        #expect(card.accessibilityActivate())
+        #expect(await poll { SlowFileURLProtocol.downloads(server).started == 1 })
+        #expect(await poll { Self.showsLoading(card) }, "the card's spinner")
+
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Von oben")])
+        engine.sendDocument(PMNode(type: "doc", content: [paragraph, Self.attachment]))
+        _ = try #require(await element(in: window) { $0.hasPrefix("Von oben") }, "the block above")
+        let anew = try #require(await element(in: window) { $0.hasPrefix("Film.mov") })
+        #expect(anew !== card, "the card made anew")
+        #expect(Self.showsLoading(anew), "the new card's spinner")
+        #expect(anew.accessibilityActivate())
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(SlowFileURLProtocol.downloads(server).started == 1)
+    }
+
+    /// Whether the card shows its spinner: VoiceOver hears a spinning `ProgressView` as updating often.
+    private static func showsLoading(_ card: NSObject) -> Bool {
+        card.accessibilityTraits.contains(.updatesFrequently)
+    }
+
     /// Opening a subpage, or closing the page, stops the card's download; back on the page, the card says nothing of
     /// it and loads again on a tap.
     @Test func leavingThePageStopsTheDownload() async throws {
@@ -100,11 +129,18 @@ struct AttachmentDownloadTests {
         await Self.remove(server)
     }
 
-    /// A page with an attachment, as the editor shows it; its file never loads.
-    private func page(server: URL) throws -> some View {
+    private static let attachment = PMNode(
+        type: "attachment", attrs: ["url": "/api/files/a1/Film.mov", "name": "Film.mov", "attachmentId": "a1"]
+    )
+
+    /// A page with an attachment, as the editor shows it; its file never loads. With `engine`, the page is the
+    /// engine's.
+    private func page(server: URL, engine: FakeDocumentEngine? = nil) throws -> some View {
         let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
-        let attachment = PMNode(type: "attachment", attrs: ["url": "/api/files/a1/Film.mov", "name": "Film.mov", "attachmentId": "a1"])
-        let model = DocumentModel(page: page, initialDocument: PMNode(type: "doc", content: [attachment]), engine: nil, readOnlyReason: nil)
+        let model = DocumentModel(
+            page: page, initialDocument: PMNode(type: "doc", content: [Self.attachment]), engine: engine, readOnlyReason: nil
+        )
+        engine?.sendDocument()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [SlowFileURLProtocol.self]
         let client = APIClient(baseURL: server, configuration: configuration)

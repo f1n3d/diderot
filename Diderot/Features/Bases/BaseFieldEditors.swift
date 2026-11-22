@@ -435,7 +435,7 @@ struct BaseFileEditor: View {
                     Button {
                         // From the entry's sheet (`keepsDownloads`): closing it stops the download, scrolling this
                         // field away or opening a picker doesn't.
-                        if let startDownload { startDownload { await open(file) } } else { Task { await open(file) } }
+                        if let startDownload { startDownload(file.id) { await open(file) } } else { Task { await open(file) } }
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "paperclip").foregroundStyle(.secondary)
@@ -451,7 +451,9 @@ struct BaseFileEditor: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            if downloading.contains(file.id) { ProgressView().controlSize(.small) }
+                            if startDownload?.isRunning(file.id) ?? downloading.contains(file.id) {
+                                ProgressView().controlSize(.small)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())

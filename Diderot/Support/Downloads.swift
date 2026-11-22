@@ -3,9 +3,15 @@ import SwiftUI
 /// Starts a download that a tap asks for to open a file (an attachment, a database file), kept by the view around
 /// (`View.keepsDownloads`).
 struct StartDownloadAction {
-    let start: (@escaping () async -> Void) -> Void
+    fileprivate let downloads: KeptDownloads
 
-    func callAsFunction(_ download: @escaping () async -> Void) { start(download) }
+    /// Starts `download` of the file `id` names, unless one of it runs already: a second one replaced the file under
+    /// the first one's preview.
+    func callAsFunction(_ id: String, _ download: @escaping () async -> Void) { downloads.start(id, download) }
+
+    /// Whether the file `id` names loads. The view that started it may be gone, made anew in its place, and the new
+    /// one shows it too.
+    func isRunning(_ id: String) -> Bool { downloads.isRunning(id) }
 }
 
 extension EnvironmentValues {
@@ -25,20 +31,34 @@ extension View {
 }
 
 private struct DownloadHost: ViewModifier {
-    @State private var downloads: [UUID: Task<Void, Never>] = [:]
+    @State private var downloads = KeptDownloads()
 
     func body(content: Content) -> some View {
         content
-            .environment(\.startDownload, StartDownloadAction { download in
-                let id = UUID()
-                downloads[id] = Task {
-                    await download()
-                    downloads[id] = nil
-                }
-            })
-            .onDisappear {
-                for download in downloads.values { download.cancel() }
-                downloads = [:]
-            }
+            .environment(\.startDownload, StartDownloadAction(downloads: downloads))
+            .onDisappear { downloads.stopAll() }
+    }
+}
+
+/// The running downloads by the file they load; a view reading `isRunning` shows when one ends.
+@Observable private final class KeptDownloads {
+    /// Each with a token of its own: one stopped as the view went, ending after a new one of its file started, leaves
+    /// the new one in.
+    private var running: [String: (token: UUID, task: Task<Void, Never>)] = [:]
+
+    func start(_ id: String, _ download: @escaping () async -> Void) {
+        guard running[id] == nil else { return }
+        let token = UUID()
+        running[id] = (token, Task {
+            await download()
+            if running[id]?.token == token { running[id] = nil }
+        })
+    }
+
+    func isRunning(_ id: String) -> Bool { running[id] != nil }
+
+    func stopAll() {
+        for download in running.values { download.task.cancel() }
+        running = [:]
     }
 }
