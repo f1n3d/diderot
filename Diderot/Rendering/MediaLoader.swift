@@ -19,6 +19,8 @@ actor MediaLoader {
     private var downloads: [Request: Download] = [:]
     /// The files too large for the offline cache, which go with the loader.
     private let sessionFolder: URL
+    /// Moved into the offline cache since this loader last capped it (`capCache`).
+    private var storedSinceCapped = 0
 
     /// What a download is for: a file, and whether it may be of any size. A view that waits for a file within the
     /// limit must not get the answer of one that may be larger, nor the other way round.
@@ -146,7 +148,9 @@ actor MediaLoader {
         do {
             let size = try download.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
             if let cache, size <= maxCachedBytes {
-                return try await cache.storeFile(at: download, key: key)
+                let file = try await cache.storeFile(at: download, key: key)
+                capCache(cache, after: size)
+                return file
             }
             // The copy saved of an earlier, smaller version would stand in for this one offline.
             await cache?.remove(key: key)
@@ -155,6 +159,16 @@ actor MediaLoader {
             try? FileManager.default.removeItem(at: download)
             throw error
         }
+    }
+
+    /// Caps the offline cache again once as much as its largest file went in since: a sign-in caps it, and iOS may then
+    /// keep the app running for days. It goes past its cap by about that much at most, and its folder is read only once
+    /// in so many downloads. What a start without network reads stays (`CacheKey.offlineStart`).
+    private func capCache(_ cache: DiskCache, after size: Int) {
+        storedSinceCapped += size
+        guard storedSinceCapped >= maxCachedBytes else { return }
+        storedSinceCapped = 0
+        Task.detached(priority: .utility) { await cache.prune(keeping: CacheKey.offlineStart) }
     }
 
     // MARK: - Images

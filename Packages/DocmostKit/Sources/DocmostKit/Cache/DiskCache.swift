@@ -75,11 +75,14 @@ public actor DiskCache {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    /// Removes entries older than `maxAge` and caps the total size (oldest first).
-    public func prune(maxAge: TimeInterval = 30 * 24 * 3600, maxBytes: Int = 300 << 20) {
+    /// Removes entries older than `maxAge` and caps the total size (oldest first). The entries of `keys` stay whatever
+    /// their age, outside the cap: what has to be there without a network, which newer files would push out.
+    public func prune(maxAge: TimeInterval = 30 * 24 * 3600, maxBytes: Int = 300 << 20, keeping keys: Set<String> = []) {
         guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]) else { return }
+        let kept = Set(keys.map(Self.safeName))
         var entries = urls.compactMap { url -> (URL, Date, Int)? in
-            guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
+            guard !kept.contains(url.deletingPathExtension().lastPathComponent),
+                  let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
                   let date = values.contentModificationDate else { return nil }
             return (url, date, values.fileSize ?? 0)
         }
