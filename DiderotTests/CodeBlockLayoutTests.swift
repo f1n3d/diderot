@@ -4,16 +4,30 @@ import DocmostKit
 @testable import Diderot
 
 /// A code block not being edited numbers its lines in a column beside the code. Each number sits on its line's
-/// baseline, at every text size, also below a line too long for the block (which scrolls sideways rather than wraps).
+/// baseline, at every text size, also below a line too long for the block (which scrolls sideways rather than wraps)
+/// and below lines in a script or emoji the code font has no glyphs for.
 struct CodeBlockLayoutTests {
     @Test(arguments: [DynamicTypeSize.xSmall, .large, .xxxLarge, .accessibility3])
     func lineNumbersSitOnTheirLines(size: DynamicTypeSize) async throws {
-        // "x" and the digits stand on the baseline, so where their ink ends is where the line's baseline is.
-        let lines = (1...11).map { $0 == 4 ? String(repeating: "x", count: 200) : "x" }
+        try await expectNumbersOnLines((1...11).map { $0 == 4 ? String(repeating: "x", count: 200) : "x" }, size: size)
+    }
+
+    /// Japanese, Chinese, Thai, Devanagari and emoji come from fonts other than the code's, with a larger ascent and
+    /// descent. Their lines keep the code's line pitch, so the numbers below them stay on their lines too.
+    @Test(arguments: [DynamicTypeSize.xSmall, .large, .xxxLarge, .accessibility3])
+    func lineNumbersSitOnTheirLinesBelowOtherFonts(size: DynamicTypeSize) async throws {
+        try await expectNumbersOnLines(["日本語のコメント", "x", "😀", "x", "中文注释", "x😀", "x", "ภาษาไทย", "x", "हिन्दी", "x", "x", "x"], size: size)
+    }
+
+    /// Draws a code block of `lines` at `size` and checks that each number ends where its line's ink does, on the
+    /// lines of only "x": "x" and the digits stand on the baseline, so where their ink ends is the baseline. Other
+    /// lines' glyphs reach below it.
+    private func expectNumbersOnLines(_ lines: [String], size: DynamicTypeSize) async throws {
         let bottoms = try await inkBottoms(ofCode: lines.joined(separator: "\n"), size: size, lines: lines.count)
         #expect(bottoms.numbers.count == lines.count, "\(bottoms.numbers)")
         #expect(bottoms.code.count == lines.count, "\(bottoms.code)")
-        for (line, (number, code)) in zip(bottoms.numbers, bottoms.code).enumerated() {
+        for (line, (number, code)) in zip(bottoms.numbers, bottoms.code).enumerated()
+        where lines.indices.contains(line) && lines[line].allSatisfy({ $0 == "x" }) {
             // Within a point: round digits such as 0 dip a little below the baseline.
             #expect(abs(number - code) <= 1, "Line \(line + 1): number ends at \(number), code at \(code)")
         }
@@ -67,7 +81,8 @@ struct CodeBlockLayoutTests {
 
         func bottoms(in columns: ClosedRange<Int>) -> [CGFloat] {
             let inkRows = (0..<bitmap.height).filter { y in columns.contains { bitmap.isInk(x: $0, y: y) } }
-            return Self.runs(of: inkRows).map { CGFloat($0.upperBound + 1) / image.scale }
+            // A stretch under a point tall is no line: the faint edge of an emoji's outline, apart from the rest of it.
+            return Self.runs(of: inkRows).filter { $0.count >= Int(image.scale) }.map { CGFloat($0.upperBound + 1) / image.scale }
         }
         return (bottoms(in: first.lowerBound...gap.0.upperBound), bottoms(in: gap.1.lowerBound...(third - 1)))
     }
