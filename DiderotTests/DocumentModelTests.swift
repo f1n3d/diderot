@@ -3075,8 +3075,11 @@ final class FakeDocumentEngine: DocumentEngine {
     /// sets the document they leave.
     private(set) var enters: [(target: BlockTarget, node: PMNode, after: [PMNode], base: PMNode?)] = []
     var enterResult = KeyResult.moved(EngineCursor(path: [1], offset: 0))
+    /// Awaited before `enter` answers, like a slow engine roundtrip.
+    var enterWaits: (() async -> Void)?
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult {
         enters.append((target, node, after, base))
+        await enterWaits?()
         if refusesSaves { return .refused }
         if savesUnavailable { return .unavailable }
         whileInserting?()
