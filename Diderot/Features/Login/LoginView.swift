@@ -250,6 +250,8 @@ struct MFACodeView: View {
             .onAppear { isFocused = true }
         }
         .interactiveDismissDisabled(isVerifying)
+        // A saved sign-in the start couldn't check waits while the code is asked for (`AppSession.endMFA`).
+        .onDisappear { session.endMFA(at: server) }
     }
 
     private func verify() {
@@ -304,12 +306,14 @@ struct LDAPLoginView: View {
             .navigationTitle("Sign In")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                // Not while it signs in: an answer that asks for an MFA code needs this sheet to show the code sheet.
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(isSubmitting) }
             }
             .linkSheet(item: $mfaChallenge) { challenge in
                 MFACodeView(challenge: challenge, server: server)
             }
         }
+        .interactiveDismissDisabled(isSubmitting)
     }
 
     private func submit() {

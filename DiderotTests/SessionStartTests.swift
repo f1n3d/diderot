@@ -137,6 +137,95 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// A sign-in there that fails, or that needs MFA set up first, leaves the screen waiting for the saved sign-in
+        /// again: Try Again and the retries on a network change went with it, and nothing checked the saved sign-in until a
+        /// relaunch.
+        @Test func failedSignInKeepsTheUncheckedSignIn() async throws {
+            let networkChanged = Mutex(false)
+            let session = try await uncheckedStartOnA {
+                $0.networkReturns = {
+                    while !Task.isCancelled {
+                        if networkChanged.withLock({ $0 }) { return true }
+                        try? await Task.sleep(for: .milliseconds(10))
+                    }
+                    return false
+                }
+            }
+            let server = ServerInfo(url: a, workspace: nil)
+            StubURLProtocol.offline.withLock { $0 = true }
+            await #expect(throws: APIError.self) { try await session.signIn(email: "u1@example.com", password: "secret", at: server) }
+            StubURLProtocol.offline.withLock { $0 = false }
+            #expect(session.uncheckedSignIn?.token == "a", "after a failed sign-in")
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"requiresMfaSetup": true}}"# }
+            let outcome = try await session.signIn(email: "u1@example.com", password: "secret", at: server)
+            StubURLProtocol.body.withLock { $0 = nil }
+            let needsSetup = if case .mfaRequired(let challenge) = outcome { challenge.needsSetup } else { false }
+            #expect(needsSetup && session.uncheckedSignIn?.token == "a", "after a sign-in that needs MFA set up first")
+            networkChanged.withLock { $0 = true }
+            for _ in 0..<100 where session.ready == nil { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(session.ready?.token == "a" && session.uncheckedSignIn == nil, "the network change tried it again")
+            await removeCaches()
+        }
+
+        /// While the sign-in screen asks for an MFA code, the saved sign-in waits, a wrong code too: the app coming back from
+        /// the authenticator app tried it, and its answer took over the code step, the sheet going with the sign-in screen
+        /// into the saved sign-in's account. Once the code sheet closes without a sign-in, the screen waits for it again.
+        @Test func codeStepKeepsTheUncheckedSignInWaiting() async throws {
+            let networkChanged = Mutex(false)
+            let session = try await uncheckedStartOnA {
+                $0.networkReturns = {
+                    while !Task.isCancelled {
+                        if networkChanged.withLock({ $0 }) { return true }
+                        try? await Task.sleep(for: .milliseconds(10))
+                    }
+                    return false
+                }
+            }
+            let server = ServerInfo(url: a, workspace: nil)
+            var challenge = try await mfaChallenge(signingIn: session, at: server)
+            await session.retryUncheckedSignIn()
+            networkChanged.withLock { $0 = true }
+            try await Task.sleep(for: .milliseconds(200))
+            #expect(session.ready == nil && session.uncheckedSignIn == nil, "a retry took over the code step")
+            challenge.mfaToken = "t"
+            await #expect(throws: APIError.self) { try await session.completeMFA(challenge, code: "123456", at: server) }
+            await session.retryUncheckedSignIn()
+            #expect(session.ready == nil && session.uncheckedSignIn == nil, "a retry took over the code step after a wrong code")
+            session.endMFA(at: server)
+            #expect(session.uncheckedSignIn?.token == "a", "after the code sheet closed")
+            for _ in 0..<100 where session.ready == nil { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(session.ready?.token == "a" && session.uncheckedSignIn == nil, "the network change tried it again")
+            await removeCaches()
+        }
+
+        /// The code sheet closed while its code is verified (Cancel stays enabled): that sign-in's failure leaves the screen
+        /// waiting for the saved sign-in again.
+        @Test func codeSheetClosedWhileVerifyingWaitsAgain() async throws {
+            let session = try await uncheckedStartOnA()
+            let server = ServerInfo(url: a, workspace: nil)
+            var challenge = try await mfaChallenge(signingIn: session, at: server)
+            challenge.mfaToken = "t"
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/mfa/verify" }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in session.endMFA(at: server) } }
+            await #expect(throws: APIError.self) { try await session.completeMFA(challenge, code: "123456", at: server) }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+            let signedOut = if case .signedOut(let current) = session.state { current.url == a } else { false }
+            #expect(signedOut && session.uncheckedSignIn?.token == "a")
+            await removeCaches()
+        }
+
+        /// The sign-in screen with an MFA code sheet for a, after a password sign-in there.
+        private func mfaChallenge(signingIn session: AppSession, at server: ServerInfo) async throws -> MFAChallenge {
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"userHasMfa": true}}"# }
+            let outcome = try await session.signIn(email: "u1@example.com", password: "secret", at: server)
+            StubURLProtocol.body.withLock { $0 = nil }
+            guard case .mfaRequired(let challenge) = outcome, !challenge.needsSetup else {
+                Issue.record("No MFA code asked for")
+                throw CancellationError()
+            }
+            return challenge
+        }
+
         /// Signing in anew there ends the saved sign-in's session on the server, as signing out does: it stayed open (code
         /// review R40).
         @Test func signingInAnewEndsTheUncheckedSignIn() async throws {
