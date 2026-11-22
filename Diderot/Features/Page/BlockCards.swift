@@ -155,19 +155,8 @@ struct TextNodeView: View {
                         .padding(.bottom, -fontLeading)
                         .multilineTextAlignment(align.textAlignment)
                 } else {
-                    // The page's one editor (`PageEditor`) lies on this text: hidden, it keeps the block's place and
-                    // size as the reader would show the text (the editor draws it the same), and tells the editor where
-                    // to lie. An empty text gets a space's height, as in the reader.
-                    Text(model.activeText.characters.isEmpty ? AttributedString(" ") : model.activeText)
-                        .font(font)
-                        .multilineTextAlignment(align.textAlignment)
-                        .frame(maxWidth: .infinity, alignment: align.frameAlignment)
-                        .frame(height: model.editorHeight?.ref == ref ? model.editorHeight?.height : nil, alignment: .top)
-                        .hidden()
-                        .accessibilityHidden(true)
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
-                            if model.active?.ref == ref { model.editorFrame = (ref, frame) }
-                        }
+                    // The page's one editor (`PageEditor`) lies on this text.
+                    EditorSlot(model: model, ref: ref, text: model.activeText, font: font, alignment: align)
                 }
                 if isActive, model.showsInsertMenu {
                     InsertMenuView(model: model)
@@ -542,15 +531,7 @@ struct CodeNodeView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         } else {
                             // The page's one editor lies on this code, as on a text block's text (`TextNodeView`).
-                            Text(code.isEmpty ? " " : code)
-                                .font(Self.codeFont)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .frame(height: model.editorHeight?.ref == ref ? model.editorHeight?.height : nil, alignment: .top)
-                                .hidden()
-                                .accessibilityHidden(true)
-                                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
-                                    if isActive { model.editorFrame = (ref, frame) }
-                                }
+                            EditorSlot(model: model, ref: ref, text: AttributedString(code), font: Self.codeFont)
                         }
                     }
                     // Where the code block's own editor drew the code: inside its 8 pt padding and its text view's
