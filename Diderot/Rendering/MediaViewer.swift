@@ -215,7 +215,8 @@ private struct MediaViewerPage: View {
             if media.isDiagram {
                 markup = DiagramView.svg(in: try await MediaLoader.read(source))
             } else {
-                // As sharp as the loader decodes at all (`MediaLoader.maxPixels`): the viewer zooms to 4×.
+                // As sharp as the loader decodes at all (`MediaLoader.maxPixels`): the viewer zooms to 4×. An
+                // animation's frames share `maxAnimationPixels` here as on the page.
                 image = await MediaLoader.decode(file: source, targetPixelWidth: 16_384)
             }
             guard markup != nil || image != nil else { throw MediaUnreadable() }
