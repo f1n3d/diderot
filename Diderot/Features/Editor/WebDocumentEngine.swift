@@ -61,8 +61,6 @@ protocol DocumentEngine: AnyObject, Observable {
         -> (result: EngineResult, path: [Int]?)
     func deleteBlock(_ target: BlockTarget) async -> EngineResult
     func moveBlock(_ target: BlockTarget, to destination: BlockTarget, position: BlockInsertPosition) async -> EngineResult
-    /// Splits a list, quote or callout after `child`: the children below go into a new one of the same kind right after.
-    func splitContainer(after child: BlockTarget) async -> EngineResult
     /// Moves the list item around the block at `target` one level in (`inward`) or out, as Tab and Shift-Tab do on the
     /// web (`itemLevelSteps` in Engine/src/steps.ts). The block keeps its id, so its editing goes on where it lands.
     func moveItemLevel(_ target: BlockTarget, inward: Bool) async -> EngineResult
@@ -76,10 +74,6 @@ protocol DocumentEngine: AnyObject, Observable {
     /// Refused with nothing to undo or redo.
     func undo() async -> EngineResult
     func redo() async -> EngineResult
-    /// Applies the steps together, all or none (`batch` in Engine/src/engine.ts). A compound edit (leaving a list,
-    /// joining a block with the one before) used to be separate calls, and a refused last one left the text twice or
-    /// the list split, without a word.
-    func batch(_ steps: [EngineStep]) async -> EngineResult
     /// For each candidate, whether its blocks can go at `place` as the engine's schema allows (Engine/src/fits.ts); nil
     /// without an engine. The app kept its own copy of these rules, and it drifted: a synced block was offered page
     /// breaks and databases it can't hold.
@@ -178,7 +172,7 @@ enum EngineFailure {
     case engineError
 }
 
-struct EngineParticipant: Identifiable, Hashable, Decodable {
+struct EngineParticipant: Identifiable, Hashable {
     let id: String
     let name: String?
     let avatarUrl: String?
@@ -313,16 +307,6 @@ struct BackspacePlans: Equatable, Sendable, Decodable {
 enum BackspaceResult: Equatable {
     case done(BackspacePlan, cursor: EngineCursor?)
     case refused, unavailable
-}
-
-/// A step of `batch` (`Step` in Engine/src/steps.ts). Each finds its block where the steps before it left it, so later
-/// steps give paths in that document. `base` and `expected` as for `replaceBlock`.
-enum EngineStep: Equatable {
-    case replace(BlockTarget, with: PMNode, base: PMNode?)
-    case insert([PMNode], relativeTo: BlockTarget?, position: BlockInsertPosition)
-    case delete(BlockTarget, expected: PMNode?)
-    /// Splits a list, quote or callout after `child`, as `splitContainer(after:)`.
-    case split(after: BlockTarget)
 }
 
 /// Bundled TipTap/Yjs editor (`Engine/`) in a `WebPage` the page view shows out of sight (`EngineHost`), connected to the
@@ -578,10 +562,6 @@ final class WebDocumentEngine: DocumentEngine {
         await call("return window.DocmostEngine.deleteBlock(target);", ["target": target.jsObject])
     }
 
-    func splitContainer(after child: BlockTarget) async -> EngineResult {
-        await call("return window.DocmostEngine.splitContainer(target);", ["target": child.jsObject])
-    }
-
     func moveItemLevel(_ target: BlockTarget, inward: Bool) async -> EngineResult {
         await call("return window.DocmostEngine.moveItemLevel(target, inward);", ["target": target.jsObject, "inward": inward])
     }
@@ -714,10 +694,6 @@ final class WebDocumentEngine: DocumentEngine {
 
     func undo() async -> EngineResult { await call("return window.DocmostEngine.undo();", [:]) }
     func redo() async -> EngineResult { await call("return window.DocmostEngine.redo();", [:]) }
-
-    func batch(_ steps: [EngineStep]) async -> EngineResult {
-        await call("return window.DocmostEngine.batch(steps);", ["steps": steps.map(Self.stepObject)])
-    }
 
     func currentDocument() async -> PMNode? {
         guard let page,
@@ -870,19 +846,6 @@ final class WebDocumentEngine: DocumentEngine {
 
     private static func jsObject(_ value: some Encodable) -> Any {
         (try? JSONEncoder().encode(value)).flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? [:]
-    }
-
-    private static func stepObject(_ step: EngineStep) -> [String: Any] {
-        switch step {
-        case .replace(let target, let node, let base):
-            ["op": "replace", "target": target.jsObject, "json": [jsObject(node)], "base": base.map { jsObject($0) } ?? NSNull()]
-        case .insert(let nodes, let target, let position):
-            ["op": "insert", "target": target?.jsObject ?? NSNull(), "json": nodes.map(jsObject), "position": position.rawValue]
-        case .delete(let target, let expected):
-            ["op": "delete", "target": target.jsObject, "expected": expected.map { jsObject($0) } ?? NSNull()]
-        case .split(let child):
-            ["op": "split", "target": child.jsObject]
-        }
     }
 }
 

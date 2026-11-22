@@ -143,7 +143,7 @@ private struct DateSheet: View {
         self.model = model
         self.target = target
         // The picker works in the device's calendar: the stored day as a local date.
-        _selection = State(initialValue: Self.localDate(of: day))
+        _selection = State(initialValue: day.start(in: .current))
     }
 
     var body: some View {
@@ -183,17 +183,6 @@ private struct DateSheet: View {
         }
         Task { await model.applyAtom(node, type: "date", target: target) }
         dismiss()
-    }
-
-    private static func localDate(of day: CalendarDay) -> Date {
-        var utc = Calendar(identifier: .gregorian)
-        utc.timeZone = .gmt
-        let parts = utc.dateComponents([.year, .month, .day], from: day.date)
-        // Gregorian parts, read in the Gregorian calendar of the device's time zone: the device's own calendar
-        // (Buddhist, Japanese) would read the year differently.
-        var local = Calendar(identifier: .gregorian)
-        local.timeZone = .current
-        return local.date(from: parts) ?? day.date
     }
 }
 

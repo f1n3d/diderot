@@ -207,8 +207,9 @@ class DocmostEngine {
   // engine takes no edits (not open, or stopped after an error: `fail`); the app keeps input for null and sends it again
   // once the engine is back. The steps behind them are in src/steps.ts.
 
-  /** Applies the steps in one transaction, all or none (src/steps.ts); a compound edit's steps go together. */
-  batch(steps: Step[]): boolean | null {
+  /** Applies the steps in one transaction, all or none (src/steps.ts), for the block operations below. The app sends no
+   * steps itself: compound edits (Return, Backspace, conversions) build theirs here (src/keys.ts, src/conversions.ts). */
+  private batch(steps: Step[]): boolean | null {
     return this.transact((editor) => {
       const tr = editor.state.tr;
       if (!applySteps(tr, steps)) return false;
@@ -310,12 +311,6 @@ class DocmostEngine {
     const doc = this.editor.state.doc;
     if (!locate(doc, target)) return null;
     return { indent: !!itemLevelSteps(doc, target, true), outdent: !!itemLevelSteps(doc, target, false) };
-  }
-
-  /** Splits a list, quote or callout after one of its children: the children below go into a new one of the same kind
-   * right after it. */
-  splitContainer(target: Target): boolean | null {
-    return this.batch([{ op: "split", target }]);
   }
 
   setAttributes(target: Target, attrs: Record<string, unknown>): boolean | null {

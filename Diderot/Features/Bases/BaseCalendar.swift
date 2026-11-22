@@ -228,7 +228,8 @@ nonisolated extension CalendarDay {
     /// The day of the week, 0 for Sunday.
     var weekday: Int { Self.utc.component(.weekday, from: date) - 1 }
 
-    /// The day's first moment in `timeZone`.
+    /// The day's first moment in `timeZone`, as a date picker there shows the day. Its Gregorian parts are read in the
+    /// Gregorian calendar: the device's own calendar (Buddhist, Japanese) would read the year differently.
     func start(in timeZone: TimeZone) -> Date {
         var local = Calendar(identifier: .gregorian)
         local.timeZone = timeZone

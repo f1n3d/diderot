@@ -1609,6 +1609,73 @@ struct DocumentModelTests {
         #expect(engine.saved.last?.plainText == "EinsZweix")
     }
 
+    /// Pasted lines the engine refuses or can't take stay in the line without their line breaks, as after a refused
+    /// Return, and a letter typed while they were on their way stays too, as it does after a Return. The line was set
+    /// back to the pasted text, and the letter was gone.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], ["A\nB\nC", "\n"])
+    func letterTypedWhileRefusedLinesWaitStays(unavailable: Bool, pasted: String) async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "xyz")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        model.dependencies.clock = TestClock()
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        engine.enterResult = unavailable ? .unavailable : .refused
+        var answers = false
+        engine.enterWaits = { while !answers { try? await Task.sleep(for: .milliseconds(10)) } }
+        let isReturn = pasted == "\n"
+
+        let text = model.activeText.characters
+        model.activeText.insert(AttributedString(pasted), at: text.index(text.startIndex, offsetBy: 2))
+        model.activeTextChanged()
+        while engine.enteredLines.isEmpty && engine.enters.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        // The editor shows the first line meanwhile.
+        #expect(String(model.activeText.characters) == (isReturn ? "xy" : "xyA"))
+        model.activeText.append(AttributedString("q"))
+        model.activeTextChanged()
+        answers = true
+        while model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
+
+        let kept = isReturn ? "xyqz" : "xyAqBCz"
+        #expect(String(model.activeText.characters) == kept)
+        // As the editor reports the change.
+        model.activeTextChanged()
+        await model.flush()
+        #expect(engine.saved.last?.plainText == kept)
+    }
+
+    /// Lines pasted into a toggle's title that the engine refuses go back where they were pasted, before what was after
+    /// the cursor, and text typed meanwhile stays where it went, at the title's start or end. Typed at the end and ending
+    /// like what was after the cursor ("Hotel" after "tel"), it took the lines in: "TiAtelHo" + "B" + "tel".
+    @Test(.timeLimit(.minutes(1)), arguments: [("q", false, "qTiABtel"), ("q", true, "TiABtelq"), ("Hotel", true, "TiABtelHotel")])
+    func letterTypedWhileRefusedTitleLinesWaitStays(typed: String, atEnd: Bool, kept: String) async throws {
+        let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "Titel")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])]),
+        ]))
+        let model = try Self.model(engine)
+        model.dependencies.clock = TestClock()
+        model.activate(NodeRef(path: [0, 0], node: title), node: title)
+        engine.enterResult = .refused
+        var answers = false
+        engine.enterWaits = { while !answers { try? await Task.sleep(for: .milliseconds(10)) } }
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 2))
+
+        #expect(model.pasteLink("A\nB"))
+        while engine.enteredLines.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        // The title keeps what was after the cursor meanwhile.
+        #expect(String(model.activeText.characters) == "TiAtel")
+        if atEnd {
+            model.activeText.append(AttributedString(typed))
+        } else {
+            model.activeText.insert(AttributedString(typed), at: model.activeText.startIndex)
+        }
+        model.activeTextChanged()
+        answers = true
+        while model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(String(model.activeText.characters) == kept)
+    }
+
     /// Moving the page to the trash while its engine opens (after pull-to-refresh) closes it after that open; stopped
     /// beside the queue, the open ran afterwards and nothing closed it.
     @Test(.timeLimit(.minutes(1))) func trashWhileOpeningClosesTheEngineLast() async throws {
@@ -3091,7 +3158,7 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var opened: [String] = []
     /// "open" and "close" in order.
     private(set) var lifecycle: [String] = []
-    /// Blocks written with `replaceBlock(_:with:base:expected:)` or a batch's replace step, and the bases passed with them.
+    /// Blocks written with `replaceBlock(_:with:base:expected:)`, and the bases passed with them.
     private(set) var saved: [PMNode] = []
     private(set) var bases: [PMNode?] = []
     /// The expected state passed with each replacement (either kind), in order.
@@ -3103,8 +3170,6 @@ final class FakeDocumentEngine: DocumentEngine {
     /// The blocks of each `replaceBlock(_:withNodes:)`.
     private(set) var replacedWith: [[PMNode]] = []
     private(set) var deleted: [BlockTarget] = []
-    /// Children that `splitContainer(after:)` split their container after.
-    private(set) var splitAfter: [BlockTarget] = []
     /// The next save waits until the test resumes `heldSave`, like a slow engine roundtrip.
     var holdsNextSave = false
     private(set) var heldSave: CheckedContinuation<Void, Never>?
@@ -3127,10 +3192,6 @@ final class FakeDocumentEngine: DocumentEngine {
     var collaboratorEdit: (() -> Void)?
     /// What `undo` and `redo` answer.
     var historyResult = EngineResult.applied
-    /// The steps of each `batch`.
-    private(set) var batches: [[EngineStep]] = []
-    /// What the next `batch` answers instead of applying, e.g. refused, as the engine refuses a block that changed.
-    var nextBatchResult: EngineResult?
     /// Targets of `setAttributes`, the attributes it set, and what it answers.
     private(set) var attributeTargets: [BlockTarget] = []
     private(set) var attributeValues: [[String: JSONValue]] = []
@@ -3300,10 +3361,6 @@ final class FakeDocumentEngine: DocumentEngine {
         moved.append((target, destination, position))
         return .applied
     }
-    func splitContainer(after child: BlockTarget) async -> EngineResult {
-        splitAfter.append(child)
-        return .applied
-    }
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult {
         attributeTargets.append(target)
         attributeValues.append(attributes)
@@ -3317,33 +3374,12 @@ final class FakeDocumentEngine: DocumentEngine {
     }
     func undo() async -> EngineResult { historyResult }
     func redo() async -> EngineResult { historyResult }
-    /// Applied, records the steps as their own calls would (`saved`, `inserted`, `deleted`, `splitAfter`) and runs
-    /// `whileInserting`, where a test sets the document the batch leaves.
-    func batch(_ steps: [EngineStep]) async -> EngineResult {
-        batches.append(steps)
-        if let result = nextBatchResult {
-            nextBatchResult = nil
-            return result
-        }
-        for step in steps {
-            switch step {
-            case .replace(_, let node, let base):
-                saved.append(node)
-                bases.append(base)
-            case .insert(let nodes, let target, let position): inserted += nodes.map { ($0, target, position) }
-            case .delete(let target, _): deleted.append(target)
-            case .split(let child): splitAfter.append(child)
-            }
-        }
-        whileInserting?()
-        return .applied
-    }
     /// Return, Backspace and conversions as the model sent them. Where their lines go is the engine's
     /// (Engine/tools/keys-check.ts, conversions-check.ts); here the test says where the cursor goes, and `whileInserting`
     /// sets the document they leave.
     private(set) var enters: [(target: BlockTarget, node: PMNode, after: [PMNode], base: PMNode?)] = []
     var enterResult = KeyResult.moved(EngineCursor(path: [1], offset: 0))
-    /// Awaited before `enter` answers, like a slow engine roundtrip.
+    /// Awaited before `enter` and `enterLines` answer, like a slow engine roundtrip.
     var enterWaits: (() async -> Void)?
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult {
         enters.append((target, node, after, base))
@@ -3357,6 +3393,7 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var enteredLines: [(target: BlockTarget, node: PMNode, lines: [[PMNode]], base: PMNode?)] = []
     func enterLines(_ target: BlockTarget, keeping node: PMNode, lines: [[PMNode]], base: PMNode?) async -> KeyResult {
         enteredLines.append((target, node, lines, base))
+        await enterWaits?()
         if refusesSaves { return .refused }
         if savesUnavailable { return .unavailable }
         whileInserting?()

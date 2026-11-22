@@ -2277,34 +2277,12 @@ final class DocumentModel {
         // A toggle's title stays whole (web parity); any other line keeps the text before the cursor, and the text after
         // it goes to the new line.
         let keepsAll = active.type == "detailsSummary"
-        session.adopt(keepsAll ? before + after : before)
-        session.cancelCommit()
-
-        let beforeInlines = Self.inlines(from: before, base: activeFont)
-        let line = PMNode(type: active.type, attrs: active.attrs, content: beforeInlines.isEmpty ? nil : beforeInlines)
-        let kept = session.currentNode() ?? line
-        session.overrides[active.ref.identity] = kept
-        let base = session.takeBase(of: active.ref, sending: kept)
-        let result = await engine.enter(active.ref.target, keeping: line, after: Self.inlines(from: after, base: activeFont), base: base)
-        guard case .moved(let cursor) = result else {
-            if result == .refused { report(.refused) }
-            guard self.active?.ref == active.ref else { return }
-            // The line stays as typed, without the line break.
-            if session.base == kept { session.base = base }
-            if !keepsAll { activeText += after }
-            if result == .refused {
-                // Saved with the next input or when editing ends: an applied save now would hide the message at once.
-                session.overrides[active.ref.identity] = session.currentNode()
-            } else {
-                // Kept for the engine's return, as any input (`ActiveTextSession`).
-                session.scheduleCommit(debounce: .zero)
-            }
-            return
+        let afterInlines = Self.inlines(from: after, base: activeFont)
+        let moved = await splitLine(active, keeping: before, showing: keepsAll ? before + after : before,
+                                    restoring: keepsAll ? AttributedString() : after, at: before.characters.count) { line, base in
+            await engine.enter(active.ref.target, keeping: line, after: afterInlines, base: base)
         }
-        // Input typed meanwhile stored a newer override; it stays pending so its commit writes it.
-        if session.overrides[active.ref.identity] == kept { session.overrides[active.ref.identity] = nil }
-        session.saveRefused = false
-        report(.applied)
+        guard let cursor = moved else { return }
         let pastedInto = !keepsAll && caretInAfter > 0 && caretInAfter <= after.characters.count
         await focusAfterOperation(cursor.path, pastedInto ? .offset(caretInAfter) : .start)
     }
@@ -2327,33 +2305,70 @@ final class DocumentModel {
             lines[lines.count - 1] = AttributedString(last[..<cut])
             caretInLast = nil
         }
-        session.adopt(lines[0])
+        let rest = lines.dropFirst().map { Self.inlines(from: $0, base: activeFont) }
+        // Refused, the other lines go back after the first line's text, before what stayed in a toggle's title.
+        let others = lines.dropFirst().reduce(AttributedString(), +)
+        let moved = await splitLine(active, keeping: lines[0], showing: lines[0], restoring: others,
+                                    at: typed[0].characters.count) { line, base in
+            await engine.enterLines(active.ref.target, keeping: line, lines: rest, base: base)
+        }
+        guard let cursor = moved else { return }
+        await focusAfterOperation(cursor.path, caretInLast.map { .offset($0) } ?? .end)
+    }
+
+    /// What Return and pasted or dictated lines share: the line, `text` its text, goes to the engine with its base
+    /// (`send`) while the editor shows `shown`, and the cursor the engine gives comes back for the caller to focus.
+    /// Refused or with no engine (nil), the line stays as typed, without the line breaks: `rest`, the text for the lines
+    /// after it, goes back where it was taken out of `shown`, after its first `cut` characters, into the editor's text as
+    /// it is by then. Set back to the text from before the key, the line lost what was typed meanwhile, and its save.
+    private func splitLine(_ active: Active, keeping text: AttributedString, showing shown: AttributedString,
+                           restoring rest: AttributedString, at cut: Int,
+                           send: (_ line: PMNode, _ base: PMNode?) async -> KeyResult) async -> EngineCursor? {
+        session.adopt(shown)
         session.cancelCommit()
 
-        let firstInlines = Self.inlines(from: lines[0], base: activeFont)
-        let line = PMNode(type: active.type, attrs: active.attrs, content: firstInlines.isEmpty ? nil : firstInlines)
+        let inlines = Self.inlines(from: text, base: activeFont)
+        let line = PMNode(type: active.type, attrs: active.attrs, content: inlines.isEmpty ? nil : inlines)
         let kept = session.currentNode() ?? line
         session.overrides[active.ref.identity] = kept
         let base = session.takeBase(of: active.ref, sending: kept)
-        let rest = lines.dropFirst().map { Self.inlines(from: $0, base: activeFont) }
-        let result = await engine.enterLines(active.ref.target, keeping: line, lines: rest, base: base)
+        let result = await send(line, base)
         guard case .moved(let cursor) = result else {
             if result == .refused { report(.refused) }
-            guard self.active?.ref == active.ref else { return }
-            // The text stays in the line as typed, without the line breaks, as after a refused Return.
+            guard self.active?.ref == active.ref else { return nil }
             if session.base == kept { session.base = base }
-            activeText = typed.dropFirst().reduce(typed[0], +)
+            if !rest.characters.isEmpty { activeText.insert(rest, at: Self.cutIndex(cut, of: shown, in: activeText)) }
             if result == .refused {
+                // Saved with the next input or when editing ends: an applied save now would hide the message at once.
                 session.overrides[active.ref.identity] = session.currentNode()
             } else {
+                // Kept for the engine's return, as any input (`ActiveTextSession`).
                 session.scheduleCommit(debounce: .zero)
             }
-            return
+            return nil
         }
+        // Input typed meanwhile stored a newer override; it stays pending so its commit writes it.
         if session.overrides[active.ref.identity] == kept { session.overrides[active.ref.identity] = nil }
         session.saveRefused = false
         report(.applied)
-        await focusAfterOperation(cursor.path, caretInLast.map { .offset($0) } ?? .end)
+        return cursor
+    }
+
+    /// The place in `text`, `shown` with input typed since, that was in `shown` after its first `cut` characters. While
+    /// `text` still begins with those and the character after them, the input went after the place: there. Else before
+    /// what followed it while `text` still ends with that (nothing after a Return: the end, after what was typed there),
+    /// else after what came before it while `text` still begins with that, else the end. Looked for from the end first,
+    /// input at a toggle title's end that ended as the title did took the lines in: "TiAtelHo" + "B" + "tel".
+    private static func cutIndex(_ cut: Int, of shown: AttributedString, in text: AttributedString) -> AttributedString.Index {
+        let characters = text.characters
+        let tail = shown.characters.dropFirst(cut)
+        let same = zip(characters, shown.characters).prefix { $0 == $1 }.count
+        if same > cut { return characters.index(characters.startIndex, offsetBy: cut) }
+        if characters.suffix(tail.count).elementsEqual(tail) {
+            return characters.index(characters.endIndex, offsetBy: -tail.count)
+        }
+        if same == cut { return characters.index(characters.startIndex, offsetBy: cut) }
+        return characters.endIndex
     }
 
     /// Plain text with line breaks pasted into a toggle's title, at the cursor: what was after the cursor stays in the

@@ -188,7 +188,6 @@ struct WriteEndpointTests {
         #expect(Endpoints.Bases.createRow(pageId: "b1").path == "bases/rows/create")
         #expect(create["cells"]?["prpS"] == "optX")
         #expect(create["position"] == "Zz")
-        #expect(create["afterRowId"] == nil)
 
         let delete = try body(of: Endpoints.Bases.deleteRow(pageId: "b1", rowId: "r1"))
         #expect(Endpoints.Bases.deleteRow(pageId: "b1", rowId: "r1").path == "bases/rows/delete")

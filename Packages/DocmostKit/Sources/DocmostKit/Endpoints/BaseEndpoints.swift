@@ -96,14 +96,13 @@ extension Endpoints {
             public let pageId: String
             public var cells: [String: JSONValue]
             public var position: String?
-            public var afterRowId: String?
         }
 
-        /// New row. Without `position`/`afterRowId` the server appends it; the response is the complete row.
+        /// New row. Without `position` the server appends it; the response is the complete row.
         public static func createRow(
-            pageId: String, cells: [String: JSONValue] = [:], position: String? = nil, afterRowId: String? = nil
+            pageId: String, cells: [String: JSONValue] = [:], position: String? = nil
         ) -> Endpoint<BaseRow> {
-            .post("bases/rows/create", body: CreateRowBody(pageId: pageId, cells: cells, position: position, afterRowId: afterRowId))
+            .post("bases/rows/create", body: CreateRowBody(pageId: pageId, cells: cells, position: position))
         }
 
         public struct UpdateRowBody: Encodable, Sendable {

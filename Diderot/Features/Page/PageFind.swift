@@ -80,10 +80,11 @@ final class PageFind {
         }
     }
 
-    /// Recomputes matches for a new query (`restart`: jumps to the first match) or a changed document.
-    func update(document: PMNode, baseURL: URL?, restart: Bool) {
+    /// Recomputes matches for a new query (`restart`: jumps to the first match), a changed document or a link preview
+    /// that arrived. `previewTitle`: an integration mention's title from the server's preview, as the page shows it.
+    func update(document: PMNode, baseURL: URL?, previewTitle: @escaping (String) -> String?, restart: Bool) {
         let previous = currentMatch
-        matches = FindMatcher.matches(of: query, options: options, in: document, baseURL: baseURL)
+        matches = FindMatcher.matches(of: query, options: options, in: document, baseURL: baseURL, previewTitle: previewTitle)
         if restart {
             current = 0
         } else if let previous, let index = matches.firstIndex(of: previous) {
@@ -161,16 +162,19 @@ enum FindMatcher {
         }
     }
 
-    /// Text of a paragraph or heading as `TextNodeView` displays it.
-    static func displayedText(of node: PMNode, baseURL: URL?) -> String {
-        String(InlineTextBuilder(baseURL: baseURL).attributedString(for: ContentParser.inlines(of: node)).characters)
+    /// Text of a paragraph or heading as `TextNodeView` displays it, also with the titles of integration mentions whose
+    /// preview loaded (`previewTitle`): the bar counts what the page highlights, which searches the shown text again.
+    static func displayedText(of node: PMNode, baseURL: URL?, previewTitle: @escaping (String) -> String?) -> String {
+        let builder = InlineTextBuilder(baseURL: baseURL, previewTitle: previewTitle)
+        return String(builder.attributedString(for: ContentParser.inlines(of: node)).characters)
     }
 
-    static func matches(of query: String, options: String.CompareOptions, in document: PMNode, baseURL: URL?) -> [FindMatch] {
+    static func matches(of query: String, options: String.CompareOptions, in document: PMNode, baseURL: URL?,
+                        previewTitle: @escaping (String) -> String?) -> [FindMatch] {
         guard !query.isEmpty else { return [] }
         var result: [FindMatch] = []
         forEachTextBlock(in: document) { node, ref, topLevel in
-            let text = node.type == "codeBlock" ? node.plainText : displayedText(of: node, baseURL: baseURL)
+            let text = node.type == "codeBlock" ? node.plainText : displayedText(of: node, baseURL: baseURL, previewTitle: previewTitle)
             for occurrence in ranges(of: query, options: options, in: text).indices {
                 result.append(FindMatch(ref: ref, occurrence: occurrence, topLevel: topLevel))
             }

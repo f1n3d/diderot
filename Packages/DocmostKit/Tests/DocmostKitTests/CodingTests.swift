@@ -17,6 +17,43 @@ struct JSONValueTests {
         #expect(value["missing"] == nil)
     }
 
+    /// Each value decodes as its own kind whatever order the decoder tries the kinds in: a string that reads like a
+    /// number, a bool, null or an object stays a string, an empty object doesn't become an empty array or back, and
+    /// numbers and bools don't turn into each other.
+    @Test func eachValueDecodesAsItsOwnKind() throws {
+        let json = #"["1", "true", "null", "", "{}", "[]", 0, 1, -2.5, true, false, null, {}, [], {"a": {}}, [[]], {"b": "c"}]"#
+        let value = try JSONDecoder().decode(JSONValue.self, from: Data(json.utf8))
+        let expected: JSONValue = [
+            .string("1"), .string("true"), .string("null"), .string(""), .string("{}"), .string("[]"),
+            .number(0), .number(1), .number(-2.5), .bool(true), .bool(false), .null,
+            .object([:]), .array([]), .object(["a": .object([:])]), .array([.array([])]), .object(["b": .string("c")]),
+        ]
+        #expect(value == expected)
+    }
+
+    /// Every recorded page and response decodes to the same tree JSONSerialization reads from it.
+    @Test func everyFixtureDecodesAsJSONSerializationReadsIt() throws {
+        func value(_ object: Any) throws -> JSONValue {
+            switch object {
+            case is NSNull: return .null
+            case let string as String: return .string(string)
+            // JSONSerialization reads true and false as the CFBoolean singletons, other numbers as plain NSNumbers.
+            case let number as NSNumber where CFGetTypeID(number) == CFBooleanGetTypeID(): return .bool(number.boolValue)
+            case let number as NSNumber: return .number(number.doubleValue)
+            case let array as [Any]: return .array(try array.map(value))
+            case let object as [String: Any]: return .object(try object.mapValues(value))
+            default: throw CocoaError(.coderReadCorrupt)
+            }
+        }
+        let urls = try #require(Bundle.module.urls(forResourcesWithExtension: "json", subdirectory: "Fixtures"))
+        for url in urls {
+            let data = try Data(contentsOf: url)
+            let decoded = try JSONDecoder().decode(JSONValue.self, from: data)
+            #expect(decoded == (try value(JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed))), "\(url.lastPathComponent)")
+        }
+        #expect(urls.count > 40)
+    }
+
     @Test func roundTripsThroughEncoder() throws {
         let value: JSONValue = ["width": "50%", "level": 2, "attrs": ["checked": true, "icon": nil]]
         let data = try JSONEncoder().encode(value)

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 import DocmostKit
 @testable import Diderot
@@ -25,7 +26,7 @@ struct FindMatcherTests {
         ])
         let document = PMNode(type: "doc", content: [paragraph("Davor"), toggle])
         let paths = { (query: String) in
-            FindMatcher.matches(of: query, options: [.caseInsensitive], in: document, baseURL: nil).map(\.ref.path)
+            FindMatcher.matches(of: query, options: [.caseInsensitive], in: document, baseURL: nil, previewTitle: { _ in nil }).map(\.ref.path)
         }
         // Index 0 of a toggle is its title, its content starts at index 1.
         #expect(paths("Titel") == [[1, 0]])
@@ -42,12 +43,12 @@ struct FindMatcherTests {
         let document = PMNode(type: "doc", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Davor")]), toggle])
         let find = PageFind()
         find.query = "treffer"
-        find.update(document: document, baseURL: nil, restart: true)
+        find.update(document: document, baseURL: nil, previewTitle: { _ in nil }, restart: true)
         #expect(find.matches.map(\.ref.path) == [[1, 0], [1, 1, 0]])
         #expect(find.holdsMatch(inside: [1, 1]))
         #expect(!find.holdsMatch(inside: [1, 0]), "a block counted as holding its own match")
         find.query = "davor"
-        find.update(document: document, baseURL: nil, restart: true)
+        find.update(document: document, baseURL: nil, previewTitle: { _ in nil }, restart: true)
         #expect(!find.holdsMatch(inside: [1, 1]))
     }
 
@@ -61,7 +62,7 @@ struct FindMatcherTests {
             PMNode(type: "transclusionSource", content: [paragraph("Synchronisierter Treffer")]),
             PMNode(type: "footnotes", content: [PMNode(type: "footnote", content: [paragraph("Fußnote mit Treffer")])]),
         ])
-        let matches = FindMatcher.matches(of: "treffer", options: [.caseInsensitive], in: document, baseURL: nil)
+        let matches = FindMatcher.matches(of: "treffer", options: [.caseInsensitive], in: document, baseURL: nil, previewTitle: { _ in nil })
         // Reading order: left column, right column (two occurrences), synced block, footnote.
         #expect(matches.map(\.ref.path) == [[0, 0, 0], [0, 1, 0], [0, 1, 0], [1, 0], [2, 0, 0]])
         #expect(matches.map(\.occurrence) == [0, 0, 1, 0, 0])
@@ -102,7 +103,7 @@ struct FindMatcherTests {
         let document = PMNode(type: "doc", content: [paragraph("Treffer"), paragraph("Treffer"), paragraph("Stelle")])
         let find = PageFind()
         find.query = "treffer"
-        find.update(document: document, baseURL: nil, restart: true)
+        find.update(document: document, baseURL: nil, previewTitle: { _ in nil }, restart: true)
         let requests = find.revealRequest
         let passage = FindMatch(ref: NodeRef(path: [2], id: nil), occurrence: 0, topLevel: NodeRef(path: [2], id: nil))
         find.reveal(passage: passage)
@@ -116,6 +117,34 @@ struct FindMatcherTests {
         find.reveal(passage: passage)
         find.endPassage()
         #expect(find.revealTarget == find.currentMatch)
+    }
+
+    /// An integration mention whose preview loaded shows the service's title, not the one its address makes: find
+    /// searches that title, so the bar counts what the page highlights, and the current match is the one highlighted
+    /// as current.
+    @Test func mentionIsFoundByTheTitleThePageShows() throws {
+        let url = "https://github.com/acme/app/issues/12"
+        let paragraph = PMNode(type: "paragraph", content: [
+            PMNode(type: "text", text: "Ein crash vor "),
+            NodeFactory.integrationMention(url: url, provider: "github"),
+            PMNode(type: "text", text: " und ein crash danach"),
+        ])
+        let document = PMNode(type: "doc", content: [paragraph])
+        let title = { (link: String) in link == url ? "Crash when opening settings" : nil }
+        let find = PageFind()
+        find.query = "crash"
+        find.update(document: document, baseURL: nil, previewTitle: title, restart: true)
+        #expect(find.matches.map(\.occurrence) == [0, 1, 2], "the mention's title wasn't searched")
+        #expect(FindMatcher.matches(of: "acme", options: [.caseInsensitive], in: document, baseURL: nil, previewTitle: title).isEmpty,
+                "the address's title was searched, which the page doesn't show")
+
+        // The page's text as `TextNodeView` highlights it, with the last match current.
+        find.previous()
+        var text = InlineTextBuilder(baseURL: nil, previewTitle: title).attributedString(for: ContentParser.inlines(of: paragraph))
+        FindMatcher.highlight(&text, find: find, ref: try #require(find.currentMatch).ref)
+        let current = text.runs.filter { $0.backgroundColor == Color.orange.opacity(0.65) }
+            .map { String(text[$0.range].characters) + String(text[$0.range.upperBound...].characters) }
+        #expect(current == ["crash danach"], "another occurrence is highlighted as the current match")
     }
 
     /// A passage is shown for a moment only: afterwards find's match is the target again, and no block keeps reporting
