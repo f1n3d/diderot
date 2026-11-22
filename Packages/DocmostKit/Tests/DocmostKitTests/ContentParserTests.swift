@@ -444,6 +444,35 @@ struct ContentParserTests {
         #expect(CalendarDay(containing: lateEvening, in: TimeZone(identifier: "Asia/Tokyo")!).value == "2026-11-27")
     }
 
+    /// Every day of a common year, of leap years and of a century that is none reads as its midnight UTC and stores as
+    /// it came; a day the year lacks, a month or day out of range, or another character among the ten is no day.
+    @Test func calendarDaysAreOnlyDaysTheYearHas() throws {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = .gmt
+        var misread: [String] = []
+        for year in [2000, 2024, 2026, 2100] {
+            let first = try #require(utc.date(from: DateComponents(year: year, month: 1, day: 1)))
+            for offset in 0..<(utc.range(of: .day, in: .year, for: first)?.count ?? 0) {
+                let date = try #require(utc.date(byAdding: .day, value: offset, to: first))
+                let parts = utc.dateComponents([.year, .month, .day], from: date)
+                let text = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+                if CalendarDay(text)?.date != date || CalendarDay(text)?.value != text { misread.append(text) }
+            }
+        }
+        #expect(misread.isEmpty, "\(misread)")
+        #expect(CalendarDay("2026-11-20")?.date == Date(timeIntervalSince1970: 1_795_132_800))
+        for valid in ["2000-02-29", "2024-02-29", "0001-01-01", "9999-12-31"] {
+            #expect(CalendarDay(valid)?.value == valid, "\(valid)")
+        }
+        for invalid in [
+            "2026-02-29", "2100-02-29", "2026-04-31", "2026-11-31", "2026-13-01", "2026-00-10", "2026-11-00", "2026-11-32",
+            "2026-11-2a", "+026-11-20", " 026-11-20", "2026/11/20", "2026-11-20 ", "2026-1-120", "20261120--", "2026--11-2",
+            "２０２６-11-20", "2026-١١-20",
+        ] {
+            #expect(CalendarDay(invalid) == nil, "\(invalid)")
+        }
+    }
+
     @Test func emptyAndStringContent() {
         #expect(ContentDocument(json: nil).isEmpty)
         #expect(ContentDocument(json: .string("# markdown")).isEmpty)
