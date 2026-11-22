@@ -175,21 +175,17 @@ struct EditorToolbar: View {
     private func textColorButton(_ color: (key: String, value: String)?) -> some View {
         let shown = color.flatMap { Color(hex: $0.value) }
         let active = shown.map { shown in isActive { $0.foregroundColor == shown } } ?? false
-        return Button {
+        return toolbarChoice(active: active) {
             EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setTextColor(color?.value, in: &$0) }
             mode = .main
         } label: {
             Text(verbatim: "A")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(shown ?? Color.primary)
-                .frame(width: 30, height: 30)
-                .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(EditorText.colorTitle(color?.key)))
         .accessibilityHint(Text("Text color"))
         .accessibilityIdentifier("text-color-\(color?.key ?? "default")")
-        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// A swatch in the highlight's color (`HighlightColors`); none for "Default".
@@ -198,28 +194,22 @@ struct EditorToolbar: View {
         let active = name.map { name in
             isActive { $0.backgroundColor == EditorText.highlightColor(name) || $0.docmost.highlight?.lowercased() == HighlightColors.hex(for: name) }
         } ?? false
-        return Button {
+        return toolbarChoice(active: active) {
             EditorText.transformRuns(of: &model.activeText, in: &model.activeSelection) { EditorText.setHighlight(named: name, in: &$0) }
             mode = .main
         } label: {
-            Group {
-                if let name {
-                    Circle()
-                        .fill(EditorText.highlightColor(name))
-                        .overlay(Circle().strokeBorder(Color(.separator)))
-                        .frame(width: 20, height: 20)
-                } else {
-                    Image(systemName: "circle.slash")
-                }
+            if let name {
+                Circle()
+                    .fill(EditorText.highlightColor(name))
+                    .overlay(Circle().strokeBorder(Color(.separator)))
+                    .frame(width: 20, height: 20)
+            } else {
+                Image(systemName: "circle.slash")
             }
-            .frame(width: 30, height: 30)
-            .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(EditorText.colorTitle(name)))
         .accessibilityHint(Text("Highlight color"))
         .accessibilityIdentifier("highlight-color-\(name ?? "default")")
-        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// The table's actions on the cell being edited, as in the web's table menus. Merging goes cell by cell (the app
@@ -305,51 +295,48 @@ struct EditorToolbar: View {
     }
 
     private func scopeButton(_ title: LocalizedStringResource, _ scope: DocumentModel.TableScope) -> some View {
-        let active = formatScope == scope
-        return Button { formatScope = scope } label: {
+        toolbarChoice(active: formatScope == scope) { formatScope = scope } label: {
             TableScopeIcon(scope: scope)
-                .frame(width: 30, height: 30)
-                .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(title))
         .accessibilityIdentifier("table-scope-\(scope.rawValue)")
-        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// A swatch in the color the cell shows (`TableCellView.background`).
     private func colorButton(_ color: DocumentModel.TableColor, active: Bool) -> some View {
-        Button { Task { await model.editTable(.background(color, formatScope)) } } label: {
-            Group {
-                if color == .none {
-                    Image(systemName: "circle.slash")
-                } else {
-                    Circle()
-                        .fill(HighlightPalette.color(name: color.name, hex: color.hex))
-                        .overlay(Circle().strokeBorder(Color(.separator)))
-                        .frame(width: 20, height: 20)
-                }
+        toolbarChoice(active: active) { Task { await model.editTable(.background(color, formatScope)) } } label: {
+            if color == .none {
+                Image(systemName: "circle.slash")
+            } else {
+                Circle()
+                    .fill(HighlightPalette.color(name: color.name, hex: color.hex))
+                    .overlay(Circle().strokeBorder(Color(.separator)))
+                    .frame(width: 20, height: 20)
             }
-            .frame(width: 30, height: 30)
-            .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(Rectangle())
         }
         .accessibilityLabel(Text(color.title))
         .accessibilityIdentifier("table-color-\(color.rawValue)")
-        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     /// All toolbar symbols in the same regular weight (the toolbar would draw them bolder).
     private func iconButton(_ title: LocalizedStringResource, _ symbol: String, id: String, active: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        toolbarChoice(active: active, action: action) {
             Image(systemName: symbol)
                 .fontWeight(active ? .semibold : .regular)
+        }
+        .accessibilityLabel(Text(title))
+        .accessibilityIdentifier(id)
+    }
+
+    /// The toolbar's square button, tinted while what it stands for applies (a format, a color, a scope). One place, so
+    /// that every button shows it, and tells VoiceOver it's selected, the same way.
+    private func toolbarChoice<Label: View>(active: Bool, action: @escaping () -> Void, @ViewBuilder label: () -> Label) -> some View {
+        Button(action: action) {
+            label()
                 .frame(width: 30, height: 30)
                 .background(active ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel(Text(title))
-        .accessibilityIdentifier(id)
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
