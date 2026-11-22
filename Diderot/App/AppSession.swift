@@ -73,6 +73,12 @@ final class AppSession {
     /// would keep the launch screen up until the requests' timeout (30 s).
     @ObservationIgnored var startDeadline: Duration = .seconds(5)
 
+    /// How often returning to the app asks for the license and version again (`refreshCurrentUser`): Docmost 0.96 and
+    /// 0.97 ask GitHub at every version request, which allows 60 an hour from one address.
+    @ObservationIgnored var licenseAndVersionInterval: Duration = .seconds(15 * 60)
+    /// When the current session's license and version were last asked for: at its sign-in, then by `refreshCurrentUser`.
+    @ObservationIgnored private var licenseAndVersionAsked: ContinuousClock.Instant?
+
     var hasAccounts: Bool { !accounts.isEmpty }
 
     /// Link previews of the signed-in session, made for its token; a new sign-in (or sign-out) starts afresh.
@@ -600,24 +606,41 @@ final class AppSession {
         state = .signedOut(session.server)
     }
 
-    /// Revalidates the session when the app returns to the foreground.
+    /// Revalidates the session when the app returns to the foreground, and every `licenseAndVersionInterval` its license
+    /// and version too: iOS may keep the app in memory for days, across a Docmost upgrade or a license change, and both
+    /// decide whether verified pages ask before an edit and whether pages open read-only.
     func refreshCurrentUser() async {
         guard case .ready(let session) = state else { return }
         if session.restoredOffline {
             await reconnectIfNeeded()
             return
         }
+        // Taken before the requests go out: the windows of an iPad that come back together ask once.
+        let asksLicenseAndVersion = licenseAndVersionAsked.map { $0.duration(to: .now) >= licenseAndVersionInterval } ?? true
+        if asksLicenseAndVersion { licenseAndVersionAsked = .now }
+        async let licenseAndVersion = asksLicenseAndVersion ? Self.licenseAndVersion(from: session.client) : nil
         do {
             let user = try await session.client.send(Endpoints.Users.me)
+            let (entitlements, version) = await licenseAndVersion ?? (nil, nil)
             // The current state, not `session`: switching servers and back meanwhile replaced the client and cache.
             guard isStillCurrent(session), case .ready(var current) = state else { return }
-            // Usually unchanged: writing `state` anyway would rebuild every view that reads the session.
-            if user != current.currentUser {
-                current.currentUser = user
-                state = .ready(current)
+            // Usually unchanged: writing `state` anyway would rebuild every view that reads the session. An answer that
+            // didn't come keeps what is known, as at sign-in.
+            var changed = user != current.currentUser
+            current.currentUser = user
+            if let entitlements, entitlements != current.entitlements {
+                current.entitlements = entitlements
+                changed = true
             }
-            // Also when unchanged: an offline start needs it, and iOS may have purged the cache meanwhile.
+            if let version, Self.reportedVersion(version) != current.serverVersion {
+                current.serverVersion = Self.reportedVersion(version)
+                changed = true
+            }
+            if changed { state = .ready(current) }
+            // Also when unchanged: an offline start needs them, and iOS may have purged the cache meanwhile.
             await current.cache.write(user, key: CacheKey.currentUser)
+            if let entitlements { await current.cache.write(entitlements, key: CacheKey.entitlements) }
+            if let version { await current.cache.write(version, key: CacheKey.serverVersion) }
             // Back in the app, perhaps in another time zone.
             await syncTimeZone(of: current)
         } catch let error as APIError where error.isSessionExpired {
@@ -625,6 +648,13 @@ final class AppSession {
         } catch {
             AppLog.session.debug("Refresh skipped: \(error.userMessage, privacy: .public)")
         }
+    }
+
+    /// The server's license and the version it names, each nil where it didn't come (`finishSignIn` says why).
+    private static func licenseAndVersion(from client: APIClient) async -> (Entitlements?, String?) {
+        async let entitlements = client.send(Endpoints.Workspace.entitlements)
+        async let version = client.send(Endpoints.Version.info)
+        return (try? await entitlements, (try? await version)?.currentVersion)
     }
 
     /// Clears the current server's offline cache, except the user, license and version that an offline start restores.
@@ -722,6 +752,8 @@ final class AppSession {
         keychain("save") { try sessionStore.save(stored) }
         reloadAccounts()
         Task.detached(priority: .utility) { await cache.prune() }
+        // Just asked for: returning to the app asks again only after `licenseAndVersionInterval`.
+        licenseAndVersionAsked = .now
         state = .ready(ReadySession(
             server: server, client: client, mediaLoader: MediaLoader(client: client, cache: cache), cache: cache,
             unsentChanges: environment.makeUnsentStore(server.url, currentUser.user.id),

@@ -5,7 +5,8 @@ import DocmostKit
 @testable import Diderot
 
 extension AppSessionRaceTests {
-    /// The start: saved content at once without an answer, the license and version kept, a sign-in it couldn't check tried again.
+    /// The start: saved content at once without an answer, the license and version kept (and asked again on returning to
+    /// the app), a sign-in it couldn't check tried again.
     @Suite struct Start: SessionStubbing {
         let store = SessionStore(keychain: MemorySecretStore())
 
@@ -46,6 +47,67 @@ extension AppSessionRaceTests {
             await session.clearCache()
             #expect(try await offlineSessionOnA().ready?.serverVersion == "0.97.0")
             await removeCaches()
+        }
+
+        /// iOS kept the app in memory overnight, while the server went from Docmost 0.97 to 0.98 and its license gained
+        /// page verification: returning to the app finds both, so a verified page asks before an edit takes its
+        /// verification back. An offline start finds them too; an answer that doesn't come keeps them, and the same
+        /// answers again rewrite no session (every view reading it would redraw).
+        @Test func returningToTheAppFindsAnUpgradeAndALicenseChange() async throws {
+            StubURLProtocol.body.withLock { $0 = Self.answer(version: "0.97.0", features: ["bases"]) }
+            defer { StubURLProtocol.body.withLock { $0 = nil } }
+            let session = try await sessionOnA()
+            try #require(session.ready.map(PageLoader.checksVerification) == false)
+            session.licenseAndVersionInterval = .zero
+            StubURLProtocol.body.withLock { $0 = Self.answer(version: "0.98.0", features: ["bases", "page:verification"]) }
+            await session.refreshCurrentUser()
+            #expect(session.ready?.serverVersion == "0.98.0")
+            #expect(session.ready?.entitlements.has("page:verification") == true)
+            #expect(session.ready.map(PageLoader.checksVerification) == true)
+            let cache = DiskCache(scope: a.absoluteString)
+            #expect(await cache.read(String.self, key: CacheKey.serverVersion) == "0.98.0")
+            #expect(await cache.read(Entitlements.self, key: CacheKey.entitlements)?.has("page:verification") == true)
+
+            let writes = Mutex(0)
+            withObservationTracking { _ = session.state } onChange: { writes.withLock { $0 += 1 } }
+            await session.refreshCurrentUser()
+            #expect(writes.withLock { $0 } == 0, "the same answers")
+            // A user alone: no version named, and no license in it.
+            StubURLProtocol.body.withLock { $0 = nil }
+            await session.refreshCurrentUser()
+            #expect(writes.withLock { $0 } == 0, "no answers")
+            #expect(session.ready?.serverVersion == "0.98.0" && session.ready?.entitlements.has("page:verification") == true)
+            await removeCaches()
+        }
+
+        /// Docmost 0.96 and 0.97 ask GitHub at every version request, which allows 60 an hour from one address: returning
+        /// to the app asks for the license and version only once `licenseAndVersionInterval` has passed since they were
+        /// last asked for, and windows of an iPad coming back together ask once.
+        @Test func licenseAndVersionAreAskedOncePerInterval() async throws {
+            let session = try await sessionOnA()
+            StubURLProtocol.requests.withLock { $0 = [] }
+            await session.refreshCurrentUser()
+            #expect(StubURLProtocol.requests.withLock { $0 } == ["a.example.com/api/users/me"], "just signed in")
+
+            session.licenseAndVersionInterval = .seconds(1)
+            try await Task.sleep(for: .milliseconds(1200))
+            // Another window comes back while this one's requests wait for their answers.
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { await session.refreshCurrentUser() } }
+            StubURLProtocol.requests.withLock { $0 = [] }
+            await session.refreshCurrentUser()
+            let requests = StubURLProtocol.requests.withLock { $0 }
+            #expect(requests.filter { $0 == "a.example.com/api/version" }.count == 1)
+            #expect(requests.filter { $0 == "a.example.com/api/workspace/entitlements" }.count == 1)
+            #expect(requests.filter { $0 == "a.example.com/api/users/me" }.count == 2)
+            await removeCaches()
+        }
+
+        /// One answer for users/me, workspace/entitlements and version alike: Docmost `version` with these license features.
+        private static func answer(version: String, features: [String]) -> String {
+            let quoted = features.map { "\"\($0)\"" }.joined(separator: ", ")
+            return #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}, "currentVersion": "\#(version)", "tier": "enterprise", "features": [\#(quoted)]}}"#
         }
 
         /// A start with saved content waits only `startDeadline` for a server that doesn't answer (behind a VPN that is

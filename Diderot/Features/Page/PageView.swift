@@ -387,6 +387,12 @@ struct PageView: View {
                 Task { await load(force: true) }
             }
         }
+        // Returning to the app found the verification check turned on or off (a Docmost upgrade, a license change): the
+        // page asks for its verification as on opening, so an editor built without the check doesn't take a
+        // verification back, and the title doesn't wait for an answer nothing asks for.
+        .onChange(of: checksVerification) { _, _ in
+            Task { await load(force: true) }
+        }
         .onChange(of: titleEdit.text) { old, _ in
             // Only while the user types: a title shown with a line break would otherwise be saved without it.
             if titleFocused, titleEdit.takeReturn(after: old) { titleFocused = false }
@@ -800,9 +806,14 @@ struct PageView: View {
 
     // MARK: - Verification
 
+    /// Whether the current session's pages ask before an edit takes their verification back (`PageLoader.checksVerification`).
+    private var checksVerification: Bool {
+        session.ready.map(PageLoader.checksVerification) ?? false
+    }
+
     /// Where the page's verification stands for its editor (`PageLoader.Verification`).
     private var verificationGate: PageLoader.Verification {
-        guard let ready = session.ready, PageLoader.checksVerification(on: ready) else { return .open }
+        guard checksVerification else { return .open }
         guard let verification else { return verificationUnavailable ? .unavailable : .unknown }
         guard let lock = verification.lock, lock != unlockedLock else { return .open }
         return .locked(lock)
