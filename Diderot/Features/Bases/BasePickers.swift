@@ -159,10 +159,7 @@ struct BasePersonPicker: View {
     let rowId: String
     let propertyId: String
     @State private var search = ""
-    @State private var results: [SearchSuggestions.UserSuggestion] = []
-    @State private var isLoading = false
-    /// Why the last search failed: shown instead of "none found".
-    @State private var searchError: String?
+    @State private var suggestions = BasePickerSearch<SearchSuggestions.UserSuggestion>()
 
     var body: some View {
         if let property = model.base?.property(id: propertyId), let row = model.row(id: rowId) {
@@ -180,7 +177,7 @@ struct BasePersonPicker: View {
                     }
                 }
                 Section {
-                    let others = results.filter { !selectedIds.contains($0.id) }
+                    let others = suggestions.results.filter { !selectedIds.contains($0.id) }
                     ForEach(others) { user in
                         personRow(id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, selected: false) {
                             model.remember(user: UserRef(id: user.id, name: user.name, avatarUrl: user.avatarUrl))
@@ -188,16 +185,16 @@ struct BasePersonPicker: View {
                             if !multiple { dismiss() }
                         }
                     }
-                    if let searchError {
+                    if let searchError = suggestions.searchError {
                         Label(searchError, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
-                    } else if others.isEmpty && !isLoading {
+                    } else if others.isEmpty && !suggestions.isLoading {
                         Text("No people found").foregroundStyle(.secondary)
                     }
                 }
             }
-            .overlay { if isLoading && results.isEmpty { ProgressView() } }
+            .overlay { if suggestions.isLoading && suggestions.results.isEmpty { ProgressView() } }
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search for a person"))
-            .task(id: search) { await load() }
+            .task(id: search) { await suggestions.load(search, with: model.suggestPeople) }
             .navigationTitle(property.name)
             .navigationBarTitleDisplayMode(.inline)
         } else {
@@ -237,23 +234,6 @@ struct BasePersonPicker: View {
         let propertyId = propertyId
         Task { await model.setCell(rowId: rowId, propertyId: propertyId, to: value) }
     }
-
-    private func load() async {
-        // Debounce keystrokes (web client: 250 ms).
-        if !search.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
-        guard !Task.isCancelled else { return }
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            let found = try await model.suggestPeople(search)
-            guard !Task.isCancelled else { return }
-            results = found
-            searchError = nil
-        } catch is CancellationError {
-        } catch {
-            searchError = error.userMessage
-        }
-    }
 }
 
 // MARK: - Page
@@ -265,10 +245,7 @@ struct BasePagePicker: View {
     let rowId: String
     let propertyId: String
     @State private var search = ""
-    @State private var results: [SearchSuggestions.PageSuggestion] = []
-    @State private var isLoading = false
-    /// Why the last search failed: shown instead of "none found".
-    @State private var searchError: String?
+    @State private var suggestions = BasePickerSearch<SearchSuggestions.PageSuggestion>()
 
     var body: some View {
         if let property = model.base?.property(id: propertyId), let row = model.row(id: rowId) {
@@ -293,7 +270,7 @@ struct BasePagePicker: View {
                     }
                 }
                 Section {
-                    ForEach(results.filter { $0.id != selectedId }) { page in
+                    ForEach(suggestions.results.filter { $0.id != selectedId }) { page in
                         Button {
                             model.remember(page: PageRef(
                                 id: page.id, slugId: page.slugId, title: page.title, icon: page.icon, spaceId: page.spaceId
@@ -316,16 +293,16 @@ struct BasePagePicker: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("base-page-\(page.id)")
                     }
-                    if let searchError {
+                    if let searchError = suggestions.searchError {
                         Label(searchError, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
-                    } else if results.isEmpty && !isLoading {
+                    } else if suggestions.results.isEmpty && !suggestions.isLoading {
                         Text("No pages found").foregroundStyle(.secondary)
                     }
                 }
             }
-            .overlay { if isLoading && results.isEmpty { ProgressView() } }
+            .overlay { if suggestions.isLoading && suggestions.results.isEmpty { ProgressView() } }
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Search pages"))
-            .task(id: search) { await load() }
+            .task(id: search) { await suggestions.load(search, with: model.suggestPages) }
             .navigationTitle(property.name)
             .navigationBarTitleDisplayMode(.inline)
         } else {
@@ -338,14 +315,40 @@ struct BasePagePicker: View {
         let propertyId = propertyId
         Task { await model.setCell(rowId: rowId, propertyId: propertyId, to: pageId.map(JSONValue.string)) }
     }
+}
 
-    private func load() async {
-        if !search.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+// MARK: - Search
+
+/// A picker's server search (people, pages): the results, whether a search is on its way and why the last one failed.
+/// The results stay while the next search runs and when it fails.
+@MainActor
+@Observable
+final class BasePickerSearch<Item> {
+    private(set) var results: [Item] = []
+    private(set) var isLoading = false
+    /// Why the last search failed: shown instead of "none found".
+    private(set) var searchError: String?
+    /// Searches that asked the server: only the latest ends `isLoading`. A cancelled request can end after the next
+    /// search has asked (an empty one asks at once), and ending it then hid that search's loading (code review W57).
+    @ObservationIgnored private var asked = 0
+    /// What the wait for more typing runs on; tests move a clock of their own (`TestClock`).
+    @ObservationIgnored private let clock: any Clock<Duration>
+
+    init(clock: any Clock<Duration> = ContinuousClock()) {
+        self.clock = clock
+    }
+
+    /// For `.task(id: search)`: waits for more typing (web client: 250 ms), but not for an empty search, then searches
+    /// with `fetch`. A search the next key cancelled changes nothing.
+    func load(_ search: String, with fetch: (String) async throws -> [Item]) async {
+        if !search.isEmpty { try? await clock.sleep(for: .milliseconds(250)) }
         guard !Task.isCancelled else { return }
+        asked += 1
+        let generation = asked
         isLoading = true
-        defer { isLoading = false }
+        defer { if generation == asked { isLoading = false } }
         do {
-            let found = try await model.suggestPages(search)
+            let found = try await fetch(search)
             guard !Task.isCancelled else { return }
             results = found
             searchError = nil
