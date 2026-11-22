@@ -142,6 +142,9 @@ final class AppSession {
     // MARK: - Start
 
     private var launchRestore: Task<Void, Never>?
+    /// Whether this process removed what the last run left (`restoreAtLaunch`). Once per process, not per session: a
+    /// session made later in it (a test's) would take the files of this run's downloads, uploads and media loaders.
+    private static var removedWhatTheLastRunLeft = false
 
     /// Every window's root view calls this, but windows share the session: only the first call restores it, in a task
     /// that closing its window can't cancel.
@@ -150,8 +153,11 @@ final class AppSession {
             launchRestore = Task {
                 // Before a client downloads or an upload starts: what the last run left when the app was ended
                 // mid-download or mid-upload.
-                APIClient.removeAbandonedDownloads()
-                TempFile.removeAbandonedFiles()
+                if !Self.removedWhatTheLastRunLeft {
+                    Self.removedWhatTheLastRunLeft = true
+                    APIClient.removeAbandonedDownloads()
+                    TempFile.removeAbandonedFiles()
+                }
                 endSignInsOfAnEarlierInstall()
                 await restore()
                 // Once per launch: a window opened later (iPad) would remove the cookie of an editor open in another.
