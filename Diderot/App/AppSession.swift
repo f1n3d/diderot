@@ -657,6 +657,7 @@ final class AppSession {
     // MARK: - Internal
 
     /// `replacing`: the offline session that a reconnect loads fully. `signingIn`: a sign-in from the sign-in screen.
+    /// `retrying`: the unchecked sign-in, tried again (`retryUncheckedSignIn`).
     private func finishSignIn(
         server: ServerInfo, client: APIClient, token: String, replacing: ReadySession? = nil, signingIn: Bool = false,
         retrying: StoredSession? = nil
@@ -670,6 +671,18 @@ final class AppSession {
         if server.workspace == nil {
             server.workspace = try? await client.send(Endpoints.Workspace.publicInfo)
         }
+        let answeredEntitlements: Entitlements?
+        do {
+            answeredEntitlements = try await entitlements
+        } catch {
+            AppLog.session.error("Entitlements unavailable, using cached: \(error.userMessage, privacy: .public)")
+            answeredEntitlements = nil
+        }
+        let namedVersion = (try? await version)?.currentVersion
+        // Nothing is written before every answer is in and the sign-in still counts: storing another user empties the
+        // cache and removes the local data, the web editor's unsynced edits too, and a late answer did that to the
+        // session that took over meanwhile. No await between the check and `storeCurrentUser`.
+        guard try stillCounts(replacing: replacing, signingIn: signingIn, at: server, retrying: retrying) else { return }
         let cache = makeCache(for: server.url)
         if await Self.storeCurrentUser(currentUser, in: cache) {
             await removeLocalData(for: server.url)
@@ -677,11 +690,10 @@ final class AppSession {
         // Every edition answers this, so a failure is a hiccup: keep the last known license (from this user's cache,
         // hence after `storeCurrentUser`).
         let resolvedEntitlements: Entitlements
-        do {
-            resolvedEntitlements = try await entitlements
-            await cache.write(resolvedEntitlements, key: CacheKey.entitlements)
-        } catch {
-            AppLog.session.error("Entitlements unavailable, using cached: \(error.userMessage, privacy: .public)")
+        if let answeredEntitlements {
+            resolvedEntitlements = answeredEntitlements
+            await cache.write(answeredEntitlements, key: CacheKey.entitlements)
+        } else {
             let cached = await cache.read(Entitlements.self, key: CacheKey.entitlements)
             resolvedEntitlements = cached ?? .community
             // Written again: `prune` below goes by age and size, like for photos and PDFs in the same cache.
@@ -690,19 +702,16 @@ final class AppSession {
         // Docmost names its version only after asking GitHub for its latest release, and nothing when GitHub refuses
         // (60 requests an hour from one address) or a proxy blocks it: keep the last one it named.
         let serverVersion: String?
-        if let current = (try? await version)?.currentVersion {
-            serverVersion = current
-            await cache.write(current, key: CacheKey.serverVersion)
+        if let namedVersion {
+            serverVersion = namedVersion
+            await cache.write(namedVersion, key: CacheKey.serverVersion)
         } else {
             serverVersion = await cache.read(String.self, key: CacheKey.serverVersion)
             // Written again, as the license above: a version the server stopped naming would only age.
             if let serverVersion { await cache.write(serverVersion, key: CacheKey.serverVersion) }
         }
-        // A reconnect must not undo a switch or sign-out made meanwhile, nor a sign-in a switch; no await from here to the
-        // `state` write.
-        if let replacing, !isStillCurrent(replacing) { return }
-        if signingIn, !isSigningIn(at: server) { throw CancellationError() }
-        if let retrying, uncheckedSignIn != retrying { throw CancellationError() }
+        // Again after the cache writes' awaits; from here no await until the `state` write.
+        guard try stillCounts(replacing: replacing, signingIn: signingIn, at: server, retrying: retrying) else { return }
         let stored = StoredSession(serverURL: server.url, token: token, email: currentUser.user.email, workspaceName: currentUser.workspace.name)
         // A sign-in anew replaces the server's saved one (one per server): its session ends on the server, as on
         // signing out, instead of staying open.
@@ -721,6 +730,18 @@ final class AppSession {
         ))
         AppLog.session.info("Signed in as \(currentUser.user.email, privacy: .private) at \(server.url.absoluteString, privacy: .public)")
         if case .ready(let ready) = state { Task { await syncTimeZone(of: ready) } }
+    }
+
+    /// Whether `finishSignIn`'s answers still count. A reconnect must not undo a switch or sign-out made meanwhile (`false`:
+    /// it ends without a word), a sign-in not a switch, and a retry of the unchecked sign-in not a sign-in anew or a switch
+    /// (`CancellationError`).
+    private func stillCounts(
+        replacing: ReadySession?, signingIn: Bool, at server: ServerInfo, retrying: StoredSession?
+    ) throws -> Bool {
+        if let replacing, !isStillCurrent(replacing) { return false }
+        if signingIn, !isSigningIn(at: server) { throw CancellationError() }
+        if let retrying, uncheckedSignIn != retrying { throw CancellationError() }
+        return true
     }
 
     /// Tells a Docmost 0.98 server the device's time zone where it keeps another one or none, as the web does once a load
