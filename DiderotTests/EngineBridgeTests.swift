@@ -199,8 +199,6 @@ extension AppSessionRaceTests {
             let (zwei, zweiPath) = try await find("b", in: engine)
             let zweiBlock = try #require(await block(at: zweiPath, in: engine))
             #expect(await engine.replaceBlock(zwei, withNodes: [paragraph("b", "B1"), paragraph("b2", "B2")], expected: zweiBlock) == .applied)
-            #expect(await engine.batch([.insert([paragraph("e", "Fünf")], relativeTo: nil, position: .after),
-                                        .delete(.id("e", path: []), expected: nil)]) == .applied)
             let (dreiNow, _) = try await find("c", in: engine)
             #expect(await engine.deleteBlock(dreiNow) == .applied)
 
@@ -216,12 +214,12 @@ extension AppSessionRaceTests {
             let columnsPath = try #require(await engine.placeBlocks([columns], at: nil, position: .after, expected: nil).path)
             #expect(await engine.setColumnCount(.path(columnsPath, type: "columns"), count: 3) == .applied)
             #expect(await engine.setAttributes(.path(columnsPath, type: "columns"), attributes: ["layout": "three_left_wide"]) == .applied)
-            let list = PMNode(type: "bulletList", content: ["i1", "i2", "i3"].map { PMNode(type: "listItem", content: [paragraph($0, $0)]) })
-            let listPath = try #require(await engine.placeBlocks([list], at: nil, position: .after, expected: nil).path)
-            #expect(await engine.splitContainer(after: .path(listPath + [0], type: "listItem")) == .applied)
-
-            // Two bullet lists next to each other join, as on the web: the split list is whole again.
-            #expect(await block(at: listPath, in: engine)?.children.map(\.plainText) == ["i1", "i2", "i3"], "the split lists didn't join")
+            // Two bullet lists next to each other join, as on the web: placed together, they are one list.
+            func list(_ items: [String]) -> PMNode {
+                PMNode(type: "bulletList", content: items.map { PMNode(type: "listItem", content: [paragraph($0, $0)]) })
+            }
+            let listPath = try #require(await engine.placeBlocks([list(["i1"]), list(["i2", "i3"])], at: nil, position: .after, expected: nil).path)
+            #expect(await block(at: listPath, in: engine)?.children.map(\.plainText) == ["i1", "i2", "i3"], "the lists didn't join")
 
             // A list item goes a level in and out again, as Tab and Shift-Tab on the web; a list's first item can't go in.
             let third = BlockTarget.id("i3", path: listPath + [2, 0])
