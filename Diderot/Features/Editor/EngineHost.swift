@@ -29,6 +29,9 @@ struct EngineHost: View {
 struct EngineVisibilityProbe: View {
     let page: WebPage
     @State private var answer = "not asked"
+    /// Which engine page of the run this is, as its value: one closed and opened again shows the next number (test81).
+    @State private var number: Int?
+    private static var made = 0
 
     var body: some View {
         Color.clear
@@ -36,6 +39,13 @@ struct EngineVisibilityProbe: View {
             .accessibilityElement()
             .accessibilityIdentifier("engine-visibility")
             .accessibilityLabel(answer)
+            .accessibilityValue(number.map { "engine \($0)" } ?? "")
+            .onAppear {
+                if number == nil {
+                    Self.made += 1
+                    number = Self.made
+                }
+            }
             .task {
                 while !Task.isCancelled {
                     answer = (try? await page.callJavaScript("return document.visibilityState") as? String) ?? "no answer"
