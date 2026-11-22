@@ -59,12 +59,7 @@ struct PageTreeStoreTests {
 
         // Held over T for `openDelay`: the drag opens it, and its subpages start loading.
         let opening = Task { await store.toggle("T") }
-        var turns = 0
-        while !gate.isWaiting && turns < 100 {
-            await Task.yield()
-            turns += 1
-        }
-        try #require(gate.isWaiting)
+        try await gate.untilWaiting()
         // The drop ends the opening, then places the page.
         opening.cancel()
         let drop = Task { try await store.placement(of: "Q", relativeTo: target, zone: .nest) }
@@ -208,12 +203,7 @@ struct PageTreeStoreTests {
 
         // The space view's load, cancelled by a tab switch while the request runs.
         let first = Task { await store.loadRootIfNeeded() }
-        var turns = 0
-        while !gate.isWaiting && turns < 100 {
-            await Task.yield()
-            turns += 1
-        }
-        try #require(gate.isWaiting)
+        try await gate.untilWaiting()
         first.cancel()
         gate.open()
         await first.value
@@ -248,12 +238,7 @@ struct PageTreeStoreTests {
         await store.toggle("A")
 
         let refresh = Task { await store.reload() }
-        var turns = 0
-        while !gate.isWaiting && turns < 100 {
-            await Task.yield()
-            turns += 1
-        }
-        try #require(gate.isWaiting)
+        try await gate.untilWaiting()
         refresh.cancel()
         gate.open()
         await refresh.value
@@ -472,6 +457,14 @@ struct PageTreeStoreTests {
         func wait() async {
             guard !isOpen else { return }
             await withCheckedContinuation { waiting.append($0) }
+        }
+
+        /// Returns once a load waits here; fails after 10 s. A number of turns was too few on GitHub's runners, where the
+        /// load reads the disk cache first.
+        func untilWaiting() async throws {
+            let deadline = ContinuousClock.now + .seconds(10)
+            while !isWaiting && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+            try #require(isWaiting, "No load reached the gate")
         }
 
         func open() {
