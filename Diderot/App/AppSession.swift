@@ -586,23 +586,12 @@ final class AppSession {
         }
     }
 
-    /// Runs an API call of the session current now and ends that session on 401. Private: a caller's client of an earlier
-    /// session would have its 401 blamed on this one (a list of a signed-out server signing out the next); a flow binds
-    /// its session once (`perform(on:)`, `load(_:of:)`).
-    private func perform<T: Sendable>(_ operation: () async throws -> T) async throws -> T {
-        let session = ready
-        do {
-            return try await operation()
-        } catch let error as APIError where error.isSessionExpired {
-            if let session, isStillCurrent(session) { handleUnauthorized() }
-            throw error
-        }
-    }
-
-    /// One request through `perform`. Without a session it throws `CancellationError`: the asking screen is closing.
+    /// One request of the session current now, through `send(_:on:)`. Without a session it throws `CancellationError`: the
+    /// asking screen is closing. A flow of several requests binds its session once instead (`perform(on:)`, `load(_:of:)`):
+    /// by its next request a switch may have made another server's session current.
     func send<Response>(_ endpoint: Endpoint<Response>) async throws -> Response {
-        guard let client else { throw CancellationError() }
-        return try await perform { try await client.send(endpoint) }
+        guard let ready else { throw CancellationError() }
+        return try await send(endpoint, on: ready)
     }
 
     /// Runs requests with `owner`'s client, for work bound to the session it started in: a flow's later requests, or
@@ -652,7 +641,8 @@ final class AppSession {
         }
         let licenseAndVersion = askLicenseAndVersionIfDue(of: session)
         do {
-            let user = try await session.client.send(Endpoints.Users.me)
+            // A 401 ends `session` there (`perform(on:)`) and is skipped below like any other failure.
+            let user = try await send(Endpoints.Users.me, on: session)
             // First: the time zone below goes only to Docmost 0.98, which the answer may have just named.
             await licenseAndVersion?.value
             // The current state, not `session`: switching servers and back meanwhile replaced the client and cache.
@@ -666,8 +656,6 @@ final class AppSession {
             await current.cache.write(user, key: CacheKey.currentUser)
             // Back in the app, perhaps in another time zone.
             await syncTimeZone(of: current)
-        } catch let error as APIError where error.isSessionExpired {
-            if isStillCurrent(session) { handleUnauthorized() }
         } catch {
             AppLog.session.debug("Refresh skipped: \(error.userMessage, privacy: .public)")
             // After its question here too: the next return then knows whether it counted as asked.
