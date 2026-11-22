@@ -201,6 +201,40 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// The user steps on twice from November, and December, stepped past, answers while January's request is still
+        /// out: the spinner stays until January's answer. December's dropped answer hid it, and January said "No
+        /// entries" until its own came.
+        @Test(.timeLimit(.minutes(1))) func skippedMonthAnswerKeepsTheSpinner() async throws {
+            let (model, session) = try await calendarOnA(Self.calendarAnswer([("nov", #"{"start": "2026-11-21"}"#)]))
+            let viewId = try #require(model.selectedView?.id)
+            defer { UserDefaults.standard.removeObject(forKey: "base.calendar.\(viewId)") }
+            let january = try day("2027-01-01")
+            let (asked, ask) = AsyncStream<Void>.makeStream()
+            let (answer, release) = AsyncStream<Void>.makeStream()
+            StubURLProtocol.body.withLock { $0 = Self.calendarAnswer([("dec", #"{"start": "2026-12-10"}"#)]) }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/bases/rows/calendar" }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+                // While December's request is out the user steps on; January's request then waits until released.
+                StubURLProtocol.beforeNextAnswer.withLock { $0 = {
+                    ask.yield()
+                    for await _ in answer { break }
+                } }
+                Task { await model.chooseCalendarDay(january) }
+                for await _ in asked { break }
+            } }
+            defer { resetStub() }
+            await model.chooseCalendarDay(try day("2026-12-01"))
+            #expect(model.isLoadingRows, "January's answer is still out")
+            #expect(model.calendar.rows.map(\.id) == ["nov"] && !model.showsCalendarMonth)
+
+            StubURLProtocol.body.withLock { $0 = Self.calendarAnswer([("jan", #"{"start": "2027-01-12"}"#)]) }
+            release.yield()
+            for _ in 0..<200 where model.isLoadingRows || !model.showsCalendarMonth { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(model.calendar.rows.map(\.id) == ["jan"] && model.showsCalendarMonth && !model.isLoadingRows)
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
         // MARK: Helpers
 
         /// Signed in to a with a Business license: an editable database whose calendar goes by `property` (`d`, a date

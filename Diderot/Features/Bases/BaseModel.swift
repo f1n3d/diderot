@@ -88,6 +88,9 @@ final class BaseModel {
     /// Rows a write saved while a load ran: an answer the server gave before the write doesn't revert them.
     @ObservationIgnored private var savedDuringLoad: [String: BaseRow] = [:]
     @ObservationIgnored private var runningLoads = 0
+    /// Counts row loads started: only the newest one's end hides the spinner (a month stepped past hid it with its
+    /// dropped answer while the month shown still loaded).
+    @ObservationIgnored private var startedLoads = 0
     /// Set by the screen. Offline the database is read-only, as pages are: a save would fail at once.
     var isOffline = false
     /// Text a failed save didn't get to the server, by "rowId/propertyId": its field shows it again, not the old value.
@@ -238,11 +241,14 @@ final class BaseModel {
         isLoadingRows = true
         rowsError = nil
         runningLoads += 1
-        // Switched tabs (or the view changed in a reload) meanwhile: the newer load shows the rows.
+        startedLoads += 1
+        let load = startedLoads
+        // Switched tabs, moved to another month (or the view changed in a reload) meanwhile: the newer load shows the
+        // rows and ends the spinner.
         defer {
             runningLoads -= 1
             if runningLoads == 0 { savedDuringLoad = [:] }
-            if selectedView == view { isLoadingRows = false }
+            if load == startedLoads { isLoadingRows = false }
         }
         do {
             switch view.kind {
