@@ -81,6 +81,32 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// The user stars one page and unstars another while the favorite ids are on their way, and the answer, from
+        /// before both, arrives last: both changes stay, and so does the rest of the answer. The answer used to undo them
+        /// until the Favorites tab loaded.
+        @Test func starsChangedWhileTheIdsLoadStay() async throws {
+            let session = try await sessionOnA()
+            let favorites = FavoritesStore(session: session)
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"items": ["p1"]}}"# }
+            await favorites.loadIds()
+            try #require(favorites.isFavorite(pageId: "p1"))
+            // The toggles' answers get this body too, which they ignore.
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"items": ["p1", "p3"]}}"# }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/favorites/ids" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+                await favorites.togglePage("p2")
+                await favorites.togglePage("p1")
+            } }
+            await favorites.loadIds()
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(favorites.isFavorite(pageId: "p2") && !favorites.isFavorite(pageId: "p1"))
+            #expect(favorites.isFavorite(pageId: "p3"), "the rest of the answer counts")
+            #expect(favorites.toast == nil)
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
         /// A slow comments load that ends after a newer one doesn't overwrite it: a comment just posted disappeared from the
         /// list and the badge, and a deleted one came back.
         @Test func lateCommentsAnswerKeepsTheNewerList() async throws {

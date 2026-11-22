@@ -14,6 +14,12 @@ final class FavoritesStore {
     var toast: String?
     /// Counts list loads, so an older answer arriving last doesn't win.
     @ObservationIgnored private var listLoads = 0
+    /// Counts ids loads and the lists that set the ids, so an older ids answer arriving last doesn't win.
+    @ObservationIgnored private var idLoads = 0
+    /// The pages and spaces whose star the user changed since the ids were asked for: the answer may be from before the
+    /// change, so they keep the star it left. A change the server didn't take leaves them to the answer.
+    @ObservationIgnored private var changedPages: Set<String> = []
+    @ObservationIgnored private var changedSpaces: Set<String> = []
     private unowned let session: AppSession
 
     init(session: AppSession) {
@@ -25,14 +31,25 @@ final class FavoritesStore {
 
     func loadIds() async {
         guard let ready = session.ready else { return }
+        idLoads += 1
+        let load = idLoads
+        changedPages = []
+        changedSpaces = []
         do {
             async let pages = session.load(Endpoints.Favorites.ids(type: .page), of: ready)
             async let spaces = session.load(Endpoints.Favorites.ids(type: .space), of: ready)
-            pageIds = Set(try await pages.items)
-            spaceIds = Set(try await spaces.items)
+            let pageAnswer = try await pages.items
+            if load == idLoads { pageIds = Self.merge(pageAnswer, into: pageIds, changed: changedPages) }
+            let spaceAnswer = try await spaces.items
+            if load == idLoads { spaceIds = Self.merge(spaceAnswer, into: spaceIds, changed: changedSpaces) }
         } catch {
             AppLog.ui.debug("Favorite ids failed: \(error.userMessage, privacy: .public)")
         }
+    }
+
+    /// The server's ids, except those whose star changed since they were asked for: those stay as they are.
+    private static func merge(_ answer: [String], into current: Set<String>, changed: Set<String>) -> Set<String> {
+        Set(answer).subtracting(changed).union(current.intersection(changed))
     }
 
     func loadList() async {
@@ -60,6 +77,7 @@ final class FavoritesStore {
     }
 
     private func apply(_ favorites: [Favorite]) {
+        idLoads += 1
         listState = .loaded(favorites)
         pageIds = Set(favorites.compactMap { $0.favoriteType == .page ? $0.pageId : nil })
         spaceIds = Set(favorites.compactMap { $0.favoriteType == .space ? $0.spaceId : nil })
@@ -69,11 +87,13 @@ final class FavoritesStore {
         guard session.client != nil else { return }
         let wasFavorite = pageIds.contains(pageId)
         if wasFavorite { pageIds.remove(pageId) } else { pageIds.insert(pageId) }
+        changedPages.insert(pageId)
         do {
             _ = try await session.send(wasFavorite ? Endpoints.Favorites.removePage(pageId) : Endpoints.Favorites.addPage(pageId))
             if listState.value != nil { await loadList() }
         } catch {
             if wasFavorite { pageIds.insert(pageId) } else { pageIds.remove(pageId) }
+            changedPages.remove(pageId)
             AppLog.ui.error("Favorite toggle failed: \(error.userMessage, privacy: .public)")
             toast = Self.failure(error, removing: wasFavorite)
         }
@@ -83,11 +103,13 @@ final class FavoritesStore {
         guard session.client != nil else { return }
         let wasFavorite = spaceIds.contains(spaceId)
         if wasFavorite { spaceIds.remove(spaceId) } else { spaceIds.insert(spaceId) }
+        changedSpaces.insert(spaceId)
         do {
             _ = try await session.send(wasFavorite ? Endpoints.Favorites.removeSpace(spaceId) : Endpoints.Favorites.addSpace(spaceId))
             if listState.value != nil { await loadList() }
         } catch {
             if wasFavorite { spaceIds.insert(spaceId) } else { spaceIds.remove(spaceId) }
+            changedSpaces.remove(spaceId)
             AppLog.ui.error("Favorite toggle failed: \(error.userMessage, privacy: .public)")
             toast = Self.failure(error, removing: wasFavorite)
         }
