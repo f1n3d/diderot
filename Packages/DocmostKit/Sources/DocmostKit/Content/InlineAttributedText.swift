@@ -288,8 +288,13 @@ public enum InlineAttributedText {
 
     /// On one line: a line break in an atom's text (a formula written with Shift-Return) would count as Return and split
     /// the block. The atom's JSON keeps the real text.
+    ///
+    /// An atom without text (an empty status or formula, which the web allows; a page mention with an empty label or an
+    /// integration mention without an address, from an import or another client) gets a no-break space: an empty run
+    /// loses its attributes, so the atom left the editor's text and went from the page with the next edit.
     public static func displayText(for node: PMNode) -> String {
-        String(atomText(for: node).map { $0.isNewline ? " " : $0 })
+        let text = String(atomText(for: node).map { $0.isNewline ? " " : $0 })
+        return text.isEmpty ? "\u{00A0}" : text
     }
 
     private static func atomText(for node: PMNode) -> String {
@@ -297,21 +302,15 @@ public enum InlineAttributedText {
         case "mention":
             let label = node.string("label") ?? "…"
             return node.string("entityType") == "user" ? "@\(label)" : label
-        // Empty math and status nodes (the web allows them) need a character, or they vanish while editing.
-        case "mathInline", "status": return nonEmpty(node.string("text"))
+        case "mathInline", "status": return node.string("text") ?? ""
         case "footnoteReference": return "[\(node.string("referenceNumber") ?? "?")]"
         case "integrationMention": return IntegrationLinks.describe(node.string("url") ?? "").inline
         // A date the web can't read shows as "Date" there; the kit has no texts of its own.
         case "date": return CalendarDay(node.string("date"))?.label() ?? "📅"
-        case "templatePlaceholder": return nonEmpty(node.string("hint"))
-        case "templateVariable": return nonEmpty(node.string("name"))
+        case "templatePlaceholder": return node.string("hint") ?? ""
+        case "templateVariable": return node.string("name") ?? ""
         default: return "\u{FFFC}"
         }
-    }
-
-    private static func nonEmpty(_ text: String?) -> String {
-        guard let text, !text.isEmpty else { return "\u{00A0}" }
-        return text
     }
 }
 

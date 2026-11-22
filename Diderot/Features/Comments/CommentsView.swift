@@ -26,7 +26,6 @@ struct CommentsView: View {
     private typealias Composing = PageComments.Composing
 
     @State private var tab = Tab.open
-    @State private var isSending = false
     @State private var highlighted: String?
     /// The sheet's presentation has ended: a scroll started before it lands wrong.
     @State private var presented = false
@@ -162,11 +161,13 @@ struct CommentsView: View {
             Button("Reply", systemImage: "arrowshape.turn.up.left") {
                 compose(.reply(comment), text: comments.composing == .new ? comments.draft : "")
             }
+            .disabled(comments.isSending)
         }
         if comment.creatorId == currentUserId {
             // The app edits plain text: a comment's links, mentions and formatting would be gone for good.
             if CommentContent.isPlain(comment.content) {
                 Button("Edit", systemImage: "pencil") { compose(.edit(comment), text: CommentContent.plainText(of: comment.content)) }
+                    .disabled(comments.isSending)
             } else {
                 Button {} label: {
                     Label("Edit", systemImage: "pencil")
@@ -223,6 +224,7 @@ struct CommentsView: View {
                         Spacer()
                         Button("Cancel") { compose(.new, text: "") }
                             .font(.caption)
+                            .disabled(comments.isSending)
                     }
                 }
                 if let errorMessage = comments.error {
@@ -233,15 +235,17 @@ struct CommentsView: View {
                         .lineLimit(1...5)
                         .textFieldStyle(.roundedBorder)
                         .focused($composerFocused)
+                        // Not disabled while sending: the field gave up its focus and took it back once the send was
+                        // done, which brought the keyboard up again. Text typed meanwhile stays for the next send.
                         .accessibilityIdentifier("comments-composer")
                     Button(action: send) {
-                        if isSending {
+                        if comments.isSending {
                             ProgressView()
                         } else {
                             Image(systemName: "arrow.up.circle.fill").font(.title2)
                         }
                     }
-                    .disabled(isSending || comments.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(comments.isSending || comments.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityLabel("Send")
                     .accessibilityIdentifier("comments-send")
                 }
@@ -266,28 +270,18 @@ struct CommentsView: View {
         composerFocused = mode != .new
     }
 
+    /// The send runs in the store, which outlives the sheet: one closed meanwhile shows it when it opens again.
     private func send() {
-        let text = comments.draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isSending else { return }
-        let mode = comments.composing
-        isSending = true
-        comments.error = nil
         Task {
-            defer { isSending = false }
-            do {
-                switch mode {
-                case .new: revealId = try await comments.create(text: text, replyTo: nil).id
-                case .reply(let comment):
-                    try await comments.create(text: text, replyTo: comment)
-                    revealId = comment.parentCommentId ?? comment.id
-                case .edit(let comment): try await comments.update(comment, text: text)
-                }
-                compose(.new, text: "")
-                composerFocused = false
-                if case .new = mode { tab = .open }
-            } catch {
-                comments.error = error.userMessage
+            switch await comments.send() {
+            case .new(let thread):
+                tab = .open
+                revealId = thread
+            case .reply(let thread): revealId = thread
+            case .edit: break
+            case nil: return
             }
+            composerFocused = false
         }
     }
 

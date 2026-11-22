@@ -28,6 +28,23 @@ struct DocumentModelTests {
         #expect(engine.saved.map(\.plainText) == ["Hello!", "Hello!?"])
     }
 
+    /// A connect that holds the page's changes waits on the model until its page takes it, once. The model keeps no
+    /// callback of the page: a closure set by the page kept the page's state, and with it the model, alive after the page
+    /// was gone.
+    @Test func aHeldConnectWaitsOnTheModelUntilThePageTakesIt() throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph")]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        #expect(model.takeHeldChanges() == nil)
+
+        let hold = EngineHold(open: 1, connect: 2)
+        engine.onHeld?(hold)
+        #expect(model.heldChanges == hold)
+        #expect(model.takeHeldChanges() == hold)
+        #expect(model.takeHeldChanges() == nil)
+    }
+
     /// "Get started with" fills only a blank page (one empty line, as the web's `editor.isEmpty`): a template's blocks
     /// replace that line; on a page someone typed into meanwhile nothing changes.
     @Test func templateFillsOnlyABlankPage() async throws {
@@ -284,6 +301,42 @@ struct DocumentModelTests {
         #expect(model.cursorRequest == .offset(1))
     }
 
+    /// Lines pasted with Windows (CR LF), old Mac (CR) or Unicode paragraph (U+2029) line ends split as with "\n": in
+    /// Swift each of them is a Character that isn't "\n", so the lines stayed one paragraph, the CR saved in its text. A
+    /// hard break (U+2028) stays in its line.
+    @Test(.timeLimit(.minutes(1))) func pastedLinesSplitAtEveryLineEnd() async throws {
+        func line(_ id: String, _ text: String) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)])
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line("a", "xyz")]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: line("a", "xyz")), node: line("a", "xyz"))
+        engine.enterResult = .moved(EngineCursor(path: [3], offset: 0))
+        engine.whileInserting = {
+            engine.document = PMNode(type: "doc", content: [line("a", "xyA"), line("b", "Bb"), line("c", "C"), line("d", "Dz")])
+        }
+
+        // Pasted after "xy", the cursor after the paste.
+        let text = model.activeText.characters
+        model.activeText.insert(AttributedString("A\r\nB\u{2028}b\rC\u{2029}D"), at: text.index(text.startIndex, offsetBy: 2))
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 11))
+        model.activeTextChanged()
+        while model.active?.ref.id != "d" { try await Task.sleep(for: .milliseconds(10)) }
+
+        let paste = try #require(engine.enteredLines.first)
+        #expect(paste.node.plainText == "xyA")
+        #expect(paste.lines.map { $0.map(\.plainText).joined() } == ["Bb", "C", "Dz"])
+        #expect(paste.lines.first?.map(\.type) == ["text", "hardBreak", "text"])
+        #expect(model.cursorRequest == .offset(1))
+    }
+
+    /// Only the line ends of paragraphs end a line: Word's break within a paragraph (U+000B), a form feed and NEL don't,
+    /// though Swift counts them as newlines too.
+    @Test func onlyParagraphLineEndsEndALine() {
+        #expect(["\n", "\r", "\r\n", "\u{2029}"].allSatisfy(DocumentModel.isLineEnd))
+        #expect(!["\u{2028}", "\u{000B}", "\u{000C}", "\u{0085}", "a"].contains(where: DocumentModel.isLineEnd))
+    }
+
     /// Two pasted lines are one Return, and the cursor goes where the paste ends too, not to the new line's start.
     @Test(.timeLimit(.minutes(1))) func twoPastedLinesPutTheCursorAtTheirEnd() async throws {
         func line(_ id: String, _ text: String) -> PMNode {
@@ -308,8 +361,8 @@ struct DocumentModelTests {
 
     /// A toggle's title stays whole as on Return there: pasted lines keep what was after the cursor in the title and go
     /// into its content, also two lines (the paste proxy hands plain text to `pasteLink`). Pasted by the text view, they
-    /// all ran together in the title.
-    @Test(.timeLimit(.minutes(1))) func pastedLinesKeepAToggleTitleWhole() async throws {
+    /// all ran together in the title. Any line end, U+2029 as well.
+    @Test(.timeLimit(.minutes(1)), arguments: ["A\r\nB", "A\u{2029}B"]) func pastedLinesKeepAToggleTitleWhole(pasted: String) async throws {
         let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "TiTel")])
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
             PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])]),
@@ -319,7 +372,7 @@ struct DocumentModelTests {
         engine.enterResult = .moved(EngineCursor(path: [0, 1, 0], offset: 0))
         model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 2))
 
-        #expect(model.pasteLink("A\r\nB"))
+        #expect(model.pasteLink(pasted))
         while engine.enteredLines.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
 
         #expect(engine.enters.isEmpty)
@@ -1325,6 +1378,29 @@ struct DocumentModelTests {
         #expect(model.errorMessage != nil)
     }
 
+    /// A block left before its last keys were saved (↓ right after typing, a tap elsewhere, the keyboard closed) shows
+    /// them at once, and a tap straight back edits them. It showed its text from before them until the save's document
+    /// came back, and editing it again in that time started from there, so the rebase misplaced what was typed then.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func aLeftBlockShowsItsLastKeysAtOnce(endsEditing: Bool) async throws {
+        let first = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Hello wor")])
+        let second = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Zwei")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [first, second]))
+        let model = try Self.model(engine)
+        model.dependencies.clock = TestClock()
+        model.activate(NodeRef(path: [0], node: first), node: first)
+        model.activeText.append(AttributedString("ld"))
+        model.activeTextChanged()
+
+        if endsEditing { model.deactivate() } else { model.activate(NodeRef(path: [1], node: second), node: second) }
+        #expect(model.node(at: [0])?.plainText == "Hello world")
+
+        let left = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: left), node: left)
+        #expect(String(model.activeText.characters) == "Hello world")
+        while engine.saved.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(engine.saved.map(\.plainText) == ["Hello world"])
+    }
+
     /// Return the engine refuses (its line is gone or changed meanwhile) leaves the line as typed, without the line break,
     /// and says so until a later save succeeds; saved at once, the line hid the message.
     @Test(.timeLimit(.minutes(1))) func refusedReturnKeepsTheLineAndSaysSo() async throws {
@@ -1369,6 +1445,39 @@ struct DocumentModelTests {
         await model.saveUnsentChanges()
         #expect(engine.saved.map(\.plainText) == ["Hello!"])
         #expect(engine.lifecycle == ["save after 1"])
+    }
+
+    /// The app saves the unsent changes when it becomes inactive and again in the background: the second save waits
+    /// for the first, as the scheduled save does. Side by side, the first one's late write of the page could land after
+    /// the second dropped what the server had confirmed, and the page opened offline showed it without its changes.
+    @Test(.timeLimit(.minutes(1))) func backgroundSavesRunOneAfterTheOther() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        engine.holdsNextUnsentSave = true
+        let first = Task { await model.saveUnsentChanges() }
+        while engine.heldUnsentSave == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let second = Task { await model.saveUnsentChanges() }
+        try await Task.sleep(for: .milliseconds(100))
+        engine.heldUnsentSave?.resume()
+        await first.value
+        await second.value
+        #expect(engine.lifecycle == ["save after 0", "saved", "save after 0"])
+    }
+
+    /// Leaving the page while the app's background save runs closes the engine after it: closed beside it, the save's
+    /// late writes could keep changes the close had found confirmed.
+    @Test(.timeLimit(.minutes(1))) func leavingDuringABackgroundSaveClosesAfterIt() async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        engine.holdsNextUnsentSave = true
+        let save = Task { await model.saveUnsentChanges() }
+        while engine.heldUnsentSave == nil { try await Task.sleep(for: .milliseconds(10)) }
+        let close = model.suspend()
+        try await Task.sleep(for: .milliseconds(100))
+        engine.heldUnsentSave?.resume()
+        await save.value
+        await close.value
+        #expect(engine.lifecycle == ["save after 0", "saved", "close"])
     }
 
     /// Input the engine hadn't saved when its web process ended goes in once the engine is back; it used to be lost.
@@ -1635,6 +1744,29 @@ struct DocumentModelTests {
         while !engine.lifecycle.contains("open") { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(100))
         #expect(engine.lifecycle == ["close", "open"])
+    }
+
+    /// An engine that restarts while the page is away for an upload (its web process ended, or an error) still closes
+    /// after the upload: the restart counted as the page coming back, and the engine stayed open off-screen.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func leavingDuringAnUploadClosesAfterARestart(error: Bool) async throws {
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [PMNode(type: "paragraph", attrs: ["id": "a"])]))
+        let model = try Self.model(engine)
+        let uploads = HeldUploads(model)
+
+        uploads.start()
+        model.leave()
+        // As the web engine does: it closes, then reports it.
+        engine.status = .idle
+        if error { engine.onFailure?(.engineError) } else { engine.onTerminated?() }
+        while !engine.lifecycle.contains("open") { try await Task.sleep(for: .milliseconds(10)) }
+        engine.status = .synced
+        engine.sendDocument()  // the reopened engine's first document
+        try await uploads.finish()
+        for _ in 0..<100 where engine.lifecycle.count < 3 { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.inserted.count == 1)
+        #expect(engine.lifecycle == ["close", "open", "close"])
+        #expect(!model.isLive)
     }
 
     /// Lost write access (Docmost 0.97's `page.permissions`, or a connection the server lets only read) ends editing and
@@ -2790,6 +2922,10 @@ final class FakeDocumentEngine: DocumentEngine {
     /// The next save waits until the test resumes `heldSave`, like a slow engine roundtrip.
     var holdsNextSave = false
     private(set) var heldSave: CheckedContinuation<Void, Never>?
+    /// The next save of the unsent changes waits until the test resumes `heldUnsentSave`, like the engine's answer
+    /// that takes up to 2 s while the server hasn't confirmed them.
+    var holdsNextUnsentSave = false
+    private(set) var heldUnsentSave: CheckedContinuation<Void, Never>?
     /// Runs mid-insert or mid-replace (saves too): the test changes `document` and delivers events there.
     var whileInserting: (() -> Void)?
     /// Runs during `open`, e.g. to send the opened engine's first document.
@@ -2901,9 +3037,16 @@ final class FakeDocumentEngine: DocumentEngine {
         lifecycle.append("close")
         reportUnsentChanges()
     }
-    /// With the number of block saves before it.
+    /// With the number of block saves before it; a held one (`holdsNextUnsentSave`) adds "saved" once the test lets it
+    /// end.
     func saveUnsentChanges() async {
         lifecycle.append("save after \(saved.count)")
+        if holdsNextUnsentSave {
+            holdsNextUnsentSave = false
+            await withCheckedContinuation { heldUnsentSave = $0 }
+            heldUnsentSave = nil
+            lifecycle.append("saved")
+        }
         reportUnsentChanges()
     }
     /// As the engine reports a save that had something to keep.
@@ -3014,8 +3157,11 @@ final class FakeDocumentEngine: DocumentEngine {
     /// sets the document they leave.
     private(set) var enters: [(target: BlockTarget, node: PMNode, after: [PMNode], base: PMNode?)] = []
     var enterResult = KeyResult.moved(EngineCursor(path: [1], offset: 0))
+    /// Awaited before `enter` answers, like a slow engine roundtrip.
+    var enterWaits: (() async -> Void)?
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult {
         enters.append((target, node, after, base))
+        await enterWaits?()
         if refusesSaves { return .refused }
         if savesUnavailable { return .unavailable }
         whileInserting?()

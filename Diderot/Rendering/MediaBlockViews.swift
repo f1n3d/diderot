@@ -252,16 +252,22 @@ struct AttachmentBlockView: View {
     let media: MediaBlock
     @Environment(\.renderContext) private var context
     @Environment(\.presentFromPage) private var presentFromPage
+    @Environment(\.startDownload) private var startDownload
     @State private var localURL: URL?
     @State private var isDownloading = false
     @State private var errorMessage: String?
 
+    /// The file the card loads, for the page's downloads (`startDownload`).
+    private var file: String { media.attachmentId ?? media.src ?? "" }
+
     var body: some View {
         Button {
-            Task { await open() }
+            // From the page where it can (`keepsDownloads`): leaving the page stops the download, and this view made
+            // anew (a collaborator's block above) doesn't. The new one shows it and doesn't start it again.
+            if let startDownload { startDownload(file) { await open() } } else { Task { await open() } }
         } label: {
             PlaceholderCard(icon: "paperclip", title: media.name ?? String(localized: "Attachment"), detail: detail, titleLineLimit: 2) {
-                if isDownloading {
+                if startDownload?.isRunning(file) ?? isDownloading {
                     ProgressView()
                 } else {
                     Image(systemName: "arrow.down.circle").foregroundStyle(.secondary)
@@ -286,7 +292,8 @@ struct AttachmentBlockView: View {
     }
 
     private func open() async {
-        guard context.canRequest, let server = context.baseURL, let url = context.mediaURL(media.src) else { return }
+        // A second tap while the file loads doesn't load it again.
+        guard context.canRequest, !isDownloading, let server = context.baseURL, let url = context.mediaURL(media.src) else { return }
         isDownloading = true
         errorMessage = nil
         defer { isDownloading = false }
@@ -296,6 +303,8 @@ struct AttachmentBlockView: View {
             // From the page where it can (`blockPresentations`): a block above, from a collaborator, makes this view anew,
             // and the preview closed.
             if let presentFromPage { presentFromPage(.quickLook(file)) } else { localURL = file }
+        } catch is CancellationError {
+            // The page was left: back on it, the card asks for a tap as before.
         } catch {
             errorMessage = error.userMessage
         }

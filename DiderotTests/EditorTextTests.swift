@@ -257,6 +257,19 @@ struct EditorTextTests {
         }
     }
 
+    /// The link sheet's target outlives a format change of its text, and is gone in another block or once its text
+    /// changed.
+    @Test func linkSheetTargetKeepsToItsText() throws {
+        var text = AttributedString("Notes here")
+        let start = text.characters.index(text.startIndex, offsetBy: 6)
+        let target = try #require(LinkSheet.Target(block: "a", text: text, selection: AttributedTextSelection(range: start..<text.endIndex)))
+        text.font = .body.bold()
+        let range = try #require(target.indices(in: text, of: "a")?.range)
+        #expect(String(text[range].characters) == "here")
+        #expect(target.indices(in: text, of: "b") == nil)
+        #expect(target.indices(in: AttributedString("Notes there"), of: "a") == nil)
+    }
+
     /// A toolbar format changes each part of the selection on its own, as on the web: a link and other formats in it
     /// stay, a mention takes the format too, when turning the format on and off.
     @Test func toolbarFormatKeepsTheOtherMarks() {
