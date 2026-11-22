@@ -430,8 +430,11 @@ struct PageView: View {
                     .onDisappear { find.barMoved(to: nil) }
                     // A preview that arrives gives a mention the service's title, on the page and so in the matches.
                     // Read only while the bar shows: previews arrive as blocks scroll in, and with find closed the
-                    // page's body needn't run again for each.
-                    .onChange(of: session.linkPreviews?.states) { _, _ in updateFind(restart: false) }
+                    // page's body needn't run again for each. By the titles alone: each search goes through the whole
+                    // document, and a link being asked about, or one without a preview, changes nothing on the page.
+                    // Previews load as their blocks are built: a mention in a block not built yet (in a collapsed
+                    // toggle, further down) is searched by its address's title until then (BACKLOG).
+                    .onChange(of: session.linkPreviews?.titles) { _, _ in updateFind(restart: false) }
             }
         }
         // No tab bar on iPhone pages: more room, and its Search tab (for pages) isn't needed here.
