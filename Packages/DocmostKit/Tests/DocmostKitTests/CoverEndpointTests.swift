@@ -44,7 +44,8 @@ struct CoverEndpointTests {
 extension MockedNetworkingTests {
     struct CoverUploadTests {
         /// A cover goes to `files/upload` as an attachment of the type `page-cover`, named before the file: the server
-        /// reads only the fields that come first.
+        /// reads only the fields that come first. The upload carries the bearer token, and the answer has no envelope
+        /// (the server's `res.send`).
         @Test func coverUploadNamesItsTypeBeforeTheFile() async throws {
             MockURLProtocol.respond(with: .init(body: Data(#"{"id":"a1","fileName":"cover.jpg","fileSize":4,"mimeType":"image/jpeg","type":"page-cover"}"#.utf8)))
             let attachment = try await TestSupport.mockClient(token: "abc").uploadCover(
@@ -53,6 +54,7 @@ extension MockedNetworkingTests {
 
             let request = try #require(MockURLProtocol.recordedRequests.first)
             #expect(request.url?.absoluteString == "http://localhost:3000/api/files/upload")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer abc")
             let contentType = try #require(request.value(forHTTPHeaderField: "Content-Type"))
             let boundary = contentType.trimmingPrefix("multipart/form-data; boundary=")
             let expected = "--\(boundary)\r\nContent-Disposition: form-data; name=\"pageId\"\r\n\r\np1\r\n"

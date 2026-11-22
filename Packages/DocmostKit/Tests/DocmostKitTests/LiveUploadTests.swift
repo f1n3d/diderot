@@ -13,7 +13,14 @@ struct LiveUploadTests {
         let page = try await client.send(Endpoints.Pages.create(spaceId: space.id, title: "Upload test \(Int(Date().timeIntervalSince1970))"))
         defer { _ = try? await client.send(Endpoints.Pages.delete(pageId: page.id, permanently: true)) }
 
-        let attachment = try await client.uploadAttachment(pageId: page.id, fileName: "pixel.png", mimeType: "image/png", data: Self.pixel)
+        // From a file on disk, as the app uploads; the body file goes beside it, so the folder is the test's own.
+        let folder = FileManager.default.temporaryDirectory.appending(path: "live-upload-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "pixel.png")
+        try Self.pixel.write(to: file)
+
+        let attachment = try await client.uploadAttachment(pageId: page.id, fileName: "pixel.png", mimeType: "image/png", fileURL: file)
         #expect(attachment.isImage)
         #expect(attachment.fileName.hasSuffix(".png"))
         #expect(attachment.fileSize == Self.pixel.count)

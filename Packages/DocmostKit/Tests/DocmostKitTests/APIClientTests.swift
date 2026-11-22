@@ -304,26 +304,6 @@ struct APIClientTests {
         _ = try await TestSupport.downloaded(at: URL(string: "http://localhost:3000/api/files/abc/secret-name.pdf")!, with: client)
         #expect(paths.withLock { $0 } == ["/api/files/abc"])
     }
-
-    @Test func uploadSendsMultipartAndDecodesBareAttachment() async throws {
-        // files/upload answers without an envelope (`res.send`).
-        MockURLProtocol.respond(with: .init(body: Data(#"{"id":"a1","fileName":"cat.png","fileSize":3,"mimeType":"image/png","url":"/api/files/a1/cat.png"}"#.utf8)))
-        let attachment = try await TestSupport.mockClient(token: "abc").uploadAttachment(
-            pageId: "p1", fileName: "my \"cat\".png", mimeType: "image/png", data: Data("PNG".utf8)
-        )
-        #expect(attachment.id == "a1")
-
-        let request = try #require(MockURLProtocol.recordedRequests.first)
-        #expect(request.url?.absoluteString == "http://localhost:3000/api/files/upload")
-        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer abc")
-        let contentType = try #require(request.value(forHTTPHeaderField: "Content-Type"))
-        #expect(contentType.hasPrefix("multipart/form-data; boundary="))
-        let boundary = contentType.trimmingPrefix("multipart/form-data; boundary=")
-        let expected = "--\(boundary)\r\nContent-Disposition: form-data; name=\"pageId\"\r\n\r\np1\r\n"
-            + "--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"my _cat_.png\"\r\nContent-Type: image/png\r\n\r\nPNG\r\n"
-            + "--\(boundary)--\r\n"
-        #expect(request.httpBody == Data(expected.utf8))
-    }
 }
 
 struct LoginFlowTests {
