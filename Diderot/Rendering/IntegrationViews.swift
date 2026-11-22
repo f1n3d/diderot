@@ -41,6 +41,14 @@ final class LinkPreviewStore {
         return nil
     }
 
+    /// The services' titles that integration mentions show, by address (`preview(for:)`): unlike `states`, it stays
+    /// as it was while a link is asked about, and for one without a preview.
+    var titles: [String: String] {
+        states.compactMapValues { state in
+            if case .loaded(.preview(let preview)) = state { preview.title } else { nil }
+        }
+    }
+
     /// Asks for the installed integrations once in 10 minutes (an admin may install one meanwhile); pasting needs them
     /// to recognize a link, cards and mentions for hosts other than the services' own.
     func loadInstalled() async {

@@ -226,6 +226,7 @@ Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the 
 - Left by the fixes of the code review of November 21, 2026:
   - Duplicate and Copy to Space wait once per page only while the space view that started them stays: its runner holds the pages being copied, and a space opened anew enables them again during a long copy.
   - The Favorites list cached at an earlier launch, shown before its request goes out, sets the stars as the cache has them, also for one changed while the ids load; the server's list or ids put it right.
+- Find on page searches an integration mention (Docmost 0.97) by the service's title, as the page shows it, once the mention's preview has loaded; a preview loads when its block is first built (review of W44, November 22, 2026). Until then find searches the title the address makes ("acme/app#12"): a collapsed toggle not opened since the app started doesn't open for a word of the service's title, and a word of the address's title opens it, or goes to a block further down, and the match is gone once that block's preview arrives. If it was the current match, the bar names another one without going there, and Next passes over that one. Asking for the previews of all the page's mentions when find opens would end it, at a request for each (the server allows 120 a minute per user, which a page listing many issues would use up) and a search of the whole document for each answer.
 
 ## Accessibility
 
