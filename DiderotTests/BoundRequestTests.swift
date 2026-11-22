@@ -57,6 +57,36 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// Back in the app, a's server rejects its sign-in (401): a's session ends, or nothing does once the user has switched
+        /// to b meanwhile.
+        @Test(arguments: [false, true]) func unauthorizedRefreshEndsOnlyItsSession(switched: Bool) async throws {
+            let session = try await sessionOnA()
+            let other = StoredSession(serverURL: b, token: "b")
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            StubURLProtocol.beforeNextAnswer.withLock {
+                $0 = {
+                    if switched { await session.switchTo(other) }
+                    StubURLProtocol.status.withLock { $0 = 401 }
+                    StubURLProtocol.body.withLock { $0 = #"{"statusCode": 401, "message": "Unauthorized"}"# }
+                }
+            }
+            defer {
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+                StubURLProtocol.status.withLock { $0 = 200 }
+                StubURLProtocol.body.withLock { $0 = nil }
+            }
+            await session.refreshCurrentUser()
+            if switched {
+                #expect(session.ready?.server.url == b)
+                #expect(try store.loadAccounts().sessions.map(\.serverURL) == [b, a])
+            } else {
+                let signedOut = if case .signedOut(let server) = session.state { server.url == a } else { false }
+                #expect(signedOut)
+                #expect(try store.loadAccounts().sessions.map(\.serverURL) == [b])
+            }
+            await removeCaches()
+        }
+
         /// A request bound to a's session doesn't go out once the app has switched to b: a flow's second request, with the
         /// user's note or title, went to b.
         @Test func boundRequestAfterASwitchDoesntGoOut() async throws {
