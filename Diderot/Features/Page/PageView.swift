@@ -394,7 +394,9 @@ struct PageView: View {
         .onAppear {
             isOnScreen = true
             model?.resume()
+            answerHeldChanges()
         }
+        .onChange(of: model?.heldChanges) { answerHeldChanges() }
         // Back in the app: an editor that failed to open, or whose web process ended while opening, tries again.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, isOnScreen { model?.resume() }
@@ -828,6 +830,12 @@ struct PageView: View {
         }
     }
 
+    /// Takes the model's held connect (`DocumentModel.heldChanges`) and answers it.
+    private func answerHeldChanges() {
+        guard let model, let hold = model.takeHeldChanges() else { return }
+        Task { await verifyHeld(hold, of: model) }
+    }
+
     /// A connect of the page's engine holds its changes (`DocumentEngine.holdsChanges`): they go if the page is still
     /// editable. A reconnect asks the server again and takes back "Edit", as the web does after a lost connection: the
     /// page may have been verified again meanwhile. The first connect counts an answer of the last 5 s.
@@ -987,10 +995,6 @@ struct PageView: View {
             .model(for: page, unsent: unsent ?? keptUnsent, isOffline: offline.isOffline, verification: verificationGate,
                    notices: notices, changes: changes) else { return }
         if created.engine != nil { keptUnsent = nil }
-        created.onChangesHeld = { [weak created] hold in
-            guard let created else { return }
-            Task { await verifyHeld(hold, of: created) }
-        }
         created.canComment = canComment(on: page)
         if created.dependencies.hasDocmost097Features, let previews = session.linkPreviews {
             // A pasted link is recognized only with the workspace's integrations known.
