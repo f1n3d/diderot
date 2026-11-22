@@ -13,6 +13,8 @@ struct PageAttachmentsView: View {
     @State private var query = ""
     /// The file being downloaded to open it.
     @State private var opening: String?
+    /// Its download, which closing the sheet stops: there, closing it is the only way to back out.
+    @State private var download: Task<Void, Never>?
     @State private var preview: URL?
     @State private var deleting: Attachment?
     @State private var errorMessage: String?
@@ -29,7 +31,7 @@ struct PageAttachmentsView: View {
                 } else {
                     List(attachments) { attachment in
                         Button {
-                            Task { await open(attachment) }
+                            download = Task { await open(attachment) }
                         } label: {
                             AttachmentRow(attachment: attachment, isOpening: opening == attachment.id)
                         }
@@ -75,6 +77,7 @@ struct PageAttachmentsView: View {
                 }
             }
         }
+        .onDisappear { download?.cancel() }
     }
 
     private func load() async {
@@ -103,6 +106,8 @@ struct PageAttachmentsView: View {
             preview = try await session.perform(on: ready) {
                 try await TempFile.download(url, with: $0, server: server, folder: ["attachments", attachment.id], name: attachment.fileName)
             }
+        } catch is CancellationError {
+            // The sheet closed.
         } catch {
             errorMessage = error.userMessage
         }
