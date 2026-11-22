@@ -226,6 +226,129 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// After an offline start, the network returns as the app comes back, in each window of an iPad: a reconnect that
+        /// starts while another runs waits for it. Each one checked the sign-in again (the version takes seconds where
+        /// Docmost asks GitHub) and replaced the session, with another media loader that downloaded the images again.
+        @Test func overlappingReconnectsSignInOnce() async throws {
+            let built = Mutex(0)
+            let session = try await offlineSessionOnA { environment in
+                let make = environment.makeUnsentStore
+                environment.makeUnsentStore = { url, userId in
+                    built.withLock { $0 += 1 }
+                    return make(url, userId)
+                }
+            }
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let second = Mutex<Task<Void, Never>?>(nil)
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            // Another window's call while the first reconnect's user request is out.
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { second.withLock { $0 = Task { await session.reconnectIfNeeded() } } } }
+            await session.reconnectIfNeeded()
+            await second.withLock { $0 }?.value
+            #expect(session.ready?.restoredOffline == false)
+            #expect(StubURLProtocol.requests.withLock { $0 }.filter { $0 == "a.example.com/api/users/me" }.count == 1,
+                    "one check of the sign-in")
+            #expect(built.withLock { $0 } == 2, "the offline session and the reconnect's")
+            await removeCaches()
+        }
+
+        /// After a start that waited for a server behind a VPN that is off, the user turns the VPN on and comes back to the
+        /// app, and another window checks the network, while the start's reconnect still waits for its answer: when that
+        /// one fails, they check the sign-in once more, together. They gave up with it, and as a VPN coming on changes no
+        /// network status, the session stayed offline until the app came back again.
+        @Test func reconnectsThatWaitedForAFailedOneTryAgainOnce() async throws {
+            let session = try await offlineSessionOnA()
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let waiting = Mutex<[Task<Void, Never>]>([])
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer {
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+                StubURLProtocol.status.withLock { $0 = 200 }
+            }
+            StubURLProtocol.beforeNextAnswer.withLock {
+                $0 = {
+                    let calls = (0..<2).map { _ in Task { @MainActor in await session.reconnectIfNeeded() } }
+                    waiting.withLock { $0 = calls }
+                    // After both on the main actor: they wait for the first reconnect.
+                    await MainActor.run {}
+                    // Its user request fails; the next one is answered.
+                    StubURLProtocol.status.withLock { $0 = 503 }
+                    StubURLProtocol.beforeNextAnswer.withLock { $0 = { StubURLProtocol.status.withLock { $0 = 200 } } }
+                }
+            }
+            await session.reconnectIfNeeded()
+            for call in waiting.withLock({ $0 }) { await call.value }
+            #expect(session.ready?.restoredOffline == false)
+            #expect(StubURLProtocol.requests.withLock { $0 }.filter { $0 == "a.example.com/api/users/me" }.count == 2,
+                    "the failed check and one more")
+            await removeCaches()
+        }
+
+        /// After a start that waited for a server behind a VPN that is off, the start's reconnect still waits for its
+        /// answer when the user turns the VPN on and comes back to the app: that call checks the sign-in at once. It
+        /// waited for the start's reconnect, whose requests can wait for their timeout (30 s), and the session stayed
+        /// offline until then.
+        @Test func laterReconnectDoesNotWaitForAnOlderOne() async throws {
+            let built = Mutex(0)
+            let session = try await offlineSessionOnA { environment in
+                let make = environment.makeUnsentStore
+                environment.makeUnsentStore = { url, userId in
+                    built.withLock { $0 += 1 }
+                    return make(url, userId)
+                }
+            }
+            // Any running reconnect is older than the calls that wait for one.
+            session.reconnectJoinWindow = .zero
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let later = Mutex<Task<Void, Never>?>(nil), loadedMeanwhile = Mutex(false)
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            // The start's user request gets its answer once the later call has loaded the session, or after 5 s.
+            StubURLProtocol.beforeNextAnswer.withLock {
+                $0 = {
+                    later.withLock { $0 = Task { @MainActor in await session.reconnectIfNeeded() } }
+                    let deadline = ContinuousClock.now + .seconds(5)
+                    while ContinuousClock.now < deadline,
+                          await MainActor.run(body: { session.ready?.restoredOffline == true }) {
+                        try? await Task.sleep(for: .milliseconds(10))
+                    }
+                    let loaded = await MainActor.run { session.ready?.restoredOffline == false }
+                    loadedMeanwhile.withLock { $0 = loaded }
+                }
+            }
+            await session.reconnectIfNeeded()
+            await later.withLock { $0 }?.value
+            #expect(loadedMeanwhile.withLock { $0 }, "loaded while the start's reconnect waited for its answer")
+            #expect(session.ready?.restoredOffline == false)
+            #expect(StubURLProtocol.requests.withLock { $0 }.filter { $0 == "a.example.com/api/users/me" }.count == 2,
+                    "the start's check and the later call's own")
+            #expect(built.withLock { $0 } == 2,
+                    "the offline session and the later call's; the start's, done last, wrote nothing")
+            await removeCaches()
+        }
+
+        /// After an offline start, the user switches to b and back to a while the reconnect waits for its answer: the
+        /// session from switching back, loaded fully, stays. The reconnect replaced it with one of its own, the offline
+        /// session's client in it, having checked the sign-in again.
+        @Test func lateReconnectKeepsTheSessionFromSwitchingBack() async throws {
+            let session = try await offlineSessionOnA()
+            let offline = try #require(session.ready?.client)
+            let other = StoredSession(serverURL: b, token: "b"), original = StoredSession(serverURL: a, token: "a")
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            StubURLProtocol.beforeNextAnswer.withLock {
+                $0 = {
+                    await session.switchTo(other)
+                    await session.switchTo(original)
+                }
+            }
+            await session.reconnectIfNeeded()
+            try #require(session.ready?.server.url == a && session.ready?.restoredOffline == false)
+            #expect(session.ready?.client !== offline)
+            await removeCaches()
+        }
+
         /// On an iPad, a second window opens while the first shows the sign-in screen after the session ended.
         @Test func secondWindowKeepsTheSignInScreen() async throws {
             try store.save(StoredSession(serverURL: a, token: "a"))
