@@ -74,6 +74,24 @@ struct APIClientTests {
         #expect(MockURLProtocol.recordedRequests.first?.timeoutInterval == 3)
     }
 
+    /// The server answers a duplicate once it has copied every attachment of the tree, and starts an export with
+    /// attachments once it has read them all: with a large tree that took longer than the client's 30 s, and the server
+    /// finished the work anyway, so a second Duplicate made a second copy.
+    @Test func duplicateAndExportWaitLong() async throws {
+        MockURLProtocol.respond(byPath: [
+            "/api/pages/duplicate": .init(body: Data(#"{"data":{"id":"p2","title":"Plan","spaceId":"s1"},"success":true,"status":200}"#.utf8)),
+            "/api/pages/export": .init(body: Data("file".utf8)),
+        ])
+        let client = TestSupport.mockClient()
+        _ = try await client.send(Endpoints.Pages.duplicate(pageId: "p1"))
+        _ = try await client.send(Endpoints.Pages.duplicate(pageId: "p1", spaceId: "s2"))
+        let (file, _) = try await client.download(
+            Endpoints.Pages.export(pageId: "p1", format: .markdown, includeChildren: true, includeAttachments: true)
+        )
+        withExtendedLifetime(client) { try? FileManager.default.removeItem(at: file) }
+        #expect(MockURLProtocol.recordedRequests.map(\.timeoutInterval) == [300, 300, 300])
+    }
+
     @Test func missingPayloadIsAnError() async throws {
         MockURLProtocol.respond(with: .init(body: try TestSupport.fixture("void-response")))
         await #expect(throws: APIError.unexpectedPayload) {

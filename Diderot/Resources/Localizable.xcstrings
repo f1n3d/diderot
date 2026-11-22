@@ -6575,6 +6575,16 @@
         }
       }
     },
+    "The server is still making the copy. It may take a while to appear.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server erstellt die Kopie noch. Es kann eine Weile dauern, bis sie erscheint."
+          }
+        }
+      }
+    },
     "The server redirects to %@.": {
       "localizations": {
         "de": {

@@ -7,9 +7,15 @@ extension Endpoints.Pages {
         public let spaceId: String?
     }
 
+    /// How long a duplicate or an export waits for the server's first byte. The server answers a duplicate once it
+    /// has copied every attachment of the tree, one after another, and starts an export with attachments once it has
+    /// read them all: with a large tree (on S3, say) that takes longer than the client's 30 s, and the server finishes
+    /// the work anyway. The web waits as long as its proxy lets it.
+    static let longWorkTimeout: TimeInterval = 300
+
     /// Duplicates a page in the same space (no `spaceId`) or copies it to another space.
     public static func duplicate(pageId: String, spaceId: String? = nil) -> Endpoint<Page> {
-        .post("pages/duplicate", body: DuplicateBody(pageId: pageId, spaceId: spaceId))
+        .post("pages/duplicate", body: DuplicateBody(pageId: pageId, spaceId: spaceId), timeout: longWorkTimeout)
     }
 
     public struct MoveToSpaceBody: Encodable, Sendable {
@@ -40,7 +46,7 @@ extension Endpoints.Pages {
     public static func export(pageId: String, format: ExportFormat, includeChildren: Bool = false, includeAttachments: Bool = false) -> Endpoint<NoContent> {
         .post("pages/export", body: ExportBody(
             pageId: pageId, format: format, includeChildren: includeChildren, includeAttachments: includeAttachments
-        ))
+        ), timeout: longWorkTimeout)
     }
 }
 

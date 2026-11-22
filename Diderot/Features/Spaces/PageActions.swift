@@ -51,9 +51,17 @@ final class PageActionRunner {
 
     func duplicate(_ page: PageRef, toSpaceId: String? = nil) async {
         await run {
-            _ = try await $0.send(Endpoints.Pages.duplicate(pageId: page.id, spaceId: toSpaceId))
+            let done: String
+            do {
+                _ = try await $0.send(Endpoints.Pages.duplicate(pageId: page.id, spaceId: toSpaceId))
+                done = toSpaceId == nil ? String(localized: "Page duplicated") : String(localized: "Page copied")
+            } catch APIError.network(let error) where error.code == .timedOut {
+                // The server makes the new pages first and answers once it has copied their attachments; it goes on
+                // after the app stops waiting. The tree shows the copy, and the toast doesn't invite a second one.
+                done = String(localized: "The server is still making the copy. It may take a while to appear.")
+            }
             self.changes.pageChanged(in: toSpaceId ?? page.spaceId)
-            self.toast = toSpaceId == nil ? String(localized: "Page duplicated") : String(localized: "Page copied")
+            self.toast = done
         }
     }
 

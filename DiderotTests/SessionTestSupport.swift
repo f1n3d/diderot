@@ -142,6 +142,9 @@ nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     /// Taken by any other request (another session's, a background check), the hook delays nothing the test awaits.
     static let beforeNextAnswerFor = Mutex<String?>(nil)
     static let offline = Mutex(false)
+    /// While set, every request fails with this error, as while `offline`: `.timedOut` for a server that answers later
+    /// than the request waits.
+    static let failure = Mutex<URLError.Code?>(nil)
     /// How many of the next requests get no answer, as from a server behind a VPN that is off (they wait until cancelled).
     static let unanswered = Mutex(0)
     static let body = Mutex<String?>(nil)
@@ -161,6 +164,10 @@ nonisolated final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         }
         if Self.offline.withLock({ $0 }) {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            return
+        }
+        if let failure = Self.failure.withLock({ $0 }) {
+            client?.urlProtocol(self, didFailWithError: URLError(failure))
             return
         }
         if Self.unanswered.withLock({ count in
