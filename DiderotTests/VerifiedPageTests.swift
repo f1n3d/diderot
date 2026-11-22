@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import DocmostKit
 @testable import Diderot
@@ -128,6 +129,144 @@ extension AppSessionRaceTests {
             #expect(await session.unsentTitle(pageId: "p1") == nil)
             await removeCaches()
         }
+
+        /// The evening before, on Docmost 0.97, a verified page's title waited for the server (`UnsentEdits`); overnight it
+        /// came back as 0.98, and iOS kept the app in memory. Back in the app, the title goes only once the license and
+        /// version that returning asks for have come, and so waits for "Edit": whether it is sent before the question
+        /// (the main view's task runs first) or while the question's answers wait (`whileAnswersWait`).
+        @Test(arguments: [false, true])
+        func keptTitleWaitsForTheLicenseAndVersionAskedFor(whileAnswersWait: Bool) async throws {
+            let (session, _) = try await licensed(["page:verification"], version: "0.97.0")
+            defer {
+                resetStub()
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+                UnsentChanges.removeAll(server: a)
+            }
+            try #require(session.ready.map(PageLoader.checksVerification) == false)
+            await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: "s1")
+            session.licenseAndVersionInterval = .zero
+            // One answer for the user, license, version, verification and rename alike.
+            StubURLProtocol.body.withLock {
+                $0 = #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}, "currentVersion": "0.98.0", "tier": "enterprise", "features": ["page:verification"], "id": "p1", "title": "Neu", "status": "verified"}}"#
+            }
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let sent: Bool
+            if whileAnswersWait {
+                let titles = Mutex<Task<Bool, Never>?>(nil)
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/version" }
+                StubURLProtocol.beforeNextAnswer.withLock {
+                    $0 = {
+                        titles.withLock { $0 = Task { @MainActor in !(await session.sendUnsentTitles().spaces.isEmpty) } }
+                        // The titles' task reads the session before the version answers.
+                        try? await Task.sleep(for: .milliseconds(200))
+                    }
+                }
+                await session.refreshCurrentUser()
+                sent = try await #require(titles.withLock { $0 }).value
+            } else {
+                sent = !(await session.sendUnsentTitles().spaces.isEmpty)
+            }
+            #expect(!sent)
+            #expect(session.ready.map(PageLoader.checksVerification) == true)
+            #expect(await session.unsentTitle(pageId: "p1") == "Neu")
+            #expect(StubURLProtocol.requests.withLock { $0 }.contains("a.example.com/api/pages/verification-info"))
+            #expect(!StubURLProtocol.requests.withLock { $0 }.contains("a.example.com/api/pages/update"))
+            await removeCaches()
+        }
+
+        /// Back in the app, a page loads while the license and version that returning asks for still wait for their
+        /// answers: its editor is built by them (`readyOnceAnswered`). Found to be Docmost 0.98 with page verification, it
+        /// holds the page's changes until the page's verification is known. Built from the session as it was, it never
+        /// held, nor on its reconnects, and its kept changes took a verification back without asking.
+        @Test func pageLoadedWhileTheLicenseAndVersionAreAskedForHolds() async throws {
+            let (session, _) = try await licensed(["page:verification"], version: "0.97.0")
+            defer {
+                resetStub()
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+            }
+            session.licenseAndVersionInterval = .zero
+            StubURLProtocol.body.withLock { $0 = Self.licensed098 }
+            let loading = Mutex<Task<ReadySession?, Never>?>(nil)
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/version" }
+            StubURLProtocol.beforeNextAnswer.withLock {
+                $0 = {
+                    loading.withLock { $0 = Task { @MainActor in await session.readyOnceAnswered() } }
+                    // The page's load asks for the session before the version answers.
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+            }
+            await session.refreshCurrentUser()
+            let loaded = try #require(loading.withLock { $0 })
+            let owner = try #require(await loaded.value)
+            #expect(PageLoader.checksVerification(on: owner))
+            let model = PageLoader(pageId: "p1", owner: owner, session: session)
+                .model(for: try Self.page(canEdit: true), unsent: nil, isOffline: false, verification: .open, notices: AppNotices(), changes: ContentChanges())
+            #expect(model?.engine?.holdsChanges == true)
+            await removeCaches()
+        }
+
+        /// A server that answers the user but not the license (overloaded, or a VPN that drops) doesn't keep a page that
+        /// loads meanwhile empty until the requests' timeout (30 s): it waits at most `startDeadline` for the answer, then
+        /// loads in the session as it is.
+        @Test(.timeLimit(.minutes(1))) func pageWaitsForTheLicenseAndVersionAtMostTheDeadline() async throws {
+            let (session, _) = try await licensed(["page:verification"], version: "0.97.0")
+            let (released, release) = AsyncStream<Void>.makeStream()
+            defer {
+                release.finish()
+                resetStub()
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+                StubURLProtocol.beforeNextAnswer.withLock { $0 = nil }
+            }
+            session.licenseAndVersionInterval = .zero
+            session.startDeadline = .milliseconds(300)
+            StubURLProtocol.body.withLock { $0 = Self.licensed098 }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/workspace/entitlements" }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { for await _ in released {} } }
+            let returned = Task { await session.refreshCurrentUser() }
+            while StubURLProtocol.beforeNextAnswer.withLock({ $0 != nil }) { try await Task.sleep(for: .milliseconds(10)) }
+            // The license answers after 3 s.
+            let answers = Task {
+                try? await Task.sleep(for: .seconds(3))
+                release.finish()
+            }
+            let start = ContinuousClock.now
+            let owner = try #require(await session.readyOnceAnswered())
+            #expect(start.duration(to: .now) < .seconds(2))
+            #expect(owner.serverVersion == "0.97.0")
+            await answers.value
+            await returned.value
+            #expect(session.ready.map(PageLoader.checksVerification) == true)
+            await removeCaches()
+        }
+
+        /// An editor opened before returning to the app found the check turned on (a Docmost upgrade, a license change) is
+        /// built again as the page loads again, also where the page has no lock: an engine reads only when it opens whether
+        /// it holds the page's changes, so this one would never hold, not on a reconnect after someone verified the page.
+        /// One that holds stays when the check turns off: it lets each connect's changes go at once.
+        @Test func editorOpenedWithoutTheCheckIsBuiltAgain() async throws {
+            let (session, before) = try await licensed(["page:verification"], version: "0.97.0")
+            defer { resetStub() }
+            let page = try Self.page(canEdit: true)
+            func engine(by loader: PageLoader) -> (any DocumentEngine)? {
+                loader.model(for: page, unsent: nil, isOffline: false, verification: .open, notices: AppNotices(), changes: ContentChanges())?.engine
+            }
+            let opened = try #require(engine(by: before))
+            #expect(PageLoader.keepsEditor(opened, for: page, verification: .open, on: before.owner))
+            session.licenseAndVersionInterval = .zero
+            StubURLProtocol.body.withLock { $0 = Self.licensed098 }
+            await session.refreshCurrentUser()
+            let after = try #require(session.ready)
+            try #require(PageLoader.checksVerification(on: after))
+            #expect(!PageLoader.keepsEditor(opened, for: page, verification: .open, on: after))
+            let rebuilt = try #require(engine(by: PageLoader(pageId: "p1", owner: after, session: session)))
+            #expect(rebuilt.holdsChanges)
+            #expect(PageLoader.keepsEditor(rebuilt, for: page, verification: .open, on: after))
+            #expect(PageLoader.keepsEditor(rebuilt, for: page, verification: .open, on: before.owner))
+            await removeCaches()
+        }
+
+        /// One answer for the user, license and version alike: Docmost 0.98 with page verification licensed.
+        private static let licensed098 = #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}, "currentVersion": "0.98.0", "tier": "enterprise", "features": ["page:verification"]}}"#
 
         /// Without the license feature nothing is asked, nor on Docmost 0.97, whose edits kept a verification and whose
         /// web didn't ask: every page edits as before.

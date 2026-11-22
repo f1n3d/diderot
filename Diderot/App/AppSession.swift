@@ -70,8 +70,16 @@ final class AppSession {
     }
 
     /// How long a start with saved content waits for the server: one that doesn't answer (behind a VPN that is off)
-    /// would keep the launch screen up until the requests' timeout (30 s).
+    /// would keep the launch screen up until the requests' timeout (30 s). A page waits as long for the license and
+    /// version asked for on returning to the app (`readyOnceAnswered`).
     @ObservationIgnored var startDeadline: Duration = .seconds(5)
+
+    /// How often returning to the app asks for the license and version again (`askLicenseAndVersionIfDue`): Docmost 0.96
+    /// and 0.97 ask GitHub at every version request, which allows 60 an hour from one address.
+    @ObservationIgnored var licenseAndVersionInterval: Duration = .seconds(15 * 60)
+    /// When the current session's license and version were last asked for: at its sign-in, then by
+    /// `askLicenseAndVersionIfDue`.
+    @ObservationIgnored private var licenseAndVersionAsked: ContinuousClock.Instant?
 
     var hasAccounts: Bool { !accounts.isEmpty }
 
@@ -521,14 +529,47 @@ final class AppSession {
     /// holds the lock the person chose to edit a page through.
     func sendUnsentTitles(consented: [String: PageVerification.Lock] = [:]) async -> (spaces: [String], dropped: [UnsentEdits.DroppedChange]) {
         guard let session = ready else { return ([], []) }
-        let checksVerification = PageLoader.checksVerification(on: session)
+        // Decided at the first kept title: only a title to send waits for the license and version.
+        var checksVerification: Bool?
         return await unsentEdits.sendTitles(in: session.unsentChanges) { pageId, title in
-            if checksVerification, let lock = try await verificationLock(of: pageId, on: session), consented[pageId] != lock {
+            if checksVerification == nil { checksVerification = await checksVerificationOnceAnswered(on: session) }
+            if checksVerification == true, let lock = try await verificationLock(of: pageId, on: session), consented[pageId] != lock {
                 throw UnsentEdits.WaitsForEdit()
             }
             // Another account's pages don't exist on its server: after a switch nothing more goes out.
             _ = try await send(Endpoints.Pages.update(pageId: pageId, title: title), on: session)
         }
+    }
+
+    /// Whether `session`'s kept titles wait for "Edit" on verified pages (`PageLoader.checksVerification`), by the license
+    /// and version that returning to the app or the network asks for (`askLicenseAndVersionIfDue`), whether that question
+    /// runs already or is due: the app's return sends kept titles while it asks, and a Docmost upgrade or a license
+    /// change found then turns the check on. False once a switch or sign-out ended `session`: nothing of it goes out then.
+    private func checksVerificationOnceAnswered(on session: ReadySession) async -> Bool {
+        // An offline session's are asked for when it reconnects (`finishSignIn`).
+        if !session.restoredOffline { await askLicenseAndVersionIfDue(of: session)?.value }
+        guard isStillCurrent(session), let current = ready else { return false }
+        return PageLoader.checksVerification(on: current)
+    }
+
+    /// The current session; while returning to the app or the network asks for the license and version
+    /// (`askLicenseAndVersionIfDue`), once they have come. A page loading meanwhile builds its editor by them
+    /// (`PageView.load`): an engine reads only when it opens whether it holds its changes for the page's verification,
+    /// so one built from the session as it was never held, and its kept changes took a verification back on the return
+    /// that first found Docmost 0.98 with `page:verification`. At once where no question runs: it starts none. At most
+    /// `startDeadline`: a server that doesn't answer (behind a VPN that is off) would keep the page empty until the
+    /// requests' timeout (30 s), and its editor can't connect to it either.
+    func readyOnceAnswered() async -> ReadySession? {
+        if let asking = askingLicenseAndVersion, isStillCurrent(asking.session) {
+            let deadline = startDeadline
+            let (over, end) = AsyncStream<Void>.makeStream()
+            // Unstructured: waiting for the question's task doesn't end when cancelled, so a task group would wait it out.
+            Task { await asking.task.value; end.finish() }
+            let timeout = Task { try? await Task.sleep(for: deadline); end.finish() }
+            for await _ in over {}
+            timeout.cancel()
+        }
+        return ready
     }
 
     /// The page's lock (`PageVerification.lock`) as the server says it now; nil without one, also where the server has
@@ -607,15 +648,19 @@ final class AppSession {
         state = .signedOut(session.server)
     }
 
-    /// Revalidates the session when the app returns to the foreground.
+    /// Revalidates the session when the app returns to the foreground or the network returns, and every
+    /// `licenseAndVersionInterval` its license and version too (`askLicenseAndVersionIfDue`).
     func refreshCurrentUser() async {
         guard case .ready(let session) = state else { return }
         if session.restoredOffline {
             await reconnectIfNeeded()
             return
         }
+        let licenseAndVersion = askLicenseAndVersionIfDue(of: session)
         do {
             let user = try await session.client.send(Endpoints.Users.me)
+            // First: the time zone below goes only to Docmost 0.98, which the answer may have just named.
+            await licenseAndVersion?.value
             // The current state, not `session`: switching servers and back meanwhile replaced the client and cache.
             guard isStillCurrent(session), case .ready(var current) = state else { return }
             // Usually unchanged: writing `state` anyway would rebuild every view that reads the session.
@@ -631,7 +676,61 @@ final class AppSession {
             if isStillCurrent(session) { handleUnauthorized() }
         } catch {
             AppLog.session.debug("Refresh skipped: \(error.userMessage, privacy: .public)")
+            // After its question here too: the next return then knows whether it counted as asked.
+            await licenseAndVersion?.value
         }
+    }
+
+    /// The running question for the license and version (`askLicenseAndVersionIfDue`): its session, when it was asked.
+    @ObservationIgnored private var askingLicenseAndVersion: (session: ReadySession, asked: ContinuousClock.Instant, task: Task<Void, Never>)?
+
+    /// Asks `session`'s server for its license and version once `licenseAndVersionInterval` has passed since they were
+    /// last asked for, and writes what changed: iOS may keep the app in memory for days, across a Docmost upgrade or a
+    /// license change, and both decide whether verified pages ask before an edit and whether pages open read-only. Back
+    /// in the app or the network (`refreshCurrentUser`) and before kept titles go (`sendUnsentTitles`), whichever comes
+    /// first; while it runs, later callers get the running one to wait for. Nil where none is due.
+    private func askLicenseAndVersionIfDue(of session: ReadySession) -> Task<Void, Never>? {
+        if let asking = askingLicenseAndVersion, isStillCurrent(asking.session) { return asking.task }
+        guard licenseAndVersionAsked.map({ $0.duration(to: .now) >= licenseAndVersionInterval }) ?? true else { return nil }
+        // Taken before the requests go out: the windows of an iPad that come back together ask once.
+        let previous = licenseAndVersionAsked, asked = ContinuousClock.now
+        licenseAndVersionAsked = asked
+        let task = Task {
+            defer { if askingLicenseAndVersion?.asked == asked { askingLicenseAndVersion = nil } }
+            let (entitlements, version) = await Self.licenseAndVersion(from: session.client)
+            guard entitlements != nil || version != nil else {
+                // Without network yet, nothing reached the server, nor GitHub: the next return asks again, unless a sign-in
+                // asked meanwhile.
+                if licenseAndVersionAsked == asked { licenseAndVersionAsked = previous }
+                return
+            }
+            // The current state, not `session`: switching servers and back meanwhile replaced the client and cache.
+            guard isStillCurrent(session), case .ready(var current) = state else { return }
+            // Usually unchanged: writing `state` anyway would rebuild every view that reads the session. An answer that
+            // didn't come keeps what is known, as at sign-in.
+            var changed = false
+            if let entitlements, entitlements != current.entitlements {
+                current.entitlements = entitlements
+                changed = true
+            }
+            if let version, Self.reportedVersion(version) != current.serverVersion {
+                current.serverVersion = Self.reportedVersion(version)
+                changed = true
+            }
+            if changed { state = .ready(current) }
+            // Also when unchanged: an offline start needs them, and iOS may have purged the cache meanwhile.
+            if let entitlements { await current.cache.write(entitlements, key: CacheKey.entitlements) }
+            if let version { await current.cache.write(version, key: CacheKey.serverVersion) }
+        }
+        askingLicenseAndVersion = (session, asked, task)
+        return task
+    }
+
+    /// The server's license and the version it names, each nil where it didn't come (`finishSignIn` says why).
+    private static func licenseAndVersion(from client: APIClient) async -> (Entitlements?, String?) {
+        async let entitlements = client.send(Endpoints.Workspace.entitlements)
+        async let version = client.send(Endpoints.Version.info)
+        return (try? await entitlements, (try? await version)?.currentVersion)
     }
 
     /// Clears the current server's offline cache, except the user, license and version that an offline start restores.
@@ -729,6 +828,8 @@ final class AppSession {
         keychain("save") { try sessionStore.save(stored) }
         reloadAccounts()
         Task.detached(priority: .utility) { await cache.prune() }
+        // Just asked for: returning to the app asks again only after `licenseAndVersionInterval`.
+        licenseAndVersionAsked = .now
         state = .ready(ReadySession(
             server: server, client: client, mediaLoader: MediaLoader(client: client, cache: cache), cache: cache,
             unsentChanges: environment.makeUnsentStore(server.url, currentUser.user.id),
