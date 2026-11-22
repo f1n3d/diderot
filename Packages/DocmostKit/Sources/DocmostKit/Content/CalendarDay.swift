@@ -7,10 +7,15 @@ public struct CalendarDay: Sendable, Hashable, Comparable {
     public let date: Date
 
     public init?(_ value: String?) {
-        guard let value, value.utf8.count == 10, value.wholeMatch(of: /\d{4}-\d{2}-\d{2}/) != nil,
-              let date = Self.formatter.date(from: value), Self.formatter.string(from: date) == value,
-              Self.calendar.component(.year, from: date) > 0
+        // Read by hand: a Regex and a DateFormatter parse took about 80 µs a value, this about 1 µs, and a calendar
+        // reads every row's date again on each tap.
+        guard let value, value.utf8.count == 10 else { return nil }
+        let bytes = Array(value.utf8)
+        guard bytes[4] == UInt8(ascii: "-"), bytes[7] == UInt8(ascii: "-"), let year = Self.number(bytes[0..<4]), year > 0,
+              let month = Self.number(bytes[5..<7]), let day = Self.number(bytes[8..<10])
         else { return nil }
+        let parts = DateComponents(year: year, month: month, day: day)
+        guard parts.isValidDate(in: Self.calendar), let date = Self.calendar.date(from: parts) else { return nil }
         self.date = date
     }
 
@@ -34,6 +39,16 @@ public struct CalendarDay: Sendable, Hashable, Comparable {
     }
 
     public static func < (lhs: CalendarDay, rhs: CalendarDay) -> Bool { lhs.date < rhs.date }
+
+    /// The number ASCII digits spell; nil if one is no digit.
+    private static func number(_ digits: ArraySlice<UInt8>) -> Int? {
+        var number = 0
+        for byte in digits {
+            guard (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte) else { return nil }
+            number = number * 10 + Int(byte - UInt8(ascii: "0"))
+        }
+        return number
+    }
 
     private static let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
