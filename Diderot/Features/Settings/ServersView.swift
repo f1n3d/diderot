@@ -18,19 +18,7 @@ struct ServersView: View {
                         Task { await session.switchTo(account) }
                     } label: {
                         HStack(spacing: 12) {
-                            // Explicit colors, or the button tints the row with the accent color.
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(account.displayName)
-                                    .foregroundStyle(Color.primary)
-                                Text(account.host)
-                                    .font(.caption)
-                                    .foregroundStyle(Color.secondary)
-                                if let email = account.email {
-                                    Text(email)
-                                        .font(.caption)
-                                        .foregroundStyle(Color.secondary)
-                                }
-                            }
+                            SavedServerLabel(account: account)
                             Spacer()
                             if isCurrent {
                                 Image(systemName: "checkmark")
@@ -78,6 +66,28 @@ struct ServersView: View {
             removing = account
         } else {
             Task { await session.removeAccount(account) }
+        }
+    }
+}
+
+/// A saved sign-in as the server list and the server entry show it: workspace, host and email.
+struct SavedServerLabel: View {
+    let account: StoredSession
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        // Explicit colors, or the button tints the row with the accent color; dimmed, as a disabled button is.
+        VStack(alignment: .leading, spacing: 2) {
+            Text(account.displayName)
+                .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            Text(account.host)
+                .font(.caption)
+                .foregroundStyle(Color.secondary)
+            if let email = account.email {
+                Text(email)
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
+            }
         }
     }
 }

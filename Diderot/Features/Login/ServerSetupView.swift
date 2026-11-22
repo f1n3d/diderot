@@ -1,4 +1,5 @@
 import SwiftUI
+import DocmostKit
 
 /// First step: enter and verify the server address.
 struct ServerSetupView: View {
@@ -36,6 +37,24 @@ struct ServerSetupView: View {
                     }
                     .disabled(address.trimmingCharacters(in: .whitespaces).isEmpty || isConnecting)
                     .accessibilityIdentifier("server-continue")
+                }
+
+                // The way out of the sign-in screen of a saved server that doesn't answer leads here (Change Server), and
+                // the server list shows only once signed in: Cancel restores that server again, and typing another
+                // server's address signs in there anew, ending its saved sign-in. Each of these opens with its own.
+                if session.hasAccounts {
+                    Section("Saved Servers") {
+                        ForEach(session.accounts) { account in
+                            Button {
+                                Task { await session.switchTo(account) }
+                            } label: {
+                                SavedServerLabel(account: account)
+                            }
+                            // A switch meanwhile would be undone by the address check's answer.
+                            .disabled(isConnecting)
+                            .accessibilityIdentifier("saved-server-\(account.host)")
+                        }
+                    }
                 }
 
                 #if DEBUG
