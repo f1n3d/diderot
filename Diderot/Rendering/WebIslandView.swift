@@ -5,6 +5,9 @@ import WebKit
 /// The app bundle is the base URL, so the bundled scripts and fonts resolve.
 struct WebIslandView: View {
     let html: String
+    /// What the island's height is remembered by (`lastHeight`) where its page is too large to hash each time the
+    /// island is built: a diagram's address, the SVG of some MB inside. Without one, the page itself.
+    var heightKey: String?
     var minHeight: CGFloat = 44
 
     @State private var page = WebViews.island()
@@ -33,7 +36,7 @@ struct WebIslandView: View {
             // One element for VoiceOver, read with the label its user sets (formula, diagram): not the web content
             // and its two scroll bars.
             .accessibilityElement(children: .ignore)
-            .frame(height: height ?? Self.lastHeight(of: html, width: width, typeSize: typeSize) ?? minHeight)
+            .frame(height: height ?? Self.lastHeight(of: heightKey ?? html, width: width, typeSize: typeSize) ?? minHeight)
             .opacity(height == nil ? 0 : 1)
             .overlay {
                 if height == nil { ProgressView() }
@@ -88,28 +91,28 @@ struct WebIslandView: View {
         let measured = try await page.callJavaScript(script)
         let height = Self.height(measured: (measured as? NSNumber)?.doubleValue ?? 0, minHeight: minHeight)
         self.height = height
-        Self.remember(height, of: html, width: width, typeSize: typeSize)
+        Self.remember(height, of: heightKey ?? html, width: width, typeSize: typeSize)
     }
 
-    /// The heights islands last measured, by content, width and text size. The page's list drops an island scrolled out
-    /// of view, and builds it anew when it shows again: without its height it came back at `minHeight` while it
-    /// rendered, then grew, and what was below it jumped (code review R48).
+    /// The heights islands last measured, by content (`heightKey` or page), width and text size. The page's list drops
+    /// an island scrolled out of view, and builds it anew when it shows again: without its height it came back at
+    /// `minHeight` while it rendered, then grew, and what was below it jumped (code review R48).
     private static var lastHeights: [HeightKey: CGFloat] = [:]
 
     private struct HeightKey: Hashable {
-        let html: Int
+        let content: Int
         let width: CGFloat
         let typeSize: DynamicTypeSize
     }
 
-    static func lastHeight(of html: String, width: CGFloat, typeSize: DynamicTypeSize) -> CGFloat? {
-        lastHeights[HeightKey(html: html.hashValue, width: width, typeSize: typeSize)]
+    static func lastHeight(of content: String, width: CGFloat, typeSize: DynamicTypeSize) -> CGFloat? {
+        lastHeights[HeightKey(content: content.hashValue, width: width, typeSize: typeSize)]
     }
 
-    static func remember(_ height: CGFloat, of html: String, width: CGFloat, typeSize: DynamicTypeSize) {
+    static func remember(_ height: CGFloat, of content: String, width: CGFloat, typeSize: DynamicTypeSize) {
         // Pages with many islands, many pages: a few hundred heights are plenty for the pages in reach.
         if lastHeights.count > 500 { lastHeights.removeAll() }
-        lastHeights[HeightKey(html: html.hashValue, width: width, typeSize: typeSize)] = height
+        lastHeights[HeightKey(content: content.hashValue, width: width, typeSize: typeSize)] = height
     }
 
     /// At most this tall; the rest is cut off, as the island doesn't scroll. A diagram or picture from the page can be
@@ -182,6 +185,14 @@ nonisolated enum IslandHTML {
           })();
         </script></body></html>
         """
+    }
+
+    /// A diagram's file as its island's page, off the main thread: a drawing with pictures pasted in can be some MB of
+    /// SVG (Excalidraw keeps its scene in the file too), which took the main thread milliseconds to decode, copy and
+    /// encode. The file's `<svg>` element, without the XML prolog; nil if it has none or isn't UTF-8.
+    @concurrent static func diagram(from file: Data, zoomable: Bool = false) async -> String? {
+        guard let text = String(data: file, encoding: .utf8), let start = text.range(of: "<svg") else { return nil }
+        return svg(String(text[start.lowerBound...]), zoomable: zoomable)
     }
 
     /// `zoomable`: full screen (`MediaViewer`), it fits the view and zooms up to 4×, as on the web.

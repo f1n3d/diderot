@@ -38,14 +38,16 @@ struct MermaidView: View {
 struct DiagramView: View {
     let media: MediaBlock
     @Environment(\.renderContext) private var context
-    @State private var markup: String?
+    /// The island's page, built once from the file: a run of the body only passes it on.
+    @State private var html: String?
     @State private var standIn = MediaStandIn.loading
     @State private var gate = MediaGate()
 
     var body: some View {
         Group {
-            if let markup {
-                WebIslandView(html: IslandHTML.svg(markup), minHeight: 80)
+            if let html {
+                // Its height by its address, which changes with the drawing: not by a page of some MB to hash.
+                WebIslandView(html: html, heightKey: media.src, minHeight: 80)
                     .accessibilityLabel(media.name ?? String(localized: "Diagram"))
                     .opensFullScreen(ViewerMedia(src: media.src, title: media.name, isDiagram: true))
             } else {
@@ -58,24 +60,19 @@ struct DiagramView: View {
 
     private func load() async {
         // Back in view (scrolling, returning to the page): keep the diagram instead of reloading.
-        guard markup == nil else { return }
+        guard html == nil else { return }
         guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return standIn = .failed(reason: nil) }
         if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
         if gate.stillWaits(standIn) { return }
         standIn = .loading
         do {
-            guard let svg = Self.svg(in: try await loader.data(for: url, maxBytes: gate.maxBytes)) else { throw MediaUnreadable() }
-            markup = svg
+            let data = try await loader.data(for: url, maxBytes: gate.maxBytes)
+            guard let html = await IslandHTML.diagram(from: data) else { throw MediaUnreadable() }
+            self.html = html
         } catch {
             // Scrolling past or opening another page cancels the download; it starts again on return.
             if let failed = MediaGate.standIn(after: error) { standIn = failed }
         }
-    }
-
-    /// The file's `<svg>` element (without the XML prolog); nil if it has none.
-    nonisolated static func svg(in data: Data) -> String? {
-        guard let text = String(data: data, encoding: .utf8), let start = text.range(of: "<svg") else { return nil }
-        return String(text[start.lowerBound...])
     }
 }
 

@@ -13,6 +13,21 @@ struct IslandHTMLTests {
         #expect(!html.contains("<svg"))
     }
 
+    /// A diagram's file shows its `<svg>` element, without the XML prolog before it; a file without one, or not
+    /// UTF-8, shows nothing ("Diagram could not be loaded.").
+    @Test func diagramFileShowsItsSVG() async {
+        let svg = #"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>"#
+        let file = Data(("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+
+            """ + svg).utf8)
+        #expect(await IslandHTML.diagram(from: file) == IslandHTML.svg(svg))
+        #expect(await IslandHTML.diagram(from: file, zoomable: true) == IslandHTML.svg(svg, zoomable: true))
+        #expect(await IslandHTML.diagram(from: Data("<html><body>Not found</body></html>".utf8)) == nil)
+        #expect(await IslandHTML.diagram(from: Data([0xFF, 0xFE, 0x3C, 0x73, 0x76, 0x67])) == nil)
+    }
+
     @Test func textCannotEndTheScript() {
         let html = IslandHTML.mermaid("</script><!--<script>")
 
