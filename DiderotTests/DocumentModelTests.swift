@@ -1609,6 +1609,71 @@ struct DocumentModelTests {
         #expect(engine.saved.last?.plainText == "EinsZweix")
     }
 
+    /// Pasted lines the engine refuses or can't take stay in the line without their line breaks, as after a refused
+    /// Return, and a letter typed while they were on their way stays too, as it does after a Return. The line was set
+    /// back to the pasted text, and the letter was gone.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], ["A\nB\nC", "\n"])
+    func letterTypedWhileRefusedLinesWaitStays(unavailable: Bool, pasted: String) async throws {
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "xyz")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph]))
+        let model = try Self.model(engine)
+        model.dependencies.clock = TestClock()
+        model.activate(NodeRef(path: [0], node: paragraph), node: paragraph)
+        engine.enterResult = unavailable ? .unavailable : .refused
+        var answers = false
+        engine.enterWaits = { while !answers { try? await Task.sleep(for: .milliseconds(10)) } }
+        let isReturn = pasted == "\n"
+
+        let text = model.activeText.characters
+        model.activeText.insert(AttributedString(pasted), at: text.index(text.startIndex, offsetBy: 2))
+        model.activeTextChanged()
+        while engine.enteredLines.isEmpty && engine.enters.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        // The editor shows the first line meanwhile.
+        #expect(String(model.activeText.characters) == (isReturn ? "xy" : "xyA"))
+        model.activeText.append(AttributedString("q"))
+        model.activeTextChanged()
+        answers = true
+        while model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
+
+        let kept = isReturn ? "xyqz" : "xyAqBCz"
+        #expect(String(model.activeText.characters) == kept)
+        // As the editor reports the change.
+        model.activeTextChanged()
+        await model.flush()
+        #expect(engine.saved.last?.plainText == kept)
+    }
+
+    /// Lines pasted into a toggle's title that the engine refuses go back where they were pasted, before what was after
+    /// the cursor, and a letter typed meanwhile stays where it went, at the title's start or end.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func letterTypedWhileRefusedTitleLinesWaitStays(atEnd: Bool) async throws {
+        let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "TiTel")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
+            PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])]),
+        ]))
+        let model = try Self.model(engine)
+        model.dependencies.clock = TestClock()
+        model.activate(NodeRef(path: [0, 0], node: title), node: title)
+        engine.enterResult = .refused
+        var answers = false
+        engine.enterWaits = { while !answers { try? await Task.sleep(for: .milliseconds(10)) } }
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 2))
+
+        #expect(model.pasteLink("A\nB"))
+        while engine.enteredLines.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        // The title keeps what was after the cursor meanwhile.
+        #expect(String(model.activeText.characters) == "TiATel")
+        if atEnd {
+            model.activeText.append(AttributedString("q"))
+        } else {
+            model.activeText.insert(AttributedString("q"), at: model.activeText.startIndex)
+        }
+        model.activeTextChanged()
+        answers = true
+        while model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(String(model.activeText.characters) == (atEnd ? "TiABTelq" : "qTiABTel"))
+    }
+
     /// Moving the page to the trash while its engine opens (after pull-to-refresh) closes it after that open; stopped
     /// beside the queue, the open ran afterwards and nothing closed it.
     @Test(.timeLimit(.minutes(1))) func trashWhileOpeningClosesTheEngineLast() async throws {
@@ -3343,7 +3408,7 @@ final class FakeDocumentEngine: DocumentEngine {
     /// sets the document they leave.
     private(set) var enters: [(target: BlockTarget, node: PMNode, after: [PMNode], base: PMNode?)] = []
     var enterResult = KeyResult.moved(EngineCursor(path: [1], offset: 0))
-    /// Awaited before `enter` answers, like a slow engine roundtrip.
+    /// Awaited before `enter` and `enterLines` answer, like a slow engine roundtrip.
     var enterWaits: (() async -> Void)?
     func enter(_ target: BlockTarget, keeping node: PMNode, after: [PMNode], base: PMNode?) async -> KeyResult {
         enters.append((target, node, after, base))
@@ -3357,6 +3422,7 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var enteredLines: [(target: BlockTarget, node: PMNode, lines: [[PMNode]], base: PMNode?)] = []
     func enterLines(_ target: BlockTarget, keeping node: PMNode, lines: [[PMNode]], base: PMNode?) async -> KeyResult {
         enteredLines.append((target, node, lines, base))
+        await enterWaits?()
         if refusesSaves { return .refused }
         if savesUnavailable { return .unavailable }
         whileInserting?()
