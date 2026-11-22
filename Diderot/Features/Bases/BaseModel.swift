@@ -284,6 +284,10 @@ final class BaseModel {
                 }
                 guard selectedView == view else { return }
                 for index in loaded.indices { loaded[index].list.rows.removeAll { deletedRowIds.contains($0.id) } }
+                // An option added while the columns loaded keeps its column, with a card set to it meanwhile.
+                if let current = groupByProperty {
+                    loaded = Self.kanbanColumns(view: view, groupBy: current, keeping: loaded)
+                }
                 columns = loaded
                 failedMore = []
                 reapplyOwnChanges()
@@ -404,6 +408,18 @@ final class BaseModel {
         guard selectedView == view else { return }
         AppLog.ui.info("Rows cursor stale: loading the view again")
         await loadRows()
+    }
+
+    /// The board's columns for the options its grouping property has now, each with the rows `shown` has for it: one
+    /// added since (`addChoice`) gets an empty column, as the web builds the columns from the property every time.
+    private static func kanbanColumns(
+        view: BaseView, groupBy: BaseProperty, keeping shown: [BaseKanbanColumn]
+    ) -> [BaseKanbanColumn] {
+        BaseLayout.kanbanColumns(view: view, groupBy: groupBy).map { column in
+            var column = column
+            if let list = shown.first(where: { $0.id == column.id })?.list { column.list = list }
+            return column
+        }
     }
 
     /// Kanban cards sort by position (web parity: plain string comparison of the keys).
@@ -681,6 +697,11 @@ final class BaseModel {
             base = self.base ?? base
             base.replace(result.property)
             state = .loaded(base)
+            // An option of the board's grouping property gets its column now, so the card the picker sets to it stays
+            // on the board. A board still loading, or showing its error, gets its columns from its load.
+            if let view = selectedView, let groupBy = groupByProperty, groupBy.id == propertyId, !columns.isEmpty {
+                columns = Self.kanbanColumns(view: view, groupBy: groupBy, keeping: columns)
+            }
             await ownSession?.cache.write(base, key: CacheKey.base(pageId))
             return choice
         } catch {
