@@ -1,7 +1,9 @@
 import AVKit
+import ImageIO
 import SwiftUI
 import Synchronization
 import Testing
+import UniformTypeIdentifiers
 import WebKit
 import DocmostKit
 @testable import Diderot
@@ -373,14 +375,62 @@ struct MediaBlockViewTests {
         #expect(size.height.isFinite && size.height > 0 && size.height <= 300, "\(size)")
     }
 
-    /// Polls `condition` while SwiftUI lays out (`tries` × 50 ms, a minute by default; a met condition ends the wait at
-    /// once). GitHub's runners start web processes far slower than a Mac: in three of about 130 runs from November 8 to
-    /// 15, 2026 one took 15 to 22 s to launch, and the 20 s this waited before ended as the launch did
+    /// An image keeps the picture of the width it shows when the decode for a width it left ends later. Its width went
+    /// from 300 points to 100 and back (a collaborator's resizing; the cover, which loads alike, on an iPad's
+    /// rotation): the way back found its picture in memory at once, and the cancelled decode for 100 points ran on and
+    /// replaced it, soft until the next change. Here the file changes before that decode, a large square in place of
+    /// the wide picture, so the image's height tells which picture it shows. Drawn as a gradient: one color decodes too
+    /// fast for the race (about 25 ms in the simulator, against 280).
+    @Test func aCancelledDecodeKeepsThePictureShown() async throws {
+        let file = URL.temporaryDirectory.appending(path: "decode-\(UUID().uuidString).png")
+        let square = URL.temporaryDirectory.appending(path: "decode-\(UUID().uuidString).png")
+        try await GradientPNG.write(width: 900, height: 450, to: file)
+        try await GradientPNG.write(width: 6000, height: 6000, to: square)
+        defer {
+            try? FileManager.default.removeItem(at: file)
+            try? FileManager.default.removeItem(at: square)
+        }
+        let server = URL(string: "https://wiki.example.com")!
+        let context = RenderContext(baseURL: server, client: nil, mediaLoader: MediaLoader(client: APIClient(baseURL: server)), token: nil, pageId: nil)
+        var height = CGFloat.zero
+        func image(width: Double) throws -> some View {
+            let doc = PMNode(type: "doc", content: [PMNode(type: "image", attrs: ["src": .string(file.absoluteString), "width": .number(width)])])
+            return BlockView(block: try #require(ContentParser.parse(doc).blocks.first))
+                .environment(\.renderContext, context)
+                .frame(width: 300)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        }
+        func shows(_ expected: CGFloat) -> Bool { abs(height - expected) < 0.5 }
+        let host = UIHostingController(rootView: try image(width: 300))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        try #require(await poll { shows(150) }, "the wide picture at 300 points")
+        _ = try FileManager.default.replaceItemAt(file, withItemAt: square)
+
+        host.rootView = try image(width: 100)
+        // Laid out for 100 points, with the wide picture or already the square: the load for 100 began. A moment for it
+        // to start, then back.
+        try #require(await poll(tries: 2000, every: .milliseconds(2)) {
+            window.layoutIfNeeded()
+            return shows(50) || shows(100)
+        })
+        try await Task.sleep(for: .milliseconds(10))
+        host.rootView = try image(width: 300)
+        #expect(await poll(tries: 100) { shows(150) }, "back at 300 points")
+        #expect(await !poll(tries: 60) { !shows(150) }, "keeps the wide picture")
+    }
+
+    /// Polls `condition` while SwiftUI lays out (`tries` × `interval`, a minute by default; a met condition ends the
+    /// wait at once). GitHub's runners start web processes far slower than a Mac: in three of about 130 runs from
+    /// November 8 to 15, 2026 one took 15 to 22 s to launch, and the 20 s this waited before ended as the launch did
     /// (`keepsItsContentOnReturn`) or four seconds after it (`formulaRendersAgainAfterItsWebProcessEnded`).
-    private func poll(tries: Int = 1200, _ condition: () -> Bool) async -> Bool {
+    private func poll(tries: Int = 1200, every interval: Duration = .milliseconds(50), _ condition: () -> Bool) async -> Bool {
         for _ in 0..<tries {
             if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(for: interval)
         }
         return false
     }
@@ -412,6 +462,22 @@ struct MediaBlockViewTests {
             if let found = self.element(in: child, matches) { return found }
         }
         return nil
+    }
+}
+
+/// A PNG of a gradient from red to blue, written off the main actor: a large one takes a second or more, which the
+/// tests waiting there would feel.
+private nonisolated enum GradientPNG {
+    @concurrent static func write(width: Int, height: Int, to file: URL) async throws {
+        let space = CGColorSpaceCreateDeviceRGB()
+        let colors = [CGColor(red: 1, green: 0, blue: 0, alpha: 1), CGColor(red: 0, green: 0, blue: 1, alpha: 1)] as CFArray
+        let context = try #require(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                             space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let gradient = try #require(CGGradient(colorsSpace: space, colors: colors, locations: nil))
+        context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: width, y: height), options: [])
+        let destination = try #require(CGImageDestinationCreateWithURL(file as CFURL, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try #require(context.makeImage()), nil)
+        try #require(CGImageDestinationFinalize(destination))
     }
 }
 
