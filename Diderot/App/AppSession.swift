@@ -447,9 +447,10 @@ final class AppSession {
         return await UnsentEdits.keepTitle(title, pageId: pageId, spaceId: spaceId, in: store)
     }
 
-    /// The page's kept title, if it still waits for the server.
-    func unsentTitle(pageId: String) async -> String? {
-        guard let store = ready?.unsentChanges else { return nil }
+    /// The page's kept title, if it still waits for the server. `store`: the one it was kept in; without one, the
+    /// current session's.
+    func unsentTitle(pageId: String, in store: UnsentStore? = nil) async -> String? {
+        guard let store = store ?? ready?.unsentChanges else { return nil }
         return await UnsentEdits.title(pageId: pageId, in: store)
     }
 
