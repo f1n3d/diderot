@@ -162,11 +162,6 @@ public actor APIClient {
         return request
     }
 
-    /// Uploads data in memory (small payloads, tests).
-    public func uploadAttachment(pageId: String, fileName: String, mimeType: String, data: Data) async throws -> Attachment {
-        try await upload(data, pageId: pageId, type: nil, fileName: fileName, mimeType: mimeType)
-    }
-
     /// Uploads an image for the page's cover (Docmost 0.98), which `Endpoints.Pages.setCover` then makes the cover; the
     /// server deletes one that doesn't become it after an hour. It takes JPG, PNG and WebP by the name's extension, up
     /// to 5 MB, so the data is held in memory.

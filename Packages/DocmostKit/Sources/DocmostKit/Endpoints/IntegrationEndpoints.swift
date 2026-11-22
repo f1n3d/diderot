@@ -1,8 +1,8 @@
 import Foundation
 
 extension Endpoints {
-    /// Links to other services (Docmost 0.97): the workspace's integrations, previews of links, connecting one's account.
-    /// Installing integrations stays in the web's workspace settings.
+    /// Links to other services (Docmost 0.97): the workspace's integrations and previews of links. Connecting one's
+    /// account runs in the web's own settings page, installing integrations in the web's workspace settings.
     public enum Integrations {
         /// The integrations installed in the workspace, from Docmost 0.98 on; `APIClient.installedIntegrations()` asks
         /// older servers too.
@@ -20,17 +20,6 @@ extension Endpoints {
         /// (no installed integration previews it). The server limits this to 120 calls a minute per user.
         public static func unfurl(_ url: String) -> Endpoint<UnfurlResponse> {
             .post("integrations/unfurl", body: UnfurlBody(url: url))
-        }
-
-        public struct AuthorizeBody: Encodable, Sendable {
-            public let integrationId: String
-            public let returnPath: String?
-        }
-
-        /// The service's sign-in page that connects the user's account to an installed integration; afterwards the
-        /// browser comes back to `returnPath` on the server.
-        public static func authorize(integrationId: String, returnPath: String?) -> Endpoint<IntegrationAuthorization> {
-            .post("integrations/oauth/authorize", body: AuthorizeBody(integrationId: integrationId, returnPath: returnPath))
         }
     }
 }
@@ -120,8 +109,4 @@ public enum LinkPreview: Codable, Sendable, Hashable {
             try container.encode(true, forKey: .needsConnection)
         }
     }
-}
-
-public struct IntegrationAuthorization: Decodable, Sendable, Hashable {
-    public let authorizationUrl: URL
 }
