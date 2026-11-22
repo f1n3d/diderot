@@ -31,9 +31,13 @@ struct UploadFileTests {
         #expect(try UploadFile.withoutLocation(image: plain) == plain)
     }
 
-    /// A library video loses its location too, without being encoded anew.
-    @Test func videosLeaveTheirLocationBehind() async throws {
+    /// A library video loses its location too, without being encoded anew. On GitHub's runners this test once waited in
+    /// one of AVFoundation's calls until the job's 40 minutes ran out (November 22, 2026), and the log didn't say which
+    /// call. So a line goes to the log before each one. The time limit puts the test's name in the log and cancels it;
+    /// that ends the wait only if the call it waits in stops when cancelled.
+    @Test(.timeLimit(.minutes(2))) func videosLeaveTheirLocationBehind() async throws {
         let video = try await Self.movie(location: "+48.1374+011.5755/")
+        Self.reached("reading the test video's location")
         #expect(try await Self.hasLocation(video), "The test video has no location")
         // Staged as the picker's copy is: in a folder of its own, which the shared file then lies in.
         let folder = FileManager.default.temporaryDirectory.appending(path: "upload-test-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -41,10 +45,13 @@ struct UploadFileTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let original = folder.appending(path: "original.mov")
         try video.write(to: original)
+        Self.reached("exporting without the location")
         let shared = try await UploadFile.withoutLocation(videoAt: original, type: .quickTimeMovie)
         #expect(!FileManager.default.fileExists(atPath: original.path), "the original goes")
         let uploaded = try Data(contentsOf: shared)
+        Self.reached("reading the exported video's location")
         #expect(try await !Self.hasLocation(uploaded))
+        Self.reached("reading the exported video's duration")
         #expect(try await Self.asset(uploaded) { try await $0.load(.duration).seconds } > 0)
     }
 
@@ -97,11 +104,13 @@ struct UploadFileTests {
             pixelFormatType: CVPixelFormatType(rawValue: kCVPixelFormatType_32BGRA), size: CVImageSize(width: 64, height: 64)))
         try writer.start()
         writer.startSession(atSourceTime: .zero)
+        reached("writing the test video's frames")
         for frame in 0..<10 {
             let buffer = try #require(frames.pixelBufferPool).makeMutablePixelBuffer()
             try await frames.append(CVReadOnlyPixelBuffer(buffer), with: CMTime(value: CMTimeValue(frame), timescale: 10))
         }
         frames.finish()
+        reached("finishing the test video")
         await writer.finishWriting()
         return try Data(contentsOf: url)
     }
@@ -115,5 +124,11 @@ struct UploadFileTests {
         defer { try? FileManager.default.removeItem(at: url) }
         try video.write(to: url)
         return try await read(AVURLAsset(url: url))
+    }
+
+    /// A line in the run's output before each of the video test's waits, as EngineBridgeTests print theirs. To the
+    /// error output, which isn't held back until the process ends.
+    private static func reached(_ part: String) {
+        FileHandle.standardError.write(Data("UploadFileTests \(Test.current?.name ?? "?") reached: \(part)\n".utf8))
     }
 }
