@@ -1,5 +1,4 @@
 import SwiftUI
-import DocmostKit
 
 /// Suggestions for "@": pages and people.
 struct MentionMenuView: View {

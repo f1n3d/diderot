@@ -3181,8 +3181,8 @@ import XCTest
                                                                              "UI-Test \(stamp)", "UI-Test \(stamp)")).firstMatch
         XCTAssertTrue(content.waitForExistence(timeout: 10), "Quick Look doesn't show the file")
         snapshot(app, "77-quick-look")
-        // iOS 26 and later close Quick Look with an ✕ ("Close"), earlier with "Done".
-        button(app, labels: ["Close", "Schließen", "Done", "Fertig"]).tap()
+        // Quick Look closes with an ✕ ("Close"); it had "Done" only before iOS 26.
+        button(app, labels: ["Close", "Schließen"]).tap()
         XCTAssertTrue(content.waitForNonExistence(timeout: 5), "Quick Look doesn't close")
 
         file.swipeLeft()

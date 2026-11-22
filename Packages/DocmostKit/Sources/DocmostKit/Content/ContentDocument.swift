@@ -294,14 +294,13 @@ public struct InlineStyle: Sendable, Hashable {
     public var comment: CommentMark?
 }
 
+/// A link as the reader opens it, by its address. The service the web recognized it as (`integrationProvider`) matters
+/// only while editing, where `InlineAttributedText` keeps it.
 public struct Link: Sendable, Hashable {
     public let href: String
-    /// The service the web recognized the link as (Docmost 0.97), e.g. `github`.
-    public let integrationProvider: String?
 
-    public init(href: String, integrationProvider: String? = nil) {
+    public init(href: String) {
         self.href = href
-        self.integrationProvider = integrationProvider
     }
 }
 

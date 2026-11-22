@@ -33,7 +33,6 @@ final class DocumentModel {
     let connection: EngineConnection
     var engine: (any DocumentEngine)? { connection.engine }
     private(set) var document: PMNode
-    var lifecycle: EngineConnection.Lifecycle { connection.lifecycle }
     var isLive: Bool { connection.isLive }
     var readOnlyReason: ReadOnlyReason? { connection.readOnlyReason }
     /// The page's one text editor and its input on the way to the engine: the block being edited, its text and
@@ -2605,12 +2604,6 @@ final class DocumentModel {
         else { return nil }
         return TableState(table: table, cell: cell, applies: activeAnswers?.tableCommands ?? [],
                           align: activeAlignment)
-    }
-
-    /// Whether the active table's first row / first column consists of header cells.
-    var activeTableHeaders: (row: Bool, column: Bool) {
-        guard let position = activeTablePosition, let table = node(at: position.tablePath) else { return (false, false) }
-        return Self.headers(of: table)
     }
 
     func editTable(_ edit: TableEdit) async {

@@ -15,7 +15,6 @@ struct BaseRowDetailSheet: View {
     @Environment(ReaderNavigation.self) private var navigation
     @Environment(AppSession.self) private var session
     let model: BaseModel
-    let route: BaseRowRoute
     @State private var path: [BaseFieldPicker] = []
     @State private var highlighted: String?
     @State private var confirmsDelete = false
@@ -28,7 +27,6 @@ struct BaseRowDetailSheet: View {
 
     init(model: BaseModel, route: BaseRowRoute) {
         self.model = model
-        self.route = route
         _pendingJump = State(initialValue: route.fieldId)
         _pendingTitleFocus = State(initialValue: route.focusTitle)
         _rowId = State(initialValue: route.rowId)

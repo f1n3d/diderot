@@ -1,5 +1,4 @@
 import SwiftUI
-import DocmostKit
 
 /// A page's cover (`coverPhoto`, Docmost 0.98) as the web's `resolveCover` reads it: one of its presets, an image
 /// uploaded to the page, or an Unsplash photo set on the web. Anything else (an unknown preset, another address) is no

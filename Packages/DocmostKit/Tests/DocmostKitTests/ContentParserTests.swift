@@ -386,7 +386,7 @@ struct ContentParserTests {
         bold.bold = true
         #expect(text.inlines[1] == .marked(.integrationMention(IntegrationLink(url: "https://linear.app/o/issue/A-1", provider: "linear")), bold))
         guard case .text(_, let style) = text.inlines[3] else { Issue.record("expected linked text"); return }
-        #expect(style.link == Link(href: github, integrationProvider: "github"))
+        #expect(style.link == Link(href: github))
 
         #expect(doc.blocks[3].kind == .subpages(sortBy: .titleAscending))
         #expect(doc.blocks[4].kind == .subpages(sortBy: .manual))

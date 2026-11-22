@@ -129,10 +129,6 @@ extension DocumentEngine {
     func replaceBlock(_ target: BlockTarget, with node: PMNode, base: PMNode? = nil) async -> EngineResult {
         await replaceBlock(target, with: node, base: base, expected: nil)
     }
-
-    func replaceBlock(_ target: BlockTarget, withNodes nodes: [PMNode]) async -> EngineResult {
-        await replaceBlock(target, withNodes: nodes, expected: nil)
-    }
 }
 
 /// What an engine operation came to: applied; refused (the block is gone, the change doesn't fit, or it changed since

@@ -353,7 +353,7 @@ public enum ContentParser {
             case .code: style.code = true
             case .superscript: style.superscript = true
             case .subscript: style.subscript = true
-            case .link(let href, let provider): style.link = Link(href: href, integrationProvider: provider)
+            case .link(let href, _): style.link = Link(href: href)
             case .highlight(let color, let colorName): style.highlight = Highlight(color: color, colorName: colorName)
             case .textColor(let color): style.textColor = color
             case .comment(let id, let resolved): style.comment = CommentMark(commentId: id, resolved: resolved)
