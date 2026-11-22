@@ -2,8 +2,8 @@ import SwiftUI
 import DocmostKit
 
 /// The page's one text editor, lying on the active block's text (paragraph, heading, toggle title, code; the block keeps
-/// its place with a hidden copy). It stays the same view while the active block changes, so focus, the keyboard and its
-/// state stay and the caret moves at once; one editor per block made iOS hand focus over at every Return.
+/// its place with a hidden copy, `EditorSlot`). It stays the same view while the active block changes, so focus, the
+/// keyboard and its state stay and the caret moves at once; one editor per block made iOS hand focus over at every Return.
 struct PageEditor: View {
     let model: DocumentModel
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
@@ -36,6 +36,32 @@ struct PageEditor: View {
                 .opacity(place.ref == active.ref ? 1 : 0)
                 .offset(x: place.frame.minX, y: place.frame.minY)
         }
+    }
+}
+
+/// Where `PageEditor` lies in the active block: the block's text, hidden, keeps the block's place and size as the reader
+/// would show the text (the editor draws it the same) and tells the editor where to lie (`editorFrame`). Its height is
+/// the one the editor draws the text at (`editorHeight`): the copy breaks lines on its own. An empty text gets a space's
+/// height, as in the reader. Text and code blocks share it; each reports its own frame with its menus besides
+/// (`activeBlockFrame`), which the keyboard centering goes by.
+struct EditorSlot: View {
+    let model: DocumentModel
+    let ref: NodeRef
+    let text: AttributedString
+    let font: Font
+    var alignment: TextAlign?
+
+    var body: some View {
+        Text(text.characters.isEmpty ? AttributedString(" ") : text)
+            .font(font)
+            .multilineTextAlignment(alignment.textAlignment)
+            .frame(maxWidth: .infinity, alignment: alignment.frameAlignment)
+            .frame(height: model.editorHeight?.ref == ref ? model.editorHeight?.height : nil, alignment: .top)
+            .hidden()
+            .accessibilityHidden(true)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(DocumentModel.documentSpace)) } action: { frame in
+                if model.active?.ref == ref { model.editorFrame = (ref, frame) }
+            }
     }
 }
 
