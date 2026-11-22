@@ -1635,9 +1635,15 @@ import XCTest
     /// A tap on an image opens it full screen with the page's other images and diagrams, as the web's lightbox: it
     /// offers sharing once loaded, swipes to the next and closes when pulled down.
     func test81_ImageViewer() {
-        let app = openFixture("Fixture: Media")
+        let app = openFixture("Fixture: Media", extraEnvironment: ["DOCMOST_DEBUG_ENGINE_VISIBILITY": "1"])
         let image = app.buttons["Gradient test image"]
         XCTAssertTrue(image.waitForExistence(timeout: 20), "Image on the page doesn't load")
+        // Which engine page the page has: the viewer covers the page without leaving it, so the engine stays.
+        let probe = element(app, "engine-visibility")
+        let numbered = NSPredicate(format: "value BEGINSWITH 'engine '")
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: numbered, object: probe)], timeout: 20), .completed,
+                       "The page's engine doesn't open")
+        let engine = probe.value as? String
         image.tap()
         let counter = app.staticTexts["media-viewer-counter"]
         XCTAssertTrue(counter.waitForExistence(timeout: 5), "The image doesn't open full screen")
@@ -1669,6 +1675,9 @@ import XCTest
                    thenHoldForDuration: 0.1)
         XCTAssertTrue(counter.waitForNonExistence(timeout: 5), "Pulling down doesn't close the viewer")
         XCTAssertTrue(image.waitForExistence(timeout: 5), "The page doesn't show again")
+        // Long enough for an engine closed under the viewer to open again.
+        Thread.sleep(forTimeInterval: 3)
+        XCTAssertEqual(probe.value as? String, engine, "Viewing the image closed the page's engine, and the page connected again")
     }
 
     // MARK: - Insert ("/" and "+")
