@@ -226,6 +226,54 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// After an offline start, the network returns as the app comes back, in each window of an iPad: a reconnect that
+        /// starts while another runs waits for it. Each one checked the sign-in again (the version takes seconds where
+        /// Docmost asks GitHub) and replaced the session, with another media loader that downloaded the images again.
+        @Test func overlappingReconnectsSignInOnce() async throws {
+            let built = Mutex(0)
+            let session = try await offlineSessionOnA { environment in
+                let make = environment.makeUnsentStore
+                environment.makeUnsentStore = { url, userId in
+                    built.withLock { $0 += 1 }
+                    return make(url, userId)
+                }
+            }
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let second = Mutex<Task<Void, Never>?>(nil)
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            // Another window's call while the first reconnect's user request is out.
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { second.withLock { $0 = Task { await session.reconnectIfNeeded() } } } }
+            await session.reconnectIfNeeded()
+            await second.withLock { $0 }?.value
+            #expect(session.ready?.restoredOffline == false)
+            #expect(StubURLProtocol.requests.withLock { $0 }.filter { $0 == "a.example.com/api/users/me" }.count == 1,
+                    "one check of the sign-in")
+            #expect(built.withLock { $0 } == 2, "the offline session and the reconnect's")
+            await removeCaches()
+        }
+
+        /// After an offline start, the user switches to b and back to a while the reconnect waits for its answer: the
+        /// session from switching back, loaded fully, stays. The reconnect replaced it with one of its own, the offline
+        /// session's client in it, having checked the sign-in again.
+        @Test func lateReconnectKeepsTheSessionFromSwitchingBack() async throws {
+            let session = try await offlineSessionOnA()
+            let offline = try #require(session.ready?.client)
+            let other = StoredSession(serverURL: b, token: "b"), original = StoredSession(serverURL: a, token: "a")
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            StubURLProtocol.beforeNextAnswer.withLock {
+                $0 = {
+                    await session.switchTo(other)
+                    await session.switchTo(original)
+                }
+            }
+            await session.reconnectIfNeeded()
+            try #require(session.ready?.server.url == a && session.ready?.restoredOffline == false)
+            #expect(session.ready?.client !== offline)
+            await removeCaches()
+        }
+
         /// On an iPad, a second window opens while the first shows the sign-in screen after the session ended.
         @Test func secondWindowKeepsTheSignInScreen() async throws {
             try store.save(StoredSession(serverURL: a, token: "a"))

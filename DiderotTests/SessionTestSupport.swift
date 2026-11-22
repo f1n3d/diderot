@@ -104,11 +104,14 @@ extension SessionStubbing {
         return session
     }
 
-    /// Signed in to a from the offline cache (a start without network), with b saved as well.
-    func offlineSessionOnA() async throws -> AppSession {
+    /// Signed in to a from the offline cache (a start without network), with b saved as well. `change`: to the session's
+    /// environment.
+    func offlineSessionOnA(_ change: (inout SessionEnvironment) -> Void = { _ in }) async throws -> AppSession {
         _ = try await sessionOnA()
         StubURLProtocol.offline.withLock { $0 = true }
-        let session = AppSession(sessionStore: store, environment: SessionEnvironment(protocolClasses: [StubURLProtocol.self]))
+        var environment = SessionEnvironment(protocolClasses: [StubURLProtocol.self])
+        change(&environment)
+        let session = AppSession(sessionStore: store, environment: environment)
         await session.restore()
         StubURLProtocol.offline.withLock { $0 = false }
         try #require(session.ready?.restoredOffline == true)

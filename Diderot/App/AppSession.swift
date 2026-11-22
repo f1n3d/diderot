@@ -732,13 +732,14 @@ final class AppSession {
         if case .ready(let ready) = state { Task { await syncTimeZone(of: ready) } }
     }
 
-    /// Whether `finishSignIn`'s answers still count. A reconnect must not undo a switch or sign-out made meanwhile (`false`:
-    /// it ends without a word), a sign-in not a switch, and a retry of the unchecked sign-in not a sign-in anew or a switch
-    /// (`CancellationError`).
+    /// Whether `finishSignIn`'s answers still count. A reconnect must not undo a switch or sign-out made meanwhile, nor
+    /// replace a session loaded fully meanwhile, by switching away and back (`false`: it ends without a word); a sign-in
+    /// must not undo a switch, and a retry of the unchecked sign-in not a sign-in anew or a switch (`CancellationError`).
     private func stillCounts(
         replacing: ReadySession?, signingIn: Bool, at server: ServerInfo, retrying: StoredSession?
     ) throws -> Bool {
-        if let replacing, !isStillCurrent(replacing) { return false }
+        // Server and token stay the same when switching back: only the offline session is still to replace.
+        if let replacing, !isStillCurrent(replacing) || ready?.restoredOffline != true { return false }
         if signingIn, !isSigningIn(at: server) { throw CancellationError() }
         if let retrying, uncheckedSignIn != retrying { throw CancellationError() }
         return true
@@ -836,16 +837,28 @@ final class AppSession {
         }
     }
 
-    /// After an offline start, fully loads the session once the server is reachable again.
+    /// The running reconnect and the offline session it loads.
+    @ObservationIgnored private var reconnecting: (session: ReadySession, task: Task<Void, Never>)?
+
+    /// After an offline start, fully loads the session once the server is reachable again. The network returning and the
+    /// app coming back call this together, in every window: a call while a reconnect of the session runs waits for that
+    /// one instead of checking the sign-in again.
     func reconnectIfNeeded() async {
         guard case .ready(let session) = state, session.restoredOffline else { return }
-        do {
-            try await finishSignIn(server: session.server, client: session.client, token: session.token, replacing: session)
-        } catch let error as APIError where error.isSessionExpired {
-            if isStillCurrent(session) { handleUnauthorized() }
-        } catch {
-            AppLog.session.debug("Still offline: \(error.userMessage, privacy: .public)")
+        if let reconnecting, isStillCurrent(reconnecting.session) { return await reconnecting.task.value }
+        let task = Task {
+            do {
+                try await finishSignIn(server: session.server, client: session.client, token: session.token, replacing: session)
+            } catch let error as APIError where error.isSessionExpired {
+                if isStillCurrent(session) { handleUnauthorized() }
+            } catch {
+                AppLog.session.debug("Still offline: \(error.userMessage, privacy: .public)")
+            }
         }
+        reconnecting = (session, task)
+        await task.value
+        // Unless a reconnect of the next session took its place: after a switch, another offline start.
+        if reconnecting?.task == task { reconnecting = nil }
     }
 
     /// Names the app (not Docmost: it isn't Docmost's app); the server derives the device name for its session list
