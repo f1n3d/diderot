@@ -28,6 +28,39 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// The poll's count is on its way when the user marks notifications read. The count the server worked out
+        /// before the mark arrives after it: it used to put the old number back on the bell until the next poll. The
+        /// count a Direct list asks for after loading still applies.
+        @Test func lateUnreadCountKeepsTheMark() async throws {
+            let session = try await sessionOnA()
+            let notifications = NotificationsStore(session: session)
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"items": [{"id": "n1", "type": "page.updated"}], "meta": {"hasNextPage": false}}}"# }
+            await notifications.loadList()
+            let notification = try #require(notifications.listState.value?.first)
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"count": 7}}"# }
+            await notifications.refreshUnreadCount()
+            #expect(notifications.unreadCount == 7)
+            let count = "a.example.com/api/notifications/unread-count"
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = count }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in await notifications.markRead(notification) } }
+            await notifications.refreshUnreadCount()
+            #expect(notifications.unreadCount == 6, "one marked read")
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = count }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in await notifications.markAllRead() } }
+            await notifications.refreshUnreadCount()
+            #expect(notifications.unreadCount == 0, "all marked read")
+            notifications.filter = .direct
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"items": [], "meta": {"hasNextPage": false}}}"# }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = count }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { StubURLProtocol.body.withLock { $0 = #"{"data": {"count": 2}}"# } } }
+            await notifications.loadList()
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(notifications.unreadCount == 2, "a list's own count")
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
         /// The user switches from Direct to All while Direct loads, and the All list arrives first.
         @Test func lateNotificationsAnswerKeepsTheNewFilter() async throws {
             let session = try await sessionOnA()
