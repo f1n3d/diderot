@@ -81,6 +81,42 @@ struct TempFileTests {
         #expect(!exists(upload.fileURL))
         #expect(exists(othersDownload) && exists(othersUpload.fileURL))
     }
+
+    /// Only an upload removes its staged file and the request body beside it, and nothing resumes an upload: an app
+    /// ended mid-upload (swiped away, or by iOS while suspended) left both, a video twice its size, until the user
+    /// signed out. The next start removes them, with a library video's copy on its way to staging and media loaders'
+    /// files.
+    @Test func theStartRemovesWhatAnEndedAppLeft() throws {
+        // The temporary folder's layout, in a folder of the test's own: in the real one, the removal would take the
+        // files of other tests running alongside.
+        let temporary = FileManager.default.temporaryDirectory.appending(path: "abandoned-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        func here(_ url: URL) -> URL {
+            let real = FileManager.default.temporaryDirectory.path(percentEncoded: false)
+            return temporary.appending(path: String(url.path(percentEncoded: false).dropFirst(real.count)))
+        }
+        func file(_ url: URL) throws -> URL {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("x".utf8).write(to: url)
+            return url
+        }
+        func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) }
+        let server = URL(string: "https://temp-\(UUID().uuidString).example.com")!
+        let other = URL(string: "https://temp-\(UUID().uuidString).example.com")!
+        let upload = here(UploadFile.folder(server: server)).appending(path: UUID().uuidString)
+        let abandoned = try [
+            file(upload.appending(path: "file")),
+            file(upload.appending(path: "body-\(UUID().uuidString)")),
+            file(here(UploadFile.folder(server: other)).appending(path: "\(UUID().uuidString)/file")),
+            file(here(UploadFile.incoming).appending(path: "\(UUID().uuidString)/original.mov")),
+            file(here(TempFile.sessionMedia(server: server)).appending(path: UUID().uuidString)),
+        ]
+
+        TempFile.removeAbandonedFiles(in: temporary)
+        for url in abandoned {
+            #expect(!exists(url), "\(url.path(percentEncoded: false).dropFirst(temporary.path(percentEncoded: false).count))")
+        }
+    }
 }
 
 /// Answers with a file, or as Docmost does for one it doesn't have (a path with "gone").

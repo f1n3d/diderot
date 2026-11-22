@@ -148,9 +148,10 @@ final class AppSession {
     func restoreAtLaunch() async {
         if launchRestore == nil {
             launchRestore = Task {
-                // Before a client downloads: what the last run's left when the app was ended mid-download.
+                // Before a client downloads or an upload starts: what the last run left when the app was ended
+                // mid-download or mid-upload.
                 APIClient.removeAbandonedDownloads()
-                TempFile.removeSessionMedia()
+                TempFile.removeAbandonedFiles()
                 endSignInsOfAnEarlierInstall()
                 await restore()
                 // Once per launch: a window opened later (iPad) would remove the cookie of an editor open in another.

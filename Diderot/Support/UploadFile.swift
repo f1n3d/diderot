@@ -13,14 +13,15 @@ nonisolated struct UploadFile: Sendable {
     let fileName: String
     let mimeType: String
 
-    /// One folder per upload in the server's temporary folder (`TempFile`); signing out of the server deletes what a
-    /// crash left there.
+    /// One folder per upload in the server's temporary folder (`TempFile`), which also takes its request body
+    /// (`APIClient.uploadAttachment`). What an upload left when the app was ended goes at the next start
+    /// (`TempFile.removeAbandonedFiles`).
     static func folder(server: URL) -> URL {
         TempFile.directory(server: server).appending(path: "uploads", directoryHint: .isDirectory)
     }
 
     /// A library video's first stop: its import (`VideoFile`) can't know the server, so `photo` moves it on.
-    private static let incoming = FileManager.default.temporaryDirectory.appending(path: "incoming", directoryHint: .isDirectory)
+    static let incoming = FileManager.default.temporaryDirectory.appending(path: "incoming", directoryHint: .isDirectory)
 
     private static func newFolder(in parent: URL) throws -> URL {
         let folder = parent.appending(path: UUID().uuidString, directoryHint: .isDirectory)
