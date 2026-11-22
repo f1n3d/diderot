@@ -206,12 +206,7 @@ enum BaseValue {
     /// shows (`BaseDateCell.Part.day(in:)`) at the device's midnight, where the picker shows it.
     static func pickerDate(_ cell: BaseDateCell, withTime: Bool, timeZone: TimeZone = .current) -> Date {
         if withTime, case .instant(let date) = cell.start { return date }
-        let day = cell.start.day(in: timeZone)
-        var utc = Calendar(identifier: .gregorian)
-        utc.timeZone = .gmt
-        var local = Calendar(identifier: .gregorian)
-        local.timeZone = timeZone
-        return local.date(from: utc.dateComponents([.year, .month, .day], from: day.date)) ?? day.date
+        return cell.start.day(in: timeZone).start(in: timeZone)
     }
 
     // MARK: File
