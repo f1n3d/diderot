@@ -837,24 +837,35 @@ final class AppSession {
         }
     }
 
-    /// The running reconnect and the offline session it loads.
-    @ObservationIgnored private var reconnecting: (session: ReadySession, task: Task<Void, Never>)?
+    /// How long after a reconnect starts a call waits for it instead of starting its own (`reconnectIfNeeded`): enough
+    /// for the calls of one moment, from the network returning and the app coming back, in every window.
+    @ObservationIgnored var reconnectJoinWindow: Duration = .seconds(2)
+
+    /// The running reconnect, the offline session it loads and when it started.
+    @ObservationIgnored
+    private var reconnecting: (session: ReadySession, task: Task<Void, Never>, started: ContinuousClock.Instant)?
 
     /// After an offline start, fully loads the session once the server is reachable again. The network returning and the
-    /// app coming back call this together, in every window: a call while a reconnect of the session runs waits for that
-    /// one instead of checking the sign-in again. If that one fails, the calls that waited try once more, together: it
-    /// started before what they answer, such as a VPN coming on, which changes no network status (`OfflineMonitor`), and
-    /// its requests could have waited for their timeout without the VPN.
+    /// app coming back call this together, in every window: a call moments after a reconnect of the session started
+    /// waits for that one instead of checking the sign-in again. If that one fails, the calls that waited try once
+    /// more, together. A later call starts its own: what it answers, such as a VPN coming on, which changes no network
+    /// status (`OfflineMonitor`), came after the running one's requests, which can wait for their timeout (30 s)
+    /// without the VPN. Of two that run, the one that ends last writes nothing (`stillCounts`).
     func reconnectIfNeeded() async {
         guard case .ready(let session) = state, session.restoredOffline else { return }
-        guard let running = reconnecting, isStillCurrent(running.session) else { return await reconnect(session) }
-        await running.task.value
+        guard let running = joinableReconnect else { return await reconnect(session) }
+        await running.value
         guard case .ready(let current) = state, current.restoredOffline, isStillCurrent(session) else { return }
         // The first of them to go on starts it; the others wait for that one.
-        if let next = reconnecting, next.task != running.task, isStillCurrent(next.session) {
-            return await next.task.value
-        }
+        if let next = joinableReconnect, next != running { return await next.value }
         await reconnect(current)
+    }
+
+    /// The running reconnect if it loads the current session and started moments ago (`reconnectJoinWindow`).
+    private var joinableReconnect: Task<Void, Never>? {
+        guard let reconnecting, isStillCurrent(reconnecting.session),
+              reconnecting.started.duration(to: .now) < reconnectJoinWindow else { return nil }
+        return reconnecting.task
     }
 
     /// Fully loads the offline session, in a task that later calls wait for (`reconnectIfNeeded`).
@@ -868,10 +879,11 @@ final class AppSession {
                 AppLog.session.debug("Still offline: \(error.userMessage, privacy: .public)")
             }
         }
-        reconnecting = (session, task)
+        reconnecting = (session, task, .now)
         await task.value
-        // Unless another reconnect took its place: the next session's, after a switch and another offline start, or the
-        // one that the calls that waited for this one start when it failed.
+        // Unless another reconnect took its place: the next session's, after a switch and another offline start, one
+        // that a later call started while this one ran, or the one that the calls that waited for this one start when
+        // it failed.
         if reconnecting?.task == task { reconnecting = nil }
     }
 

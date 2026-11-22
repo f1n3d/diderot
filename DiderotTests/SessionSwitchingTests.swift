@@ -285,6 +285,49 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// After a start that waited for a server behind a VPN that is off, the start's reconnect still waits for its
+        /// answer when the user turns the VPN on and comes back to the app: that call checks the sign-in at once. It
+        /// waited for the start's reconnect, whose requests can wait for their timeout (30 s), and the session stayed
+        /// offline until then.
+        @Test func laterReconnectDoesNotWaitForAnOlderOne() async throws {
+            let built = Mutex(0)
+            let session = try await offlineSessionOnA { environment in
+                let make = environment.makeUnsentStore
+                environment.makeUnsentStore = { url, userId in
+                    built.withLock { $0 += 1 }
+                    return make(url, userId)
+                }
+            }
+            // Any running reconnect is older than the calls that wait for one.
+            session.reconnectJoinWindow = .zero
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let later = Mutex<Task<Void, Never>?>(nil), loadedMeanwhile = Mutex(false)
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            // The start's user request gets its answer once the later call has loaded the session, or after 5 s.
+            StubURLProtocol.beforeNextAnswer.withLock {
+                $0 = {
+                    later.withLock { $0 = Task { @MainActor in await session.reconnectIfNeeded() } }
+                    let deadline = ContinuousClock.now + .seconds(5)
+                    while ContinuousClock.now < deadline,
+                          await MainActor.run(body: { session.ready?.restoredOffline == true }) {
+                        try? await Task.sleep(for: .milliseconds(10))
+                    }
+                    let loaded = await MainActor.run { session.ready?.restoredOffline == false }
+                    loadedMeanwhile.withLock { $0 = loaded }
+                }
+            }
+            await session.reconnectIfNeeded()
+            await later.withLock { $0 }?.value
+            #expect(loadedMeanwhile.withLock { $0 }, "loaded while the start's reconnect waited for its answer")
+            #expect(session.ready?.restoredOffline == false)
+            #expect(StubURLProtocol.requests.withLock { $0 }.filter { $0 == "a.example.com/api/users/me" }.count == 2,
+                    "the start's check and the later call's own")
+            #expect(built.withLock { $0 } == 2,
+                    "the offline session and the later call's; the start's, done last, wrote nothing")
+            await removeCaches()
+        }
+
         /// After an offline start, the user switches to b and back to a while the reconnect waits for its answer: the
         /// session from switching back, loaded fully, stays. The reconnect replaced it with one of its own, the offline
         /// session's client in it, having checked the sign-in again.
