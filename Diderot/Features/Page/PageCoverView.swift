@@ -114,7 +114,7 @@ struct PageCoverBand: View {
             CoverFit(natural: CoverPreset.pictureSize, position: position) { CoverArt(preset: preset) }
         case .file, .unsplash:
             if let image {
-                CoverFit(natural: image.size, position: position) { Image(uiImage: image).resizable() }
+                CoverFit(natural: image.size, position: position) { ResizableImage(image: image) }
                     .transition(.opacity)
                     .accessibilityHidden(true)
             } else {
