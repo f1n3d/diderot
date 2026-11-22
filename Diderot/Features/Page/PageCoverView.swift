@@ -270,6 +270,8 @@ struct PageCoverBand: View {
         if image == nil { standIn = .loading }
         do {
             let loaded = try await loader.image(for: url, targetWidth: size.width, scale: displayScale, maxBytes: gate.maxBytes)
+            // As for a page's image: a load cancelled meanwhile (a rotation) leaves the newer one's picture.
+            guard !Task.isCancelled else { return }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { image = loaded }
         } catch {
             guard let failed = MediaGate.standIn(after: error) else { return }

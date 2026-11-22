@@ -16,8 +16,10 @@ struct ContentImageView: View {
     var body: some View {
         HStack {
             if image.align == .center || image.align == .right { Spacer(minLength: 0) }
+            // At most, not exactly: the width measured below would otherwise be the image's own, and a column that
+            // gets narrower (a rotation, a smaller window) would leave the image wider than it.
             content
-                .frame(width: targetWidth)
+                .frame(maxWidth: targetWidth)
             if image.align == .center || image.align == .left { Spacer(minLength: 0) }
         }
         .frame(maxWidth: .infinity)
@@ -100,7 +102,11 @@ struct ContentImageView: View {
         // Another width (a rotation) keeps the image it has until the new one is there.
         if loaded == nil { standIn = .loading }
         do {
-            loaded = try await loader.image(for: url, targetWidth: width, scale: displayScale, maxBytes: gate.maxBytes)
+            let image = try await loader.image(for: url, targetWidth: width, scale: displayScale, maxBytes: gate.maxBytes)
+            // Cancelled meanwhile (another width, a tap): the decode of a file already on the device runs to its end
+            // all the same, and the newer load may have shown its picture already, from memory.
+            guard !Task.isCancelled else { return }
+            loaded = image
         } catch {
             guard let failed = MediaGate.standIn(after: error) else { return }
             standIn = failed
