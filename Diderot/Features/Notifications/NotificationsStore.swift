@@ -31,8 +31,8 @@ final class NotificationsStore {
         listState.value.map { items in unreadOnly ? items.filter(\.isUnread) : items }
     }
 
-    /// Counts list loads and marks: a list the server answered before a newer load or a mark doesn't win (it showed a
-    /// notification just marked as read unread again, and raised the badge).
+    /// Counts list loads and marks: a list or count the server answered before a newer load or a mark doesn't win (it
+    /// showed a notification just marked as read unread again, and raised the badge).
     @ObservationIgnored private var listLoads = 0
 
     init(session: AppSession) {
@@ -40,7 +40,11 @@ final class NotificationsStore {
     }
 
     func refreshUnreadCount() async {
-        if let result = try? await session.send(Endpoints.Notifications.unreadCount) {
+        // A mark lowers the count without asking the server again, so a count worked out before it put the old number
+        // back until the next poll. A newer load brings its own count, or the next poll does; `loadList` asks after its
+        // own increment, so the count it asks for applies.
+        let load = listLoads
+        if let result = try? await session.send(Endpoints.Notifications.unreadCount), load == listLoads {
             unreadCount = result.count
         }
     }

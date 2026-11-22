@@ -400,6 +400,7 @@ struct BaseDateEditor: View {
 /// Cell files: tap previews, minus removes; add from photos, camera or files.
 struct BaseFileEditor: View {
     @Environment(AppSession.self) private var session
+    @Environment(\.startDownload) private var startDownload
     let model: BaseModel
     let rowId: String
     let property: BaseProperty
@@ -432,7 +433,9 @@ struct BaseFileEditor: View {
             ForEach(files) { file in
                 HStack(spacing: 10) {
                     Button {
-                        Task { await open(file) }
+                        // From the entry's sheet (`keepsDownloads`): closing it stops the download, scrolling this
+                        // field away or opening a picker doesn't.
+                        if let startDownload { startDownload(file.id) { await open(file) } } else { Task { await open(file) } }
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "paperclip").foregroundStyle(.secondary)
@@ -448,7 +451,9 @@ struct BaseFileEditor: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            if downloading.contains(file.id) { ProgressView().controlSize(.small) }
+                            if startDownload?.isRunning(file.id) ?? downloading.contains(file.id) {
+                                ProgressView().controlSize(.small)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
@@ -539,6 +544,8 @@ struct BaseFileEditor: View {
             previewURL = try await session.perform(on: ready) {
                 try await TempFile.download(url, with: $0, server: baseURL, folder: ["attachments", file.id], name: file.name)
             }
+        } catch is CancellationError {
+            // The sheet closed.
         } catch {
             model.toast = error.userMessage
         }
