@@ -92,6 +92,11 @@ final class PageActionRunner {
             let (file, response) = try await client.download(
                 Endpoints.Pages.export(pageId: page.id, format: format, includeChildren: includeChildren, includeAttachments: includeAttachments)
             )
+            // The sheet was closed as the last byte came: nobody waits for the share sheet any more.
+            guard !Task.isCancelled else {
+                try? FileManager.default.removeItem(at: file)
+                throw CancellationError()
+            }
             let fallback = "\(page.displayTitle).\(includeChildren || includeAttachments ? "zip" : format.fileExtension)"
             let name = ContentDisposition.filename(from: response) ?? fallback
             self.shareFile = try TempFile.take(file, server: server, folder: ["exports"], name: name)
@@ -110,6 +115,8 @@ final class PageActionRunner {
         guard let ready = session.ready else { return }
         do {
             try await session.perform(on: ready) { try await operation($0) }
+        } catch is CancellationError {
+            // Its sheet was closed (an export the user stopped): there is nothing to say.
         } catch {
             toast = error.userMessage
         }
@@ -203,7 +210,9 @@ struct ExportOptionsSheet: View {
     @State private var format: Endpoints.Pages.ExportFormat = .markdown
     @State private var includeChildren = false
     @State private var includeAttachments = false
-    @State private var isExporting = false
+    /// The running export. Closing the sheet stops it: one with subpages and attachments can take minutes, and it ran
+    /// on after Cancel, then opened a share sheet nobody waited for.
+    @State private var exporting: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -224,23 +233,32 @@ struct ExportOptionsSheet: View {
             .navigationTitle("Export")
             .toolbarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        // Before the sheet goes: a file that arrives while it closes must not open the share sheet.
+                        exporting?.cancel()
+                        dismiss()
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    if isExporting {
+                    if exporting != nil {
                         ProgressView()
                     } else {
                         Button("Export") {
-                            Task {
-                                isExporting = true
+                            exporting = Task {
                                 await runner.export(page, format: format, includeChildren: includeChildren, includeAttachments: includeAttachments)
-                                isExporting = false
-                                dismiss()
+                                // A stopped export's sheet is closing already.
+                                if !Task.isCancelled { dismiss() }
                             }
                         }
                     }
                 }
             }
         }
+        // While it exports, only Cancel closes the sheet: stopping a long export takes a tap, not a stray swipe.
+        .interactiveDismissDisabled(exporting != nil)
+        // Any other close (the space view leaving) stops it too.
+        .onDisappear { exporting?.cancel() }
     }
 }
 

@@ -102,5 +102,51 @@ extension AppSessionRaceTests {
             #expect(runner.toast == String(localized: "Page duplicated"))
             await removeCaches()
         }
+
+        /// Closing the export sheet cancels its export, while the file loads or between its last byte and the share
+        /// sheet: it ends there without a word. The download ran on after Cancel and a share sheet opened later,
+        /// unasked; a cancelled download said "Something went wrong."
+        @Test(arguments: [false, true]) func aCancelledExportSharesNothing(afterTheLastByte: Bool) async throws {
+            let session = try await sessionOnA()
+            let runner = PageActionRunner(session: session, changes: ContentChanges())
+            let page = PageRef(id: "p1", slugId: "plan", title: "Plan", spaceId: "s1")
+            let shared = TempFile.directory(server: a).appending(components: "exports", "Plan.md")
+            try? FileManager.default.removeItem(at: shared)
+            StubURLProtocol.body.withLock { $0 = "# Plan" }
+            StubURLProtocol.requests.withLock { $0 = [] }
+            defer {
+                StubURLProtocol.body.withLock { $0 = nil }
+                StubURLProtocol.unanswered.withLock { $0 = 0 }
+                StubURLProtocol.beforeNextAnswer.withLock { $0 = nil }
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+            }
+
+            let exporting = Task { await runner.export(page, format: .markdown, includeChildren: false, includeAttachments: false) }
+            if afterTheLastByte {
+                // The main actor is busy while the file arrives, and the cancel comes before the export goes on with it.
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/pages/export" }
+                StubURLProtocol.beforeNextAnswer.withLock {
+                    $0 = {
+                        DispatchQueue.main.async {
+                            Thread.sleep(forTimeInterval: 0.5)
+                            exporting.cancel()
+                        }
+                    }
+                }
+            } else {
+                StubURLProtocol.unanswered.withLock { $0 = 1 }
+                while !StubURLProtocol.requests.withLock({ $0.contains { $0.hasSuffix("/api/pages/export") } }) {
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                exporting.cancel()
+            }
+            await exporting.value
+
+            #expect(runner.shareFile == nil)
+            #expect(!FileManager.default.fileExists(atPath: shared.path(percentEncoded: false)))
+            #expect(runner.toast == nil)
+            try? FileManager.default.removeItem(at: shared)
+            await removeCaches()
+        }
     }
 }
