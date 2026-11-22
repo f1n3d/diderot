@@ -36,7 +36,7 @@ The risk sits in three places.
 **1. The page's lifetime.**
 
 - No opened page's model is ever freed (W1).
-- The image viewer closes the page's engine and opens it again from the start (W2).
+- The image viewer closes the page's engine and opens it again from the start (W2). This turned out wrong: SwiftUI calls no `onDisappear` for the page under a full-screen cover, and the page kept one engine through test81, which now checks it (#232).
 - An engine restart during an upload keeps the engine open off-screen (W3).
 - On Docmost 0.98 with verification, a key typed during a resync leaves "Saving" on (W4).
 
@@ -57,113 +57,11 @@ The rest is cleanup. Code went unused once the engine took over Return, tables a
 
 | Package | Entries | Checked by | Risk |
 |---|---|---|---|
-| **A** The page's engine and memory | W1–W7 | unit tests, engine checks, UI tests | medium |
 | **B** Where edits land and what gets sent | W8–W16 | unit tests, UI tests | medium |
 | **C** Long operations, cancelling and stale answers | W17–W33 | unit tests, UI tests | low to medium |
 | **D** Session and local data | W34–W41 | session tests | low to medium |
 | **E** Performance | W42–W49 | unit tests, measurements | low |
 | **F** Unnecessary code | W50–W62 | build, CI | low |
-
-A comes first: W1 keeps every opened page in memory.
-
----
-
-## A. The page's engine and memory
-
-### W1 [medium] The model's `onChangesHeld` closure captures the page view, and through it the model: no opened page's model is freed
-
-**Where:** `Diderot/Features/Page/PageView.swift:990–993` (`apply(page:)`), `Diderot/Features/Page/DocumentModel.swift:293` (`onChangesHeld`), `:2792–2794` (`connectionHeld`).
-
-**Problem:** The closure calls the struct method `verifyHeld`, so it captures a copy of PageView, whose `@State model` storage holds this same model (line 999). `[weak created]` breaks only the direct link, and nothing resets `onChangesHeld`. The design expects the model to go with its page: `EngineConnection` has a weak `owner` and checks `serves` (`EngineConnection.swift:41, 80`). The engine still closes; only memory leaks. This relies on SwiftUI's State storage keeping its value after the view goes; not checked in Instruments.
-
-**Scenario:** Open a page, go back, open the next. Each popped page leaves its DocumentModel (document tree, text session, closed engine) and the view copy's state: the page's content, PageComments, breadcrumbs, webHTML. Tens of KB to a few MB a visit, growing all session.
-
-**Fix:** Replace the closure with an observed `private(set) var heldChanges: EngineHold?`, set in `connectionHeld(_:)`. PageView reacts to it, and to a pending one in `onAppear`:
-```swift
-.onChange(of: model?.heldChanges) { _, hold in
-    if let hold, let model { Task { await verifyHeld(hold, of: model) } }
-}
-```
-
-### W2 [medium] Opening the image viewer closes the page's engine, and closing the viewer connects it again from the start
-
-**Where:** `Diderot/Features/Page/PageView.swift:414–420` (`onDisappear`), `Diderot/Rendering/MediaViewer.swift:98` (`MediaViewerHost`), applied at `Diderot/Features/Page/BlockCards.swift:23`.
-
-**Problem:** The viewer is a plain full-screen cover on the document body. It takes the page out of the window, so `onDisappear` calls `leave()`; only the camera is excepted (line 419). `leave()` closes the engine. Closing the viewer reopens it: a new WebPage, engine.js again, a collab token, socket and Yjs sync; the `.task(id:)` reloads the page too (line 367). A page that went offline while live comes back "Not connected", as the token request throws (`EngineConnection.swift:107–112`), and going online doesn't recover it (lines 385–389).
-
-**Scenario:** Tap an image on an editable page, swipe, close the viewer. Collaborators see the user leave. Then the pill says "Connecting" and the page is read-only until the new engine syncs; the page, breadcrumbs, space and, on 0.98, the verification are fetched again. Every image viewed repeats it. Nothing is lost.
-
-**Fix:** Treat the viewer like the camera: a `showsMediaViewer` state that MediaViewerHost sets while its cover is up, then
-```swift
-if showsCamera || showsMediaViewer { model?.deactivate() } else { model?.leave() }
-```
-The presentation and the web editor keep `leave()`. The cover picker's camera (`CoverPickerSheet.swift:64`) wasn't checked.
-
-### W3 [medium] An engine restart on a page left during an upload clears `suspendsAfterUploads`, so the engine stays open off-screen
-
-**Where:** `Diderot/Features/Page/EngineConnection.swift:92` (`resume`), `:265–273` (`terminated`), `:248–251` (`failed`, `.engineError`), `:176–182` (`uploadEnded`).
-
-**Problem:** With uploads running, `leave()` keeps the engine open and sets `suspendsAfterUploads`, for the last `uploadEnded()` to close it. `terminated()` and the first `.engineError` restart a live engine with `suspend(); resume()`. `resume()`, the entry point for a page that appeared, clears the flag (line 92). Then nothing closes the engine when the uploads end.
-
-**Scenario:** The user starts a video upload, then switches tabs or opens a subpage. iOS ends the off-screen engine's web process, and `terminated()` restarts it. After the upload the page stays connected: collaborators see the user as present, and the socket and a web process (about 69 MB) stay until the page is shown and left again. A popped page's engine, once its model is freed, goes through `isolated deinit` (`WebDocumentEngine.swift:369–372`) without `close()`, so what the server hadn't confirmed isn't kept.
-
-**Fix:** Keep the flag across the internal restart, called from both places:
-```swift
-private func restart() {
-    let leaving = suspendsAfterUploads
-    suspend(); resume()
-    suspendsAfterUploads = leaving
-}
-```
-Test it with `HeldUploads`: `leave()`, `onTerminated`, the upload finished, then a final "close".
-
-### W4 [medium] A change typed during the resync after a release leaves the unconfirmed count at 1 for the rest of the connection
-
-**Where:** `Engine/src/connection.ts:118–122` (`ChangeHold.pass`), `:99–103` (`release`), `:133–137` (`resync`).
-
-**Problem:** With holds on (Docmost 0.98 with `page:verification`), `release` calls `forceSync()`, which sets `unsyncedChanges` to 1. Until the server's SyncStep1 comes back, `pass` drops each local update: `kept` is still true, and `resync` returns early while `resyncing`. Hocuspocus 4.5 counted each one before `send`, but the server acknowledges only the one SyncStep2 that carries them all. The data arrives; the count stays at 1.
-
-**Scenario:** The connection drops and comes back while the user types; the app asks `verificationInfo` and releases (`PageView.swift:834–847`). A key typed in that round trip leaves the count at 1. Reproduced on connection-check.ts's stand-in server; an insert 200 ms later ends at 0. Until the next reconnect the pill says "Saving", every document event schedules an unsent save, and each save or close waits the full 2 s in `unsentChanges()` (`engine.ts:170`).
-
-**Fix:** Undo the count only when a resync already runs; one that `resync` starts covers the update:
-```ts
-if (this.kept && sync.step === syncUpdate) {
-  if (this.resyncing) provider.decrementUnsyncedChanges();
-  else this.resync(provider);
-  return null;
-}
-```
-Add that insert to `held()` in `Engine/tools/connection-check.ts`, expecting 0.
-
-### W5 [low] The background save of unsent changes bypasses the engine's queue, so two overlapping saves can leave a document without its changes
-
-**Where:** `Diderot/Features/Page/EngineConnection.swift:152–156` (`saveUnsentChanges`), `Diderot/Features/Page/PageView.swift:406–412` (`onChange(of: scenePhase)`), `Diderot/Features/Editor/WebDocumentEngine.swift:487–519` (`saveUnsentChanges`).
-
-**Problem:** The scheduled save is queued on `engineStep`, because "beside a close, an older state could be kept after it". The background save calls the engine directly, and PageView starts it on every phase but active, so `.inactive` and `.background` start two that overlap. The engine's save awaits the JS call (with its own 2 s deadline), a store write or remove, `currentDocument()` and a store write, so one save's document write can land after the other's removal.
-
-**Scenario:** The user presses Home. Save A reaches its deadline unconfirmed, writes `unsentChanges` and asks for the document. The ack arrives; save B removes both keys. Then A writes `unsentDocument`. PageLoader shows it offline and until the first sync (`PageLoader.swift:19, 133–134`), and `UnsentChanges.hasEntries` warns when the server is removed. The window is milliseconds; the next live close clears it.
-
-**Fix:** After `connectionWritesInput`, chain the save onto `engineStep` as `scheduleUnsentSave` does (lines 198–203), and await it. Skipping a save while one runs also drops the duplicate work.
-
-### W6 [low] Every held connect counts as withheld, even when the SyncStep2 it holds back is empty
-
-**Where:** `Engine/src/connection.ts:127–130` (`ChangeHold.pass`), `Engine/src/engine.ts:146–148` (`emitUnconfirmed`), `:174–175` (`unsentChanges`).
-
-**Problem:** While a connect holds, `pass` calls `keep(true)` for any SyncStep2 without looking at what it holds back. The provider answers every SyncStep1 of the server with one, so `withheld` turns true on every held connect, also without local edits. It then counts as one more unconfirmed change, and `unsentChanges()` returns the whole Yjs state instead of "". Holds are on for every page on 0.98 with `page:verification`.
-
-**Scenario:** A page without local edits reconnects; a copy of connection-check.ts printed `withheld true` after the sync. If the verification takes over 2 s, the pill says "Saving". A document event or leaving the page during the hold stores the full state as unsent changes, so removing the server asks about changes that don't exist (`ServersView.swift:77`). The blob merges idempotently; nothing is lost.
-
-**Fix:** Keep a held SyncStep2 only for unconfirmed local changes: a `dirty` flag that `connection()` sets on document updates not from the provider (`hold?.changedLocally()`), checked in the hold branch. Clear it only when the count reaches 0 on a released connect with nothing kept; cleared whenever an update passes, one sent just before a drop would be lost. Add both cases to connection-check.ts.
-
-### W7 [low] While changes stay unconfirmed, each save of them decodes the whole page on the main thread only to store it again
-
-**Where:** `Diderot/Features/Editor/WebDocumentEngine.swift:512–514` (`saveUnsentChanges`), `:713–718` (`currentDocument`), `Engine/src/engine.ts:175` (`unsentChanges`).
-
-**Problem:** Offline the engine's count stays above 0, so each adopted document event (`DocumentModel.swift:312`) leads to a save about every 2 s of typing. Each save asks `currentDocument()`, which decodes the whole page into PMNode on the main actor, only for `UnsentStore` to encode it back to JSON for the next offline open. The per-byte base64 at `engine.ts:175` is cheap: 7 ms for 400 KB, 0.7 ms chunked.
-
-**Scenario:** Offline, someone edits a page of 1,000 to 2,000 blocks. Every 2 s of typing adds one main-thread decode of about 35–70 ms, by BACKLOG M6's 35 ms per 310 KB. The finding's sizes were about 5x too high (400 KB of Yjs state for 2,000 paragraphs, not 2 MB). It adds about 20% to the per-event decodes M6 lists; no new hitch.
-
-**Fix:** Let `unsentChanges()` return the base64 state and `JSON.stringify(this.editor.getJSON())` (null before the first sync) in one call. Write the JSON's UTF-8 bytes under `CacheKey.unsentDocument` through a new `UnsentStore.writeJSONData(_:key:)` with kind "json", so `read(PMNode.self, …)` still finds it. Chunk the encode while there (`String.fromCharCode.apply` over 0x8000-byte slices).
 
 ---
 
