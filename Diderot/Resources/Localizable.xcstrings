@@ -1594,6 +1594,16 @@
         }
       }
     },
+    "Copying page…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seite wird kopiert …"
+          }
+        }
+      }
+    },
     "Could not read the server response (%@).": {
       "extractionState": "manual",
       "localizations": {
@@ -2150,6 +2160,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Duplizieren"
+          }
+        }
+      }
+    },
+    "Duplicating page…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seite wird dupliziert …"
           }
         }
       }
