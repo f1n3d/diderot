@@ -7279,6 +7279,26 @@
         }
       }
     },
+    "Uploading %@…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wird hochgeladen …"
+          }
+        }
+      }
+    },
+    "Uploading file…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datei wird hochgeladen …"
+          }
+        }
+      }
+    },
     "Uploading…": {
       "localizations": {
         "de": {

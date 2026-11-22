@@ -311,6 +311,37 @@ struct AttachmentBlockView: View {
     }
 }
 
+/// A file another client is still uploading, as the web shows it: its name beside a spinner, and nothing to tap until
+/// the file is there. A PDF said it could not be loaded, which a tap couldn't help. If the uploader's tab closed
+/// mid-upload, the web too shows it uploading for good.
+struct UploadingCard: View {
+    let media: MediaBlock
+
+    var body: some View {
+        PlaceholderCard(icon: icon, title: title, detail: size, titleLineLimit: 2) {
+            ProgressView()
+        }
+    }
+
+    private var title: String {
+        media.name.map { String(localized: "Uploading \($0)…") } ?? String(localized: "Uploading file…")
+    }
+
+    /// An attachment's, which the web puts in with the name.
+    private var size: String? {
+        media.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }
+    }
+
+    private var icon: String {
+        switch media.kind {
+        case .video: "video"
+        case .audio: "waveform"
+        case .pdf: "doc.richtext"
+        default: "paperclip"
+        }
+    }
+}
+
 // MARK: - Embeds
 
 struct EmbedBlockView: View {

@@ -55,12 +55,17 @@ struct BlockView: View {
             ContentImageView(image: image).id(image.src)
         case .media(let media):
             Group {
-                switch media.kind {
-                case .video, .audio: VideoBlockView(media: media)
-                case .pdf: PDFBlockView(media: media)
-                case .attachment: AttachmentBlockView(media: media)
-                case .drawio, .excalidraw: DiagramView(media: media)
-                case .embed, .youtube: EmbedBlockView(media: media)
+                // No file yet to load or open; the upload's end sets `src`, and the file's view takes this place.
+                if media.isUploading {
+                    UploadingCard(media: media)
+                } else {
+                    switch media.kind {
+                    case .video, .audio: VideoBlockView(media: media)
+                    case .pdf: PDFBlockView(media: media)
+                    case .attachment: AttachmentBlockView(media: media)
+                    case .drawio, .excalidraw: DiagramView(media: media)
+                    case .embed, .youtube: EmbedBlockView(media: media)
+                    }
                 }
             }
             .id(media.src)

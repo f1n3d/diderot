@@ -298,6 +298,30 @@ struct ContentParserTests {
         #expect(media[0].attachmentId == "{{FILE_ID}}")
         #expect(media[4].attachmentId == "00000000-0000-0000-0000-000000000001")
         #expect(media.map(\.provider) == [nil, "youtube", nil, "figma", nil, nil, nil, nil, nil])
+        #expect(media.map(\.isUploading) == Array(repeating: false, count: 9))
+    }
+
+    /// A file a collaborator is still uploading: the web puts its node in without the file and with a `placeholder`
+    /// (the name in it, or for an attachment in `name`), then sets `src` or `url` and drops the placeholder. A node
+    /// without its file and without a placeholder is no upload, nor one whose file has come.
+    @Test func uploadsInProgress() throws {
+        let json: JSONValue = ["type": "doc", "content": [
+            ["type": "pdf", "attrs": ["src": "", "placeholder": ["id": "u1", "name": "report.pdf"]]],
+            ["type": "video", "attrs": ["src": "", "placeholder": ["id": "u2", "name": "clip.mov"]]],
+            ["type": "audio", "attrs": ["src": "", "placeholder": ["id": "u3"]]],
+            ["type": "attachment", "attrs": ["url": "", "name": "notes.txt", "size": 41, "placeholder": ["id": "u4"]]],
+            ["type": "pdf", "attrs": ["src": "", "placeholder": .null]],
+            ["type": "pdf", "attrs": ["src": "/api/files/f/manual.pdf", "name": "manual.pdf", "placeholder": .null]],
+            ["type": "video", "attrs": ["src": "/api/files/f/clip.mov"]],
+        ]]
+        let media = ContentDocument(json: json).blocks.compactMap { block -> MediaBlock? in
+            if case .media(let media) = block.kind { return media }
+            return nil
+        }
+        try #require(media.count == 7)
+        #expect(media.map(\.isUploading) == [true, true, true, true, false, false, false])
+        #expect(media.map(\.name) == ["report.pdf", "clip.mov", nil, "notes.txt", nil, "manual.pdf", nil])
+        #expect(media[3].size == 41)
     }
 
     @Test func advancedNodesAndFallbacks() throws {

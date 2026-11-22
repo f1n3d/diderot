@@ -198,6 +198,41 @@ struct MediaBlockViewTests {
         #expect(OnceURLProtocol.requests.withLock { $0[server.host()!] } == nil)
     }
 
+    /// A file a collaborator is still uploading (the web puts its node in without the file) says so with its name and a
+    /// spinner, as the web does, and there is nothing to tap. A PDF said it could not be loaded, which a tap couldn't
+    /// help, video and audio "Media unavailable.", and a tap on an attachment did nothing. Once the file has come, it
+    /// shows.
+    @Test(arguments: ["pdf", "video", "audio", "attachment"])
+    func aCollaboratorsUploadSaysSo(type: String) async throws {
+        let server = URL(string: "https://uploading-\(type).docmost.invalid")!
+        OnceURLProtocol.requests.withLock { $0[server.host()!] = nil }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [OnceURLProtocol.self]
+        let client = APIClient(baseURL: server, configuration: configuration)
+        let context = RenderContext(baseURL: server, client: client, mediaLoader: MediaLoader(client: client), token: nil, pageId: "p")
+        func media(_ src: String) throws -> some View {
+            let attrs: [String: JSONValue] = type == "attachment"
+                ? ["url": .string(src), "name": "report.pdf", "size": 41, "placeholder": src.isEmpty ? ["id": "u"] : .null]
+                : ["src": .string(src), "placeholder": src.isEmpty ? ["id": "u", "name": "report.pdf"] : .null]
+            let doc = PMNode(type: "doc", content: [PMNode(type: type, attrs: attrs)])
+            return BlockView(block: try #require(ContentParser.parse(doc).blocks.first)).environment(\.renderContext, context)
+        }
+        let host = UIHostingController(rootView: try media(""))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        let uploading = String(localized: "Uploading \("report.pdf")…", bundle: .main)
+        #expect(await poll(tries: 100) { labels(in: window).contains { $0.contains(uploading) } }, "\(labels(in: window))")
+        #expect(spinner(in: window))
+        #expect(element(in: window) { $0.contains(uploading) }.map { !$0.accessibilityTraits.contains(.button) } == true, "nothing to tap")
+
+        host.rootView = try media("/api/files/f/\(type)")
+        #expect(await poll { !labels(in: window).contains { $0.contains(uploading) } }, "the file has come")
+    }
+
     /// A formula is blank after its web process ended (iOS reclaimed its memory in the background, a crash). Coming
     /// back into view renders it again. GitHub's simulator sometimes doesn't let the app end the process (RunningBoard:
     /// "Client not entitled"); the test is cancelled then, as there is nothing to check.
