@@ -36,6 +36,37 @@ struct KanbanDragTests {
         #expect(await pagesOn(drag, clock))
     }
 
+    /// Out of the column into the gap at the right edge, then straight up off the board, where no column or card is
+    /// left to report an exit: the board paged on to the last column.
+    @Test func pagingStopsWhenTheFingerLeavesTheBoardFromAGap() async {
+        let clock = TestClock()
+        let drag = await pagingRight(clock)
+        enterHeader(drag)
+        drag.leave(rowId: nil, columnId: "doing", at: CGPoint(x: 341, y: 300), size: column, boardMinX: 31)
+        drag.hoverBoard(atBoardX: 377)
+        #expect(await pagesOn(drag, clock))
+        drag.leaveBoard()
+        #expect(!(await pagesOn(drag, clock)))
+    }
+
+    /// From the gap into the next column, which peeks in at the edge: paging goes on, whichever comes first, the
+    /// board's exit or the column's entry. While a column or card has the drag, the board changes nothing.
+    @Test func pagingGoesOnFromAGapIntoAColumn() async {
+        for boardFirst in [false, true] {
+            let clock = TestClock()
+            let drag = await pagingRight(clock)
+            enterHeader(drag)
+            drag.leave(rowId: nil, columnId: "doing", at: CGPoint(x: 341, y: 300), size: column, boardMinX: 31)
+            drag.hoverBoard(atBoardX: 377)
+            if boardFirst { drag.leaveBoard() }
+            drag.target = KanbanDropTarget(columnId: "done", rowId: nil)
+            drag.hover(atBoardX: 386)
+            if !boardFirst { drag.leaveBoard() }
+            drag.hoverBoard(atBoardX: 200)
+            #expect(await pagesOn(drag, clock), "Board first: \(boardFirst)")
+        }
+    }
+
     /// An exit reported after the drop or the drag's end doesn't start paging again.
     @Test func exitAfterTheDragEndsDoesNotPage() async {
         let clock = TestClock()

@@ -37,6 +37,9 @@ struct BaseKanbanView: View {
             .scrollPosition($position)
             .scrollTargetBehavior(KanbanColumnSnapping(columnCount: model.columns.count))
             .scrollIndicators(.hidden)
+            // The whole visible board, gaps and padding included, in the coordinates paging works in.
+            .contentShape(Rectangle())
+            .onDrop(of: DragPayload.types, delegate: KanbanBoardDropDelegate(drag: drag))
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { drag.boardWidth = $0 }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in offsetX = x }
             .onChange(of: drag.scrollRequest) { _, request in
@@ -192,11 +195,11 @@ final class KanbanDragState {
 
     /// Finger left a drop area, a card (`rowId`) or the rest of a column: clears its insertion mark and aims paging at
     /// where it left (`location`, in the area's coordinates; the area is `size` large, its leading edge at `boardMinX`).
-    /// Out through a column's top or bottom the finger is off the board (its padding, the header, the navigation bar),
-    /// where no drop area would stop paging, so it stops. Out beside a column, into a gap that paging moves under a
-    /// finger held at the edge, it goes on while the finger is near the edge. A card's top and bottom border its
-    /// column, which takes the drag over. Once another area has taken it, or the drag has ended, nothing changes: the
-    /// order of one area's exit and the next one's entry isn't documented.
+    /// Out through a column's top or bottom the finger is in the board's padding or already off the board (the header,
+    /// the navigation bar), so it stops; in the padding the board's own drop area pages on near the edge. Out beside a
+    /// column, into a gap that paging moves under a finger held at the edge, it goes on while the finger is near the
+    /// edge. A card's top and bottom border its column, which takes the drag over. Once another area has taken it, or
+    /// the drag has ended, nothing changes: the order of one area's exit and the next one's entry isn't documented.
     func leave(rowId: String?, columnId: String, at location: CGPoint, size: CGSize, boardMinX: CGFloat) {
         guard target?.columnId == columnId, target?.rowId == rowId else { return }
         target = nil
@@ -205,6 +208,21 @@ final class KanbanDragState {
         } else {
             hover(atBoardX: boardMinX + location.x)
         }
+    }
+
+    /// Finger on the board beside every column and card (a gap between columns, the board's padding): pages while it
+    /// is near the edge. While a column or card has the drag, it aims paging itself.
+    func hoverBoard(atBoardX x: CGFloat) {
+        guard target == nil else { return }
+        hover(atBoardX: x)
+    }
+
+    /// Finger left the board, or moved on into a column or card: off the board no other drop area would stop paging.
+    /// Into a column, its entry may come before this exit, which then changes nothing, or after it, starting paging
+    /// again near the edge.
+    func leaveBoard() {
+        guard target == nil else { return }
+        stopPaging()
     }
 
     func end() {
@@ -281,6 +299,25 @@ private struct KanbanDropDelegate: DropDelegate {
         drag.target = target(info)
         drag.hover(atBoardX: boardMinX() + info.location.x)
     }
+}
+
+/// The visible board behind its columns: nothing lands in a gap or the padding, but a finger there pages near the
+/// edge, and leaving the board from there stops paging. Columns and cards lie above it and take their drops.
+private struct KanbanBoardDropDelegate: DropDelegate {
+    let drag: KanbanDragState
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: DragPayload.types) }
+
+    func dropEntered(info: DropInfo) { drag.hoverBoard(atBoardX: info.location.x) }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        drag.hoverBoard(atBoardX: info.location.x)
+        return DropProposal(operation: .cancel)
+    }
+
+    func dropExited(info: DropInfo) { drag.leaveBoard() }
+
+    func performDrop(info: DropInfo) -> Bool { false }
 }
 
 // MARK: - Column
