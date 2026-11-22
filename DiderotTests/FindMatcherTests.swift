@@ -43,12 +43,12 @@ struct FindMatcherTests {
         let document = PMNode(type: "doc", content: [PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Davor")]), toggle])
         let find = PageFind()
         find.query = "treffer"
-        find.update(document: document, baseURL: nil, previewTitle: { _ in nil }, restart: true)
+        find.update(document: document, baseURL: nil, previewTitles: [:], restart: true)
         #expect(find.matches.map(\.ref.path) == [[1, 0], [1, 1, 0]])
         #expect(find.holdsMatch(inside: [1, 1]))
         #expect(!find.holdsMatch(inside: [1, 0]), "a block counted as holding its own match")
         find.query = "davor"
-        find.update(document: document, baseURL: nil, previewTitle: { _ in nil }, restart: true)
+        find.update(document: document, baseURL: nil, previewTitles: [:], restart: true)
         #expect(!find.holdsMatch(inside: [1, 1]))
     }
 
@@ -103,7 +103,7 @@ struct FindMatcherTests {
         let document = PMNode(type: "doc", content: [paragraph("Treffer"), paragraph("Treffer"), paragraph("Stelle")])
         let find = PageFind()
         find.query = "treffer"
-        find.update(document: document, baseURL: nil, previewTitle: { _ in nil }, restart: true)
+        find.update(document: document, baseURL: nil, previewTitles: [:], restart: true)
         let requests = find.revealRequest
         let passage = FindMatch(ref: NodeRef(path: [2], id: nil), occurrence: 0, topLevel: NodeRef(path: [2], id: nil))
         find.reveal(passage: passage)
@@ -130,10 +130,11 @@ struct FindMatcherTests {
             PMNode(type: "text", text: " und ein crash danach"),
         ])
         let document = PMNode(type: "doc", content: [paragraph])
-        let title = { (link: String) in link == url ? "Crash when opening settings" : nil }
+        let titles = [url: "Crash when opening settings"]
+        let title = { (link: String) in titles[link] }
         let find = PageFind()
         find.query = "crash"
-        find.update(document: document, baseURL: nil, previewTitle: title, restart: true)
+        find.update(document: document, baseURL: nil, previewTitles: titles, restart: true)
         #expect(find.matches.map(\.occurrence) == [0, 1, 2], "the mention's title wasn't searched")
         #expect(FindMatcher.matches(of: "acme", options: [.caseInsensitive], in: document, baseURL: nil, previewTitle: title).isEmpty,
                 "the address's title was searched, which the page doesn't show")
@@ -145,6 +146,112 @@ struct FindMatcherTests {
         let current = text.runs.filter { $0.backgroundColor == Color.orange.opacity(0.65) }
             .map { String(text[$0.range].characters) + String(text[$0.range.upperBound...].characters) }
         #expect(current == ["crash danach"], "another occurrence is highlighted as the current match")
+    }
+
+    /// Find searches a text it builds without the page's fonts, colors and links: the same characters as the page's,
+    /// for every kind of run, also an atom with marks, a mention's title from its preview and one from its address.
+    @Test func searchedTextIsTheShownText() {
+        let url = "https://github.com/acme/app/issues/12"
+        let paragraph = PMNode(type: "paragraph", content: [
+            PMNode(type: "text", text: "Über "),
+            PMNode(type: "text", marks: [PMMark(type: "link", attrs: ["href": .string("https://example.com")])], text: "Link"),
+            PMNode(type: "hardBreak"),
+            PMNode(type: "mention", attrs: ["entityType": .string("page"), "label": .string("Seite"), "slugId": .string("s1")]),
+            PMNode(type: "mention", attrs: ["entityType": .string("user"), "label": .string("Ada"), "entityId": .string("u1")]),
+            PMNode(type: "mention", attrs: ["entityType": .string("user")]),
+            PMNode(type: "mathInline", attrs: ["text": .string("x^2")]),
+            PMNode(type: "status", attrs: ["text": .string("Offen"), "color": .string("green")], marks: [PMMark(type: "bold")]),
+            PMNode(type: "footnoteReference", attrs: ["referenceNumber": .string("3"), "data-id": .string("f3")]),
+            PMNode(type: "footnoteReference"),
+            NodeFactory.integrationMention(url: url, provider: "github"),
+            NodeFactory.integrationMention(url: "https://github.com/acme/app/pull/7", provider: "github"),
+            PMNode(type: "date", attrs: ["date": .string("2026-11-22")]),
+            PMNode(type: "date"),
+            PMNode(type: "templateVariable", attrs: ["name": .string("Kunde")]),
+            PMNode(type: "templatePlaceholder", attrs: ["hint": .string("Hier tippen")]),
+            PMNode(type: "unbekannt"),
+            PMNode(type: "text", text: " Ende"),
+        ])
+        let inlines = ContentParser.inlines(of: paragraph)
+        var builder = InlineTextBuilder(baseURL: URL(string: "https://docs.example.com"), previewTitle: { $0 == url ? "Crash" : nil })
+        builder.atomLinkBlock = "block"
+        let shown = String(builder.attributedString(for: inlines).characters)
+        #expect(builder.plainText(for: inlines) == shown)
+        #expect(shown.contains(" Crash ") && shown.contains("📄 Seite") && shown.contains(" Offen "), "the paragraph lacks runs: \(shown)")
+    }
+
+    /// Find keeps the blocks' texts between searches; another query, "Aa", a changed document or a mention's title
+    /// that arrived searches as a search from scratch does, also after find closed while the page changed.
+    @Test func eachSearchFindsWhatAFreshOneFinds() {
+        let url = "https://github.com/acme/app/issues/12"
+        func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", content: [PMNode(type: "text", text: text)]) }
+        let first = PMNode(type: "doc", content: [
+            paragraph("Erster Treffer"),
+            PMNode(type: "paragraph", content: [PMNode(type: "text", text: "Vor "), NodeFactory.integrationMention(url: url, provider: "github")]),
+            paragraph("treffer klein"),
+        ])
+        let second = PMNode(type: "doc", content: [paragraph("Neu davor"), paragraph("Noch ein Treffer")] + first.children)
+        let find = PageFind()
+        // "Aa" is kept in the defaults.
+        let matchCase = find.matchCase
+        defer { find.matchCase = matchCase }
+        find.matchCase = false
+        /// Searches `document` as the page does and checks the matches against a search from scratch.
+        func expectFresh(_ document: PMNode, titles: [String: String], restart: Bool = false, _ comment: Comment) {
+            find.update(document: document, baseURL: nil, previewTitles: titles, restart: restart)
+            let fresh = FindMatcher.matches(of: find.query, options: find.options, in: document, baseURL: nil, previewTitle: { titles[$0] })
+            #expect(find.matches == fresh, comment)
+            #expect(!fresh.isEmpty, "nothing was checked: \(comment)")
+        }
+        find.show()
+        find.query = "treffer"
+        expectFresh(first, titles: [:], restart: true, "first search")
+        find.query = "treff"
+        expectFresh(first, titles: [:], restart: true, "another query")
+        find.matchCase = true
+        find.query = "Treffer"
+        expectFresh(first, titles: [:], restart: true, "match case")
+        find.matchCase = false
+        expectFresh(second, titles: [:], "changed document")
+        find.query = "crash"
+        expectFresh(second, titles: [url: "Crash when opening settings"], restart: true, "a mention's title arrived")
+        find.close()
+        find.show()
+        find.query = "treffer"
+        expectFresh(first, titles: [:], restart: true, "after closing with another document")
+    }
+
+    /// A block holds a match when one lies anywhere below it, also deep in nested toggles, lists and tables, and not
+    /// when the match is the block itself or beside it.
+    @Test func holdsMatchGoesByEveryBlockAbove() {
+        func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", content: [PMNode(type: "text", text: text)]) }
+        func toggle(_ title: String, _ content: [PMNode]) -> PMNode {
+            PMNode(type: "details", content: [
+                PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: title)]),
+                PMNode(type: "detailsContent", content: content),
+            ])
+        }
+        let list = PMNode(type: "bulletList", content: [PMNode(type: "listItem", content: [paragraph("Treffer in der Liste")])])
+        let table = PMNode(type: "table", content: [PMNode(type: "tableRow", content: [PMNode(type: "tableCell", content: [paragraph("Treffer")])])])
+        let document = PMNode(type: "doc", content: [
+            paragraph("Davor"),
+            toggle("Außen", [paragraph("Nichts"), toggle("Treffer innen", [paragraph("Treffer"), list]), table]),
+            toggle("Leer", [paragraph("Nichts")]),
+        ])
+        let find = PageFind()
+        find.query = "treffer"
+        find.update(document: document, baseURL: nil, previewTitles: [:], restart: true)
+        #expect(find.matches.map(\.ref.path) == [[1, 1, 1, 0], [1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 0, 0], [1, 1, 2, 0, 0, 0]])
+        var paths: Set<[Int]> = [[], [0], [2], [2, 1], [2, 1, 0], [1, 1, 0], [9, 9]]
+        for match in find.matches { for count in 0...match.ref.path.count { paths.insert(Array(match.ref.path.prefix(count))) } }
+        for path in paths {
+            let below = find.matches.contains { $0.ref.path.count > path.count && $0.ref.path.starts(with: path) }
+            #expect(find.holdsMatch(inside: path) == below, "\(path)")
+        }
+        #expect(find.holdsMatch(inside: [1, 1]) && find.holdsMatch(inside: [1, 1, 1, 1]))
+        #expect(!find.holdsMatch(inside: [2, 1]))
+        find.close()
+        #expect(!find.holdsMatch(inside: [1, 1]), "a closed find still holds matches")
     }
 
     /// A passage is shown for a moment only: afterwards find's match is the target again, and no block keeps reporting

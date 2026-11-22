@@ -28,6 +28,9 @@ final class PageFind {
         didSet { UserDefaults.standard.set(matchCase, forKey: Self.matchCaseKey) }
     }
     private(set) var matches: [FindMatch] = []
+    /// The paths of the blocks that matches lie below (`holdsMatch(inside:)`): each rendered toggle asks on every
+    /// render, and going through the tens of thousands of matches of a one-letter search took long on a long page.
+    private var matchedAncestors: Set<[Int]> = []
     private(set) var current = 0
     /// A comment's passage the page shows ("Show on Page"): its first text block, which the page centers as it centers
     /// the current match, above the keyboard. Nothing is highlighted for it. It is shown for `passageDuration`, while
@@ -47,6 +50,17 @@ final class PageFind {
     @ObservationIgnored private(set) var barTopBeforeRise: CGFloat?
     /// Incremented whenever the bar rose: the keyboard came up under it, and the page keeps the current match in sight.
     private(set) var barRise = 0
+    /// The text blocks last searched, with what their texts were built from: another query or "Aa" searches them
+    /// again, as building the texts of a long page took more than half of each keystroke. A changed document, server
+    /// or mention's title builds them anew.
+    @ObservationIgnored private var searched: Searched?
+
+    private struct Searched {
+        let document: PMNode
+        let baseURL: URL?
+        let previewTitles: [String: String]
+        let blocks: [FindMatcher.Block]
+    }
 
     var currentMatch: FindMatch? { matches.indices.contains(current) ? matches[current] : nil }
 
@@ -65,8 +79,10 @@ final class PageFind {
         isShown = false
         query = ""
         matches = []
+        matchedAncestors = []
         current = 0
         currentFrame = nil
+        searched = nil
     }
 
     /// The find bar's top edge moved, or the bar went (`nil`). It rises when the keyboard comes up under it: the field
@@ -81,10 +97,13 @@ final class PageFind {
     }
 
     /// Recomputes matches for a new query (`restart`: jumps to the first match), a changed document or a link preview
-    /// that arrived. `previewTitle`: an integration mention's title from the server's preview, as the page shows it.
-    func update(document: PMNode, baseURL: URL?, previewTitle: @escaping (String) -> String?, restart: Bool) {
+    /// that arrived. `previewTitles`: integration mentions' titles from the server's previews by address, as the page
+    /// shows them (`LinkPreviewStore.titles`).
+    func update(document: PMNode, baseURL: URL?, previewTitles: [String: String], restart: Bool) {
         let previous = currentMatch
-        matches = FindMatcher.matches(of: query, options: options, in: document, baseURL: baseURL, previewTitle: previewTitle)
+        matches = query.isEmpty ? [] : FindMatcher.matches(of: query, options: options,
+                                                           in: blocks(of: document, baseURL: baseURL, previewTitles: previewTitles))
+        matchedAncestors = Self.ancestors(of: matches)
         if restart {
             current = 0
         } else if let previous, let index = matches.firstIndex(of: previous) {
@@ -96,6 +115,27 @@ final class PageFind {
             passage = nil
             revealRequest += 1
         }
+    }
+
+    private func blocks(of document: PMNode, baseURL: URL?, previewTitles: [String: String]) -> [FindMatcher.Block] {
+        if let searched, searched.document == document, searched.baseURL == baseURL, searched.previewTitles == previewTitles {
+            return searched.blocks
+        }
+        let blocks = FindMatcher.blocks(in: document, baseURL: baseURL, previewTitle: { previewTitles[$0] })
+        searched = Searched(document: document, baseURL: baseURL, previewTitles: previewTitles, blocks: blocks)
+        return blocks
+    }
+
+    /// Every path above a matched block's: a block at one of them holds a match below it.
+    private static func ancestors(of matches: [FindMatch]) -> Set<[Int]> {
+        var result: Set<[Int]> = []
+        var last: [Int]?
+        // A block's matches follow each other.
+        for match in matches where match.ref.path != last {
+            last = match.ref.path
+            for count in match.ref.path.indices { result.insert(Array(match.ref.path.prefix(count))) }
+        }
+        return result
     }
 
     /// Shows a comment's passage as find shows its match: the page goes to its block and centers it above the keyboard.
@@ -117,7 +157,7 @@ final class PageFind {
 
     /// Whether a match lies in the block at `path` or below it: a collapsed toggle shows its content then.
     func holdsMatch(inside path: [Int]) -> Bool {
-        matches.contains { $0.ref.path.count > path.count && $0.ref.path.starts(with: path) }
+        matchedAncestors.contains(path)
     }
 
     func next() { step(1) }
@@ -162,25 +202,43 @@ enum FindMatcher {
         }
     }
 
-    /// Text of a paragraph or heading as `TextNodeView` displays it, also with the titles of integration mentions whose
-    /// preview loaded (`previewTitle`): the bar counts what the page highlights, which searches the shown text again.
-    static func displayedText(of node: PMNode, baseURL: URL?, previewTitle: @escaping (String) -> String?) -> String {
-        let builder = InlineTextBuilder(baseURL: baseURL, previewTitle: previewTitle)
-        return String(builder.attributedString(for: ContentParser.inlines(of: node)).characters)
+    /// A text block find searches, with the text the page shows in it.
+    struct Block {
+        let ref: NodeRef
+        let topLevel: NodeRef
+        let text: String
     }
 
-    static func matches(of query: String, options: String.CompareOptions, in document: PMNode, baseURL: URL?,
-                        previewTitle: @escaping (String) -> String?) -> [FindMatch] {
-        guard !query.isEmpty else { return [] }
-        var result: [FindMatch] = []
+    /// The text blocks find searches, in reading order. A paragraph's or heading's text is the one `TextNodeView`
+    /// displays, also with the titles of integration mentions whose preview loaded (`previewTitle`): the bar counts
+    /// what the page highlights, which searches the shown text again.
+    static func blocks(in document: PMNode, baseURL: URL?, previewTitle: @escaping (String) -> String?) -> [Block] {
+        let builder = InlineTextBuilder(baseURL: baseURL, previewTitle: previewTitle)
+        var result: [Block] = []
         forEachTextBlock(in: document) { node, ref, topLevel in
-            let text = node.type == "codeBlock" ? node.plainText : displayedText(of: node, baseURL: baseURL, previewTitle: previewTitle)
-            for occurrence in ranges(of: query, options: options, in: text).indices {
-                result.append(FindMatch(ref: ref, occurrence: occurrence, topLevel: topLevel))
-            }
+            let text = node.type == "codeBlock" ? node.plainText : builder.plainText(for: ContentParser.inlines(of: node))
+            result.append(Block(ref: ref, topLevel: topLevel, text: text))
             return true
         }
         return result
+    }
+
+    static func matches(of query: String, options: String.CompareOptions, in blocks: [Block]) -> [FindMatch] {
+        guard !query.isEmpty else { return [] }
+        var result: [FindMatch] = []
+        for block in blocks {
+            for occurrence in ranges(of: query, options: options, in: block.text).indices {
+                result.append(FindMatch(ref: block.ref, occurrence: occurrence, topLevel: block.topLevel))
+            }
+        }
+        return result
+    }
+
+    /// A search from scratch; `PageFind` keeps the blocks between searches.
+    static func matches(of query: String, options: String.CompareOptions, in document: PMNode, baseURL: URL?,
+                        previewTitle: @escaping (String) -> String?) -> [FindMatch] {
+        guard !query.isEmpty else { return [] }
+        return matches(of: query, options: options, in: blocks(in: document, baseURL: baseURL, previewTitle: previewTitle))
     }
 
     /// The first text block holding a comment's mark: where "Show on Page" goes, as find goes to a match. Nil where find

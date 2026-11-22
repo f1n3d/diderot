@@ -598,8 +598,7 @@ struct PageView: View {
     private func updateFind(restart: Bool) {
         guard let model else { return }
         // The titles the page's text blocks show (`TextNodeView`), so find searches what they highlight.
-        let previews = session.linkPreviews
-        find.update(document: model.document, baseURL: session.server?.url, previewTitle: { previews?.preview(for: $0)?.title },
+        find.update(document: model.document, baseURL: session.server?.url, previewTitles: session.linkPreviews?.titles ?? [:],
                     restart: restart)
     }
 
