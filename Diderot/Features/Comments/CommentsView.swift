@@ -235,8 +235,8 @@ struct CommentsView: View {
                         .lineLimit(1...5)
                         .textFieldStyle(.roundedBorder)
                         .focused($composerFocused)
-                        // Text typed during a send wouldn't go with it.
-                        .disabled(comments.isSending)
+                        // Not disabled while sending: the field gave up its focus and took it back once the send was
+                        // done, which brought the keyboard up again. Text typed meanwhile stays for the next send.
                         .accessibilityIdentifier("comments-composer")
                     Button(action: send) {
                         if comments.isSending {
