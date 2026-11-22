@@ -2342,10 +2342,10 @@ final class DocumentModel {
     }
 
     /// A line break that ends its line, as Return does: "\n", and the CR LF, CR or U+2029 that text from elsewhere ends
-    /// its lines with, each a Character that isn't "\n" (CR LF is one Character). Not the hard break (U+2028), a break
-    /// within a line.
-    private static func isLineEnd(_ character: Character) -> Bool {
-        character.isNewline && character != InlineAttributedText.lineBreak
+    /// its lines with, each a Character that isn't "\n" (CR LF is one Character). Not the hard break (U+2028), nor Word's
+    /// break within a paragraph (U+000B) and the other newlines that end no paragraph.
+    static func isLineEnd(_ character: Character) -> Bool {
+        ["\n", "\r", "\r\n", "\u{2029}"].contains(character)
     }
 
     /// Backspace at a block's start: joins it with the text block before, removes it (an empty line after an image, a

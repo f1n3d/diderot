@@ -313,6 +313,13 @@ struct DocumentModelTests {
         #expect(model.cursorRequest == .offset(1))
     }
 
+    /// Only the line ends of paragraphs end a line: Word's break within a paragraph (U+000B), a form feed and NEL don't,
+    /// though Swift counts them as newlines too.
+    @Test func onlyParagraphLineEndsEndALine() {
+        #expect(["\n", "\r", "\r\n", "\u{2029}"].allSatisfy(DocumentModel.isLineEnd))
+        #expect(!["\u{2028}", "\u{000B}", "\u{000C}", "\u{0085}", "a"].contains(where: DocumentModel.isLineEnd))
+    }
+
     /// Two pasted lines are one Return, and the cursor goes where the paste ends too, not to the new line's start.
     @Test(.timeLimit(.minutes(1))) func twoPastedLinesPutTheCursorAtTheirEnd() async throws {
         func line(_ id: String, _ text: String) -> PMNode {
