@@ -428,6 +428,11 @@ struct PageView: View {
                 PageFindBar(find: find)
                     .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { find.barMoved(to: $0) }
                     .onDisappear { find.barMoved(to: nil) }
+                    // A changed document (the engine's sync, a collaborator's edit) is searched again. Here, not on the
+                    // page: its body reads the document nowhere else, so with find closed it needn't run again, nor
+                    // compare the old document with the new, at each engine event. Find opens with an empty query: the
+                    // first key searches the document as it is then.
+                    .onChange(of: model?.document) { _, _ in updateFind(restart: false) }
                     // A preview that arrives gives a mention the service's title, on the page and so in the matches.
                     // Read only while the bar shows: previews arrive as blocks scroll in, and with find closed the
                     // page's body needn't run again for each. By the titles alone: each search goes through the whole
@@ -442,9 +447,6 @@ struct PageView: View {
         // At each key, on the main thread: the blocks highlight the query as typed, and the bar counts the same (BACKLOG).
         .onChange(of: find.query) { _, _ in updateFind(restart: true) }
         .onChange(of: find.matchCase) { _, _ in updateFind(restart: true) }
-        .onChange(of: model?.document) { _, _ in
-            if find.isShown { updateFind(restart: false) }
-        }
         .onChange(of: model?.active?.ref) { _, _ in
             // Tapping into the text ends find; the user continues typing there.
             if model?.active != nil, find.isShown { find.close() }
@@ -1061,8 +1063,8 @@ struct PageView: View {
     }
 
     /// Where "Show on Page" goes, as find goes to a match: the text block holding the comment's mark, centered above the
-    /// keyboard (the top-level block went to the middle of the screen, behind the keyboard). Where find doesn't look
-    /// (tabs), the top-level block around the mark.
+    /// keyboard (the top-level block went to the middle of the screen, behind the keyboard). Where find doesn't look, the
+    /// top-level block around the mark.
     private func passage(ofComment id: String) -> FindMatch? {
         guard let model else { return nil }
         return FindMatcher.passage(ofComment: id, in: model.document)
