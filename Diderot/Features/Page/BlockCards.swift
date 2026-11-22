@@ -491,6 +491,12 @@ struct CodeNodeView: View {
     private var isActive: Bool { model.active?.ref == ref }
     private var code: String { isActive ? model.activeCode : node.plainText }
 
+    /// The numbers of the code's lines, one per line; an empty block has a line 1 too.
+    static func lineNumbers(of code: String) -> String {
+        let count = code.reduce(into: 1) { count, character in if character == "\n" { count += 1 } }
+        return (1...count).map(String.init).joined(separator: "\n")
+    }
+
     /// Code as in the reader, in its syntax colors (`colored`), with find matches highlighted.
     private func displayed(_ colored: AttributedString) -> AttributedString {
         var text = code.isEmpty ? AttributedString(" ") : colored
@@ -568,14 +574,16 @@ struct CodeNodeView: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: true) {
                     HStack(alignment: .top, spacing: 12) {
-                        let lines = code.split(separator: "\n", omittingEmptySubsequences: false)
-                        VStack(alignment: .trailing, spacing: 0) {
-                            ForEach(0..<max(lines.count, 1), id: \.self) { index in
-                                Text("\(index + 1)")
-                            }
-                        }
-                        .font(.system(.callout, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        // One text in the code's font, so every number lies on its line: a text per number put them one
+                        // line's height apart, less than the code's lines are, and each sat further above its line than
+                        // the one before. One text also lays out a pasted log of thousands of lines without the pause a
+                        // text per line made.
+                        Text(verbatim: Self.lineNumbers(of: code))
+                            .multilineTextAlignment(.trailing)
+                            .font(.system(.callout, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            // The code is what VoiceOver reads, not a number per line before it.
+                            .accessibilityHidden(true)
                         // Colored when it isn't being edited: the page's one editor shows its text in one color.
                         HighlightedCode(code: code, language: node.string("language")) { colored in
                             Text(displayed(colored))
