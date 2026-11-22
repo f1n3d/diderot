@@ -11,35 +11,25 @@ nonisolated struct TableGrid: Equatable, Sendable {
         var left: Int
         var bottom: Int
         var right: Int
-
-        func intersects(_ other: Area) -> Bool {
-            top < other.bottom && other.top < bottom && left < other.right && other.left < right
-        }
     }
 
     /// Each row's cells, in order.
     let areas: [[Area]]
-    let width: Int
-    var height: Int { areas.count }
 
     init(spans: [[(columns: Int, rows: Int)]]) {
         // Columns that cells from rows above still cover: `columns` until (before) row `until`.
         var covered: [(columns: Range<Int>, until: Int)] = []
-        var width = 0
         areas = spans.enumerated().map { row, cells in
             covered.removeAll { $0.until <= row }
             var column = 0
-            let areas = cells.map { span in
+            return cells.map { span in
                 while let cover = covered.first(where: { $0.columns.contains(column) }) { column = cover.columns.upperBound }
                 let area = Area(top: row, left: column, bottom: min(row + span.rows, spans.count), right: column + span.columns)
                 if area.bottom > row + 1 { covered.append((area.left..<area.right, area.bottom)) }
                 column = area.right
                 return area
             }
-            width = max(width, column, covered.map(\.columns.upperBound).max() ?? 0)
-            return areas
         }
-        self.width = width
     }
 
     init(table: PMNode) {
@@ -49,17 +39,6 @@ nonisolated struct TableGrid: Equatable, Sendable {
     init(table: TableBlock) {
         self.init(spans: table.rows.map { $0.cells.map { ($0.colspan, $0.rowspan) } })
     }
-
-    /// The cell (row, index in the row) covering a slot of the grid.
-    func cell(row: Int, column: Int) -> (row: Int, index: Int)? {
-        for (top, cells) in areas.enumerated() where top <= row {
-            if let index = cells.firstIndex(where: { $0.intersects(Area(top: row, left: column, bottom: row + 1, right: column + 1)) }) {
-                return (top, index)
-            }
-        }
-        return nil
-    }
-
 }
 
 /// A table cell's area on its grid, for `TableGridLayout`.
