@@ -250,6 +250,8 @@ struct MFACodeView: View {
             .onAppear { isFocused = true }
         }
         .interactiveDismissDisabled(isVerifying)
+        // A saved sign-in the start couldn't check waits while the code is asked for (`AppSession.endMFA`).
+        .onDisappear { session.endMFA(at: server) }
     }
 
     private func verify() {

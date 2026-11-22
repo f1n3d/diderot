@@ -37,6 +37,10 @@ final class AppSession {
 
     private(set) var state: State = .restoring {
         didSet {
+            // The code step goes with its server's sign-in screen, which stays through its verifying.
+            if let uncheckedSignInAfterCode, !isOnSignIn(at: uncheckedSignInAfterCode.serverURL) {
+                self.uncheckedSignInAfterCode = nil
+            }
             // Only its server's sign-in screen waits for it.
             if case .signedOut(let server) = state, let uncheckedSignIn,
                ServerKey(server.url) == ServerKey(uncheckedSignIn.serverURL) { return }
@@ -49,6 +53,10 @@ final class AppSession {
     /// The sign-in screen showed without a word, nothing tried again, and signing in anew left its session open.
     private(set) var uncheckedSignIn: StoredSession?
     @ObservationIgnored private var uncheckedSignInRetry: Task<Void, Never>?
+    /// `uncheckedSignIn` while the sign-in screen asks for an MFA code, until the code sheet closes (`endMFA`). A retry
+    /// meanwhile (the app coming back from the authenticator app) would take over the code step: the sheet went with
+    /// the sign-in screen, into the saved sign-in's account.
+    @ObservationIgnored private var uncheckedSignInAfterCode: StoredSession?
     /// Saved sign-ins, one per server, including the current one.
     private(set) var accounts: [StoredSession] = []
     private let sessionStore: SessionStore
@@ -344,7 +352,19 @@ final class AppSession {
 
     /// Second step after `.mfaRequired`.
     func completeMFA(_ challenge: MFAChallenge, code: String, at server: ServerInfo) async throws {
-        try await signIn(at: server) { .authenticated(token: try await LoginFlow.verifyMFA(client: $0, challenge: challenge, code: code)) }
+        try await signIn(at: server, entersCode: true) {
+            .authenticated(token: try await LoginFlow.verifyMFA(client: $0, challenge: challenge, code: code))
+        }
+    }
+
+    /// The MFA code sheet closed (`MFACodeView`): without a sign-in, the screen waits for the saved sign-in the start
+    /// couldn't check again (`uncheckedSignInAfterCode`). Closed while a code is verified, that sign-in's failure does.
+    func endMFA(at screen: ServerInfo) {
+        guard let unchecked = uncheckedSignInAfterCode, ServerKey(unchecked.serverURL) == ServerKey(screen.url) else { return }
+        uncheckedSignInAfterCode = nil
+        guard case .signedOut(let server) = state, Self.isSameServer(server, as: screen) else { return }
+        uncheckedSignIn = unchecked
+        retryUncheckedSignInWhenTheNetworkChanges()
     }
 
     /// Sign-in via the embedded browser (SSO/MFA), which captured the `authToken` cookie.
@@ -366,14 +386,17 @@ final class AppSession {
 
     /// Signs in to the sign-in screen's server. Once the app shows another (a link switched servers), it doesn't start,
     /// or ends without changing anything (`CancellationError`): the server switched to would get the other's token or
-    /// MFA code, and the late answer would sign out of it or replace it.
+    /// MFA code, and the late answer would sign out of it or replace it. `entersCode`: the MFA code step's (`completeMFA`).
     @discardableResult
-    private func signIn(at screen: ServerInfo, _ login: (APIClient) async throws -> LoginResult) async throws -> SignInOutcome {
+    private func signIn(
+        at screen: ServerInfo, entersCode: Bool = false, _ login: (APIClient) async throws -> LoginResult
+    ) async throws -> SignInOutcome {
         // The state's copy: it can know more of the server (`loadWorkspaceInfo`).
         guard case .signedOut(let server) = state, Self.isSameServer(server, as: screen) else { throw CancellationError() }
         // `.authenticating` ends the wait for the saved sign-in the start couldn't check, so that a late retry can't take
-        // over this sign-in. Back on the sign-in screen, it waits for it again.
-        let unchecked = uncheckedSignIn
+        // over this sign-in. Back on the sign-in screen, it waits for it again. Signing in anew ends a code step.
+        let unchecked = uncheckedSignIn ?? uncheckedSignInAfterCode
+        if !entersCode { uncheckedSignInAfterCode = nil }
         state = .authenticating(server)
         do {
             let client = makeClient(for: server.url, token: nil)
@@ -384,6 +407,8 @@ final class AppSession {
                 return .signedIn
             case .mfaRequired(let challenge):
                 guard isSigningIn(at: server) else { throw CancellationError() }
+                // The screen asks for the code (`LoginView`); one that needs MFA set up first says so instead.
+                if !challenge.needsSetup { uncheckedSignInAfterCode = unchecked }
                 returnToSignIn(at: server, waitingFor: unchecked)
                 return .mfaRequired(challenge)
             }
@@ -394,10 +419,11 @@ final class AppSession {
     }
 
     /// The sign-in screen again after a sign-in that didn't finish, with the saved sign-in it waited for
-    /// (`uncheckedSignIn`): Try Again went, and nothing checked the saved sign-in again until a relaunch.
+    /// (`uncheckedSignIn`): Try Again went, and nothing checked the saved sign-in again until a relaunch. While it asks
+    /// for an MFA code, that waits for the code sheet to close (`endMFA`).
     private func returnToSignIn(at server: ServerInfo, waitingFor unchecked: StoredSession?) {
         state = .signedOut(server)
-        guard let unchecked else { return }
+        guard let unchecked, uncheckedSignInAfterCode == nil else { return }
         uncheckedSignIn = unchecked
         retryUncheckedSignInWhenTheNetworkChanges()
     }
@@ -405,6 +431,14 @@ final class AppSession {
     private func isSigningIn(at server: ServerInfo) -> Bool {
         guard case .authenticating(let current) = state else { return false }
         return Self.isSameServer(current, as: server)
+    }
+
+    /// The server's sign-in screen shows, signing in or not.
+    private func isOnSignIn(at serverURL: URL) -> Bool {
+        switch state {
+        case .signedOut(let current), .authenticating(let current): ServerKey(current.url) == ServerKey(serverURL)
+        case .restoring, .noServer, .ready: false
+        }
     }
 
     private static func isSameServer(_ server: ServerInfo, as other: ServerInfo) -> Bool {
