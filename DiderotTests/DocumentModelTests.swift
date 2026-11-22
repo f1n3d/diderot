@@ -1644,9 +1644,11 @@ struct DocumentModelTests {
     }
 
     /// Lines pasted into a toggle's title that the engine refuses go back where they were pasted, before what was after
-    /// the cursor, and a letter typed meanwhile stays where it went, at the title's start or end.
-    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func letterTypedWhileRefusedTitleLinesWaitStays(atEnd: Bool) async throws {
-        let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "TiTel")])
+    /// the cursor, and text typed meanwhile stays where it went, at the title's start or end. Typed at the end and ending
+    /// like what was after the cursor ("Hotel" after "tel"), it took the lines in: "TiAtelHo" + "B" + "tel".
+    @Test(.timeLimit(.minutes(1)), arguments: [("q", false, "qTiABtel"), ("q", true, "TiABtelq"), ("Hotel", true, "TiABtelHotel")])
+    func letterTypedWhileRefusedTitleLinesWaitStays(typed: String, atEnd: Bool, kept: String) async throws {
+        let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "Titel")])
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
             PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])]),
         ]))
@@ -1661,17 +1663,17 @@ struct DocumentModelTests {
         #expect(model.pasteLink("A\nB"))
         while engine.enteredLines.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
         // The title keeps what was after the cursor meanwhile.
-        #expect(String(model.activeText.characters) == "TiATel")
+        #expect(String(model.activeText.characters) == "TiAtel")
         if atEnd {
-            model.activeText.append(AttributedString("q"))
+            model.activeText.append(AttributedString(typed))
         } else {
-            model.activeText.insert(AttributedString("q"), at: model.activeText.startIndex)
+            model.activeText.insert(AttributedString(typed), at: model.activeText.startIndex)
         }
         model.activeTextChanged()
         answers = true
         while model.isSwitchingByTyping { try await Task.sleep(for: .milliseconds(10)) }
 
-        #expect(String(model.activeText.characters) == (atEnd ? "TiABTelq" : "qTiABTel"))
+        #expect(String(model.activeText.characters) == kept)
     }
 
     /// Moving the page to the trash while its engine opens (after pull-to-refresh) closes it after that open; stopped

@@ -2354,18 +2354,20 @@ final class DocumentModel {
         return cursor
     }
 
-    /// The place in `text`, `shown` with input typed since, that was in `shown` after its first `cut` characters: before
-    /// what followed it there while `text` still ends with that (nothing after a Return: the end), else after what came
-    /// before it while `text` still begins with that, else the end.
+    /// The place in `text`, `shown` with input typed since, that was in `shown` after its first `cut` characters. While
+    /// `text` still begins with those and the character after them, the input went after the place: there. Else before
+    /// what followed it while `text` still ends with that (nothing after a Return: the end, after what was typed there),
+    /// else after what came before it while `text` still begins with that, else the end. Looked for from the end first,
+    /// input at a toggle title's end that ended as the title did took the lines in: "TiAtelHo" + "B" + "tel".
     private static func cutIndex(_ cut: Int, of shown: AttributedString, in text: AttributedString) -> AttributedString.Index {
         let characters = text.characters
         let tail = shown.characters.dropFirst(cut)
+        let same = zip(characters, shown.characters).prefix { $0 == $1 }.count
+        if same > cut { return characters.index(characters.startIndex, offsetBy: cut) }
         if characters.suffix(tail.count).elementsEqual(tail) {
             return characters.index(characters.endIndex, offsetBy: -tail.count)
         }
-        if characters.starts(with: shown.characters.prefix(cut)) {
-            return characters.index(characters.startIndex, offsetBy: cut)
-        }
+        if same == cut { return characters.index(characters.startIndex, offsetBy: cut) }
         return characters.endIndex
     }
 
