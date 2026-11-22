@@ -44,6 +44,12 @@ extension SessionStubbing {
         #"{"data": {"items": [{"id": "\#(id)", "cells": {}}], "meta": {"hasNextPage": false}}}"#
     }
 
+    /// A page of the row `id`, placed by its id, and with `next` more behind that cursor.
+    static func rows(_ id: String, next: String?) -> String {
+        let meta = next.map { #"{"hasNextPage": true, "nextCursor": "\#($0)"}"# } ?? #"{"hasNextPage": false}"#
+        return #"{"data": {"items": [{"id": "\#(id)", "cells": {}, "position": "\#(id)"}], "meta": \#(meta)}}"#
+    }
+
     static func results(_ id: String) -> String {
         #"{"data": {"items": [{"id": "\#(id)"}]}}"#
     }

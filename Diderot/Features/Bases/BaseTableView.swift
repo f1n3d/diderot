@@ -47,12 +47,9 @@ struct BaseTableView<Top: View>: View {
                     ForEach(model.table.rows) { row in
                         rowView(row, columns: columns)
                             .id(row.id)
-                            .onAppear {
-                                if row.id == model.table.rows.last?.id { Task { await model.loadMoreTable() } }
-                            }
                     }
                     if model.table.hasMore {
-                        ProgressView()
+                        BaseMoreRows(cursor: model.table.cursor, failed: model.loadMoreFailed()) { await model.loadMoreTable() }
                             .frame(height: Self.rowHeight)
                             .padding(.leading, 16)
                             .pinnedToLeadingEdge()

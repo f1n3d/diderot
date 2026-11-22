@@ -72,7 +72,12 @@ final class BaseModel {
     /// Toast: failed writes, confirmations ("Link copied"), input and file errors.
     var toast: String?
     @ObservationIgnored private unowned let session: AppSession
+    /// "Load More" requests on their way, by list (`listKey`) and the cursor they continue from: a list loaded anew
+    /// meanwhile goes on from its own cursor at once.
     @ObservationIgnored private var loadingMore: Set<String> = []
+    /// Lists (`listKey`) whose next page failed: their end shows "Try Again" until they load anew, as nothing else asks
+    /// again.
+    private var failedMore: Set<String> = []
     /// Writes run one at a time so the server applies them in input order.
     @ObservationIgnored private var writeQueue: Task<Void, Never>?
     /// Pending changes and their rows' last confirmed state, so a response can't overwrite later changes already shown.
@@ -222,6 +227,7 @@ final class BaseModel {
         columns = []
         calendar = BaseCalendarList()
         offBoardRows = [:]
+        failedMore = []
         await restoreSnapshot()
         await loadRows()
     }
@@ -244,6 +250,7 @@ final class BaseModel {
                 let page = try await fetch(filter: BaseLayout.filter(of: view), sorts: BaseLayout.sorts(of: view), cursor: nil)
                 guard selectedView == view else { return }
                 table = BaseRowList(rows: page.items, cursor: page.meta.nextCursor, hasMore: page.meta.hasNextPage)
+                failedMore = []
                 table.rows.removeAll { deletedRowIds.contains($0.id) }
                 merge(page.references)
                 reapplyOwnChanges()
@@ -278,6 +285,7 @@ final class BaseModel {
                 guard selectedView == view else { return }
                 for index in loaded.indices { loaded[index].list.rows.removeAll { deletedRowIds.contains($0.id) } }
                 columns = loaded
+                failedMore = []
                 reapplyOwnChanges()
             case .calendar:
                 guard let property = BaseCalendarLayout.dateProperty(base: base, view: view) else {
@@ -314,46 +322,75 @@ final class BaseModel {
         if !showsRows { rowsError = error } else if notice { toast = error.userMessage }
     }
 
+    /// Whether the table's next page, or a board column's, failed: its end shows "Try Again" instead of the spinner.
+    func loadMoreFailed(columnId: String? = nil) -> Bool {
+        guard let view = selectedView else { return false }
+        return failedMore.contains(Self.listKey(view, columnId: columnId))
+    }
+
     func loadMoreTable() async {
-        guard let view = selectedView, table.hasMore, let cursor = table.cursor, !loadingMore.contains("table") else { return }
-        loadingMore.insert("table")
-        defer { loadingMore.remove("table") }
-        do {
-            let page = try await fetch(filter: BaseLayout.filter(of: view), sorts: BaseLayout.sorts(of: view), cursor: cursor)
-            guard selectedView == view else { return }
+        guard let view = selectedView, table.hasMore, let cursor = table.cursor else { return }
+        let filter = BaseLayout.filter(of: view)
+        await loadNextPage(of: Self.listKey(view), in: view, from: cursor, filter: filter, sorts: BaseLayout.sorts(of: view)) {
+            table.cursor == cursor
+        } add: { page in
             let known = Set(table.rows.map(\.id)).union(deletedRowIds)
             table.rows += page.items.filter { !known.contains($0.id) }
             table.cursor = page.meta.nextCursor
             table.hasMore = page.meta.hasNextPage
-            merge(page.references)
-        } catch let error as APIError where error.isStaleBaseCursor {
-            await restartAfterStaleCursor(in: view)
-        } catch {
-            if selectedView == view { toast = error.userMessage }
         }
     }
 
     func loadMore(columnId: String) async {
         guard let base, let view = selectedView, let groupBy = BaseLayout.groupByProperty(base: base, view: view),
-              let index = columns.firstIndex(where: { $0.id == columnId }), columns[index].list.hasMore,
-              let cursor = columns[index].list.cursor, !loadingMore.contains(columnId)
+              let column = columns.first(where: { $0.id == columnId }), column.list.hasMore, let cursor = column.list.cursor
         else { return }
-        loadingMore.insert(columnId)
-        defer { loadingMore.remove(columnId) }
-        let filter = BaseLayout.columnFilter(viewFilter: BaseLayout.filter(of: view), groupBy: groupBy.id, column: columns[index])
-        do {
-            let page = try await fetch(filter: filter, sorts: nil, cursor: cursor)
-            guard selectedView == view, let current = columns.firstIndex(where: { $0.id == columnId }) else { return }
-            let known = Set(columns[current].list.rows.map(\.id)).union(deletedRowIds)
-            columns[current].list.rows = Self.byPosition(columns[current].list.rows + page.items.filter { !known.contains($0.id) })
-            columns[current].list.cursor = page.meta.nextCursor
-            columns[current].list.hasMore = page.meta.hasNextPage
-            merge(page.references)
-        } catch let error as APIError where error.isStaleBaseCursor {
-            await restartAfterStaleCursor(in: view)
-        } catch {
-            if selectedView == view { toast = error.userMessage }
+        let filter = BaseLayout.columnFilter(viewFilter: BaseLayout.filter(of: view), groupBy: groupBy.id, column: column)
+        await loadNextPage(of: Self.listKey(view, columnId: columnId), in: view, from: cursor, filter: filter, sorts: nil) {
+            columns.first { $0.id == columnId }?.list.cursor == cursor
+        } add: { page in
+            guard let index = columns.firstIndex(where: { $0.id == columnId }) else { return }
+            let known = Set(columns[index].list.rows.map(\.id)).union(deletedRowIds)
+            columns[index].list.rows = Self.byPosition(columns[index].list.rows + page.items.filter { !known.contains($0.id) })
+            columns[index].list.cursor = page.meta.nextCursor
+            columns[index].list.hasMore = page.meta.hasNextPage
         }
+    }
+
+    /// The table, or a column of a board, of a view: the lists of different views page apart.
+    private static func listKey(_ view: BaseView, columnId: String? = nil) -> String {
+        columnId.map { "\(view.id)/column/\($0)" } ?? "\(view.id)/table"
+    }
+
+    /// The page after `cursor` of a list, which `add` adds while the view still shows the list ending there
+    /// (`endsAtCursor`): one loaded anew meanwhile asks from its own cursor. A failure leaves "Try Again" at the list's
+    /// end; a stale cursor starts the view again.
+    private func loadNextPage(
+        of list: String, in view: BaseView, from cursor: String, filter: JSONValue?, sorts: JSONValue?,
+        endsAtCursor: () -> Bool, add: (BaseRowsPage) -> Void
+    ) async {
+        let request = "\(list) \(cursor)"
+        guard loadingMore.insert(request).inserted else { return }
+        failedMore.remove(list)
+        var isStale = false
+        do {
+            let page = try await fetch(filter: filter, sorts: sorts, cursor: cursor)
+            if selectedView == view, endsAtCursor() {
+                add(page)
+                merge(page.references)
+            }
+        } catch let error as APIError where error.isStaleBaseCursor {
+            isStale = true
+        } catch is CancellationError {
+        } catch {
+            if selectedView == view, endsAtCursor() {
+                failedMore.insert(list)
+                toast = error.userMessage
+            }
+        }
+        loadingMore.remove(request)
+        // Only once this request is off the list: nothing then holds up the next page of the first page loaded again.
+        if isStale, endsAtCursor() { await restartAfterStaleCursor(in: view) }
     }
 
     /// The row the cursor refers to changed or went since its page loaded (Docmost 0.98): the view loads again from its
