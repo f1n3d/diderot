@@ -3091,7 +3091,7 @@ final class FakeDocumentEngine: DocumentEngine {
     private(set) var opened: [String] = []
     /// "open" and "close" in order.
     private(set) var lifecycle: [String] = []
-    /// Blocks written with `replaceBlock(_:with:base:expected:)` or a batch's replace step, and the bases passed with them.
+    /// Blocks written with `replaceBlock(_:with:base:expected:)`, and the bases passed with them.
     private(set) var saved: [PMNode] = []
     private(set) var bases: [PMNode?] = []
     /// The expected state passed with each replacement (either kind), in order.
@@ -3103,8 +3103,6 @@ final class FakeDocumentEngine: DocumentEngine {
     /// The blocks of each `replaceBlock(_:withNodes:)`.
     private(set) var replacedWith: [[PMNode]] = []
     private(set) var deleted: [BlockTarget] = []
-    /// Children that `splitContainer(after:)` split their container after.
-    private(set) var splitAfter: [BlockTarget] = []
     /// The next save waits until the test resumes `heldSave`, like a slow engine roundtrip.
     var holdsNextSave = false
     private(set) var heldSave: CheckedContinuation<Void, Never>?
@@ -3127,10 +3125,6 @@ final class FakeDocumentEngine: DocumentEngine {
     var collaboratorEdit: (() -> Void)?
     /// What `undo` and `redo` answer.
     var historyResult = EngineResult.applied
-    /// The steps of each `batch`.
-    private(set) var batches: [[EngineStep]] = []
-    /// What the next `batch` answers instead of applying, e.g. refused, as the engine refuses a block that changed.
-    var nextBatchResult: EngineResult?
     /// Targets of `setAttributes`, the attributes it set, and what it answers.
     private(set) var attributeTargets: [BlockTarget] = []
     private(set) var attributeValues: [[String: JSONValue]] = []
@@ -3300,10 +3294,6 @@ final class FakeDocumentEngine: DocumentEngine {
         moved.append((target, destination, position))
         return .applied
     }
-    func splitContainer(after child: BlockTarget) async -> EngineResult {
-        splitAfter.append(child)
-        return .applied
-    }
     func setAttributes(_ target: BlockTarget, attributes: [String: JSONValue]) async -> EngineResult {
         attributeTargets.append(target)
         attributeValues.append(attributes)
@@ -3317,27 +3307,6 @@ final class FakeDocumentEngine: DocumentEngine {
     }
     func undo() async -> EngineResult { historyResult }
     func redo() async -> EngineResult { historyResult }
-    /// Applied, records the steps as their own calls would (`saved`, `inserted`, `deleted`, `splitAfter`) and runs
-    /// `whileInserting`, where a test sets the document the batch leaves.
-    func batch(_ steps: [EngineStep]) async -> EngineResult {
-        batches.append(steps)
-        if let result = nextBatchResult {
-            nextBatchResult = nil
-            return result
-        }
-        for step in steps {
-            switch step {
-            case .replace(_, let node, let base):
-                saved.append(node)
-                bases.append(base)
-            case .insert(let nodes, let target, let position): inserted += nodes.map { ($0, target, position) }
-            case .delete(let target, _): deleted.append(target)
-            case .split(let child): splitAfter.append(child)
-            }
-        }
-        whileInserting?()
-        return .applied
-    }
     /// Return, Backspace and conversions as the model sent them. Where their lines go is the engine's
     /// (Engine/tools/keys-check.ts, conversions-check.ts); here the test says where the cursor goes, and `whileInserting`
     /// sets the document they leave.
