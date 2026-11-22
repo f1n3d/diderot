@@ -8,7 +8,7 @@ import { Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { uniqueIdTypes } from "./extensions";
 import { holds, slotAt } from "./fits";
 import { dissolvedToggle, liftLineEdit, type KeyEdit } from "./keys";
-import { locate, pathOf, type Step, type Target } from "./steps";
+import { items, locate, pathOf, type Step, type Target } from "./steps";
 
 /** What a line can turn into: the app's block types for "/" and the toolbar, and a synced block. */
 export type Kind =
@@ -20,7 +20,6 @@ export const kinds: readonly Kind[] = [
   "quote", "callout", "toggle", "codeBlock", "syncedBlock",
 ];
 
-const items = new Set(["listItem", "taskItem"]);
 /** The blocks that turn into others: lines the app edits as text. */
 const lines = new Set(["paragraph", "heading", "codeBlock"]);
 const lists: Partial<Record<Kind, { list: string; item: string }>> = {

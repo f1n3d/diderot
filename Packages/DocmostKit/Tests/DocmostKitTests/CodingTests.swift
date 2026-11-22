@@ -42,11 +42,13 @@ struct JSONValueTests {
 
 struct DateParsingTests {
     @Test func parsesServerFormats() throws {
-        let withMillis = try #require(JSONDecoding.parseDate("2026-10-08T09:23:11.123Z"))
-        let withoutMillis = try #require(JSONDecoding.parseDate("2026-10-08T09:23:11Z"))
+        let withMillis = try #require(Date(docmostISO: "2026-10-08T09:23:11.123Z"))
+        let withoutMillis = try #require(Date(docmostISO: "2026-10-08T09:23:11Z"))
         #expect(abs(withMillis.timeIntervalSince(withoutMillis) - 0.123) < 0.001)
-        #expect(JSONDecoding.parseDate("2026-10-08T09:23:11.123456") == nil)
-        #expect(JSONDecoding.parseDate("not a date") == nil)
+        #expect(Date(docmostISO: "2026-10-08T11:23:11.123+02:00") == withMillis)
+        #expect(Date(docmostISO: "2026-10-08T09:23:11.123456") == nil)
+        #expect(Date(docmostISO: "2026-10-08") == nil)
+        #expect(Date(docmostISO: "not a date") == nil)
     }
 
     @Test func decoderUsesFallbackChain() throws {

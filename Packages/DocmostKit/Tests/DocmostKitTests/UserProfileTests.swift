@@ -57,7 +57,7 @@ struct UserProfileTests {
         #expect(edited.displayTitle == "Editor-Test")
         #expect(edited.space?.displayName == "Demo")
         #expect(edited.wasEdited)
-        #expect(edited.activityAt == JSONDecoding.parseDate("2026-11-21T01:11:19.958Z"))
+        #expect(edited.activityAt == Date(docmostISO: "2026-11-21T01:11:19.958Z"))
         let created = try #require(pages.items.last)
         #expect(!created.wasEdited)
         #expect(created.displayTitle == PageTitle.untitled)

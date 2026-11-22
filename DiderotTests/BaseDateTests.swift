@@ -29,6 +29,8 @@ struct BaseDateTests {
         let moments = try #require(BaseDateCell(["start": "2026-10-09T07:30:00.000Z", "end": "2026-10-09T09:00:00Z"]))
         #expect(moments.start == .instant(try instant("2026-10-09T07:30:00.000Z")))
         #expect(moments.end == .instant(try instant("2026-10-09T09:00:00.000Z")))
+        let offset = try #require(BaseDateCell(["start": "2026-10-09T09:30:00+02:00"]))
+        #expect(offset.start == .instant(try instant("2026-10-09T07:30:00.000Z")))
     }
 
     /// An end the web wouldn't keep (on the start, before it, a day for a moment) is none; a cell without a date reads as

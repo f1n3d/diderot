@@ -81,8 +81,7 @@ nonisolated extension BaseDateCell.Part {
     init?(_ text: String) {
         if let day = CalendarDay(text) {
             self = .day(day)
-        } else if let date = (try? Date(text, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
-                    ?? (try? Date(text, strategy: .iso8601)) {
+        } else if let date = Date(docmostISO: text) {
             self = .instant(date)
         } else {
             return nil
