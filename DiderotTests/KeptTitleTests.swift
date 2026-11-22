@@ -320,6 +320,27 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// Opening a page sends every kept title, not only its own: titles of pages in several spaces count as one change
+        /// of all, so every space's open view reloads. Each space was announced on its own, and the views, which see only
+        /// the last, left the other spaces' trees and Recent lists with the old titles.
+        @Test func keptTitlesSentOnOpeningAPageReloadEverySpace() async throws {
+            let session = try await sessionOnA()
+            defer { UnsentChanges.removeAll(server: a) }
+            await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: "s1")
+            await session.keepUnsentTitle("Zwei", pageId: "p2", spaceId: "s2")
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Neu"}}"# }
+            defer { StubURLProtocol.body.withLock { $0 = nil } }
+            let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+            let changes = ContentChanges()
+            var reports: [String] = []
+            let sent = await PageTitleEdit().showUnsent(of: page, consented: nil, typing: { false }, isOffline: { false },
+                                                        session: session, changes: changes) { reports.append($0) }
+            #expect(sent && reports.isEmpty)
+            #expect(await session.unsentTitle(pageId: "p2") == nil, "the other space's title went too")
+            #expect(changes.version == 1 && changes.lastChangedSpaceId == nil, "one change for both spaces")
+            await removeCaches()
+        }
+
         static let titleUpdate = "a.example.com/api/pages/update"
 
         /// Holds the next title request, as a network handover does, until the returned continuation finishes; then it
