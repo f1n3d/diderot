@@ -63,7 +63,9 @@ struct MainTabView: View {
         .onChange(of: offline.isOffline) { _, isOffline in
             guard !isOffline else { return }
             Task {
-                await session.reconnectIfNeeded()
+                // As back in the app: an offline start loads fully, and the license and version that a return without
+                // network couldn't get are asked for now.
+                await session.refreshCurrentUser()
                 await sendUnsentChanges()
                 await session.sendPendingLogouts()
             }

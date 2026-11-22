@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import DocmostKit
 @testable import Diderot
@@ -126,6 +127,50 @@ extension AppSessionRaceTests {
             #expect(await afterEdit.value, "the page's send went after it")
             #expect(edit.unsent == nil && reports.isEmpty)
             #expect(await session.unsentTitle(pageId: "p1") == nil)
+            await removeCaches()
+        }
+
+        /// The evening before, on Docmost 0.97, a verified page's title waited for the server (`UnsentEdits`); overnight it
+        /// came back as 0.98, and iOS kept the app in memory. Back in the app, the title goes only once the license and
+        /// version that returning asks for have come, and so waits for "Edit": whether it is sent before the question
+        /// (the main view's task runs first) or while the question's answers wait (`whileAnswersWait`).
+        @Test(arguments: [false, true])
+        func keptTitleWaitsForTheLicenseAndVersionAskedFor(whileAnswersWait: Bool) async throws {
+            let (session, _) = try await licensed(["page:verification"], version: "0.97.0")
+            defer {
+                resetStub()
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+                UnsentChanges.removeAll(server: a)
+            }
+            try #require(session.ready.map(PageLoader.checksVerification) == false)
+            await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: "s1")
+            session.licenseAndVersionInterval = .zero
+            // One answer for the user, license, version, verification and rename alike.
+            StubURLProtocol.body.withLock {
+                $0 = #"{"data": {"user": {"id": "u1", "email": "u1@example.com"}, "workspace": {"id": "w1", "name": "Docs"}, "currentVersion": "0.98.0", "tier": "enterprise", "features": ["page:verification"], "id": "p1", "title": "Neu", "status": "verified"}}"#
+            }
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let sent: Bool
+            if whileAnswersWait {
+                let titles = Mutex<Task<Bool, Never>?>(nil)
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/version" }
+                StubURLProtocol.beforeNextAnswer.withLock {
+                    $0 = {
+                        titles.withLock { $0 = Task { @MainActor in !(await session.sendUnsentTitles().spaces.isEmpty) } }
+                        // The titles' task reads the session before the version answers.
+                        try? await Task.sleep(for: .milliseconds(200))
+                    }
+                }
+                await session.refreshCurrentUser()
+                sent = try await #require(titles.withLock { $0 }).value
+            } else {
+                sent = !(await session.sendUnsentTitles().spaces.isEmpty)
+            }
+            #expect(!sent)
+            #expect(session.ready.map(PageLoader.checksVerification) == true)
+            #expect(await session.unsentTitle(pageId: "p1") == "Neu")
+            #expect(StubURLProtocol.requests.withLock { $0 }.contains("a.example.com/api/pages/verification-info"))
+            #expect(!StubURLProtocol.requests.withLock { $0 }.contains("a.example.com/api/pages/update"))
             await removeCaches()
         }
 

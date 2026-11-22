@@ -104,6 +104,23 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// Flight mode just off, the app comes back before Wi-Fi has joined: neither the license nor the version came, and
+        /// the requests never reached the server (nor GitHub), so the next return asks again rather than 15 minutes on.
+        @Test func unansweredLicenseAndVersionAreAskedAgain() async throws {
+            let session = try await sessionOnA()
+            session.licenseAndVersionInterval = .seconds(1)
+            try await Task.sleep(for: .milliseconds(1200))
+            StubURLProtocol.offline.withLock { $0 = true }
+            await session.refreshCurrentUser()
+            StubURLProtocol.offline.withLock { $0 = false }
+            StubURLProtocol.requests.withLock { $0 = [] }
+            await session.refreshCurrentUser()
+            let requests = StubURLProtocol.requests.withLock { $0 }
+            #expect(requests.contains("a.example.com/api/version"))
+            #expect(requests.contains("a.example.com/api/workspace/entitlements"))
+            await removeCaches()
+        }
+
         /// One answer for users/me, workspace/entitlements and version alike: Docmost `version` with these license features.
         private static func answer(version: String, features: [String]) -> String {
             let quoted = features.map { "\"\($0)\"" }.joined(separator: ", ")
