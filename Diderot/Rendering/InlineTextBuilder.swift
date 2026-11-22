@@ -29,55 +29,95 @@ struct InlineTextBuilder {
         return result
     }
 
+    /// The text `attributedString(for:)` shows, without its fonts, colors and links: what find on page searches, for
+    /// every text block of the page at once.
+    func plainText(for inlines: [Inline]) -> String {
+        var result = ""
+        for inline in inlines { result += text(of: inline) }
+        return result
+    }
+
+    /// The characters of a run, which `attributedString(for:)` styles: the page and find go by the same text.
+    private func text(of inline: Inline) -> String {
+        switch inline {
+        case .text(let text, _):
+            return text
+        case .hardBreak:
+            return "\n"
+        case .mention(let mention):
+            let label = mention.label ?? "…"
+            return mention.entityType == .page ? "📄 \(label)" : "@\(label)"
+        case .mathInline(let latex):
+            return latex
+        case .status(let text, _):
+            return " \(text) "
+        case .integrationMention(let link):
+            return " \(previewTitle(link.url) ?? IntegrationLinks.describe(link.url).title) "
+        case .date(let value):
+            // In the reader's language; one the web can't read says "Date" there too.
+            return " \(CalendarDay(value)?.label() ?? String(localized: "Date")) "
+        case .templateVariable(let name):
+            return " \(name) "
+        case .templatePlaceholder(let hint):
+            return hint
+        case .footnoteReference(let number, _):
+            return "[\(number ?? "?")]"
+        case .marked(let atom, _):
+            return text(of: atom)
+        case .unknown:
+            return ""
+        }
+    }
+
     private func attributedString(for inline: Inline) -> AttributedString {
         switch inline {
         case .text(let text, let style):
             return styled(text, style)
         case .hardBreak:
-            return AttributedString("\n")
+            return AttributedString(text(of: inline))
         case .mention(let mention):
-            return mentionRun(mention)
-        case .mathInline(let latex):
-            var run = AttributedString(latex)
+            return mentionRun(mention, text: text(of: inline))
+        case .mathInline:
+            var run = AttributedString(text(of: inline))
             run.font = monospacedFont
             run.backgroundColor = Color(.tertiarySystemFill)
             return run
-        case .status(let text, let color):
-            var run = AttributedString(" \(text) ")
+        case .status(_, let color):
+            var run = AttributedString(text(of: inline))
             run.font = font.weight(.medium)
             run.backgroundColor = StatusPalette.background(for: color)
             run.foregroundColor = StatusPalette.foreground(for: color)
             return run
         case .integrationMention(let link):
             // Tinted like a status, without the service's logo (no third-party images).
-            var run = AttributedString(" \(previewTitle(link.url) ?? IntegrationLinks.describe(link.url).title) ")
+            var run = AttributedString(text(of: inline))
             run.font = font.weight(.medium)
             run.foregroundColor = .accentColor
             run.backgroundColor = Color.accentColor.opacity(0.12)
             if let url = ContentLinkRouter.contentURL(link.url) { run.link = url }
             return run
-        case .date(let value):
-            // A chip as on the web, in the reader's language; one the web can't read says "Date" there too.
-            var run = AttributedString(" \(CalendarDay(value)?.label() ?? String(localized: "Date")) ")
+        case .date:
+            // A chip as on the web.
+            var run = AttributedString(text(of: inline))
             run.font = font.weight(.medium)
             run.backgroundColor = StatusPalette.background(for: "gray")
             run.foregroundColor = StatusPalette.foreground(for: "gray")
             return run
-        case .templateVariable(let name):
+        case .templateVariable:
             // A template's field, as the web's template preview shows it: a tinted chip with its name.
-            var run = AttributedString(" \(name) ")
+            var run = AttributedString(text(of: inline))
             run.font = font.weight(.medium)
             run.foregroundColor = .accentColor
             run.backgroundColor = Color.accentColor.opacity(0.12)
             return run
-        case .templatePlaceholder(let hint):
+        case .templatePlaceholder:
             // The web shows the hint dimmed where one would type.
-            var run = AttributedString(hint)
+            var run = AttributedString(text(of: inline))
             run.font = font
             run.foregroundColor = Color(.placeholderText)
             return run
-        case .footnoteReference(let number, let dataId):
-            var run = AttributedString("[\(number ?? "?")]")
+        case .footnoteReference(_, let dataId):
+            var run = AttributedString(text(of: inline))
             run.font = .caption2
             run.baselineOffset = 6
             if let dataId {
@@ -138,11 +178,10 @@ struct InlineTextBuilder {
         }
     }
 
-    private func mentionRun(_ mention: Mention) -> AttributedString {
-        let label = mention.label ?? "…"
+    private func mentionRun(_ mention: Mention, text: String) -> AttributedString {
+        var run = AttributedString(text)
         switch mention.entityType {
         case .page:
-            var run = AttributedString("📄 \(label)")
             run.font = font.weight(.medium)
             run.foregroundColor = .accentColor
             if let slugId = mention.slugId ?? mention.entityId {
@@ -150,7 +189,6 @@ struct InlineTextBuilder {
             }
             return run
         case .user, .none:
-            var run = AttributedString("@\(label)")
             run.font = font.weight(.medium)
             run.foregroundColor = .accentColor
             run.backgroundColor = Color.accentColor.opacity(0.12)

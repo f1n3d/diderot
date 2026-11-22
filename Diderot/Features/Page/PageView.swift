@@ -439,6 +439,7 @@ struct PageView: View {
         }
         // No tab bar on iPhone pages: more room, and its Search tab (for pages) isn't needed here.
         .toolbar(UIDevice.current.userInterfaceIdiom == .phone ? .hidden : .automatic, for: .tabBar)
+        // At each key, on the main thread: the blocks highlight the query as typed, and the bar counts the same (BACKLOG).
         .onChange(of: find.query) { _, _ in updateFind(restart: true) }
         .onChange(of: find.matchCase) { _, _ in updateFind(restart: true) }
         .onChange(of: model?.document) { _, _ in
@@ -598,8 +599,7 @@ struct PageView: View {
     private func updateFind(restart: Bool) {
         guard let model else { return }
         // The titles the page's text blocks show (`TextNodeView`), so find searches what they highlight.
-        let previews = session.linkPreviews
-        find.update(document: model.document, baseURL: session.server?.url, previewTitle: { previews?.preview(for: $0)?.title },
+        find.update(document: model.document, baseURL: session.server?.url, previewTitles: session.linkPreviews?.titles ?? [:],
                     restart: restart)
     }
 
