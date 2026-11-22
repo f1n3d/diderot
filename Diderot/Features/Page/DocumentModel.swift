@@ -1806,20 +1806,14 @@ final class DocumentModel {
                 session.dropActive()
                 slashQuery = nil
                 showsPlusMenu = false
-            } else if focus == nil {
-                // The editor stays, unless the new blocks move its block where it can't be followed (`start` is where they
-                // go; without an anchor, at the end before the footnotes). Its save goes by path then, so it is written
-                // before they go in, while the path still names it: one started by `deactivate` would arrive after them.
+            } else {
+                // Where the new blocks go; without an anchor, at the end before the footnotes.
                 let start = anchor.map { replace || before ? $0.path : Self.sibling(of: $0.path, offset: 1) } ?? [contentBlocks.count]
-                if !staysEditable(active, insertingAt: start) {
-                    await flush()
-                    // Not a block tapped while the save went.
-                    if self.active?.ref.identity == active.ref.identity { deactivate() }
-                }
-            } else if focusTarget == nil {
-                deactivate()
+                await endEditingOfMovedBlock(insertingAt: start)
+                // Otherwise the editor stays without `focus`; with one, until the new block takes focus (the keyboard
+                // stays up), unless the cursor has nowhere to go.
+                if focus != nil, focusTarget == nil { deactivate() }
             }
-            // Otherwise it stays active until the new block takes focus (the keyboard stays up).
         }
         let position: BlockPlace.Position = replace ? .replace : before && anchor != nil ? .before : .after
         let (applied, placed) = await engine.placeBlocks(blocks, at: anchor?.target, position: position, expected: replacedBlock, inside: inside)
@@ -1834,6 +1828,20 @@ final class DocumentModel {
         var path = path
         path[path.count - 1] += offset
         return path
+    }
+
+    /// Ends the editing of a block that blocks going in at `path` move where it can't be followed (`staysEditable`).
+    /// Its save goes by path then, so it is written before they go in, while the path still names it: one started by
+    /// `deactivate` would arrive after them. Inserts are held through an upload or the server's creation of a database
+    /// while the user writes anywhere on the page, and a block tapped while the save went is checked the same way.
+    private func endEditingOfMovedBlock(insertingAt path: [Int]) async {
+        while let active, !staysEditable(active, insertingAt: path) {
+            await flush()
+            if self.active?.ref.identity == active.ref.identity {
+                deactivate()
+                return
+            }
+        }
     }
 
     /// Whether the block being edited can stay so while blocks go in at `path`: it lies before them, or it has an id no

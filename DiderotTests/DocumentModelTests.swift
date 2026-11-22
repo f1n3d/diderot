@@ -881,6 +881,41 @@ struct DocumentModelTests {
         #expect(savedBeforeImage == ["let x = 12"])
     }
 
+    /// A code block tapped while that save went, also below the upload's place, ends editing the same way, with what
+    /// was typed there saved first. It stayed open: its path named the code block above it once the image went in, and
+    /// its input went into that one.
+    @Test(.timeLimit(.minutes(1))) func uploadEndsTheEditingOfCodeTappedWhileItSaved() async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Oben")])
+        let first = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let x = 1")])
+        let second = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let y = 1")])
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line, first, second]))
+        let model = try Self.model(engine)
+        model.requestMedia(.images, placement: .afterTopLevel(NodeRef(path: [0], node: line)))
+        let target = model.takeMediaTarget()
+        model.activate(NodeRef(path: [1], node: first), node: first)
+        model.activeCode += "2"
+        model.activeCodeChanged()
+        let image = Attachment(id: "i", fileName: "i.png", mimeType: "image/png")
+        var savedBeforeImage: [String]?
+        engine.whileInserting = {
+            guard !engine.inserted.isEmpty, savedBeforeImage == nil else { return }
+            savedBeforeImage = engine.saved.map(\.plainText)
+            engine.sendDocument(PMNode(type: "doc", content: [line, image.contentNode(asAttachment: false), first, second]))
+        }
+        engine.holdsNextSave = true
+
+        let upload = Task { await model.insertUploads([image], to: target) }
+        while engine.heldSave == nil { try await Task.sleep(for: .milliseconds(10)) }
+        model.activate(NodeRef(path: [2], node: second), node: second)
+        model.activeCode += "2"
+        model.activeCodeChanged()
+        engine.heldSave?.resume()
+        await upload.value
+
+        #expect(model.active == nil)
+        #expect(savedBeforeImage?.last == "let y = 12")
+    }
+
     /// A math block or embed from its sheet goes in only after the sheet has closed (switching editors while it slides
     /// away can leave a UIKit animation running), and only once: a later cancelled sheet adds nothing.
     @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func sheetBlockWaitsForDismissal(embed: Bool) async throws {
@@ -1342,6 +1377,42 @@ struct DocumentModelTests {
         while model.notice == nil && created == 0 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(created == 0 && model.notice == String(localized: "This can't be placed there."))
         #expect(engine.inserted.isEmpty && engine.replacedWith.isEmpty)
+    }
+
+    /// A database the server creates while the user writes in a code block below its place ends that block's editing
+    /// when it goes in, with what was typed saved first; the cursor then goes to the line after the database, if there
+    /// is one. Saved after the database went in, by a path that named the database by then, the input was refused; left
+    /// open until the cursor moved, the code block lost it.
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true]) func databaseCreatedWhileWritingCodeBelowSavesItFirst(lineAfter: Bool) async throws {
+        let line = PMNode(type: "paragraph", attrs: ["id": "a"], content: [PMNode(type: "text", text: "Notizen")])
+        let after = PMNode(type: "paragraph", attrs: ["id": "b"], content: [PMNode(type: "text", text: "Weiter")])
+        let code = PMNode(type: "codeBlock", content: [PMNode(type: "text", text: "let x = 1")])
+        let below = lineAfter ? [after, code] : [code]
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line] + below))
+        let model = try Self.model(engine)
+        var answer: CheckedContinuation<String, Never>?
+        model.dependencies.canCreateBases = true
+        model.dependencies.createBase = { _ in await withCheckedContinuation { answer = $0 } }
+        var savedBeforeBase: [String]?
+        engine.whileInserting = {
+            guard !engine.inserted.isEmpty, savedBeforeBase == nil else { return }
+            savedBeforeBase = engine.saved.map(\.plainText)
+            engine.document = PMNode(type: "doc", content: [line, PMNode(type: "base", attrs: ["pageId": "base"])] + below)
+        }
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        model.perform(.base)
+        while answer == nil { try await Task.sleep(for: .milliseconds(10)) }
+        // While the server creates it, the user taps the code block and types.
+        model.activate(NodeRef(path: [below.count], node: code), node: code)
+        model.activeCode += "2"
+        model.activeCodeChanged()
+
+        answer?.resume(returning: "base")
+        while model.isCreatingBase { try await Task.sleep(for: .milliseconds(10)) }
+
+        #expect(engine.inserted.map(\.node.type) == ["base"])
+        #expect(savedBeforeBase == ["let x = 12"])
+        #expect(model.active?.ref.id == (lineAfter ? "b" : nil))
     }
 
     /// A user mention shows as "@label": with the cursor right after it (its space deleted) the mention list stays
