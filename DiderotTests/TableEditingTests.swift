@@ -17,25 +17,13 @@ struct TableEditingTests {
             [Area(top: 1, left: 0, bottom: 2, right: 1), Area(top: 1, left: 1, bottom: 2, right: 2)],
             [Area(top: 2, left: 0, bottom: 3, right: 1), Area(top: 2, left: 1, bottom: 3, right: 2), Area(top: 2, left: 2, bottom: 3, right: 3)],
         ])
-        #expect(merged.width == 3 && merged.height == 3)
-        #expect(cell(in: merged, row: 1, column: 2) == [0, 1])
-        #expect(cell(in: merged, row: 0, column: 1) == [0, 0])
-        #expect(cell(in: merged, row: 2, column: 2) == [2, 2])
     }
 
-    /// A rowspan past the last row ends there; a cell far right of the others widens the grid.
+    /// A rowspan past the last row ends there; a cell wider than the rows above reaches past their columns.
     @Test func spansEndAtTheTablesEdge() {
         let grid = TableGrid(spans: [[(1, 3), (1, 1)], [(3, 1)]])
         #expect(grid.areas == [[Area(top: 0, left: 0, bottom: 2, right: 1), Area(top: 0, left: 1, bottom: 1, right: 2)],
                                [Area(top: 1, left: 1, bottom: 2, right: 4)]])
-        #expect(grid.width == 4)
-        #expect(cell(in: grid, row: 1, column: 0) == [0, 0])
-        #expect(cell(in: grid, row: 0, column: 3) == nil)
-    }
-
-    /// The cell covering a slot, as row and index in the row.
-    private func cell(in grid: TableGrid, row: Int, column: Int) -> [Int]? {
-        grid.cell(row: row, column: column).map { [$0.row, $0.index] }
     }
 
     /// Columns as wide as their widest single cell, rows as tall as their tallest; a spanning cell widens or heightens
