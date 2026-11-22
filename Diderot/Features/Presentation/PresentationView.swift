@@ -28,7 +28,9 @@ struct PresentationView: View {
     @State private var index = 0
     @State private var scrollRequest: SlideScrollRequest?
     @State private var showsLaserPointer = false
-    @State private var pointer: CGPoint?
+    /// Where the pointer is, read only by `LaserDot`: read in the body, each move of the pointer ran the body again,
+    /// and with it every heading of the page, the hidden ones that measure the slides included.
+    @State private var laser = LaserPointerPosition()
     @FocusState private var focused: Bool
     /// Subpages and databases on a slide open on the page's stack, once the presentation has closed.
     @State private var slideNavigation = ReaderNavigation()
@@ -114,16 +116,16 @@ struct PresentationView: View {
         .background(Color(.systemBackground))
         .overlay {
             if UIDevice.current.userInterfaceIdiom == .pad {
-                LaserPointerLayer(isOn: showsLaserPointer) { pointer = $0 }
+                LaserPointerLayer(isOn: showsLaserPointer) { laser.point = $0 }
                     .accessibilityHidden(true)
             }
         }
-        .overlay { laserPointer }
+        .overlay { LaserDot(position: laser, isOn: showsLaserPointer) }
         // Also below the layer: should UIKit not hand the pointer's hovering to it, the dot still follows.
         .onContinuousHover { phase in
             switch phase {
-            case .active(let location): pointer = location
-            case .ended: pointer = nil
+            case .active(let location): laser.point = location
+            case .ended: laser.point = nil
             }
         }
         .statusBarHidden()
@@ -277,15 +279,27 @@ struct PresentationView: View {
         .padding(.top, 8)
         .padding(.bottom, 12)
     }
+}
 
-    @ViewBuilder
-    private var laserPointer: some View {
-        if showsLaserPointer, let pointer {
+/// Where the pointer is over the presentation, for the laser pointer's dot.
+@Observable
+final class LaserPointerPosition {
+    var point: CGPoint?
+}
+
+/// The laser pointer's dot, at the pointer while the laser pointer is on. Only this view reads the position, so a move
+/// of the pointer draws the dot again and nothing else.
+struct LaserDot: View {
+    let position: LaserPointerPosition
+    let isOn: Bool
+
+    var body: some View {
+        if isOn, let point = position.point {
             Circle()
                 .fill(Color.blue.opacity(0.65))
                 .frame(width: 14, height: 14)
                 .shadow(color: .blue.opacity(0.5), radius: 8)
-                .position(pointer)
+                .position(point)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
