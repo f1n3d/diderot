@@ -428,6 +428,10 @@ struct PageView: View {
                 PageFindBar(find: find)
                     .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { find.barMoved(to: $0) }
                     .onDisappear { find.barMoved(to: nil) }
+                    // A preview that arrives gives a mention the service's title, on the page and so in the matches.
+                    // Read only while the bar shows: previews arrive as blocks scroll in, and with find closed the
+                    // page's body needn't run again for each.
+                    .onChange(of: session.linkPreviews?.states) { _, _ in updateFind(restart: false) }
             }
         }
         // No tab bar on iPhone pages: more room, and its Search tab (for pages) isn't needed here.
@@ -590,7 +594,10 @@ struct PageView: View {
 
     private func updateFind(restart: Bool) {
         guard let model else { return }
-        find.update(document: model.document, baseURL: session.server?.url, restart: restart)
+        // The titles the page's text blocks show (`TextNodeView`), so find searches what they highlight.
+        let previews = session.linkPreviews
+        find.update(document: model.document, baseURL: session.server?.url, previewTitle: { previews?.preview(for: $0)?.title },
+                    restart: restart)
     }
 
     private func header(_ page: Page) -> some View {
