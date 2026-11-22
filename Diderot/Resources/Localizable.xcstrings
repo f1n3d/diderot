@@ -5621,6 +5621,16 @@
         }
       }
     },
+    "Saved Servers": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gespeicherte Server"
+          }
+        }
+      }
+    },
     "Saving": {
       "localizations": {
         "de": {
