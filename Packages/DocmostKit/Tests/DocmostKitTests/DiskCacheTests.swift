@@ -8,6 +8,13 @@ struct DiskCacheTests {
         return DiskCache(scope: "https://wiki.example.com", baseDirectory: base)
     }
 
+    /// A file as a download leaves it, for the cache to take.
+    private func download(_ data: Data) throws -> URL {
+        let file = FileManager.default.temporaryDirectory.appending(path: "download-\(UUID().uuidString).tmp")
+        try data.write(to: file)
+        return file
+    }
+
     @Test func roundTripsCodableValues() async throws {
         let cache = makeCache()
         let page = try TestSupport.decodeFixture(Page.self, "page-info")
@@ -17,13 +24,15 @@ struct DiskCacheTests {
         await cache.removeAll()
     }
 
-    @Test func storesRawData() async {
+    @Test func storesRawData() async throws {
         let cache = makeCache()
+        let key = "https://wiki.example.com/api/files/a/b.png@512"
         let data = Data([1, 2, 3, 4])
-        await cache.writeData(data, key: "https://wiki.example.com/api/files/a/b.png@512")
-        #expect(await cache.readData(key: "https://wiki.example.com/api/files/a/b.png@512") == data)
-        await cache.remove(key: "https://wiki.example.com/api/files/a/b.png@512")
-        #expect(await cache.readData(key: "https://wiki.example.com/api/files/a/b.png@512") == nil)
+        try await cache.storeFile(at: download(data), key: key)
+        let file = try #require(await cache.dataFile(key: key))
+        #expect(try Data(contentsOf: file) == data)
+        await cache.remove(key: key)
+        #expect(await cache.dataFile(key: key) == nil)
         await cache.removeAll()
     }
 
@@ -39,64 +48,31 @@ struct DiskCacheTests {
         #expect(DiskCache.safeName("https://wiki.example.com") == "https___wiki_example_com-7dc434cdcfb05899")
     }
 
-    /// For changes the server hasn't confirmed (the app's unsent titles): updates all count, also concurrent ones, and a
-    /// file that can't be read throws instead of looking empty, so an update doesn't replace it.
-    @Test func updatesInOneStepAndKeepsUnreadableFiles() async throws {
-        let base = FileManager.default.temporaryDirectory.appending(path: "docmost-cache-tests-\(UUID().uuidString)")
-        // Readable after the first unlock, as the app's store for unsent changes (the other class fails on some Macs).
-        let cache = DiskCache(scope: "https://wiki.example.com", baseDirectory: base, protection: .afterFirstUnlock)
-        defer { try? FileManager.default.removeItem(at: base) }
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for index in 0..<50 {
-                group.addTask { try await cache.update([String: Int].self, key: "counts", initial: [:]) { $0["\(index)"] = index } }
-            }
-            try await group.waitForAll()
-        }
-        #expect(try await cache.readThrowing([String: Int].self, key: "counts")?.count == 50)
-        #expect(try await cache.readThrowing([String: Int].self, key: "missing") == nil)
-
-        // A format change or a damaged file.
-        await cache.write("not a dictionary", key: "counts")
-        await #expect(throws: (any Error).self) { try await cache.readThrowing([String: Int].self, key: "counts") }
-        await #expect(throws: (any Error).self) {
-            try await cache.update([String: Int].self, key: "counts", initial: [:]) { $0["new"] = 1 }
-        }
-        #expect(await cache.read(String.self, key: "counts") == "not a dictionary", "left as it was")
-    }
-
-    /// A download becomes the entry by moving in, without passing through memory, and reads as a file or as data.
+    /// A download becomes the entry by moving in, without passing through memory, and reads as a file.
     @Test func takesAFileAsTheEntry() async throws {
         let cache = makeCache()
         defer { try? FileManager.default.removeItem(at: cache.directory.deletingLastPathComponent().deletingLastPathComponent()) }
-        func download(_ text: String) throws -> URL {
-            let file = FileManager.default.temporaryDirectory.appending(path: "download-\(UUID().uuidString).tmp")
-            try Data(text.utf8).write(to: file)
-            return file
-        }
         #expect(await cache.dataFile(key: "image/a") == nil)
 
-        let first = try download("first")
+        let first = try download(Data("first".utf8))
         let stored = try await cache.storeFile(at: first, key: "image/a")
         #expect(!FileManager.default.fileExists(atPath: first.path(percentEncoded: false)), "moved, not copied")
         #expect(await cache.dataFile(key: "image/a") == stored)
         #expect(try Data(contentsOf: stored) == Data("first".utf8))
-        #expect(await cache.readData(key: "image/a") == Data("first".utf8))
 
-        // A newer download replaces it in the same place; data written the old way is replaced as well.
-        #expect(try await cache.storeFile(at: download("second"), key: "image/a") == stored)
-        #expect(await cache.readData(key: "image/a") == Data("second".utf8))
-        await cache.writeData(Data("third".utf8), key: "image/a")
-        #expect(try Data(contentsOf: stored) == Data("third".utf8))
-        #expect(await cache.totalSize() == 5)
+        // A newer download replaces it in the same place.
+        #expect(try await cache.storeFile(at: download(Data("second".utf8)), key: "image/a") == stored)
+        #expect(try Data(contentsOf: stored) == Data("second".utf8))
+        #expect(await cache.totalSize() == 6)
 
         await cache.remove(key: "image/a")
         #expect(await cache.dataFile(key: "image/a") == nil)
     }
 
-    @Test func pruneRemovesOldAndOversizedEntries() async {
+    @Test func pruneRemovesOldAndOversizedEntries() async throws {
         let cache = makeCache()
-        await cache.writeData(Data(repeating: 1, count: 1000), key: "big")
-        await cache.writeData(Data(repeating: 2, count: 10), key: "small")
+        try await cache.storeFile(at: download(Data(repeating: 1, count: 1000)), key: "big")
+        try await cache.storeFile(at: download(Data(repeating: 2, count: 10)), key: "small")
         #expect(await cache.totalSize() == 1010)
         await cache.prune(maxAge: 3600, maxBytes: 500)
         #expect(await cache.totalSize() <= 500)

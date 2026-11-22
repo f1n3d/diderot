@@ -19,7 +19,7 @@ struct FileProtectionTests {
     @Test func cacheAndDownloadsOnlyWhileUnlocked() async throws {
         let cache = DiskCache(scope: "protection", baseDirectory: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
         defer { try? FileManager.default.removeItem(at: cache.directory) }
-        await cache.writeData(Data("x".utf8), key: "page")
+        await cache.write("x", key: "page")
         #expect(try protection(of: onlyFile(in: cache.directory)) == .complete)
         // A download the cache takes as a file gets the same, whatever it was written with.
         let downloaded = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

@@ -1,43 +1,17 @@
 import Foundation
 
 /// Per-server key → data file cache for offline reading. No database on purpose: every access is by key (space list,
-/// page tree level, page, image).
+/// page tree level, page, image). Its files can be read only while the device is unlocked, so a locked device doesn't
+/// give away its pages.
 public actor DiskCache {
-    /// When its files can be read (iOS data protection).
-    public enum Protection: Sendable {
-        /// Only while the device is unlocked: the offline cache, so a locked device doesn't give away its pages.
-        case whileUnlocked
-        /// From the first unlock after a restart on: what the app must still write when it goes to the background
-        /// and the device locks, such as unsent changes.
-        case afterFirstUnlock
-
-        /// For a file as it is written.
-        var writingOption: Data.WritingOptions {
-            switch self {
-            case .whileUnlocked: .completeFileProtection
-            case .afterFirstUnlock: .completeFileProtectionUntilFirstUserAuthentication
-            }
-        }
-
-        /// The same for a file that is there already.
-        var fileProtection: FileProtectionType {
-            switch self {
-            case .whileUnlocked: .complete
-            case .afterFirstUnlock: .completeUntilFirstUserAuthentication
-            }
-        }
-    }
-
     public nonisolated let directory: URL
-    private let protection: Protection
     private let decoder = JSONDecoding.makeDecoder()
     private let encoder = JSONDecoding.makeEncoder()
 
     /// - Parameter scope: e.g. a hash of the server URL, keeping servers apart.
-    public init(scope: String, baseDirectory: URL? = nil, protection: Protection = .whileUnlocked) {
+    public init(scope: String, baseDirectory: URL? = nil) {
         let base = baseDirectory ?? URL.cachesDirectory
         directory = base.appending(path: "docmost-cache/\(Self.safeName(scope))")
-        self.protection = protection
     }
 
     // MARK: - Codable values
@@ -52,35 +26,7 @@ public actor DiskCache {
         try? store(data, at: fileURL(for: key, kind: "json"))
     }
 
-    /// The value, nil without one. Unlike `read` it throws for a file it can't read or decode, for data that must not be
-    /// lost: with `nil` for both, the next write would replace what couldn't be read.
-    public func readThrowing<Value: Decodable & Sendable>(_ type: Value.Type, key: String) throws -> Value? {
-        let url = fileURL(for: key, kind: "json")
-        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return nil }
-        return try decoder.decode(Value.self, from: Data(contentsOf: url))
-    }
-
-    /// Changes the value (`initial` if there is none) in one step: nothing else reaches this cache between the read and
-    /// the write. Throws, changing nothing, if the stored value can't be read or the new one can't be written.
-    @discardableResult
-    public func update<Value: Codable & Sendable, Result: Sendable>(
-        _ type: Value.Type, key: String, initial: Value, _ change: @Sendable (inout Value) throws -> Result
-    ) throws -> Result {
-        var value = try readThrowing(type, key: key) ?? initial
-        let result = try change(&value)
-        try store(encoder.encode(value), at: fileURL(for: key, kind: "json"))
-        return result
-    }
-
     // MARK: - Raw data (images, files)
-
-    public func readData(key: String) -> Data? {
-        try? Data(contentsOf: fileURL(for: key, kind: "bin"))
-    }
-
-    public func writeData(_ data: Data, key: String) {
-        try? store(data, at: fileURL(for: key, kind: "bin"))
-    }
 
     /// The raw entry as a file, nil without one: to read it in place (an image source, a PDF) instead of into memory.
     /// The file can go at any time (`prune`, `remove`), as for every reader of a cache.
@@ -109,7 +55,7 @@ public actor DiskCache {
     /// package's tests, the simulator's files) has nothing to set, and some refuse the attempt (GitHub's runners:
     /// "Invalid argument").
     private func protect(_ file: URL) throws {
-        let attributes: [FileAttributeKey: Any] = [.protectionKey: protection.fileProtection]
+        let attributes: [FileAttributeKey: Any] = [.protectionKey: FileProtectionType.complete]
         #if os(macOS) || targetEnvironment(simulator)
         try? FileManager.default.setAttributes(attributes, ofItemAtPath: file.path(percentEncoded: false))
         #else
@@ -158,7 +104,7 @@ public actor DiskCache {
 
     private func store(_ data: Data, at url: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try data.write(to: url, options: [.atomic, protection.writingOption])
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
     }
 
     private func fileURL(for key: String, kind: String) -> URL {

@@ -3,7 +3,7 @@ import Testing
 @testable import DocmostKit
 
 /// What the server hasn't confirmed yet (`UnsentStore`): its names stay as they were, it reads what the offline cache
-/// kept there before, and it says when it can't read or write.
+/// kept there before, every update counts, and it says when it can't read or write.
 struct UnsentStoreTests {
     private func directory() -> URL {
         FileManager.default.temporaryDirectory.appending(path: "unsent-store-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -20,14 +20,16 @@ struct UnsentStoreTests {
             == "https___documentation-platform_engineering_examp-ac0a4ae7e1e0a60e")
     }
 
-    /// What the offline cache kept there in earlier versions, this store finds.
+    /// What the offline cache kept there in earlier versions, this store finds: the files as the cache wrote them.
     @Test func readsWhatTheCacheKept() async throws {
         let base = directory()
         defer { try? FileManager.default.removeItem(at: base) }
-        let cache = DiskCache(scope: "u1", baseDirectory: base, protection: .afterFirstUnlock)
-        await cache.write(["p1": "Titel"], key: "unsentTitles")
-        await cache.writeData(Data([1, 2, 3]), key: "unsent/p1")
-        let store = UnsentStore(directory: cache.directory)
+        // The cache's names (`DiskCache.safeName`) for the user "u1" and the keys "unsentTitles" and "unsent/p1".
+        let kept = base.appending(path: "docmost-cache/u1-8c47b07b56747f3", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: kept, withIntermediateDirectories: true)
+        try Data(#"{"p1":"Titel"}"#.utf8).write(to: kept.appending(path: "unsentTitles-f5b98a95e5d78dc7.json"))
+        try Data([1, 2, 3]).write(to: kept.appending(path: "unsent_p1-5069100dfe6d3b3a.bin"))
+        let store = UnsentStore(directory: kept)
         #expect(try await store.read([String: String].self, key: "unsentTitles") == ["p1": "Titel"])
         #expect(try await store.readData(key: "unsent/p1") == Data([1, 2, 3]))
         #expect(try await store.read([String: String].self, key: "nothing") == nil)
@@ -44,6 +46,20 @@ struct UnsentStoreTests {
         #expect(try await store.read(PMNode.self, key: "unsentDocument/p1") == PMNode(type: "doc", content: [paragraph]))
         try await store.remove(key: "unsentDocument/p1")
         #expect(try await store.read(PMNode.self, key: "unsentDocument/p1") == nil)
+    }
+
+    /// Concurrent updates all count: none starts from a value another one is about to replace.
+    @Test func updatesAllCount() async throws {
+        let base = directory()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = UnsentStore(directory: base)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for index in 0..<50 {
+                group.addTask { try await store.update([String: Int].self, key: "counts", initial: [:]) { $0["\(index)"] = index } }
+            }
+            try await group.waitForAll()
+        }
+        #expect(try await store.read([String: Int].self, key: "counts")?.count == 50)
     }
 
     /// A value it can't read throws, also for `update`, which then leaves it as it was; one it can't write throws.
