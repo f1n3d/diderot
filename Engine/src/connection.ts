@@ -40,12 +40,21 @@ export function connection(
       options.onAuthenticated?.(data);
       hold?.authenticated(provider);
     },
+    onMessage: (data) => {
+      hold?.received(new Uint8Array(data.event.data as ArrayBuffer));
+      options.onMessage?.(data);
+    },
     onDisconnect: (data) => {
       provider.onClose();
       options.onDisconnect?.(data);
     },
   });
   if (hold) {
+    // Every change but the server's, which the provider applies as their origin. In place before the engine applies the
+    // changes the server hadn't confirmed when the page last closed, so those count too.
+    provider.document.on("update", (_update: Uint8Array, origin: unknown) => {
+      if (origin !== provider) hold.changedLocally();
+    });
     const send = websocket.send.bind(websocket);
     websocket.send = (message: Uint8Array) => {
       const passed = hold.pass(message, websocket.webSocket?.readyState === 1, provider);
@@ -67,7 +76,9 @@ const syncUpdate = 2;
  * `usePageSyncPermission`). Meanwhile the connection syncs as a reader's would: the server's document and others'
  * changes come in, the page's own stay in its shared document, and the sync after `release` sends them all. Changes made
  * while the connection is down wait for the next connect the same way: queued, they would go out with it, before the app
- * could ask.
+ * could ask. A connect without such changes holds nothing back: the page's answer to the server's sync is empty then,
+ * and nothing counts as withheld. Its release still sends the full answer once, for changes the server confirmed and
+ * then lost.
  */
 export class ChangeHold {
   /** Connects so far: each one holds until `release` names it. */
@@ -75,6 +86,29 @@ export class ChangeHold {
   private released = 0;
   private kept = false;
   private resyncing = false;
+  /**
+   * The page has changes of its own the server may lack. Set by each; cleared once, on a connection whose answer to the
+   * server's sync left it lacking none (`answered`), the server confirmed all that went out and nothing stayed back.
+   */
+  private ownChanges = false;
+  /**
+   * Changes that went out on this connection and that the server hasn't confirmed. Not the provider's count: a sync it
+   * starts sets that to 1, and a confirmation of what went out before then takes it to 0 while the sync's answer is on
+   * its way.
+   */
+  private awaiting = 0;
+  /**
+   * The answer to the server's sync on this connection left the server lacking none of the page's changes: the answer
+   * carried them, or the server had them all. Before it, a change released early goes on its own, and its confirmation
+   * says nothing of the changes the answer carries.
+   */
+  private answered = false;
+  /**
+   * The page answered the server's sync on this connection with an empty update while the connect held. The release
+   * still sends the full answer once: the server confirms a change once it has it in memory and stores the page later,
+   * so after a crash it may lack changes it confirmed, and only that answer, made from its state, gives them back.
+   */
+  private answeredEmpty = false;
 
   /** `changed` runs when `withheld` changes. */
   constructor(private readonly changed: () => void) {}
@@ -93,6 +127,10 @@ export class ChangeHold {
   connected() {
     this.connects++;
     this.resyncing = false;
+    // Confirmations come on the connection a change went out on.
+    this.awaiting = 0;
+    this.answered = false;
+    this.answeredEmpty = false;
   }
 
   /** The page's changes may go out on connect `connect`, the current one; a later connect holds again. */
@@ -107,6 +145,18 @@ export class ChangeHold {
     this.resync(provider);
   }
 
+  /** The page's document changed, not by the server's sync. */
+  changedLocally() {
+    this.ownChanges = true;
+  }
+
+  /** The server sent `message`; a confirmation of a change it applied counts one off. */
+  received(message: Uint8Array) {
+    if (!confirms(message)) return;
+    if (this.awaiting > 0) this.awaiting--;
+    if (this.answered && this.awaiting === 0 && !this.kept) this.ownChanges = false;
+  }
+
   /**
    * What goes out for `message` on a socket that is `open` or not: the message itself, an empty answer to the server's
    * sync, or nothing (null).
@@ -116,22 +166,37 @@ export class ChangeHold {
     if (!sync || (sync.step !== syncStep2 && sync.step !== syncUpdate)) return message;
     if (open && !this.holds) {
       if (this.kept && sync.step === syncUpdate) {
-        // It may build on a change that stayed back: the sync sends them all, this one with them.
-        this.resync(provider);
+        // It may build on a change that stayed back: the sync sends them all, this one with them. The provider counted
+        // this one as on its way, and the server confirms the sync once for all it carries. A sync that starts here, or
+        // once the server took the token, sets the count to 1 anew; with one already on its way, the count goes back.
+        if (this.resyncing) provider.decrementUnsyncedChanges();
+        else this.resync(provider);
         return null;
       }
       this.resyncing = false;
       this.keep(false);
+      if (sync.step === syncStep2) {
+        this.answered = true;
+        this.answeredEmpty = false;
+      }
+      this.awaiting++;
       return message;
     }
     this.resyncing = false;
-    this.keep(true);
-    // An empty answer completes the server's sync: the connection then syncs as a reader's.
-    return open && sync.step === syncStep2 ? emptyAnswer(message.subarray(0, sync.nameEnd)) : null;
+    // An update is a change of the page's own; the answer to the server's sync holds one back only if the page has any.
+    if (sync.step === syncUpdate || this.ownChanges) this.keep(true);
+    if (!open || sync.step !== syncStep2) return null;
+    // An empty answer completes the server's sync: the connection then syncs as a reader's. Without changes of the
+    // page's own that the server hasn't confirmed, the full answer would carry nothing more either, unless the server
+    // lost some it confirmed: the release sends it all the same.
+    if (!this.ownChanges) this.answered = true;
+    this.answeredEmpty = true;
+    this.awaiting++;
+    return emptyAnswer(message.subarray(0, sync.nameEnd));
   }
 
   private resync(provider: HocuspocusProvider) {
-    if (this.holds || !this.kept || this.resyncing || !provider.isAuthenticated) return;
+    if (this.holds || !(this.kept || this.answeredEmpty) || this.resyncing || !provider.isAuthenticated) return;
     this.resyncing = true;
     provider.forceSync();
   }
@@ -147,12 +212,24 @@ export class ChangeHold {
 function syncOf(message: Uint8Array): { step: number; nameEnd: number } | null {
   // A ping's answer is its type alone, without a document's name.
   if (message.length <= 1) return null;
-  const reader = { bytes: message, at: 0 };
-  const nameLength = readUint(reader);
-  const nameEnd = reader.at + nameLength;
-  reader.at = nameEnd;
+  const reader = afterName(message);
+  const nameEnd = reader.at;
   if (readUint(reader) !== MessageType.Sync) return null;
   return { step: readUint(reader), nameEnd };
+}
+
+/** Whether the server's `message` confirms a change it applied: a sync status of 1 (lib0's signed 1 is that byte too). */
+function confirms(message: Uint8Array): boolean {
+  const reader = afterName(message);
+  return readUint(reader) === MessageType.SyncStatus && readUint(reader) === 1;
+}
+
+/** A reader of `message` at its type, past its document's name. */
+function afterName(message: Uint8Array): { bytes: Uint8Array; at: number } {
+  const reader = { bytes: message, at: 0 };
+  const nameLength = readUint(reader);
+  reader.at += nameLength;
+  return reader;
 }
 
 /** lib0's unsigned integer: 7 bits a byte, the low ones first; -1 where the message ends first. */

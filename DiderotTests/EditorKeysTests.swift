@@ -312,4 +312,38 @@ struct EditorKeysTests {
         model.activeCodeChanged()
         #expect(model.activeCode == "a\n")
     }
+
+    /// ⌘K right after Return, while the key still waits for the engine: the link sheet opens on the line Return
+    /// leaves, and once the engine answers, the new line takes the editor. The sheet's target is gone then; its
+    /// positions in the old line's text went past the new line's end (Apply crashed) or onto its text.
+    @Test(.timeLimit(.minutes(1))) func linkKeyRightAfterReturnLinksNothingInTheNewLine() async throws {
+        func paragraph(_ id: String, _ text: String?) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: text.map { [PMNode(type: "text", text: $0)] })
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [paragraph("a", "Notes")]))
+        let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id":"p"}"#.utf8))
+        let model = DocumentModel(page: page, initialDocument: nil, engine: engine, readOnlyReason: nil)
+        engine.sendDocument()
+        let line = try #require(model.node(at: [0]))
+        model.activate(NodeRef(path: [0], node: line), node: line)
+        var answers = false
+        engine.enterWaits = { while !answers { try? await Task.sleep(for: .milliseconds(10)) } }
+        engine.whileInserting = { engine.document = PMNode(type: "doc", content: [paragraph("a", "Notes"), paragraph("b", nil)]) }
+
+        model.activeText.append(AttributedString("\n"))
+        model.activeTextChanged()
+        while engine.enters.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        // The cursor at the old line's end, where the editor shows it meanwhile.
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.endIndex)
+        model.handleKey(.link)
+        #expect(model.editsLink)
+        // What the sheet takes on opening.
+        let target = try #require(LinkSheet.Target(block: model.active?.ref.identity, text: model.activeText, selection: model.activeSelection))
+        #expect(target.indices(in: model.activeText, of: model.active?.ref.identity)?.insertionPoint == model.activeText.endIndex)
+
+        answers = true
+        while model.active?.ref.id != "b" { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(model.activeText.characters.isEmpty)
+        #expect(target.indices(in: model.activeText, of: model.active?.ref.identity) == nil)
+    }
 }

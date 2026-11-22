@@ -62,6 +62,8 @@ struct BaseRowDetailSheet: View {
                 }
             }
         }
+        // Outside the navigation: a picker opened over the fields doesn't stop a file's download.
+        .keepsDownloads()
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .toast(Binding { model.toast } set: { model.toast = $0 })

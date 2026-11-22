@@ -54,6 +54,12 @@ extension SessionStubbing {
         #"{"data": {"items": [{"id": "\#(id)"}]}}"#
     }
 
+    /// A page of search results with these ids, in this order.
+    static func results(_ ids: [String]) -> String {
+        let items = ids.map { #"{"id": "\#($0)"}"# }.joined(separator: ", ")
+        return #"{"data": {"items": [\#(items)]}}"#
+    }
+
     /// Signed in to a, with b saved as well.
     func sessionOnA() async throws -> AppSession {
         try store.save(StoredSession(serverURL: b, token: "b"))

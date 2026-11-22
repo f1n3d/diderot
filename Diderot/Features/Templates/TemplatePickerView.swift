@@ -55,10 +55,14 @@ struct TemplatePickerView: View {
                             NavigationLink(value: template) {
                                 TemplateRow(template: template, place: place(of: template))
                             }
-                            Button("Use") { Task { await apply(template) } }
-                                .buttonStyle(.bordered)
-                                .disabled(using != nil)
-                                .accessibilityIdentifier("template-use-\(template.displayTitle)")
+                            if using == template.id {
+                                ProgressView()
+                            } else {
+                                Button("Use") { Task { await apply(template) } }
+                                    .buttonStyle(.bordered)
+                                    .disabled(using != nil)
+                                    .accessibilityIdentifier("template-use-\(template.displayTitle)")
+                            }
                         }
                     }
                 }
@@ -78,8 +82,9 @@ struct TemplatePickerView: View {
             .navigationTitle("Use a Template")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Not while a template is being used: the page would still be made, or filled, after the picker closed.
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { dismiss() }.disabled(using != nil)
                 }
             }
             .navigationDestination(for: PageTemplate.self) { template in
@@ -105,6 +110,8 @@ struct TemplatePickerView: View {
                 }
             }
         }
+        // Nor a swipe-down, for the same reason as Cancel.
+        .interactiveDismissDisabled(using != nil)
     }
 
     /// The templates whose title contains the query, as the web filters them.

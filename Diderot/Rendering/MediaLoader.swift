@@ -2,6 +2,7 @@ import Foundation
 import ImageIO
 import PDFKit
 import UIKit
+import UniformTypeIdentifiers
 import DocmostKit
 
 /// Loads the files a page shows from behind the API (images, diagrams, PDFs): one download per address, however many
@@ -169,15 +170,27 @@ actor MediaLoader {
         }
         let file = try await file(for: url, maxBytes: maxBytes)
         guard let image = await Self.decode(file: file, targetPixelWidth: bucket) else {
+            // Stopped while it decoded (`decode`): nobody waits.
+            try Task.checkCancellation()
             throw MediaUnreadable()
         }
-        memory.setObject(image, forKey: key, cost: Int(image.size.width * image.size.height * image.scale * image.scale * 4))
+        memory.setObject(image, forKey: key, cost: Self.decodedBytes(image))
         return image
+    }
+
+    /// The memory an image takes decoded: an animation's every frame, once however often it repeats.
+    nonisolated static func decodedBytes(_ image: UIImage) -> Int {
+        let frames = Set((image.images ?? [image]).map(ObjectIdentifier.init)).count
+        return Int(image.size.width * image.size.height * image.scale * image.scale * 4) * frames
     }
 
     /// Most pixels an image decodes to (about 48 MB): tall screenshots stay sharp in portrait on the iPhone; on wider
     /// screens (iPhone in landscape, iPad) they get slightly softer instead of taking up to 85 MB each.
     nonisolated static let maxPixels = 12_000_000.0
+    /// Most pixels an animation's frames take together (about 12 MB). Every image on a page keeps what it decoded while
+    /// the page is open, and an animation fills its budget at any size it shows in: at `maxPixels`, a page of screen
+    /// recordings took 48 MB for each.
+    nonisolated static let maxAnimationPixels = maxPixels / 4
     /// Largest image decoded at all, about twice a 48 MP photo.
     nonisolated static let maxSourcePixels = 100_000_000.0
 
@@ -224,17 +237,81 @@ actor MediaLoader {
             // Orientations 5–8 turn the image 90°.
             let ratio = (properties[kCGImagePropertyOrientation] as? Int ?? 1) >= 5 ? width / height : height / width
             maxPixelSize = thumbnailSize(targetPixelWidth: targetPixelWidth, ratio: ratio)
+            if let animation = animation(source, width: width, height: height, maxPixelSize: maxPixelSize) { return animation }
+            // Stopped (the view scrolled away): nobody waits, and an animation's first frame alone mustn't stand in for
+            // it where it is kept (the memory cache, a view).
+            if Task.isCancelled { return nil }
         }
-        let thumbnailOptions = [
+        if let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize: maxPixelSize)) {
+            return UIImage(cgImage: cgImage)
+        }
+        return whole()
+    }
+
+    private nonisolated static func thumbnailOptions(maxPixelSize: Int) -> CFDictionary {
+        [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
         ] as CFDictionary
-        if let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) {
-            return UIImage(cgImage: cgImage)
+    }
+
+    /// Most frames an animation plays; a longer one shows its first frame, as a still image. Within
+    /// `maxAnimationPixels` its frames would be too small to make out, and decoding them all would take long.
+    nonisolated static let maxAnimationFrames = 200
+    /// Most steps an animation plays in, each a reference to one of its frames: odd delays (70 ms beside 30 ms) over
+    /// a long animation would repeat its frames by the thousand.
+    private nonisolated static let maxAnimationSteps = 1_000
+
+    /// The frames of an animated GIF, PNG or WebP, which the web's `<img>` plays, each for as long as the file says
+    /// and as often (`UIImage.plays`); nil for a still image and one of more than `maxAnimationFrames`. All frames
+    /// together decode within `maxAnimationPixels`, each no larger than the still image, so a long animation plays
+    /// less sharp.
+    private nonisolated static func animation(_ source: CGImageSource, width: Double, height: Double, maxPixelSize: Int) -> UIImage? {
+        let count = CGImageSourceGetCount(source)
+        guard count > 1, count <= maxAnimationFrames, let keys = animationKeys(of: source) else { return nil }
+        // The longer side that keeps all frames within the budget; a thumbnail is never larger than its source.
+        let fitting = max(width, height) * (maxAnimationPixels / (Double(count) * width * height)).squareRoot()
+        let options = thumbnailOptions(maxPixelSize: min(maxPixelSize, Int(fitting)))
+        var frames: [(image: UIImage, seconds: Double)] = []
+        for index in 0..<count {
+            // Nobody waits any more: the other frames would be decoded for nothing.
+            guard !Task.isCancelled, let frame = CGImageSourceCreateThumbnailAtIndex(source, index, options) else { return nil }
+            let properties = (CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any])?[keys.dictionary] as? [CFString: Any]
+            let delay = (properties?[keys.unclamped] ?? properties?[keys.clamped]) as? Double ?? 0
+            // As in WebKit, a delay under 11 ms (often 0, "as fast as you can") is 100 ms.
+            frames.append((UIImage(cgImage: frame), delay < 0.011 ? 0.1 : delay))
         }
-        return whole()
+        // UIImage plays its frames at equal intervals, so a frame that lasts longer (a screen recording's pause)
+        // repeats: in steps of the delays' greatest common divisor in milliseconds (GIF counts in 10 ms, APNG and WebP
+        // finer), or coarser where that would take too many. The whole lasts as long as the file's delays together.
+        func divisor(_ a: Int, _ b: Int) -> Int { b == 0 ? a : divisor(b, a % b) }
+        let milliseconds = frames.map { max(1, Int(($0.seconds * 1000).rounded())) }
+        let total = milliseconds.reduce(0, +)
+        let step = max(milliseconds.reduce(0, divisor), (total + maxAnimationSteps - 1) / maxAnimationSteps)
+        let steps = zip(frames, milliseconds).flatMap { frame, length in
+            repeatElement(frame.image, count: max(1, Int((Double(length) / Double(step)).rounded())))
+        }
+        let image = UIImage.animatedImage(with: steps, duration: frames.reduce(0) { $0 + $1.seconds })
+        // ImageIO counts plays, not repetitions (a GIF's NETSCAPE value plus one, once without it); 0 is on and on.
+        let plays = ((CGImageSourceCopyProperties(source, nil) as? [CFString: Any])?[keys.dictionary] as? [CFString: Any])?[keys.loopCount] as? Int
+        image?.plays = plays.flatMap { $0 > 0 ? $0 : nil }
+        return image
+    }
+
+    /// Where a format that animates keeps a frame's delay (as the file has it, and as ImageIO clamps it) and how often
+    /// it plays. A TIFF's pages or an icon's sizes are frames too, but no animation.
+    private nonisolated static func animationKeys(of source: CGImageSource) -> (dictionary: CFString, unclamped: CFString, clamped: CFString, loopCount: CFString)? {
+        switch CGImageSourceGetType(source) as String? {
+        case UTType.gif.identifier:
+            (kCGImagePropertyGIFDictionary, kCGImagePropertyGIFUnclampedDelayTime, kCGImagePropertyGIFDelayTime, kCGImagePropertyGIFLoopCount)
+        case UTType.png.identifier:
+            (kCGImagePropertyPNGDictionary, kCGImagePropertyAPNGUnclampedDelayTime, kCGImagePropertyAPNGDelayTime, kCGImagePropertyAPNGLoopCount)
+        case UTType.webP.identifier:
+            (kCGImagePropertyWebPDictionary, kCGImagePropertyWebPUnclampedDelayTime, kCGImagePropertyWebPDelayTime, kCGImagePropertyWebPLoopCount)
+        default: nil
+        }
     }
 
     // MARK: - PDFs
@@ -243,5 +320,16 @@ actor MediaLoader {
     @concurrent static func pdf(at file: URL) async -> PDFDocument? {
         struct Opened: @unchecked Sendable { let document: PDFDocument? }
         return Opened(document: PDFDocument(url: file)).document
+    }
+}
+
+extension UIImage {
+    nonisolated(unsafe) private static var playsKey: UInt8 = 0
+
+    /// How often an animated image plays before it stays on its last frame, as its file says (`MediaLoader.decode`);
+    /// nil for on and on. UIImage has no such count, and UIImageView plays one on and on (`AnimatedImageView`).
+    nonisolated fileprivate(set) var plays: Int? {
+        get { objc_getAssociatedObject(self, &Self.playsKey) as? Int }
+        set { objc_setAssociatedObject(self, &Self.playsKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
     }
 }

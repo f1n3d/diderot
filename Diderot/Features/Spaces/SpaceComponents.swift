@@ -61,7 +61,7 @@ struct RemoteThumbnail<ClipShape: Shape, Placeholder: View>: View {
         if let url = source {
             Group {
                 if let image {
-                    Image(uiImage: image).resizable().scaledToFill()
+                    ResizableImage(image: image).scaledToFill()
                 } else {
                     placeholder
                 }
