@@ -337,6 +337,77 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// The user switches to another table (or board) while the first one's "Load More" waits, and reaches its end:
+        /// its own page goes out at once. One key held the list of every view, so its spinner ran with nothing asked.
+        @Test(arguments: ["table", "kanban"]) func loadMoreOfAnotherViewGoesOut(type: String) async throws {
+            let (model, session) = try await twoViewsWithMore(type)
+            defer { UserDefaults.standard.removeObject(forKey: "base.view.\(model.pageId)") }
+            let second = try #require(model.views.last)
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+                StubURLProtocol.body.withLock { $0 = Self.rows("r2", next: "c") }
+                await model.select(second)
+                StubURLProtocol.body.withLock { $0 = Self.rows("r3", next: nil) }
+                await Self.loadMore(model)
+                // The first view's page.
+                StubURLProtocol.body.withLock { $0 = Self.rows("late", next: nil) }
+            } }
+            await Self.loadMore(model)
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(model.selectedView == second)
+            #expect(Self.shownRows(model) == ["r2", "r3"])
+            #expect(Self.shownList(model)?.hasMore == false)
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
+        /// The table or a board's column loads anew while its "Load More" waits (a pull to refresh, a stale cursor that
+        /// starts the view again): the new first page's next goes out at once, and the older answer stays out of the new
+        /// list. The waiting request held the list, so nothing was asked, and its answer joined the new rows.
+        @Test(arguments: ["table", "kanban"]) func listLoadedAnewGoesOnFromItsFirstPage(type: String) async throws {
+            let (model, session) = try await twoViewsWithMore(type)
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+                StubURLProtocol.body.withLock { $0 = Self.rows("r2", next: "c2") }
+                await model.loadRows()
+                StubURLProtocol.body.withLock { $0 = Self.rows("r3", next: nil) }
+                await Self.loadMore(model)
+                // The page after "c".
+                StubURLProtocol.body.withLock { $0 = Self.rows("late", next: "c3") }
+            } }
+            await Self.loadMore(model)
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(Self.shownRows(model) == ["r2", "r3"])
+            #expect(Self.shownList(model)?.hasMore == false)
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
+        /// A page that fails leaves "Try Again" at the end of the table or column: only the last row's showing asked for
+        /// it, so after a failure the spinner ran on with nothing asked. The next try, or the list loading anew, takes
+        /// it away.
+        @Test(arguments: ["table", "kanban"]) func failedPageOffersTryAgain(type: String) async throws {
+            let (model, session) = try await twoViewsWithMore(type)
+            let column = type == "kanban" ? BaseKanbanColumn.noValueId : nil
+            func failPage() async {
+                StubURLProtocol.offline.withLock { $0 = true }
+                await Self.loadMore(model)
+                StubURLProtocol.offline.withLock { $0 = false }
+            }
+            await failPage()
+            #expect(model.loadMoreFailed(columnId: column) && model.toast != nil)
+            #expect(Self.shownRows(model) == ["r1"] && Self.shownList(model)?.hasMore == true)
+            StubURLProtocol.body.withLock { $0 = Self.rows("r1", next: "c") }
+            await model.loadRows()
+            #expect(!model.loadMoreFailed(columnId: column), "loaded anew")
+            await failPage()
+            StubURLProtocol.body.withLock { $0 = Self.rows("r2", next: nil) }
+            await Self.loadMore(model)
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(!model.loadMoreFailed(columnId: column), "tried again")
+            #expect(Self.shownRows(model) == ["r1", "r2"])
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
         /// A card set to a status the board hides leaves the board, but its detail sheet keeps showing it and saving edits.
         @Test func cardInHiddenColumnStaysInItsSheet() async throws {
             let business = try JSONDecoder().decode(Entitlements.self, from: Data(#"{"tier": "business", "features": ["bases"]}"#.utf8))
@@ -655,6 +726,43 @@ extension AppSessionRaceTests {
             #expect(model.toast == String(localized: "This can't be placed there."))
             withExtendedLifetime(session) {}
             await removeCaches()
+        }
+
+        // MARK: Helpers
+
+        /// Signed in to a: a database with two views of `type` (boards by "s", so only the "No value" column), the first
+        /// showing r1 with a next page behind the cursor "c".
+        private func twoViewsWithMore(_ type: String) async throws -> (BaseModel, AppSession) {
+            let session = try await sessionOnA()
+            let model = BaseModel(pageId: "base-\(UUID().uuidString)", session: session)
+            // The rows request gets the base as its answer too, so the rows load again below.
+            StubURLProtocol.body.withLock {
+                $0 = #"{"data": {"id": "b", "properties": [{"id": "s", "name": "S", "type": "select"}], "views": [{"id": "v1", "name": "A", "type": "\#(type)", "position": "a", "config": {"groupByPropertyId": "s"}}, {"id": "v2", "name": "B", "type": "\#(type)", "position": "b", "config": {"groupByPropertyId": "s"}}]}}"#
+            }
+            await model.load()
+            StubURLProtocol.body.withLock { $0 = Self.rows("r1", next: "c") }
+            await model.loadRows()
+            StubURLProtocol.body.withLock { $0 = nil }
+            try #require(Self.shownRows(model) == ["r1"] && Self.shownList(model)?.cursor == "c")
+            return (model, session)
+        }
+
+        /// The table's rows, or those of the board's column.
+        private static func shownList(_ model: BaseModel) -> BaseRowList? {
+            model.selectedView?.kind == .kanban ? model.columns.first?.list : model.table
+        }
+
+        private static func shownRows(_ model: BaseModel) -> [String] {
+            shownList(model)?.rows.map(\.id) ?? []
+        }
+
+        /// "Load More" of the table, or of the board's column.
+        private static func loadMore(_ model: BaseModel) async {
+            if model.selectedView?.kind == .kanban {
+                await model.loadMore(columnId: BaseKanbanColumn.noValueId)
+            } else {
+                await model.loadMoreTable()
+            }
         }
     }
 }

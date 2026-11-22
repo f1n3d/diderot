@@ -281,15 +281,15 @@ private struct KanbanColumnView: View {
                                 model: model, row: row, column: column, cardProperties: cardProperties, drag: drag,
                                 boardMinX: { minX + Self.cardInset }, onOpen: onOpen
                             )
-                            .onAppear {
-                                if row.id == column.list.rows.last?.id { Task { await model.loadMore(columnId: column.id) } }
-                            }
                         }
                         if drag.target == KanbanDropTarget(columnId: column.id, rowId: nil) {
                             InsertionMark()
                         }
                         if column.list.hasMore {
-                            ProgressView().padding(8)
+                            BaseMoreRows(cursor: column.list.cursor, failed: model.loadMoreFailed(columnId: column.id)) {
+                                await model.loadMore(columnId: column.id)
+                            }
+                            .padding(8)
                         }
                         if column.list.rows.isEmpty {
                             Text("No entries")

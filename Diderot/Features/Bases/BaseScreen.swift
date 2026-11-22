@@ -180,6 +180,28 @@ extension View {
     }
 }
 
+/// The end of a table or board column while more rows follow: it asks for the next page as it comes into sight and
+/// again for each new cursor while it stays there, and after a failure offers "Try Again". The last row's appearing
+/// asked only once, so a failed page, or a list loaded anew that ended with the same row, left the spinner running.
+struct BaseMoreRows: View {
+    /// Where the list goes on: a new one is a new page to ask for.
+    let cursor: String?
+    let failed: Bool
+    let loadMore: @MainActor () async -> Void
+
+    var body: some View {
+        if failed {
+            Button("Try Again") { Task { await loadMore() } }
+                .font(.subheadline)
+        } else {
+            ProgressView()
+                // Tasks of their own, not the view's: scrolling away doesn't cancel a page on its way.
+                .onAppear { Task { await loadMore() } }
+                .onChange(of: cursor) { Task { await loadMore() } }
+        }
+    }
+}
+
 /// Database (base) embedded in a page: card with title and views; tapping opens the database page.
 struct BaseEmbedCard: View {
     let pageId: String?
