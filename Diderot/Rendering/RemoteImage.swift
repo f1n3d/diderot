@@ -16,8 +16,10 @@ struct ContentImageView: View {
     var body: some View {
         HStack {
             if image.align == .center || image.align == .right { Spacer(minLength: 0) }
+            // At most, not exactly: the width measured below would otherwise be the image's own, and a column that
+            // gets narrower (a rotation, a smaller window) would leave the image wider than it.
             content
-                .frame(width: targetWidth)
+                .frame(maxWidth: targetWidth)
             if image.align == .center || image.align == .left { Spacer(minLength: 0) }
         }
         .frame(maxWidth: .infinity)

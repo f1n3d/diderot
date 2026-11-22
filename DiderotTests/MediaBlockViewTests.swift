@@ -423,6 +423,47 @@ struct MediaBlockViewTests {
         #expect(await !poll(tries: 60) { !shows(150) }, "keeps the wide picture")
     }
 
+    /// An image follows its column as it gets narrower (an iPhone turned from landscape to portrait, an iPad's window
+    /// made narrower) and wider again, loaded or still loading. Its width comes from the place it is offered, which
+    /// took the width of the image in it: once laid out wide, the image stayed wide and ran past the column. The full
+    /// width, or 250 points (the image at 250 in the wide column, at 200 in the narrow one).
+    @Test(arguments: [("left", nil), ("center", nil), ("right", nil), ("center", 250)] as [(align: String, width: Double?)], [true, false])
+    func anImageFollowsItsColumnsWidth(layout: (align: String, width: Double?), loads: Bool) async throws {
+        let file = URL.temporaryDirectory.appending(path: "column-\(UUID().uuidString).png")
+        try await GradientPNG.write(width: 900, height: 450, to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let server = URL(string: "https://wiki.example.com")!
+        // Without a loader the placeholder stays, sized by the page's aspect ratio: the picture's own.
+        let loader = loads ? MediaLoader(client: APIClient(baseURL: server)) : nil
+        let context = RenderContext(baseURL: server, client: nil, mediaLoader: loader, token: nil, pageId: nil)
+        var attrs: [String: JSONValue] = ["src": .string(file.absoluteString), "aspectRatio": .number(2), "align": .string(layout.align)]
+        if let width = layout.width { attrs["width"] = .number(width) }
+        let doc = PMNode(type: "doc", content: [PMNode(type: "image", attrs: attrs)])
+        let block = try #require(ContentParser.parse(doc).blocks.first)
+        let wide = min(layout.width ?? 300, 300) / 2
+        var height = CGFloat.zero
+        func image(in column: CGFloat) -> some View {
+            BlockView(block: block)
+                .environment(\.renderContext, context)
+                .frame(width: column)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        }
+        func shows(_ expected: CGFloat) -> Bool { abs(height - expected) < 0.5 }
+        let host = UIHostingController(rootView: image(in: 300))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        try #require(await poll { shows(wide) && spinner(in: window) != loads }, "in the wide column: \(height)")
+
+        host.rootView = image(in: 200)
+        #expect(await poll(tries: 100) { shows(100) }, "narrower with its column: \(height)")
+        host.rootView = image(in: 300)
+        #expect(await poll(tries: 100) { shows(wide) }, "wider again: \(height)")
+        #expect(spinner(in: window) != loads)
+    }
+
     /// Polls `condition` while SwiftUI lays out (`tries` × `interval`, a minute by default; a met condition ends the
     /// wait at once). GitHub's runners start web processes far slower than a Mac: in three of about 130 runs from
     /// November 8 to 15, 2026 one took 15 to 22 s to launch, and the 20 s this waited before ended as the launch did
