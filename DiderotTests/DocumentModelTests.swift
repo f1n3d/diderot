@@ -301,6 +301,42 @@ struct DocumentModelTests {
         #expect(model.cursorRequest == .offset(1))
     }
 
+    /// Lines pasted with Windows (CR LF), old Mac (CR) or Unicode paragraph (U+2029) line ends split as with "\n": in
+    /// Swift each of them is a Character that isn't "\n", so the lines stayed one paragraph, the CR saved in its text. A
+    /// hard break (U+2028) stays in its line.
+    @Test(.timeLimit(.minutes(1))) func pastedLinesSplitAtEveryLineEnd() async throws {
+        func line(_ id: String, _ text: String) -> PMNode {
+            PMNode(type: "paragraph", attrs: ["id": .string(id)], content: [PMNode(type: "text", text: text)])
+        }
+        let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [line("a", "xyz")]))
+        let model = try Self.model(engine)
+        model.activate(NodeRef(path: [0], node: line("a", "xyz")), node: line("a", "xyz"))
+        engine.enterResult = .moved(EngineCursor(path: [3], offset: 0))
+        engine.whileInserting = {
+            engine.document = PMNode(type: "doc", content: [line("a", "xyA"), line("b", "Bb"), line("c", "C"), line("d", "Dz")])
+        }
+
+        // Pasted after "xy", the cursor after the paste.
+        let text = model.activeText.characters
+        model.activeText.insert(AttributedString("A\r\nB\u{2028}b\rC\u{2029}D"), at: text.index(text.startIndex, offsetBy: 2))
+        model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 11))
+        model.activeTextChanged()
+        while model.active?.ref.id != "d" { try await Task.sleep(for: .milliseconds(10)) }
+
+        let paste = try #require(engine.enteredLines.first)
+        #expect(paste.node.plainText == "xyA")
+        #expect(paste.lines.map { $0.map(\.plainText).joined() } == ["Bb", "C", "Dz"])
+        #expect(paste.lines.first?.map(\.type) == ["text", "hardBreak", "text"])
+        #expect(model.cursorRequest == .offset(1))
+    }
+
+    /// Only the line ends of paragraphs end a line: Word's break within a paragraph (U+000B), a form feed and NEL don't,
+    /// though Swift counts them as newlines too.
+    @Test func onlyParagraphLineEndsEndALine() {
+        #expect(["\n", "\r", "\r\n", "\u{2029}"].allSatisfy(DocumentModel.isLineEnd))
+        #expect(!["\u{2028}", "\u{000B}", "\u{000C}", "\u{0085}", "a"].contains(where: DocumentModel.isLineEnd))
+    }
+
     /// Two pasted lines are one Return, and the cursor goes where the paste ends too, not to the new line's start.
     @Test(.timeLimit(.minutes(1))) func twoPastedLinesPutTheCursorAtTheirEnd() async throws {
         func line(_ id: String, _ text: String) -> PMNode {
@@ -325,8 +361,8 @@ struct DocumentModelTests {
 
     /// A toggle's title stays whole as on Return there: pasted lines keep what was after the cursor in the title and go
     /// into its content, also two lines (the paste proxy hands plain text to `pasteLink`). Pasted by the text view, they
-    /// all ran together in the title.
-    @Test(.timeLimit(.minutes(1))) func pastedLinesKeepAToggleTitleWhole() async throws {
+    /// all ran together in the title. Any line end, U+2029 as well.
+    @Test(.timeLimit(.minutes(1)), arguments: ["A\r\nB", "A\u{2029}B"]) func pastedLinesKeepAToggleTitleWhole(pasted: String) async throws {
         let title = PMNode(type: "detailsSummary", content: [PMNode(type: "text", text: "TiTel")])
         let engine = FakeDocumentEngine(document: PMNode(type: "doc", content: [
             PMNode(type: "details", attrs: ["open": .bool(true)], content: [title, PMNode(type: "detailsContent", content: [PMNode(type: "paragraph")])]),
@@ -336,7 +372,7 @@ struct DocumentModelTests {
         engine.enterResult = .moved(EngineCursor(path: [0, 1, 0], offset: 0))
         model.activeSelection = AttributedTextSelection(insertionPoint: model.activeText.characters.index(model.activeText.startIndex, offsetBy: 2))
 
-        #expect(model.pasteLink("A\r\nB"))
+        #expect(model.pasteLink(pasted))
         while engine.enteredLines.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
 
         #expect(engine.enters.isEmpty)

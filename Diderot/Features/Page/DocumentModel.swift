@@ -629,7 +629,7 @@ final class DocumentModel {
         let typedBefore = typedText
         typedText = String(characters)
         let grew = characters.count > typedBefore.count
-        if let newline = characters.firstIndex(of: "\n") {
+        if let newline = characters.firstIndex(where: Self.isLineEnd) {
             // Return with the slash menu open picks the first enabled item (web parity); the line break is dropped.
             if slashQuery != nil, let first = insertMatches.first(where: isEnabled) {
                 let offset = characters.distance(from: characters.startIndex, to: newline)
@@ -2223,10 +2223,10 @@ final class DocumentModel {
     private func handleReturn(_ active: Active) async {
         guard let engine else { return }
         let full = activeText
-        guard let newline = full.characters.firstIndex(of: "\n") else { return }
+        guard let newline = full.characters.firstIndex(where: Self.isLineEnd) else { return }
         let afterStart = full.characters.index(after: newline)
         // Text pasted or dictated with line breaks: a typed Return makes one.
-        if full.characters[afterStart...].contains("\n") {
+        if full.characters[afterStart...].contains(where: Self.isLineEnd) {
             await handleLines(active, text: full, caret: cursorOffset(), tailStaysInTitle: false)
             return
         }
@@ -2321,11 +2321,10 @@ final class DocumentModel {
     /// title, as on Return there, and the lines go into its content (`handleLines`). Pasted by the text view, a single
     /// break looked like a typed Return, and the lines ran into the title. True if it took the paste.
     private func pasteLinesIntoTitle(_ text: String) -> Bool {
-        let pasted = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
-        guard let active, active.type == "detailsSummary", pasted.contains("\n"),
+        guard let active, active.type == "detailsSummary", text.contains(where: Self.isLineEnd),
               case .insertionPoint(let cursor) = activeSelection.indices(in: activeText) else { return false }
-        let combined = AttributedString(activeText[..<cursor]) + AttributedString(pasted) + AttributedString(activeText[cursor...])
-        let caret = activeText.characters.distance(from: activeText.startIndex, to: cursor) + pasted.count
+        let combined = AttributedString(activeText[..<cursor]) + AttributedString(text) + AttributedString(activeText[cursor...])
+        let caret = activeText.characters.distance(from: activeText.startIndex, to: cursor) + text.count
         Task.immediate {
             typingSwitches += 1
             defer { typingSwitchEnded() }
@@ -2342,7 +2341,7 @@ final class DocumentModel {
         var index = text.startIndex
         while index < text.endIndex {
             let next = text.characters.index(after: index)
-            if text.characters[index] == "\n" {
+            if isLineEnd(text.characters[index]) {
                 lines.append(AttributedString(text[start..<index]))
                 start = next
             }
@@ -2350,6 +2349,13 @@ final class DocumentModel {
         }
         lines.append(AttributedString(text[start..<text.endIndex]))
         return lines
+    }
+
+    /// A line break that ends its line, as Return does: "\n", and the CR LF, CR or U+2029 that text from elsewhere ends
+    /// its lines with, each a Character that isn't "\n" (CR LF is one Character). Not the hard break (U+2028), nor Word's
+    /// break within a paragraph (U+000B) and the other newlines that end no paragraph.
+    static func isLineEnd(_ character: Character) -> Bool {
+        ["\n", "\r", "\r\n", "\u{2029}"].contains(character)
     }
 
     /// Backspace at a block's start: joins it with the text block before, removes it (an empty line after an image, a
