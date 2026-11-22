@@ -191,6 +191,76 @@ struct PageTreeStoreTests {
         #expect(store.visibleRows.map(\.id) == ["A"])
     }
 
+    /// The same with a tree saved on an earlier visit: the saved copy showed as the current tree, and as loaded, so
+    /// nothing loaded it again when the space showed again. New pages stayed missing until a pull to refresh.
+    @Test func cancelledFirstLoadOfASavedTreeStartsAgain() async throws {
+        let base = FileManager.default.temporaryDirectory.appending(path: "page-tree-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let cache = DiskCache(scope: "server", baseDirectory: base)
+        await cache.write([SidebarPage(id: "yesterday", title: "yesterday")], key: CacheKey.tree(spaceId: "s", parentPageId: nil))
+        let gate = Gate()
+        let store = PageTreeStore(spaceId: "s", cache: cache) { _, _ in
+            await gate.wait()
+            // As URLSession ends the request of a cancelled task, which APIClient throws as `CancellationError`.
+            try Task.checkCancellation()
+            return Paginated(items: [SidebarPage(id: "today", title: "today")], meta: PaginationMeta(hasNextPage: false, nextCursor: nil))
+        }
+
+        // The space view's load, cancelled by a tab switch while the request runs.
+        let first = Task { await store.loadRootIfNeeded() }
+        var turns = 0
+        while !gate.isWaiting && turns < 100 {
+            await Task.yield()
+            turns += 1
+        }
+        try #require(gate.isWaiting)
+        first.cancel()
+        gate.open()
+        await first.value
+        guard case .idle = store.rootState else {
+            Issue.record("\(store.rootState), showing \(store.visibleRows.map(\.id))")
+            return
+        }
+
+        await store.loadRootIfNeeded()
+        #expect(store.visibleRows.map(\.id) == ["today"])
+    }
+
+    /// A refresh cancelled while it reloads the open levels leaves the tree as it was: the levels it didn't reload
+    /// collapsed their pages.
+    @Test func cancelledRefreshKeepsOpenPages() async throws {
+        let base = FileManager.default.temporaryDirectory.appending(path: "page-tree-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let cache = DiskCache(scope: "server", baseDirectory: base)
+        let levels = ["root": [page("A", children: true)], "A": [page("A1", parent: "A")]]
+        let gate = Gate()
+        let log = EventLog()
+        let store = PageTreeStore(spaceId: "s", cache: cache) { parent, _ in
+            log.events.append(parent ?? "root")
+            // The refresh's load of A's level, held until the refresh is cancelled.
+            if log.events == ["root", "A", "root", "A"] {
+                await gate.wait()
+                try Task.checkCancellation()
+            }
+            return Paginated(items: levels[parent ?? "root"] ?? [], meta: PaginationMeta(hasNextPage: false, nextCursor: nil))
+        }
+        await store.loadRootIfNeeded()
+        await store.toggle("A")
+
+        let refresh = Task { await store.reload() }
+        var turns = 0
+        while !gate.isWaiting && turns < 100 {
+            await Task.yield()
+            turns += 1
+        }
+        try #require(gate.isWaiting)
+        refresh.cancel()
+        gate.open()
+        await refresh.value
+        #expect(store.isExpanded("A"))
+        #expect(store.visibleRows.map(\.id) == ["A", "A1"])
+    }
+
     /// A refresh (after a rename, a move or a pull) keeps every expanded level open, not only the root's.
     @Test func reloadKeepsNestedLevelsExpanded() async {
         let levels = ["root": [page("A", children: true)], "A": [page("A1", parent: "A", children: true)], "A1": [page("A1a", parent: "A1")]]
