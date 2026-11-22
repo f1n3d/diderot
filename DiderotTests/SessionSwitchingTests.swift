@@ -253,6 +253,38 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// After a start that waited for a server behind a VPN that is off, the user turns the VPN on and comes back to the
+        /// app, and another window checks the network, while the start's reconnect still waits for its answer: when that
+        /// one fails, they check the sign-in once more, together. They gave up with it, and as a VPN coming on changes no
+        /// network status, the session stayed offline until the app came back again.
+        @Test func reconnectsThatWaitedForAFailedOneTryAgainOnce() async throws {
+            let session = try await offlineSessionOnA()
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let waiting = Mutex<[Task<Void, Never>]>([])
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/users/me" }
+            defer {
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+                StubURLProtocol.status.withLock { $0 = 200 }
+            }
+            StubURLProtocol.beforeNextAnswer.withLock {
+                $0 = {
+                    let calls = (0..<2).map { _ in Task { @MainActor in await session.reconnectIfNeeded() } }
+                    waiting.withLock { $0 = calls }
+                    // After both on the main actor: they wait for the first reconnect.
+                    await MainActor.run {}
+                    // Its user request fails; the next one is answered.
+                    StubURLProtocol.status.withLock { $0 = 503 }
+                    StubURLProtocol.beforeNextAnswer.withLock { $0 = { StubURLProtocol.status.withLock { $0 = 200 } } }
+                }
+            }
+            await session.reconnectIfNeeded()
+            for call in waiting.withLock({ $0 }) { await call.value }
+            #expect(session.ready?.restoredOffline == false)
+            #expect(StubURLProtocol.requests.withLock { $0 }.filter { $0 == "a.example.com/api/users/me" }.count == 2,
+                    "the failed check and one more")
+            await removeCaches()
+        }
+
         /// After an offline start, the user switches to b and back to a while the reconnect waits for its answer: the
         /// session from switching back, loaded fully, stays. The reconnect replaced it with one of its own, the offline
         /// session's client in it, having checked the sign-in again.

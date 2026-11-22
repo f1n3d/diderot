@@ -842,10 +842,23 @@ final class AppSession {
 
     /// After an offline start, fully loads the session once the server is reachable again. The network returning and the
     /// app coming back call this together, in every window: a call while a reconnect of the session runs waits for that
-    /// one instead of checking the sign-in again.
+    /// one instead of checking the sign-in again. If that one fails, the calls that waited try once more, together: it
+    /// started before what they answer, such as a VPN coming on, which changes no network status (`OfflineMonitor`), and
+    /// its requests could have waited for their timeout without the VPN.
     func reconnectIfNeeded() async {
         guard case .ready(let session) = state, session.restoredOffline else { return }
-        if let reconnecting, isStillCurrent(reconnecting.session) { return await reconnecting.task.value }
+        guard let running = reconnecting, isStillCurrent(running.session) else { return await reconnect(session) }
+        await running.task.value
+        guard case .ready(let current) = state, current.restoredOffline, isStillCurrent(session) else { return }
+        // The first of them to go on starts it; the others wait for that one.
+        if let next = reconnecting, next.task != running.task, isStillCurrent(next.session) {
+            return await next.task.value
+        }
+        await reconnect(current)
+    }
+
+    /// Fully loads the offline session, in a task that later calls wait for (`reconnectIfNeeded`).
+    private func reconnect(_ session: ReadySession) async {
         let task = Task {
             do {
                 try await finishSignIn(server: session.server, client: session.client, token: session.token, replacing: session)
@@ -857,7 +870,8 @@ final class AppSession {
         }
         reconnecting = (session, task)
         await task.value
-        // Unless a reconnect of the next session took its place: after a switch, another offline start.
+        // Unless another reconnect took its place: the next session's, after a switch and another offline start, or the
+        // one that the calls that waited for this one start when it failed.
         if reconnecting?.task == task { reconnecting = nil }
     }
 
