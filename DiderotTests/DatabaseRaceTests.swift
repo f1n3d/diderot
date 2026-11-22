@@ -500,6 +500,53 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// An option added from a card to the board's grouping property gets its column at once, and the card the
+        /// picker sets to it moves there; the other columns keep what they loaded. Only a load built the columns, so
+        /// the card left the board, and its offline copy, until a refresh.
+        @Test func newGroupingOptionGetsItsColumn() async throws {
+            let (session, model) = try await boardsOnA()
+            StubURLProtocol.body.withLock { $0 = Self.rows("r1", next: "c") }
+            await model.loadRows()
+            StubURLProtocol.body.withLock { $0 = Self.boardBase }
+            Self.answerOptionsUpdate()
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            let choice = try #require(await model.addChoice(named: "Blocked", to: "s"))
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"s": "\#(choice.id)"}, "position": "r1"}}"# }
+            await model.setCell(rowId: "r1", propertyId: "s", to: .string(choice.id))
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(model.columns.map(\.id) == [choice.id, BaseKanbanColumn.noValueId], "before \"No value\", as on the web")
+            #expect(model.columns.map { $0.list.rows.map(\.id) } == [["r1"], []], "the card is in the new column")
+            #expect(model.columns.last?.list.cursor == "c", "\"No value\" keeps its next page")
+            let copy = await DiskCache(scope: a.absoluteString).read(
+                BaseViewSnapshot.self, key: CacheKey.baseView(model.pageId, viewId: "v1")
+            )
+            #expect(copy?.columns?.map { $0.list.rows.map(\.id) } == [["r1"], []], "the offline copy has it there too")
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
+        /// The same while the board loads: the load's answer, from before the option, keeps its column and the card
+        /// in it.
+        @Test func optionAddedWhileTheBoardLoadsKeepsItsColumn() async throws {
+            let (session, model) = try await boardsOnA()
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/bases/rows" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in
+                StubURLProtocol.body.withLock { $0 = Self.boardBase }
+                Self.answerOptionsUpdate()
+                guard let choice = await model.addChoice(named: "Blocked", to: "s") else { return }
+                StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {"s": "\#(choice.id)"}}}"# }
+                await model.setCell(rowId: "r1", propertyId: "s", to: .string(choice.id))
+                StubURLProtocol.body.withLock { $0 = Self.rows("r1") }
+            } }
+            await model.loadRows()
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(model.columns.map(\.name) == ["Blocked", nil])
+            #expect(model.columns.map { $0.list.rows.map(\.id) } == [["r1"], []], "the card stays in the new column")
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
         /// The user edits a card and switches to a board without it before the answer arrives.
         @Test func lateWriteAnswerKeepsTheNewView() async throws {
             let (session, model) = try await boardsOnA()
@@ -772,6 +819,20 @@ extension AppSessionRaceTests {
         }
 
         // MARK: Helpers
+
+        /// The database of `boardsOnA`, as `bases/info` answers.
+        private static let boardBase = #"{"data": {"id": "b", "permissions": {"canEdit": true}, "properties": [{"id": "s", "name": "S", "type": "select"}], "views": [{"id": "v1", "name": "A", "type": "kanban", "position": "a", "config": {"groupByPropertyId": "s"}}, {"id": "v2", "name": "B", "type": "kanban", "position": "b", "config": {"groupByPropertyId": "s"}}]}}"#
+
+        /// The next options update gets the server's answer: the select "s" with the options it was sent.
+        nonisolated private static func answerOptionsUpdate() {
+            let path = "a.example.com/api/bases/properties/update"
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = path }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = {
+                let sent = StubURLProtocol.bodies.withLock { $0[path] }.flatMap { try? JSONDecoder().decode([String: JSONValue].self, from: $0) }
+                let answer: JSONValue = ["data": ["property": ["id": "s", "name": "S", "type": "select", "typeOptions": sent?["typeOptions"] ?? .null]]]
+                StubURLProtocol.body.withLock { $0 = (try? JSONEncoder().encode(answer)).map { String(decoding: $0, as: UTF8.self) } }
+            } }
+        }
 
         /// Signed in to a: a database with two views of `type` (boards by "s", so only the "No value" column), the first
         /// showing r1 with a next page behind the cursor "c".
