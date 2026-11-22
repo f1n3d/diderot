@@ -1813,7 +1813,8 @@ final class DocumentModel {
                 let start = anchor.map { replace || before ? $0.path : Self.sibling(of: $0.path, offset: 1) } ?? [contentBlocks.count]
                 if !staysEditable(active, insertingAt: start) {
                     await flush()
-                    deactivate()
+                    // Not a block tapped while the save went.
+                    if self.active?.ref.identity == active.ref.identity { deactivate() }
                 }
             } else if focusTarget == nil {
                 deactivate()
