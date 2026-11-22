@@ -114,4 +114,37 @@ struct BasePickerSearchTests {
         #expect(search.searchError == nil)
         #expect(!search.isLoading)
     }
+
+    /// Clearing the field while a typed search waits for the server: the empty search asks at once, and the typed one's
+    /// cancellation, which URLSession reports later, doesn't end the loading of the search still on its way (code
+    /// review W57). Otherwise the picker said "No people found" with no spinner until the answer came.
+    @Test func cancelledSearchLeavesTheNextOneLoading() async {
+        let clock = TestClock()
+        let server = Server(clock: clock)
+        let search = BasePickerSearch<String>(clock: clock)
+        let nobody = Task { await search.load("xyz", with: server.suggest) }
+        await clock.advance(by: .milliseconds(250))
+        await nobody.value
+        #expect(server.asked == ["xyz"])
+        #expect(search.results.isEmpty)
+
+        server.delay = .seconds(1)
+        let typed = Task { await search.load("a", with: server.suggest) }
+        await clock.advance(by: .milliseconds(250))
+        #expect(server.asked.last == "a")
+        #expect(search.isLoading)
+
+        server.answer = .success(["Ada", "Grace"])
+        let cleared = Task { await search.load("", with: server.suggest) }
+        await clock.advance(by: .zero)
+        #expect(server.asked.last == "")
+        typed.cancel()
+        await typed.value
+        #expect(search.isLoading)
+
+        await clock.advance(by: .seconds(1))
+        await cleared.value
+        #expect(!search.isLoading)
+        #expect(search.results == ["Ada", "Grace"])
+    }
 }

@@ -328,6 +328,9 @@ final class BasePickerSearch<Item> {
     private(set) var isLoading = false
     /// Why the last search failed: shown instead of "none found".
     private(set) var searchError: String?
+    /// Searches that asked the server: only the latest ends `isLoading`. A cancelled request can end after the next
+    /// search has asked (an empty one asks at once), and ending it then hid that search's loading (code review W57).
+    @ObservationIgnored private var asked = 0
     /// What the wait for more typing runs on; tests move a clock of their own (`TestClock`).
     @ObservationIgnored private let clock: any Clock<Duration>
 
@@ -340,8 +343,10 @@ final class BasePickerSearch<Item> {
     func load(_ search: String, with fetch: (String) async throws -> [Item]) async {
         if !search.isEmpty { try? await clock.sleep(for: .milliseconds(250)) }
         guard !Task.isCancelled else { return }
+        asked += 1
+        let generation = asked
         isLoading = true
-        defer { isLoading = false }
+        defer { if generation == asked { isLoading = false } }
         do {
             let found = try await fetch(search)
             guard !Task.isCancelled else { return }
