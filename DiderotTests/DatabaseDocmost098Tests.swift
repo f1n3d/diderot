@@ -27,18 +27,31 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
-        /// A first page that fails too says so and tries no further; the rows shown stay.
-        @Test func failedRestartSaysSo() async throws {
-            let (model, session) = try await tableWithMore()
+        /// A first page that fails too says so and tries no further; the rows shown stay, and the end of the table or
+        /// board column offers "Try Again", which sends the stale cursor once more and so starts the view again. Its
+        /// spinner ran on with nothing asked.
+        @Test(arguments: [false, true]) func failedRestartSaysSo(board: Bool) async throws {
+            let (model, session) = try await board ? boardWithMore() : tableWithMore()
             defer { withExtendedLifetime(session) {} }
+            defer { UserDefaults.standard.removeObject(forKey: "base.view.\(model.pageId)") }
+            let column = board ? BaseKanbanColumn.noValueId : nil
+            func loadMore() async {
+                if let column { await model.loadMore(columnId: column) } else { await model.loadMoreTable() }
+            }
+            func shownRows() -> [String] { (board ? model.columns.first?.list : model.table)?.rows.map(\.id) ?? [] }
             StubURLProtocol.status.withLock { $0 = 400 }
             StubURLProtocol.body.withLock { $0 = Self.staleCursor }
             defer { resetStub() }
             StubURLProtocol.requests.withLock { $0 = [] }
-            await model.loadMoreTable()
+            await loadMore()
             #expect(rowRequests() == 2)
-            #expect(model.table.rows.map(\.id) == ["r1"])
+            #expect(shownRows() == ["r1"])
             #expect(model.toast == "The row cursor is stale. Reload rows and try again.")
+            #expect(model.loadMoreFailed(columnId: column), "Try Again at the end")
+            Self.answerRows([(400, Self.staleCursor), (200, Self.rows("r2"))])
+            await loadMore()
+            #expect(shownRows() == ["r2"])
+            #expect(!model.loadMoreFailed(columnId: column))
             await removeCaches()
         }
 
@@ -235,6 +248,16 @@ extension AppSessionRaceTests {
             await model.loadRows()
             StubURLProtocol.body.withLock { $0 = nil }
             try #require(model.table.hasMore && model.table.cursor == "c")
+            return (model, session)
+        }
+
+        /// `boardsOnA`'s first board, its column with a next page behind the cursor "c".
+        private func boardWithMore() async throws -> (BaseModel, AppSession) {
+            let (session, model) = try await boardsOnA()
+            StubURLProtocol.body.withLock { $0 = Self.rowsWithMore("r1") }
+            await model.loadRows()
+            StubURLProtocol.body.withLock { $0 = nil }
+            try #require(model.columns.first?.list.hasMore == true && model.columns.first?.list.cursor == "c")
             return (model, session)
         }
 

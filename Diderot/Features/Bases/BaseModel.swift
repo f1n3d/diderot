@@ -364,7 +364,7 @@ final class BaseModel {
 
     /// The page after `cursor` of a list, which `add` adds while the view still shows the list ending there
     /// (`endsAtCursor`): one loaded anew meanwhile asks from its own cursor. A failure leaves "Try Again" at the list's
-    /// end; a stale cursor starts the view again.
+    /// end; a stale cursor starts the view again, and leaves "Try Again" should that fail too.
     private func loadNextPage(
         of list: String, in view: BaseView, from cursor: String, filter: JSONValue?, sorts: JSONValue?,
         endsAtCursor: () -> Bool, add: (BaseRowsPage) -> Void
@@ -390,7 +390,11 @@ final class BaseModel {
         }
         loadingMore.remove(request)
         // Only once this request is off the list: nothing then holds up the next page of the first page loaded again.
-        if isStale, endsAtCursor() { await restartAfterStaleCursor(in: view) }
+        guard isStale, endsAtCursor() else { return }
+        await restartAfterStaleCursor(in: view)
+        // The first page failed too (it says so): the list still ends at the stale cursor, and its end has nothing new
+        // to ask for. "Try Again" there sends that cursor once more, which starts the view again.
+        if selectedView == view, endsAtCursor() { failedMore.insert(list) }
     }
 
     /// The row the cursor refers to changed or went since its page loaded (Docmost 0.98): the view loads again from its
