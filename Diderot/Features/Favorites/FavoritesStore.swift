@@ -14,7 +14,7 @@ final class FavoritesStore {
     var toast: String?
     /// Counts list loads, so an older answer arriving last doesn't win.
     @ObservationIgnored private var listLoads = 0
-    /// Counts ids loads and the lists that set the ids, so an older ids answer arriving last doesn't win.
+    /// Counts ids loads and the server's lists, which set the ids too, so an older ids answer arriving last doesn't win.
     @ObservationIgnored private var idLoads = 0
     /// The pages and spaces whose star the user changed since the ids were asked for: the answer may be from before the
     /// change, so they keep the star it left. A change the server didn't take leaves them to the answer.
@@ -72,6 +72,9 @@ final class FavoritesStore {
                 try await session.load(Endpoints.Favorites.list(cursor: cursor), of: ready)
             }
             guard load == listLoads else { return }
+            // The server's list is newer than an ids answer still on its way. The cached one above isn't: that answer
+            // still decides when this request fails.
+            idLoads += 1
             apply(favorites)
             await ready.cache.write(favorites, key: CacheKey.favorites)
         } catch is CancellationError {
@@ -81,7 +84,6 @@ final class FavoritesStore {
     }
 
     private func apply(_ favorites: [Favorite]) {
-        idLoads += 1
         listState = .loaded(favorites)
         pageIds = Set(favorites.compactMap { $0.favoriteType == .page ? $0.pageId : nil })
         spaceIds = Set(favorites.compactMap { $0.favoriteType == .space ? $0.spaceId : nil })

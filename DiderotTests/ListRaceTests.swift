@@ -126,6 +126,29 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// The Favorites tab opens while the ids are on their way and shows the list cached at an earlier launch; then
+        /// the list's own request fails. The ids answer, newer than the cache, decides the stars: it used to be dropped
+        /// as older, leaving the cache's, which can be days old. Spaces, as their answer is taken after the pages':
+        /// after the cached list, whichever of the two requests waits.
+        @Test func aCachedListDoesntOutweighTheIdsOnTheirWay() async throws {
+            let session = try await sessionOnA()
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"items": [{"id": "f1", "type": "space", "spaceId": "s1"}], "meta": {"hasNextPage": false}}}"# }
+            await FavoritesStore(session: session).loadList()
+            let favorites = FavoritesStore(session: session)
+            // Since then s1 was unstarred and s2 starred on the web. The list's request gets this body too, which it
+            // can't read.
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"items": ["s2"]}}"# }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/favorites/ids" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in await favorites.loadList() } }
+            await favorites.loadIds()
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(favorites.listState.value?.map(\.id) == ["f1"], "the cached list shows")
+            #expect(favorites.isFavorite(spaceId: "s2") && !favorites.isFavorite(spaceId: "s1"))
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
         /// A slow comments load that ends after a newer one doesn't overwrite it: a comment just posted disappeared from the
         /// list and the badge, and a deleted one came back.
         @Test func lateCommentsAnswerKeepsTheNewerList() async throws {
