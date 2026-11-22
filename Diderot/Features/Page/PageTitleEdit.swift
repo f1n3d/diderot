@@ -41,7 +41,8 @@ final class PageTitleEdit {
     func commit(_ page: Page, in pageSession: ReadySession, session: AppSession, changes: ContentChanges,
                 sent: @escaping () async -> Void, report: @escaping (String) -> Void) -> Task<Void, Never>? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed != (page.title ?? ""), trimmed != saving else { return nil }
+        // The loaded title goes again while a newer one is on its way: typed back, it must come after that one.
+        guard trimmed != (page.title ?? "") || saving != nil, trimmed != saving else { return nil }
         // Its session ended (401) or a link switched servers: the title waits for the next sign-in there, like the text.
         guard session.isStillCurrent(pageSession) else {
             return Task { await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges) }

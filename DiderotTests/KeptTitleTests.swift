@@ -211,6 +211,45 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// The title the page loaded with, typed back while a rename is on its way, goes after it: skipped as unchanged,
+        /// the rename's late answer left the page with the title the field no longer showed.
+        @Test(.timeLimit(.minutes(1))) func theLoadedTitleTypedBackGoesAfterARenameOnItsWay() async throws {
+            let session = try await sessionOnA()
+            defer { UnsentChanges.removeAll(server: a) }
+            let onA = try #require(session.ready)
+            let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+            let edit = PageTitleEdit()
+            var reports: [String] = []
+            func commit(_ text: String) -> Task<Void, Never>? {
+                edit.text = text
+                return edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: {}) { reports.append($0) }
+            }
+            func updates() -> Int { StubURLProtocol.requests.withLock { $0.filter { $0 == Self.titleUpdate }.count } }
+
+            StubURLProtocol.requests.withLock { $0 = [] }
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Alt"}}"# }
+            let release = holdNextTitleRequest()
+            defer {
+                release.finish()
+                answerAsUsual()
+            }
+            let rename = commit("Plan")
+            try await titleRequestHeld()
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { StubURLProtocol.status.withLock { $0 = 200 } } }
+            let back = commit("Alt")
+            #expect(back != nil, "the loaded title typed back is saved")
+
+            release.finish()
+            await rename?.value
+            await back?.value
+            #expect(updates() == 2)
+            let last = StubURLProtocol.bodies.withLock { $0[Self.titleUpdate] }.flatMap { String(data: $0, encoding: .utf8) }
+            #expect(last?.contains("Alt") == true, "the server got the loaded title last")
+            #expect(edit.unsent == nil && reports.isEmpty)
+            #expect(await session.unsentTitle(pageId: "p1") == nil)
+            await removeCaches()
+        }
+
         static let titleUpdate = "a.example.com/api/pages/update"
 
         /// Holds the next title request, as a network handover does, until the returned continuation finishes; then it
