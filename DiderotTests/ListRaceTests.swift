@@ -201,5 +201,53 @@ extension AppSessionRaceTests {
             #expect(search.errorMessage == nil)
             await removeCaches()
         }
+
+        /// With page permissions (a license feature), Docmost leaves out the pages the user may not open only after
+        /// taking 25 matches: a page of 24 isn't the last, and the next starts at the 26th match, not after the 24
+        /// shown. A result that moved to the next page between the two shows once; an empty page ends the results.
+        @Test func aPageShortOfARestrictedPageHasMore() async throws {
+            let permissions = try JSONDecoder().decode(Entitlements.self, from: Data(#"{"tier": "enterprise", "features": ["page:permissions"]}"#.utf8))
+            await DiskCache(scope: a.absoluteString).write(permissions, key: CacheKey.entitlements)
+            let session = try await sessionOnA()
+            let search = SearchModel(query: "a")
+            search.session = session
+            let first = (1...24).map { "a\($0)" }
+            StubURLProtocol.body.withLock { $0 = Self.results(first) }
+            await search.run()
+            #expect(search.results.map(\.id) == first && search.hasMore)
+            StubURLProtocol.body.withLock { $0 = Self.results(["a24", "a25"]) }
+            await search.loadMore()
+            #expect(try searchOffset() == 25)
+            #expect(search.results.map(\.id) == first + ["a25"] && search.hasMore)
+            StubURLProtocol.body.withLock { $0 = Self.results([]) }
+            await search.loadMore()
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(try searchOffset() == 50)
+            #expect(search.results.map(\.id) == first + ["a25"] && !search.hasMore)
+            await removeCaches()
+        }
+
+        /// Without page permissions the server leaves nothing out: a short page is the last, and no "Load More"
+        /// follows it that finds nothing. A full page has more.
+        @Test func aShortPageEndsTheResults() async throws {
+            let session = try await sessionOnA()
+            let search = SearchModel(query: "a")
+            search.session = session
+            StubURLProtocol.body.withLock { $0 = Self.results((1...25).map { "a\($0)" }) }
+            await search.run()
+            #expect(search.results.count == 25 && search.hasMore)
+            StubURLProtocol.body.withLock { $0 = Self.results(["a26"]) }
+            await search.loadMore()
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(try searchOffset() == 25)
+            #expect(search.results.count == 26 && !search.hasMore)
+            await removeCaches()
+        }
+
+        /// Where the last search asked to start.
+        private func searchOffset() throws -> JSONValue? {
+            let sent = try #require(StubURLProtocol.bodies.withLock { $0["a.example.com/api/search"] })
+            return try JSONDecoder().decode([String: JSONValue].self, from: sent)["offset"]
+        }
     }
 }

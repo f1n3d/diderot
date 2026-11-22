@@ -24,6 +24,9 @@ final class SearchModel {
     /// The query whose results show, from their first page on. Back from a result, `.task(id: key)` starts again with
     /// the same key: searching again replaced what "Load More" added and lost the place (code review V38).
     @ObservationIgnored private var shownKey: Key?
+    /// Where the next page starts: after the matches the server took for the pages so far, which can be more than the
+    /// results shown (`search`).
+    @ObservationIgnored private var nextOffset = 0
     /// What the wait for more typing runs on; tests move a clock of their own (`TestClock`).
     @ObservationIgnored private let clock: any Clock<Duration>
 
@@ -46,6 +49,7 @@ final class SearchModel {
         guard isActive else {
             results = []
             shownKey = nil
+            nextOffset = 0
             hasMore = false
             errorMessage = nil
             isSearching = false
@@ -90,17 +94,27 @@ final class SearchModel {
         guard let session, session.client != nil else { return }
         errorMessage = nil
         let key = key
-        let offset = append ? results.count : 0
+        let offset = append ? nextOffset : 0
         let spaceId = spaceId
         let limit = pageSize
+        // Docmost leaves out the pages the user may not open (page permissions, a license feature) after it takes a
+        // page of matches, so such a page comes back short while more follow; there only an empty page is the last.
+        let leavesOutPages = session.ready?.entitlements.has("page:permissions") == true
         do {
             let response = try await session.send(Endpoints.Search.search(
                 query: key.query, spaceId: spaceId, titleOnly: key.titleOnly ? true : nil, limit: limit, offset: offset
             ))
             // "Load More" outlives its query's task: drop a page that no longer continues the results shown.
-            guard !Task.isCancelled, key == self.key, !append || results.count == offset else { return }
-            results = append ? results + response.items : response.items
-            hasMore = response.items.count == pageSize
+            guard !Task.isCancelled, key == self.key, !append || nextOffset == offset else { return }
+            if append {
+                // A page changed between the two requests can move to the next one, and the list shows results by id.
+                let shown = Set(results.map(\.id))
+                results += response.items.filter { !shown.contains($0.id) }
+            } else {
+                results = response.items
+            }
+            nextOffset = offset + limit
+            hasMore = leavesOutPages ? !response.items.isEmpty : response.items.count == limit
             if !append { shownKey = key }
         } catch is CancellationError {
         } catch {
