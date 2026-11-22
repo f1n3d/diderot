@@ -250,6 +250,76 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// A reload while a rename is on its way (an icon or cover set meanwhile) shows the rename, and leaving the field
+        /// then sends nothing: the field showed the loaded title again, and focusing and leaving it sent that one over the
+        /// rename.
+        @Test(.timeLimit(.minutes(1))) func aReloadDuringARenameShowsTheRename() async throws {
+            let session = try await sessionOnA()
+            defer { UnsentChanges.removeAll(server: a) }
+            let onA = try #require(session.ready)
+            let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+            let edit = PageTitleEdit()
+            func commit() -> Task<Void, Never>? {
+                edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: {}) { _ in }
+            }
+            func updates() -> Int { StubURLProtocol.requests.withLock { $0.filter { $0 == Self.titleUpdate }.count } }
+
+            StubURLProtocol.requests.withLock { $0 = [] }
+            let release = holdNextTitleRequest()
+            defer {
+                release.finish()
+                answerAsUsual()
+            }
+            edit.text = "Plan"
+            let rename = commit()
+            try await titleRequestHeld()
+            // The page loads again with the title the server still has.
+            edit.show(page, typing: false)
+            #expect(edit.text == "Plan", "the field shows the rename on its way")
+            // Focused and left without typing.
+            let again = commit()
+            #expect(again == nil, "nothing goes over the rename")
+
+            release.finish()
+            await rename?.value
+            await again?.value
+            #expect(updates() == 1)
+            #expect(edit.unsent == "Plan", "the rename waits to go")
+            #expect(await session.unsentTitle(pageId: "p1") == "Plan")
+            await removeCaches()
+        }
+
+        /// The loaded title typed back while a rename waits on the device goes out, and the rename doesn't go after it:
+        /// skipped as unchanged, it left the rename kept, to go out over it once the server answered.
+        @Test(.timeLimit(.minutes(1))) func theLoadedTitleTypedBackReplacesAWaitingRename() async throws {
+            let session = try await sessionOnA()
+            defer { UnsentChanges.removeAll(server: a) }
+            let onA = try #require(session.ready)
+            let page = try JSONDecoder().decode(Page.self, from: Data(#"{"id": "p1", "title": "Alt", "spaceId": "s1"}"#.utf8))
+            let edit = PageTitleEdit()
+            func commit(_ text: String) -> Task<Void, Never>? {
+                edit.text = text
+                return edit.commit(page, in: onA, session: session, changes: ContentChanges(), sent: {}) { _ in }
+            }
+
+            StubURLProtocol.offline.withLock { $0 = true }
+            await commit("Plan")?.value
+            StubURLProtocol.offline.withLock { $0 = false }
+            #expect(edit.unsent == "Plan")
+
+            StubURLProtocol.bodies.withLock { $0[Self.titleUpdate] = nil }
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Alt"}}"# }
+            defer { StubURLProtocol.body.withLock { $0 = nil } }
+            let back = commit("Alt")
+            #expect(back != nil, "the loaded title typed back is saved")
+            await back?.value
+            let last = StubURLProtocol.bodies.withLock { $0[Self.titleUpdate] }.flatMap { String(data: $0, encoding: .utf8) }
+            #expect(last?.contains("Alt") == true, "the server got the loaded title")
+            #expect(edit.unsent == nil)
+            #expect(await session.unsentTitle(pageId: "p1") == nil, "the rename doesn't go later")
+            await removeCaches()
+        }
+
         static let titleUpdate = "a.example.com/api/pages/update"
 
         /// Holds the next title request, as a network handover does, until the returned continuation finishes; then it

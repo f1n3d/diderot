@@ -18,9 +18,11 @@ final class PageTitleEdit {
     /// Counts the saves: only the newest says how it went (`unsent`, a report) and ends `saving`.
     @ObservationIgnored private var latest = 0
 
-    /// The page's title, or the one it waits to get; not while one is being typed.
+    /// The page's title, or the one on its way to it or waiting to go; not while one is being typed. A page that loads
+    /// again while a rename is on its way (an icon set meanwhile) still has the older title: shown, a focus loss would
+    /// send it over the rename.
     func show(_ page: Page, typing: Bool) {
-        if !typing { text = unsent ?? page.title ?? "" }
+        if !typing { text = saving ?? unsent ?? page.title ?? "" }
     }
 
     /// Return in the field (it takes it as a line break, being vertical) ends the title (`SingleLineInput`): a pasted
@@ -41,8 +43,9 @@ final class PageTitleEdit {
     func commit(_ page: Page, in pageSession: ReadySession, session: AppSession, changes: ContentChanges,
                 sent: @escaping () async -> Void, report: @escaping (String) -> Void) -> Task<Void, Never>? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The loaded title goes again while a newer one is on its way: typed back, it must come after that one.
-        guard trimmed != (page.title ?? "") || saving != nil, trimmed != saving else { return nil }
+        // The loaded title goes again while a newer one is on its way or waits on the device: typed back, it must come
+        // after that one, or the newer one goes out over it later.
+        guard trimmed != (page.title ?? "") || saving != nil || unsent != nil, trimmed != saving else { return nil }
         // Its session ended (401) or a link switched servers: the title waits for the next sign-in there, like the text.
         guard session.isStillCurrent(pageSession) else {
             return Task { await session.keepUnsentTitle(trimmed, pageId: page.id, spaceId: page.spaceId, in: pageSession.unsentChanges) }
