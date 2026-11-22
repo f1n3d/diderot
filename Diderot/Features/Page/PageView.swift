@@ -1063,8 +1063,8 @@ struct PageView: View {
     }
 
     /// Where "Show on Page" goes, as find goes to a match: the text block holding the comment's mark, centered above the
-    /// keyboard (the top-level block went to the middle of the screen, behind the keyboard). Where find doesn't look
-    /// (tabs), the top-level block around the mark.
+    /// keyboard (the top-level block went to the middle of the screen, behind the keyboard). Where find doesn't look, the
+    /// top-level block around the mark.
     private func passage(ofComment id: String) -> FindMatch? {
         guard let model else { return nil }
         return FindMatcher.passage(ofComment: id, in: model.document)

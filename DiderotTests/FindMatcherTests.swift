@@ -69,9 +69,62 @@ struct FindMatcherTests {
         #expect(matches.map(\.topLevel.path) == [[0], [0], [0], [1], [2]])
     }
 
+    /// A tab's blocks (Docmost 0.97) are searched, with the paths `TabsNodeView` gives its panel: a word in the tab that
+    /// shows is counted, as the page highlights it there.
+    @Test func matchInTheFirstTabIsCounted() throws {
+        func paragraph(_ text: String) -> PMNode { PMNode(type: "paragraph", content: [PMNode(type: "text", text: text)]) }
+        let tabs = PMNode(type: "tabs", content: [
+            NodeFactory.tab(label: "Erster", panel: [paragraph("Das Budget steht hier")]),
+            NodeFactory.tab(label: "Zweiter", panel: [paragraph("Nichts")]),
+        ])
+        let document = PMNode(type: "doc", content: [paragraph("Davor"), tabs])
+        let find = PageFind()
+        find.query = "Budget"
+        find.update(document: document, baseURL: nil, previewTitles: [:], restart: true)
+        // A tab's panel is its child 1, after its label.
+        #expect(find.matches.map(\.ref.path) == [[1, 0, 1, 0]], "the tab's word isn't counted")
+        #expect(find.matches.map(\.topLevel.path) == [[1]])
+
+        // The shown tab's paragraph, as `TextNodeView` highlights it: its one occurrence is the current match.
+        var text = AttributedString("Das Budget steht hier")
+        FindMatcher.highlight(&text, find: find, ref: NodeRef(path: [1, 0, 1, 0], node: tabs.children[0].children[1].children[0]))
+        #expect(text.runs.filter { $0.backgroundColor == Color.orange.opacity(0.65) }.count == 1,
+                "the tab highlights a match the bar doesn't count")
+    }
+
+    /// A match in a tab that doesn't show is numbered in reading order and reached with Next, and that tab is the one
+    /// `TabsNodeView` shows for it. A comment's passage there is found as well.
+    @Test func matchInALaterTabIsReachedAndShowsItsTab() throws {
+        func paragraph(_ text: String, comment: String? = nil) -> PMNode {
+            PMNode(type: "paragraph", content: [
+                PMNode(type: "text", marks: comment.map { [PMMark(type: "comment", attrs: ["commentId": .string($0)])] }, text: text),
+            ])
+        }
+        let tabs = PMNode(type: "tabs", content: [
+            NodeFactory.tab(label: "Erster", panel: [paragraph("Nichts")]),
+            NodeFactory.tab(label: "Zweiter", panel: [paragraph("Davor"), paragraph("Das Budget im zweiten", comment: "c1")]),
+        ])
+        let document = PMNode(type: "doc", content: [paragraph("Ein Budget vorher"), tabs, paragraph("Budget danach")])
+        let find = PageFind()
+        find.query = "Budget"
+        find.update(document: document, baseURL: nil, previewTitles: [:], restart: true)
+        #expect(find.matches.map(\.ref.path) == [[0], [1, 1, 1, 1], [2]], "the hidden tab's word isn't found")
+        find.next()
+        let match = try #require(find.currentMatch)
+        #expect(match.ref.path == [1, 1, 1, 1])
+        #expect(match.topLevel.path == [1])
+
+        let entries = NodeEntry.entries(tabs.children, parentPath: [1])
+        #expect(TabsNodeView.tab(holding: find.revealTarget?.ref.path, in: entries, at: [1])?.ref.path == [1, 1],
+                "another tab shows than the one holding the match")
+        #expect(TabsNodeView.tab(holding: [2], in: entries, at: [1]) == nil)
+
+        #expect(FindMatcher.passage(ofComment: "c1", in: document)?.ref.path == [1, 1, 1, 1])
+    }
+
     /// "Show on Page" goes to the first text block holding the comment's mark, by the refs the views give it, as find
-    /// goes to a match: an item's second paragraph, a table cell's. Where find doesn't look (tabs), nothing: the page
-    /// falls back to the top-level block there.
+    /// goes to a match: an item's second paragraph, a table cell's, a tab's. Where find doesn't look, nothing: the
+    /// page falls back to the top-level block there.
     @Test func commentPassageIsItsFirstTextBlock() {
         func text(_ text: String, comment: String? = nil) -> PMNode {
             PMNode(type: "text", marks: comment.map { [PMMark(type: "comment", attrs: ["commentId": .string($0)])] }, text: text)
@@ -92,8 +145,7 @@ struct FindMatcherTests {
         #expect(first?.ref.path == [1, 1, 1])
         #expect(first?.topLevel.path == [1])
         #expect(FindMatcher.passage(ofComment: "c2", in: document)?.ref.path == [2, 0, 1, 0])
-        #expect(FindMatcher.passage(ofComment: "c3", in: document) == nil)
-        #expect(document.children[3].holdsComment("c3"), "the fallback finds the tabs by their mark")
+        #expect(FindMatcher.passage(ofComment: "c3", in: document)?.ref.path == [3, 0, 1, 0])
         #expect(FindMatcher.passage(ofComment: "c4", in: document) == nil)
     }
 

@@ -16,8 +16,9 @@ struct FindMatch: Equatable {
 
 /// Find like Safari's "Find on Page": matches in reading order; the page scrolls to the current one. Ignores
 /// diacritics, and case while "Aa" is off. Searches paragraphs, headings and code, also inside lists, quotes,
-/// callouts, tables, toggle blocks, columns, footnotes and this page's synced blocks. A collapsed toggle shows its
-/// content while it holds a match, as on the web (`holdsMatch(inside:)`), and stays collapsed: nothing is saved.
+/// callouts, tables, toggle blocks, columns, tabs, footnotes and this page's synced blocks. A collapsed toggle shows its
+/// content while it holds a match, as on the web (`holdsMatch(inside:)`), and stays collapsed: nothing is saved. The
+/// tab holding the current match shows (`TabsNodeView`).
 @MainActor
 @Observable
 final class PageFind {
@@ -242,7 +243,7 @@ enum FindMatcher {
     }
 
     /// The first text block holding a comment's mark: where "Show on Page" goes, as find goes to a match. Nil where find
-    /// doesn't look (tabs).
+    /// doesn't look.
     static func passage(ofComment id: String, in document: PMNode) -> FindMatch? {
         var passage: FindMatch?
         forEachTextBlock(in: document) { node, ref, topLevel in
@@ -255,7 +256,7 @@ enum FindMatcher {
 
     /// The text blocks find searches, in reading order, with the refs the views give them and their top-level block:
     /// paragraphs, headings, toggle titles and code (not Mermaid, which shows a diagram), also inside lists, quotes,
-    /// callouts, tables, toggles, columns, footnotes and synced blocks. `body` returns false to stop.
+    /// callouts, tables, toggles, columns, tabs, footnotes and synced blocks. `body` returns false to stop.
     private static func forEachTextBlock(in document: PMNode, _ body: (PMNode, NodeRef, NodeRef) -> Bool) {
         for entry in NodeEntry.entries(document.children, parentPath: []) {
             guard visit(entry.node, ref: entry.ref, topLevel: entry.ref, body) else { return }
@@ -283,6 +284,13 @@ enum FindMatcher {
             // A toggle's title at index 0 and its content from index 1, also while it's collapsed: it shows a match there
             // (`ToggleNodeView`), as the web's search does.
             return children(node.children, parentPath: ref.path)
+        case "tabs":
+            // Every tab's blocks, at the paths its panel gives them (`TabsNodeView`), also of the tabs that don't show: the
+            // page highlights the shown tab's matches, and the tab holding find's target shows by itself.
+            return NodeEntry.entries(node.children, parentPath: ref.path).allSatisfy { tab in
+                guard tab.node.type == "tab", let panel = tab.node.children.firstIndex(where: { $0.type == "tabPanel" }) else { return true }
+                return children(tab.node.children[panel].children, parentPath: tab.ref.path + [panel])
+            }
         default:
             return true
         }

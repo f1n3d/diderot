@@ -3,8 +3,8 @@ import DocmostKit
 
 /// Tabs while editing (Docmost 0.97): the strip switches tabs; holding a tab opens its menu (rename, duplicate, move,
 /// delete), holding and moving it drags it to another place, and "+" adds one, then asks for its name as the web
-/// does. The shown tab's blocks edit like any others; the tab holding the cursor or the current find match shows by
-/// itself.
+/// does. The shown tab's blocks edit like any others; the tab holding the cursor, find's current match or a comment's
+/// passage ("Show on Page") shows by itself.
 struct TabsNodeView: View {
     let model: DocumentModel
     let node: PMNode
@@ -64,7 +64,9 @@ struct TabsNodeView: View {
             }
         }
         .onChange(of: model.active?.ref.path) { _, path in reveal(path) }
-        .onChange(of: find?.currentMatch?.ref.path) { _, path in reveal(path) }
+        // Also when the block is first built: the page jumps to a block it hasn't built yet, and a target in a tab that
+        // doesn't show could never report its frame.
+        .onChange(of: find?.revealTarget?.ref.path, initial: true) { _, path in reveal(path) }
         .onChange(of: tabs.map(\.id)) { _, ids in
             // The new tab arrived: show it and ask for its name.
             guard let index = added, ids.indices.contains(index) else { return }
@@ -163,12 +165,15 @@ struct TabsNodeView: View {
         ])
     }
 
-    /// Shows the tab that holds `path` (the cursor, a find match), if it lies in this block.
+    /// Shows the tab that holds `path` (the cursor, find's target), if it lies in this block.
     private func reveal(_ path: [Int]?) {
-        guard let path, path.count > ref.path.count + 1, path.starts(with: ref.path) else { return }
-        let tabs = tabs
-        let index = path[ref.path.count]
-        if tabs.indices.contains(index) { shown = tabs[index].id }
+        if let tab = Self.tab(holding: path, in: tabs, at: ref.path) { shown = tab.id }
+    }
+
+    /// The tab of the tabs block at `tabsPath` that holds `path`, by its place among the block's children.
+    static func tab(holding path: [Int]?, in tabs: [NodeEntry], at tabsPath: [Int]) -> NodeEntry? {
+        guard let path, path.count > tabsPath.count + 1, path.starts(with: tabsPath) else { return nil }
+        return tabs.first { $0.ref.path.last == path[tabsPath.count] }
     }
 }
 
