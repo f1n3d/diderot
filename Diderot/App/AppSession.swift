@@ -371,6 +371,9 @@ final class AppSession {
     private func signIn(at screen: ServerInfo, _ login: (APIClient) async throws -> LoginResult) async throws -> SignInOutcome {
         // The state's copy: it can know more of the server (`loadWorkspaceInfo`).
         guard case .signedOut(let server) = state, Self.isSameServer(server, as: screen) else { throw CancellationError() }
+        // `.authenticating` ends the wait for the saved sign-in the start couldn't check, so that a late retry can't take
+        // over this sign-in. Back on the sign-in screen, it waits for it again.
+        let unchecked = uncheckedSignIn
         state = .authenticating(server)
         do {
             let client = makeClient(for: server.url, token: nil)
@@ -381,13 +384,22 @@ final class AppSession {
                 return .signedIn
             case .mfaRequired(let challenge):
                 guard isSigningIn(at: server) else { throw CancellationError() }
-                state = .signedOut(server)
+                returnToSignIn(at: server, waitingFor: unchecked)
                 return .mfaRequired(challenge)
             }
         } catch {
-            if isSigningIn(at: server) { state = .signedOut(server) }
+            if isSigningIn(at: server) { returnToSignIn(at: server, waitingFor: unchecked) }
             throw error
         }
+    }
+
+    /// The sign-in screen again after a sign-in that didn't finish, with the saved sign-in it waited for
+    /// (`uncheckedSignIn`): Try Again went, and nothing checked the saved sign-in again until a relaunch.
+    private func returnToSignIn(at server: ServerInfo, waitingFor unchecked: StoredSession?) {
+        state = .signedOut(server)
+        guard let unchecked else { return }
+        uncheckedSignIn = unchecked
+        retryUncheckedSignInWhenTheNetworkChanges()
     }
 
     private func isSigningIn(at server: ServerInfo) -> Bool {

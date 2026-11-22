@@ -137,6 +137,35 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// A sign-in there that fails or asks for an MFA code leaves the screen waiting for the saved sign-in again: Try
+        /// Again and the retries on a network change went with it, and nothing checked the saved sign-in until a relaunch.
+        @Test func failedSignInKeepsTheUncheckedSignIn() async throws {
+            let networkChanged = Mutex(false)
+            let session = try await uncheckedStartOnA {
+                $0.networkReturns = {
+                    while !Task.isCancelled {
+                        if networkChanged.withLock({ $0 }) { return true }
+                        try? await Task.sleep(for: .milliseconds(10))
+                    }
+                    return false
+                }
+            }
+            let server = ServerInfo(url: a, workspace: nil)
+            StubURLProtocol.offline.withLock { $0 = true }
+            await #expect(throws: APIError.self) { try await session.signIn(email: "u1@example.com", password: "secret", at: server) }
+            StubURLProtocol.offline.withLock { $0 = false }
+            #expect(session.uncheckedSignIn?.token == "a", "after a failed sign-in")
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"userHasMfa": true}}"# }
+            let outcome = try await session.signIn(email: "u1@example.com", password: "secret", at: server)
+            StubURLProtocol.body.withLock { $0 = nil }
+            let asksForCode = if case .mfaRequired = outcome { true } else { false }
+            #expect(asksForCode && session.uncheckedSignIn?.token == "a", "after an MFA challenge")
+            networkChanged.withLock { $0 = true }
+            for _ in 0..<100 where session.ready == nil { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(session.ready?.token == "a" && session.uncheckedSignIn == nil, "the network change tried it again")
+            await removeCaches()
+        }
+
         /// Signing in anew there ends the saved sign-in's session on the server, as signing out does: it stayed open (code
         /// review R40).
         @Test func signingInAnewEndsTheUncheckedSignIn() async throws {
