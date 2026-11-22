@@ -77,7 +77,8 @@ const syncUpdate = 2;
  * changes come in, the page's own stay in its shared document, and the sync after `release` sends them all. Changes made
  * while the connection is down wait for the next connect the same way: queued, they would go out with it, before the app
  * could ask. A connect without such changes holds nothing back: the page's answer to the server's sync is empty then,
- * and nothing counts as withheld.
+ * and nothing counts as withheld. Its release still sends the full answer once, for changes the server confirmed and
+ * then lost.
  */
 export class ChangeHold {
   /** Connects so far: each one holds until `release` names it. */
@@ -102,6 +103,12 @@ export class ChangeHold {
    * says nothing of the changes the answer carries.
    */
   private answered = false;
+  /**
+   * The page answered the server's sync on this connection with an empty update while the connect held. The release
+   * still sends the full answer once: the server confirms a change once it has it in memory and stores the page later,
+   * so after a crash it may lack changes it confirmed, and only that answer, made from its state, gives them back.
+   */
+  private answeredEmpty = false;
 
   /** `changed` runs when `withheld` changes. */
   constructor(private readonly changed: () => void) {}
@@ -123,6 +130,7 @@ export class ChangeHold {
     // Confirmations come on the connection a change went out on.
     this.awaiting = 0;
     this.answered = false;
+    this.answeredEmpty = false;
   }
 
   /** The page's changes may go out on connect `connect`, the current one; a later connect holds again. */
@@ -167,7 +175,10 @@ export class ChangeHold {
       }
       this.resyncing = false;
       this.keep(false);
-      if (sync.step === syncStep2) this.answered = true;
+      if (sync.step === syncStep2) {
+        this.answered = true;
+        this.answeredEmpty = false;
+      }
       this.awaiting++;
       return message;
     }
@@ -176,14 +187,16 @@ export class ChangeHold {
     if (sync.step === syncUpdate || this.ownChanges) this.keep(true);
     if (!open || sync.step !== syncStep2) return null;
     // An empty answer completes the server's sync: the connection then syncs as a reader's. Without changes of the
-    // page's own that the server lacks, the full answer would carry nothing more either.
+    // page's own that the server hasn't confirmed, the full answer would carry nothing more either, unless the server
+    // lost some it confirmed: the release sends it all the same.
     if (!this.ownChanges) this.answered = true;
+    this.answeredEmpty = true;
     this.awaiting++;
     return emptyAnswer(message.subarray(0, sync.nameEnd));
   }
 
   private resync(provider: HocuspocusProvider) {
-    if (this.holds || !this.kept || this.resyncing || !provider.isAuthenticated) return;
+    if (this.holds || !(this.kept || this.answeredEmpty) || this.resyncing || !provider.isAuthenticated) return;
     this.resyncing = true;
     provider.forceSync();
   }

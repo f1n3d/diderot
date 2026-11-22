@@ -2,8 +2,9 @@
 // connect's sync emits "synced", after a connection that ended with a close event and after one that died without
 // notice, which the socket closes itself as WebKit gives no close event then. The app shows "Saved" only after
 // "synced". A connection that holds the page's changes (`ChangeHold`) sends none until its connect is released, and
-// each reconnect holds again; it holds back only changes the server hasn't confirmed, and the provider counts each
-// change until the server confirms it. Exits with 1 on any difference.
+// each reconnect holds again; it holds back only changes the server hasn't confirmed, each release still gives the
+// server back changes it confirmed and lost, and the provider counts each change until the server confirms it. Exits
+// with 1 on any difference.
 import * as Y from "yjs";
 import { ChangeHold, connection } from "../src/connection";
 
@@ -419,6 +420,32 @@ async function releasedBeforeTheSync(): Promise<string[]> {
   return end();
 }
 
+/**
+ * A change the server confirmed and then lost, as when Docmost's collab server ends abruptly before it stored the page:
+ * it confirms a change once it has it in memory and stores the page seconds later. The change is typed right after the
+ * first connect's release, while the sync it starts runs; the page reconnects, and that connect is released too.
+ */
+async function forgotten(): Promise<string[]> {
+  const { hold, provider, text, state, has, start, end } = holding("page.forgotten");
+  start();
+  await until(() => provider.synced);
+  await pause(50);
+  hold.release(hold.connects, provider);
+  text.insert(0, "confirmed ");
+  await has("confirmed");
+  state("confirmed");
+  // The server starts again from what it stored, without the change.
+  StandInSocket.documents.set("page.forgotten", new Y.Doc());
+  StandInSocket.opened.at(-1)!.ends();
+  await until(() => hold.connects === 2 && provider.synced);
+  await pause(50);
+  state("reconnected");
+  hold.release(2, provider);
+  await has("confirmed");
+  state("released");
+  return end();
+}
+
 async function main() {
   expect("a connection that ended: synced again after the reconnect", ["synced", "lost 1006", "closed 1006", "synced"],
     await events((socket) => socket.ends()));
@@ -469,6 +496,15 @@ async function main() {
     'reconnected: server "", withheld true, unsynced 0',
     'released: server "lost early ", withheld false, unsynced 0',
   ], await releasedBeforeTheSync());
+  // The page's answer to the server's sync is empty while the connect holds, as the page has no changes the server
+  // hasn't confirmed; only the full answer after the release gives the server back what it lost.
+  expect("a change the server confirmed and lost: the sync after a connect's release sends it again", [
+    "synced",
+    'confirmed: server "confirmed ", withheld false, unsynced 0',
+    "synced",
+    'reconnected: server "", withheld false, unsynced 0',
+    'released: server "confirmed ", withheld false, unsynced 0',
+  ], await forgotten());
   console.log(differences > 0 ? `${differences} difference(s)`
     : "Each connect syncs again, also after a connection that died without notice; a held connection sends nothing before its release, and holds back only changes the server hasn't confirmed.");
   // The provider's own timers would keep Node running.
