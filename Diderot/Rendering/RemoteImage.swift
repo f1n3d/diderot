@@ -28,8 +28,7 @@ struct ContentImageView: View {
     @ViewBuilder
     private var content: some View {
         if let loaded {
-            Image(uiImage: loaded)
-                .resizable()
+            ResizableImage(image: loaded)
                 .aspectRatio(contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .accessibilityLabel(image.alt ?? String(localized: "Image"))
@@ -108,5 +107,42 @@ struct ContentImageView: View {
             // File names are user content and logs can be exported, so only the folder, as the client logs it.
             AppLog.ui.debug("Image failed: \(url.deletingLastPathComponent().path, privacy: .public) – \(error.userMessage, privacy: .public)")
         }
+    }
+}
+
+/// A decoded image drawn as `Image(uiImage:).resizable()` draws it, at the size it is given, but an animated one (a
+/// GIF's frames, `MediaLoader.decode`) plays: SwiftUI's `Image` shows its first frame only. With Accessibility ›
+/// Motion › Animated Images off, it shows that frame too.
+struct ResizableImage: View {
+    let image: UIImage
+    @Environment(\.accessibilityPlayAnimatedImages) private var playsAnimatedImages
+
+    var body: some View {
+        if playsAnimatedImages, image.images != nil {
+            PlayingImage(image: image)
+        } else {
+            Image(uiImage: image.images?.first ?? image).resizable()
+        }
+    }
+}
+
+/// UIImageView plays an animated image by itself.
+private struct PlayingImage: UIViewRepresentable {
+    let image: UIImage
+
+    func makeUIView(context: Context) -> UIImageView {
+        let view = UIImageView()
+        view.isAccessibilityElement = true
+        view.accessibilityTraits = .image
+        return view
+    }
+
+    func updateUIView(_ view: UIImageView, context: Context) {
+        if view.image !== image { view.image = image }
+    }
+
+    /// Any size, as a resizable `Image`: the frame and aspect ratio around it decide, its own size where none is given.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIImageView, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions(by: image.size)
     }
 }

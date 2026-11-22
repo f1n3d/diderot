@@ -239,12 +239,19 @@ private struct ZoomableImage: UIViewRepresentable {
     let close: () -> Void
 
     func makeUIView(context: Context) -> ImageZoomView {
-        ImageZoomView(image: image)
+        ImageZoomView(image: shown(context))
     }
 
     func updateUIView(_ view: ImageZoomView, context: Context) {
+        let shown = shown(context)
+        if view.imageView.image !== shown { view.imageView.image = shown }
         view.imageView.accessibilityLabel = label
         view.close = close
+    }
+
+    /// The image view plays an animated image, as the page does (`ResizableImage`), unless Animated Images is off.
+    private func shown(_ context: Context) -> UIImage {
+        context.environment.accessibilityPlayAnimatedImages ? image : image.images?.first ?? image
     }
 }
 

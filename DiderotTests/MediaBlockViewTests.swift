@@ -338,6 +338,35 @@ struct MediaBlockViewTests {
         #expect(gate.maxBytes == nil && gate != MediaGate())
     }
 
+    /// An animated GIF plays in the page (the reader, the editor, a presentation), as on the web, and VoiceOver still
+    /// reads it as the image it is: SwiftUI's `Image` showed its first frame only.
+    @Test func animatedImagesPlay() async throws {
+        let file = URL.temporaryDirectory.appending(path: "animated-\(UUID().uuidString).gif")
+        try MediaLoaderTests.animation(.gif, delays: [0.1, 0.1, 0.1], width: 40, height: 30).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let server = URL(string: "https://animated.docmost.invalid")!
+        let context = RenderContext(baseURL: server, client: nil, mediaLoader: MediaLoader(client: APIClient(baseURL: server)), token: nil, pageId: nil)
+        let doc = PMNode(type: "doc", content: [PMNode(type: "image", attrs: ["src": .string(file.absoluteString), "alt": "Screen recording"])])
+        let view = BlockView(block: try #require(ContentParser.parse(doc).blocks.first)).environment(\.renderContext, context)
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: view)
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        #expect(await poll { imageViews(in: window).contains { $0.image?.images?.count == 3 && $0.window != nil } })
+        let playing = try #require(imageViews(in: window).first { $0.image?.images != nil })
+        // UIImageView plays it as an animation of its layer's contents.
+        #expect(playing.layer.animationKeys()?.isEmpty == false)
+        #expect(playing.bounds.width > 0 && abs(playing.bounds.width / playing.bounds.height - 4 / 3) < 0.01, "\(playing.bounds)")
+        #expect(labels(in: window).contains("Screen recording"))
+    }
+
+    private func imageViews(in view: UIView) -> [UIImageView] {
+        view.layoutIfNeeded()
+        return [view as? UIImageView].compactMap(\.self) + view.subviews.flatMap(imageViews)
+    }
+
     /// Taps the element whose label holds `text` until `done`. Again where needed: SwiftUI may build the view anew
     /// while other tests' windows come and go, and a tap on an element of the view before reaches nothing.
     private func tap(_ text: String, in window: UIWindow, until done: () -> Bool) async -> Bool {

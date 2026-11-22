@@ -71,6 +71,68 @@ struct MediaLoaderTests {
         #expect(await MediaLoader.decode(data, targetPixelWidth: 100, maxSourcePixels: 200_000) != nil)
     }
 
+    /// An animated GIF or PNG plays as the web's `<img>` plays it: every frame, each as long as the file says, and one
+    /// of 10 ms or less (often 0) for 100 ms, as browsers take it. It decoded to its first frame only.
+    @Test(arguments: [UTType.gif, .png])
+    func animatedImagesKeepTheirFramesAndTiming(type: UTType) async throws {
+        let data = try Self.animation(type, delays: [0.2, 0.6, 0], width: 40, height: 30)
+        let image = try #require(await MediaLoader.decode(data, targetPixelWidth: 512))
+        let frames = try #require(image.images, "animated")
+        // Equal steps of 100 ms: the first frame for two, the second for six, the third for one.
+        var runs: [Int] = []
+        for (index, frame) in frames.enumerated() {
+            if index > 0, frames[index - 1] === frame { runs[runs.count - 1] += 1 } else { runs.append(1) }
+        }
+        #expect(runs == [2, 6, 1])
+        #expect(abs(image.duration - 0.9) < 0.001)
+        #expect(image.size == CGSize(width: 40, height: 30))
+        // The memory cache counts each frame once, however often it repeats.
+        #expect(MediaLoader.decodedBytes(image) == 3 * 40 * 30 * 4)
+        // The same from a file, as the full-screen viewer decodes it.
+        let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).\(type.preferredFilenameExtension ?? "img")")
+        try data.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        #expect(await MediaLoader.decode(file: file, targetPixelWidth: 16_384)?.images?.count == 9)
+    }
+
+    /// An animation's frames together take no more memory than one still image may (`maxPixels`): a large one plays
+    /// smaller. One of more frames than `maxAnimationFrames`, and a TIFF's pages, show the first frame, still.
+    @Test func animationsKeepToTheLimits() async throws {
+        let large = try Self.animation(.gif, delays: Array(repeating: 0.1, count: 10), width: 1500, height: 1000)
+        let image = try #require(await MediaLoader.decode(large, targetPixelWidth: 2048))
+        let frame = try #require(image.images?.first)
+        let pixels = 10 * frame.size.width * frame.size.height
+        #expect(pixels <= MediaLoader.maxPixels && pixels > MediaLoader.maxPixels * 0.95, "\(frame.size)")
+        #expect(abs(frame.size.width / frame.size.height - 1.5) < 0.01)
+
+        let long = try Self.animation(.gif, delays: Array(repeating: 0.1, count: MediaLoader.maxAnimationFrames + 1), width: 8, height: 8)
+        #expect(try #require(await MediaLoader.decode(long, targetPixelWidth: 64)).images == nil)
+        let pages = try Self.animation(.tiff, delays: [0.1, 0.1], width: 8, height: 8)
+        #expect(try #require(await MediaLoader.decode(pages, targetPixelWidth: 64)).images == nil)
+    }
+
+    /// Frames of `width` × `height` pixels, each in its own color, that last `delays` seconds, as a GIF or an APNG
+    /// that loops; another type (TIFF) gets them as pages.
+    static func animation(_ type: UTType, delays: [Double], width: Int, height: Int) throws -> Data {
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, type.identifier as CFString, delays.count, nil))
+        let (dictionary, loopCount, delayTime) = type == .png
+            ? (kCGImagePropertyPNGDictionary, kCGImagePropertyAPNGLoopCount, kCGImagePropertyAPNGDelayTime)
+            : (kCGImagePropertyGIFDictionary, kCGImagePropertyGIFLoopCount, kCGImagePropertyGIFDelayTime)
+        CGImageDestinationSetProperties(destination, [dictionary: [loopCount: 0]] as CFDictionary)
+        for (index, delay) in delays.enumerated() {
+            let context = try #require(CGContext(
+                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+            ))
+            context.setFillColor(red: CGFloat(index % 2), green: CGFloat(index % 3) / 2, blue: CGFloat(index % 5) / 4, alpha: 1)
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            CGImageDestinationAddImage(destination, try #require(context.makeImage()), [dictionary: [delayTime: delay]] as CFDictionary)
+        }
+        try #require(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
     private func jpeg(width: Int, height: Int, orientation: Int) throws -> Data {
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
