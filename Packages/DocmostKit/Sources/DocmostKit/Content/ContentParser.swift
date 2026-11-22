@@ -166,9 +166,15 @@ public enum ContentParser {
         default:
             // Media kinds by `MediaBlock.Kind`, so a new kind can't be listed here and missing there.
             if let kind = MediaBlock.Kind(rawValue: node.type) {
+                let src = node.string("src") ?? node.string("url")
+                // An upload names its file in the placeholder (an attachment in `name`); the web drops the placeholder
+                // when it sets the file.
+                let placeholder = node.attr("placeholder")?.objectValue
+                let isUploading = placeholder != nil && (src ?? "").isEmpty
+                let name = node.string("name") ?? node.string("title") ?? (isUploading ? placeholder?["name"]?.stringValue : nil)
                 return Block(id: id, kind: .media(MediaBlock(
-                    kind: kind, src: node.string("src") ?? node.string("url"), attachmentId: node.string("attachmentId"),
-                    name: node.string("name") ?? node.string("title"), size: node.int("size"), provider: node.string("provider")
+                    kind: kind, src: src, attachmentId: node.string("attachmentId"), name: name, size: node.int("size"),
+                    provider: node.string("provider"), isUploading: isUploading
                 )))
             }
             // Unknown container: keep the children (like the server); pure text content becomes a paragraph.

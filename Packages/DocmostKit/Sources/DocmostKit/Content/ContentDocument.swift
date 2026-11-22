@@ -228,6 +228,9 @@ public struct MediaBlock: Sendable, Hashable {
     public let name: String?
     public let size: Int?
     public let provider: String?
+    /// A file another client is still uploading (Docmost 0.96 and later): the web puts the node in without the file,
+    /// and with a `placeholder`, until the server has it.
+    public let isUploading: Bool
 }
 
 public struct TableBlock: Sendable, Hashable {
