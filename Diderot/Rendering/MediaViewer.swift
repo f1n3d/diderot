@@ -181,7 +181,8 @@ private struct MediaViewerPage: View {
     let loaded: (URL) -> Void
     @Environment(\.renderContext) private var context
     @State private var image: UIImage?
-    @State private var markup: String?
+    /// A diagram's page (`IslandHTML.diagram`), built once.
+    @State private var html: String?
     @State private var standIn = MediaStandIn.loading
     @State private var gate = MediaGate()
 
@@ -191,8 +192,8 @@ private struct MediaViewerPage: View {
         Group {
             if let image {
                 ZoomableImage(image: image, label: title, close: close)
-            } else if let markup {
-                ZoomableDiagram(markup: markup, label: title, close: close)
+            } else if let html {
+                ZoomableDiagram(html: html, label: title, close: close)
             } else {
                 MediaStandInCard(standIn: standIn, icon: media.isDiagram ? "pencil.and.outline" : "photo", title: title,
                                  failure: media.isDiagram ? String(localized: "Diagram could not be loaded.") : String(localized: "Image unavailable"),
@@ -205,7 +206,7 @@ private struct MediaViewerPage: View {
     }
 
     private func load() async {
-        guard image == nil, markup == nil else { return }
+        guard image == nil, html == nil else { return }
         guard let loader = context.mediaLoader, let url = context.mediaURL(media.src) else { return standIn = .failed(reason: nil) }
         if let waits = gate.standIn(before: url, in: context) { return standIn = waits }
         if gate.stillWaits(standIn) { return }
@@ -213,13 +214,13 @@ private struct MediaViewerPage: View {
         do {
             let source = try await loader.file(for: url, maxBytes: gate.maxBytes)
             if media.isDiagram {
-                markup = DiagramView.svg(in: try await MediaLoader.read(source))
+                html = await IslandHTML.diagram(from: try await MediaLoader.read(source), zoomable: true)
             } else {
                 // As sharp as the loader decodes at all (`MediaLoader.maxPixels`): the viewer zooms to 4×. An
                 // animation's frames share `maxAnimationPixels` here as on the page.
                 image = await MediaLoader.decode(file: source, targetPixelWidth: 16_384)
             }
-            guard markup != nil || image != nil else { throw MediaUnreadable() }
+            guard html != nil || image != nil else { throw MediaUnreadable() }
             // Shared as the web downloads it: the file with its name. Copied off the main thread, which it held up.
             if let server = context.baseURL {
                 let folder = ["attachments", url.deletingLastPathComponent().lastPathComponent], name = url.lastPathComponent
@@ -325,7 +326,8 @@ final class ImageZoomView: UIScrollView, UIScrollViewDelegate {
 /// closes. A WKWebView per view (`WebViews.diagramViewer`): SwiftUI's WebView traps when the paging view builds a page
 /// twice (one `WebPage`, two views), and its HTML has nothing to navigate to (an `<img>`).
 private struct ZoomableDiagram: UIViewRepresentable {
-    let markup: String
+    /// Its page, zoomable.
+    let html: String
     let label: String
     let close: () -> Void
 
@@ -344,7 +346,7 @@ private struct ZoomableDiagram: UIViewRepresentable {
         doubleTap.numberOfTapsRequired = 2
         doubleTap.delegate = context.coordinator
         view.addGestureRecognizer(doubleTap)
-        view.loadHTMLString(IslandHTML.svg(markup, zoomable: true), baseURL: IslandHTML.baseURL)
+        view.loadHTMLString(html, baseURL: IslandHTML.baseURL)
         return view
     }
 

@@ -375,6 +375,24 @@ struct MediaBlockViewTests {
         #expect(await poll { !labels(in: window).contains { $0.contains(tap) } }, "and asks no more")
     }
 
+    /// A diagram's island remembers its height by the diagram's address, which changes with the drawing (Docmost adds
+    /// the time of its last save): its page holds the whole SVG, some MB for a drawing with pictures pasted in, and
+    /// hashing that each time the island was built held up the main thread.
+    @Test func aDiagramsHeightIsRememberedByItsAddress() async throws {
+        let server = URL(string: "https://height.docmost.invalid")!
+        OnceURLProtocol.requests.withLock { $0[server.host()!] = nil }
+        let src = "/api/files/f/drawio?t=1763712000000"
+        let window = try show("drawio", src: src, server: server, protocolClass: OnceURLProtocol.self)
+        defer { window.isHidden = true }
+        let typeSize = try #require(DynamicTypeSize(window.traitCollection.preferredContentSizeCategory))
+        func remembered() -> CGFloat? {
+            guard let island = webViews(in: window).first else { return nil }
+            return WebIslandView.lastHeight(of: src, width: island.bounds.width.rounded(), typeSize: typeSize)
+        }
+        #expect(await poll { !webViews(in: window).isEmpty && !spinner(in: window) && remembered() != nil }, "remembered by its address")
+        #expect(remembered() == webViews(in: window).first?.bounds.height)
+    }
+
     /// What stands in after a failed load: a tap card for a file over the limit, the reason for a failure, nothing
     /// for a file that isn't what the view shows, and no failure at all for a cancelled load.
     @Test func standInsAfterAFailedLoad() async {
