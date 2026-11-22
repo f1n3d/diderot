@@ -126,23 +126,46 @@ struct ResizableImage: View {
     }
 }
 
-/// UIImageView plays an animated image by itself.
+/// UIImageView plays an animated image by itself (`AnimatedImageView`).
 private struct PlayingImage: UIViewRepresentable {
     let image: UIImage
 
-    func makeUIView(context: Context) -> UIImageView {
-        let view = UIImageView()
+    func makeUIView(context: Context) -> AnimatedImageView {
+        let view = AnimatedImageView()
         view.isAccessibilityElement = true
         view.accessibilityTraits = .image
         return view
     }
 
-    func updateUIView(_ view: UIImageView, context: Context) {
-        if view.image !== image { view.image = image }
+    func updateUIView(_ view: AnimatedImageView, context: Context) {
+        view.show(image)
     }
 
     /// Any size, as a resizable `Image`: the frame and aspect ratio around it decide, its own size where none is given.
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIImageView, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: AnimatedImageView, context: Context) -> CGSize? {
         proposal.replacingUnspecifiedDimensions(by: image.size)
+    }
+}
+
+/// Plays an animated image as often as its file says (`UIImage.plays`), then stays on its last frame, as the web's
+/// `<img>` does: set as its `image`, UIImageView plays one on and on.
+final class AnimatedImageView: UIImageView {
+    /// The image it was given, which isn't `image` while it plays the frames.
+    private var shown: UIImage?
+
+    func show(_ shown: UIImage) {
+        guard shown !== self.shown else { return }
+        self.shown = shown
+        stopAnimating()
+        if let frames = shown.images, let plays = shown.plays {
+            animationImages = frames
+            animationDuration = shown.duration
+            animationRepeatCount = plays
+            image = frames.last
+            startAnimating()
+        } else {
+            animationImages = nil
+            image = shown
+        }
     }
 }

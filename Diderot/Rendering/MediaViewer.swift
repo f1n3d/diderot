@@ -243,8 +243,7 @@ private struct ZoomableImage: UIViewRepresentable {
     }
 
     func updateUIView(_ view: ImageZoomView, context: Context) {
-        let shown = shown(context)
-        if view.imageView.image !== shown { view.imageView.image = shown }
+        view.imageView.show(shown(context))
         view.imageView.accessibilityLabel = label
         view.close = close
     }
@@ -257,14 +256,14 @@ private struct ZoomableImage: UIViewRepresentable {
 
 /// Fits the image, zooms it up to 4× (pinch, double tap) and pans it; pulled down at its normal size, it closes.
 final class ImageZoomView: UIScrollView, UIScrollViewDelegate {
-    let imageView: UIImageView
+    let imageView = AnimatedImageView()
     var close: () -> Void = {}
     /// The size the image was last fitted into.
     private var fittedSize: CGSize = .zero
 
     init(image: UIImage) {
-        imageView = UIImageView(image: image)
         super.init(frame: .zero)
+        imageView.show(image)
         delegate = self
         maximumZoomScale = 4
         // Pulls down at the normal size too; sideways the pages swipe.

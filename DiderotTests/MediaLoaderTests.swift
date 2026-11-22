@@ -95,15 +95,28 @@ struct MediaLoaderTests {
         #expect(await MediaLoader.decode(file: file, targetPixelWidth: 16_384)?.images?.count == 9)
     }
 
-    /// An animation's frames together take no more memory than one still image may (`maxPixels`): a large one plays
-    /// smaller. One of more frames than `maxAnimationFrames`, and a TIFF's pages, show the first frame, still.
+    /// An animation's frames together take a quarter of what one still image may (`maxPixels`), about 12 MB, and each
+    /// no more than the still image would: every image on a page keeps what it decoded while the page is open, and a
+    /// page of screen recordings took 48 MB for each. A large one plays smaller. One of more frames than
+    /// `maxAnimationFrames`, and a TIFF's pages, show the first frame, still.
     @Test func animationsKeepToTheLimits() async throws {
+        let budget = MediaLoader.maxAnimationPixels
+        #expect(budget == MediaLoader.maxPixels / 4)
         let large = try Self.animation(.gif, delays: Array(repeating: 0.1, count: 10), width: 1500, height: 1000)
         let image = try #require(await MediaLoader.decode(large, targetPixelWidth: 2048))
         let frame = try #require(image.images?.first)
         let pixels = 10 * frame.size.width * frame.size.height
-        #expect(pixels <= MediaLoader.maxPixels && pixels > MediaLoader.maxPixels * 0.95, "\(frame.size)")
+        #expect(pixels <= budget && pixels > budget * 0.95, "\(frame.size)")
         #expect(abs(frame.size.width / frame.size.height - 1.5) < 0.01)
+        // A screen recording in an iPhone's column (a 1280 px bucket): 60 frames of 800 × 450. ImageIO rounds the
+        // shorter side up (298 × 168), a pixel row over.
+        let recording = try Self.animation(.gif, delays: Array(repeating: 0.1, count: 60), width: 800, height: 450)
+        let played = try #require(await MediaLoader.decode(recording, targetPixelWidth: 1280)?.images?.first)
+        #expect(60 * played.size.width * played.size.height <= budget * 1.01, "\(played.size)")
+        // Few frames: as large as the still image at that width, no larger.
+        let short = try Self.animation(.gif, delays: [0.1, 0.1], width: 1500, height: 1000)
+        let still = try #require(await MediaLoader.decode(Self.animation(.gif, delays: [0.1], width: 1500, height: 1000), targetPixelWidth: 512))
+        #expect(try #require(await MediaLoader.decode(short, targetPixelWidth: 512)?.images?.first).size == still.size)
 
         let long = try Self.animation(.gif, delays: Array(repeating: 0.1, count: MediaLoader.maxAnimationFrames + 1), width: 8, height: 8)
         #expect(try #require(await MediaLoader.decode(long, targetPixelWidth: 64)).images == nil)
@@ -111,15 +124,67 @@ struct MediaLoaderTests {
         #expect(try #require(await MediaLoader.decode(pages, targetPixelWidth: 64)).images == nil)
     }
 
+    /// APNG and WebP count a frame's delay in milliseconds or finer, GIF in 10 ms: a 33 ms frame lasts 33 ms. Rounded
+    /// to 10 ms, as for a GIF, a 30 fps WebP played 10 % fast and a 60 fps APNG 20 % slow.
+    @Test func delaysCountInMilliseconds() async throws {
+        let delays = [33.0, 17, 50]
+        for data in [try Self.animation(.png, delays: delays.map { $0 / 1000 }, width: 4, height: 4), Self.webP(delays: delays.map { Int($0) })] {
+            let image = try #require(await MediaLoader.decode(data, targetPixelWidth: 64))
+            let frames = try #require(image.images, "animated")
+            var runs: [Int] = []
+            for (index, frame) in frames.enumerated() {
+                if index > 0, frames[index - 1] === frame { runs[runs.count - 1] += 1 } else { runs.append(1) }
+            }
+            let shown = runs.map { Double($0) * image.duration / Double(frames.count) * 1000 }
+            #expect(zip(shown, delays).allSatisfy { abs($0 - $1) < 0.5 }, "\(shown)")
+        }
+    }
+
+    /// An animation plays as often as its file says, as on the web: ImageIO counts a GIF's plays (none written: once),
+    /// an APNG's and a WebP's; 0 is on and on. It played on and on.
+    @Test func animationsPlayAsOftenAsTheFileSays() async throws {
+        let files: [(data: Data, plays: Int?)] = [
+            (try Self.animation(.gif, delays: [0.1, 0.1], width: 4, height: 4, loops: 1), 1),
+            (try Self.animation(.gif, delays: [0.1, 0.1], width: 4, height: 4, loops: 3), 3),
+            (try Self.animation(.gif, delays: [0.1, 0.1], width: 4, height: 4), nil),
+            (try Self.animation(.png, delays: [0.1, 0.1], width: 4, height: 4, loops: 2), 2),
+            (try Self.animation(.png, delays: [0.1, 0.1], width: 4, height: 4), nil),
+            (Self.webP(delays: [100, 100], loops: 2), 2),
+            (Self.webP(delays: [100, 100]), nil),
+        ]
+        for (index, file) in files.enumerated() {
+            let image = try #require(await MediaLoader.decode(file.data, targetPixelWidth: 64))
+            #expect(image.images != nil && image.plays == file.plays, "file \(index)")
+        }
+    }
+
+    /// A decode whose view went away (scrolled past) stops between frames and keeps nothing: it decoded every frame
+    /// for nobody, and the first frame alone mustn't stand in for the animation in the memory cache.
+    @Test func cancelledAnimationsStopDecoding() async throws {
+        let data = try Self.animation(.gif, delays: [0.1, 0.1, 0.1], width: 40, height: 30)
+        let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).gif")
+        try data.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let loader = MediaLoader(client: APIClient(baseURL: URL(string: "https://cancelled.docmost.invalid")!))
+        let cancelled = Task { () -> (decoded: UIImage?, loaded: UIImage?) in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return (await MediaLoader.decode(data, targetPixelWidth: 512), try? await loader.image(for: file, targetWidth: 40, scale: 1))
+        }
+        let result = await cancelled.value
+        #expect(result.decoded == nil && result.loaded == nil)
+        #expect(try await loader.image(for: file, targetWidth: 40, scale: 1).images?.count == 3)
+    }
+
     /// Frames of `width` × `height` pixels, each in its own color, that last `delays` seconds, as a GIF or an APNG
-    /// that loops; another type (TIFF) gets them as pages.
-    static func animation(_ type: UTType, delays: [Double], width: Int, height: Int) throws -> Data {
+    /// that plays `loops` times (0: on and on); another type (TIFF) gets them as pages.
+    static func animation(_ type: UTType, delays: [Double], width: Int, height: Int, loops: Int = 0) throws -> Data {
         let data = NSMutableData()
         let destination = try #require(CGImageDestinationCreateWithData(data, type.identifier as CFString, delays.count, nil))
         let (dictionary, loopCount, delayTime) = type == .png
             ? (kCGImagePropertyPNGDictionary, kCGImagePropertyAPNGLoopCount, kCGImagePropertyAPNGDelayTime)
             : (kCGImagePropertyGIFDictionary, kCGImagePropertyGIFLoopCount, kCGImagePropertyGIFDelayTime)
-        CGImageDestinationSetProperties(destination, [dictionary: [loopCount: 0]] as CFDictionary)
+        // ImageIO counts a GIF's plays as browsers do: it writes 1 as no NETSCAPE block, n as n - 1 repetitions.
+        CGImageDestinationSetProperties(destination, [dictionary: [loopCount: loops]] as CFDictionary)
         for (index, delay) in delays.enumerated() {
             let context = try #require(CGContext(
                 data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -131,6 +196,18 @@ struct MediaLoaderTests {
         }
         try #require(CGImageDestinationFinalize(destination))
         return data as Data
+    }
+
+    /// A WebP of 1 × 1 pixel frames that last `delays` milliseconds and play `loops` times (0: on and on). ImageIO
+    /// writes no WebP, so it is put together here: a lossless frame in an ANMF chunk for each delay.
+    static func webP(delays: [Int], loops: Int = 0) -> Data {
+        func bytes(_ value: Int, _ count: Int) -> [UInt8] { (0..<count).map { UInt8((value >> (8 * $0)) & 0xff) } }
+        func chunk(_ tag: String, _ body: [UInt8]) -> [UInt8] { Array(tag.utf8) + bytes(body.count, 4) + body + (body.count % 2 == 1 ? [0] : []) }
+        // The VP8L chunk of the smallest lossless WebP.
+        let frame = Array(Data(base64Encoded: "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==")!.dropFirst(12))
+        var body = Array("WEBP".utf8) + chunk("VP8X", [0x02, 0, 0, 0] + bytes(0, 6)) + chunk("ANIM", bytes(0, 4) + bytes(loops, 2))
+        for delay in delays { body += chunk("ANMF", bytes(0, 12) + bytes(delay, 3) + [0] + frame) }
+        return Data(chunk("RIFF", body))
     }
 
     private func jpeg(width: Int, height: Int, orientation: Int) throws -> Data {

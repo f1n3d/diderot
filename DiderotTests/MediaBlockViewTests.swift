@@ -362,6 +362,29 @@ struct MediaBlockViewTests {
         #expect(labels(in: window).contains("Screen recording"))
     }
 
+    /// One that plays once or a few times, as its file says, stops on its last frame, as the web's `<img>` does, in
+    /// the page and full screen. UIImageView played it on and on.
+    @Test func animationsStopAfterTheirPlays() async throws {
+        // A GIF that plays once: ImageIO writes it without a NETSCAPE block.
+        let data = try MediaLoaderTests.animation(.gif, delays: [0.5, 0.5, 0.5], width: 40, height: 30, loops: 1)
+        let image = try #require(await MediaLoader.decode(data, targetPixelWidth: 512))
+        let last = try #require(image.images?.last)
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: ResizableImage(image: image).frame(width: 40, height: 30))
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let viewer = ImageZoomView(image: image)
+        viewer.frame = CGRect(x: 0, y: 100, width: 200, height: 200)
+        window.addSubview(viewer)
+
+        // The image views with its frames (a scroll view may have image views of its own).
+        func shown() -> [UIImageView] { imageViews(in: window).filter { $0.image?.images != nil || $0.animationImages != nil } }
+        func playing(_ view: UIImageView) -> Bool { view.layer.animationKeys()?.isEmpty == false }
+        #expect(await poll { shown().count == 2 && shown().allSatisfy(playing) })
+        #expect(await poll(tries: 100) { shown().allSatisfy { !playing($0) && $0.image === last } })
+    }
+
     private func imageViews(in view: UIView) -> [UIImageView] {
         view.layoutIfNeeded()
         return [view as? UIImageView].compactMap(\.self) + view.subviews.flatMap(imageViews)
