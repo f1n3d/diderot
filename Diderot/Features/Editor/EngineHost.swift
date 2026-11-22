@@ -39,7 +39,8 @@ struct EngineVisibilityProbe: View {
             .accessibilityElement()
             .accessibilityIdentifier("engine-visibility")
             .accessibilityLabel(answer)
-            .accessibilityValue(number.map { "engine \($0)" } ?? "")
+            // Read by the test, not shown: verbatim, not a key for the String Catalog.
+            .accessibilityValue(Text(verbatim: number.map { "engine \($0)" } ?? ""))
             .onAppear {
                 if number == nil {
                     Self.made += 1
