@@ -6,6 +6,9 @@ enum CacheKey {
     static let entitlements = "workspace/entitlements"
     /// The server's last known Docmost version.
     static let serverVersion = "version"
+    /// What a start without network reads (`AppSession.restore`). Photos and PDFs share the cache, and `DiskCache.prune`
+    /// keeps these whatever their age and the cache's size.
+    static let offlineStart: Set<String> = [currentUser, entitlements, serverVersion]
     static let spaces = "spaces"
     static let recent = "pages/recent"
     static let favorites = "favorites"

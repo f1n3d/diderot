@@ -793,10 +793,7 @@ final class AppSession {
             resolvedEntitlements = answeredEntitlements
             await cache.write(answeredEntitlements, key: CacheKey.entitlements)
         } else {
-            let cached = await cache.read(Entitlements.self, key: CacheKey.entitlements)
-            resolvedEntitlements = cached ?? .community
-            // Written again: `prune` below goes by age and size, like for photos and PDFs in the same cache.
-            if let cached { await cache.write(cached, key: CacheKey.entitlements) }
+            resolvedEntitlements = await cache.read(Entitlements.self, key: CacheKey.entitlements) ?? .community
         }
         // Docmost names its version only after asking GitHub for its latest release, and nothing when GitHub refuses
         // (60 requests an hour from one address) or a proxy blocks it: keep the last one it named.
@@ -806,8 +803,6 @@ final class AppSession {
             await cache.write(namedVersion, key: CacheKey.serverVersion)
         } else {
             serverVersion = await cache.read(String.self, key: CacheKey.serverVersion)
-            // Written again, as the license above: a version the server stopped naming would only age.
-            if let serverVersion { await cache.write(serverVersion, key: CacheKey.serverVersion) }
         }
         // Again after the cache writes' awaits; from here no await until the `state` write.
         guard try stillCounts(replacing: replacing, signingIn: signingIn, at: server, retrying: retrying) else { return }
@@ -820,7 +815,9 @@ final class AppSession {
         }
         keychain("save") { try sessionStore.save(stored) }
         reloadAccounts()
-        Task.detached(priority: .utility) { await cache.prune() }
+        // Not what an offline start reads: a license or version kept from an earlier answer can be older than every photo.
+        // While the app runs, the media loader caps the cache again.
+        Task.detached(priority: .utility) { await cache.prune(keeping: CacheKey.offlineStart) }
         // Just asked for: returning to the app asks again only after `licenseAndVersionInterval`.
         licenseAndVersionAsked = .now
         state = .ready(ReadySession(

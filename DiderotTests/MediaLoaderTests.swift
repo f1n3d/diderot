@@ -242,9 +242,12 @@ struct MediaLoaderTests {
         DiskCache(scope: "media", baseDirectory: FileManager.default.temporaryDirectory.appending(path: "media-loader-tests-\(UUID().uuidString)"))
     }
 
-    private func poll(_ condition: () -> Bool) async -> Bool {
-        for _ in 0..<400 where !condition() { try? await Task.sleep(for: .milliseconds(10)) }
-        return condition()
+    private func poll(_ condition: () async -> Bool) async -> Bool {
+        for _ in 0..<400 {
+            if await condition() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return await condition()
     }
 
     private var requests: Int { FileServer.state.withLock { $0.requests } }
@@ -344,6 +347,39 @@ struct MediaLoaderTests {
 
         loader = nil
         #expect(!FileManager.default.fileExists(atPath: file.path), "gone with its loader")
+    }
+
+    /// A sign-in caps the offline cache at 300 MB, and iOS may keep the app running for days after it: the cache grew
+    /// by every file opened meanwhile. Once a loader has moved as much into it as its largest file, it caps it again,
+    /// the oldest first, but not what a start without network reads.
+    @Test func theCacheKeepsItsCapWhileTheAppRuns() async throws {
+        let cache = cache()
+        defer { try? FileManager.default.removeItem(at: cache.directory.deletingLastPathComponent().deletingLastPathComponent()) }
+        // Signed in a day ago, and photos and PDFs of 300 MB opened since (one sparse file: nothing of it is written).
+        await cache.write("u1", key: CacheKey.currentUser)
+        await cache.write("business", key: CacheKey.entitlements)
+        await cache.write("0.98.0", key: CacheKey.serverVersion)
+        for file in try FileManager.default.contentsOfDirectory(at: cache.directory, includingPropertiesForKeys: nil) {
+            try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-24 * 3600)],
+                                                  ofItemAtPath: file.path(percentEncoded: false))
+        }
+        let opened = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).pdf")
+        #expect(FileManager.default.createFile(atPath: opened.path(percentEncoded: false), contents: nil))
+        let handle = try FileHandle(forWritingTo: opened)
+        try handle.truncate(atOffset: 300 << 20)
+        try handle.close()
+        let stored = try await cache.storeFile(at: opened, key: "image/opened")
+        try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-3600)],
+                                              ofItemAtPath: stored.path(percentEncoded: false))
+
+        // One more photo, as large as the largest file the cache takes here.
+        _ = try await loader(cache: cache, maxCachedBytes: 4).file(for: image)
+        #expect(await poll { await cache.totalSize() <= 300 << 20 })
+        #expect(await cache.dataFile(key: "image/opened") == nil)
+        #expect(await cache.dataFile(key: "image/\(image.absoluteString)") != nil, "the newest stays")
+        #expect(await cache.read(String.self, key: CacheKey.currentUser) == "u1")
+        #expect(await cache.read(String.self, key: CacheKey.entitlements) == "business")
+        #expect(await cache.read(String.self, key: CacheKey.serverVersion) == "0.98.0")
     }
 }
 

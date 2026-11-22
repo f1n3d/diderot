@@ -103,4 +103,25 @@ struct DiskCacheTests {
         await cache.removeAll()
         #expect(await cache.totalSize() == 0)
     }
+
+    /// What a start without network reads (the app's user, license and version) shares the cache with photos and PDFs,
+    /// which push the oldest out: the entries it names stay whatever their age and the size, the others go.
+    @Test func pruneKeepsTheEntriesItIsGiven() async throws {
+        let cache = makeCache()
+        await cache.write("u1", key: "users/me")
+        await cache.writeData(Data(repeating: 1, count: 1000), key: "kept")
+        await cache.writeData(Data(repeating: 2, count: 10), key: "image/old")
+        let longAgo = Date.now.addingTimeInterval(-40 * 24 * 3600)
+        for file in try FileManager.default.contentsOfDirectory(at: cache.directory, includingPropertiesForKeys: nil) {
+            try FileManager.default.setAttributes([.modificationDate: longAgo], ofItemAtPath: file.path(percentEncoded: false))
+        }
+        await cache.writeData(Data(repeating: 3, count: 600), key: "image/new")
+
+        await cache.prune(maxAge: 30 * 24 * 3600, maxBytes: 500, keeping: ["users/me", "kept"])
+        #expect(await cache.read(String.self, key: "users/me") == "u1")
+        #expect(await cache.readData(key: "kept")?.count == 1000, "a raw entry too, and over the size by itself")
+        #expect(await cache.readData(key: "image/old") == nil, "too old")
+        #expect(await cache.readData(key: "image/new") == nil, "over the size")
+        await cache.removeAll()
+    }
 }
