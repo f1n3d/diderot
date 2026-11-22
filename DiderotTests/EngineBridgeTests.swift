@@ -124,21 +124,23 @@ extension AppSessionRaceTests {
             engine.onDocument = { _ in seen.documents += 1 }
             engine.onUnsentChangesKept = { seen.kept.append($0) }
             engine.onHeld = { seen.held.append($0) }
-            // WebKit starts its processes with the first page. On GitHub's runners, where this suite may open the run's
-            // first page, the engine then didn't start within the app's 15 s; a page loaded first starts them, and the
-            // engine gets a second try.
-            let firstPage = WebPage()
-            for try await _ in firstPage.load(html: "<!doctype html><p>", baseURL: IslandHTML.baseURL) {}
-            reached("WebKit's first page loaded")
+            // On GitHub's runners the engine's page didn't always start within the app's 15 s: its web process alone
+            // took up to 20 s to launch. So the test waits 40 s. A page that still hasn't started is dropped, and the
+            // second attempt opens the engine on a new one: there, a new page started where a stuck one never did. No
+            // plain page loads first any more to start WebKit's processes: that load had no deadline, and where the
+            // processes took 25 to 47 s to launch it never ended, so the test ran into its time limit.
+            engine.startDeadline = .seconds(40)
             do {
                 StubURLProtocol.body.withLock { $0 = #"{"data": {"token": "collab"}}"# }
                 defer { StubURLProtocol.body.withLock { $0 = nil } }
                 for attempt in 1...2 {
+                    reached("open attempt \(attempt)")
                     do {
                         try await engine.open(pageId: pageId)
                         break
-                    } catch where attempt < 2 {
-                        continue
+                    } catch {
+                        reached("open attempt \(attempt) failed: \(error)")
+                        if attempt == 2 { throw error }
                     }
                 }
             }

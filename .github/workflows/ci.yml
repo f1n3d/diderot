@@ -109,6 +109,54 @@ jobs:
           -resultBundlePath TestResults.xcresult
           CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
 
+      - name: Why the unit tests failed
+        # When the test host dies, xcodebuild's log above says only that it restarted it. The result bundle says how
+        # ("Crash: Diderot at <frame>", or the code the host exited with) and under which test, but it is kept only as a
+        # download (below), for 7 days. So the bundle's failure messages go into the log here, each cut to its first 40
+        # lines. The step only reads: if it fails, the tests' result still decides the job.
+        if: failure()
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          if [ ! -d TestResults.xcresult ]; then echo "No test results: the unit tests didn't run."; exit 0; fi
+          xcrun xcresulttool get test-results tests --path TestResults.xcresult --compact > "$RUNNER_TEMP/tests.json"
+          python3 - "$RUNNER_TEMP/tests.json" <<'EOF'
+          import json, sys
+
+          lines = []
+
+          def has_message(node):
+              children = node.get("children", [])
+              return any(child.get("nodeType") == "Failure Message" or has_message(child) for child in children)
+
+          def walk(node, place):
+              kind = node.get("nodeType")
+              if kind == "Test Case":
+                  place = node.get("nodeIdentifier") or node.get("name", "?")
+                  if node.get("result") == "Failed" and not has_message(node):
+                      lines.append(f"{place}: failed, with no message")
+              elif kind in ("Arguments", "Repetition"):
+                  place = f"{place} [{node.get('name', '?')}]"
+              elif kind in ("Unit test bundle", "Test Suite"):
+                  place = node.get("name", "?")
+              elif kind == "Failure Message":
+                  source = node.get("sourceLocation") or {}
+                  where = place or "the run"
+                  if source.get("filePath"):
+                      where += f" ({source['filePath'].rsplit('/', 1)[-1]}:{source.get('lineNumber', '?')})"
+                  text = node.get("name", "").splitlines() or [""]
+                  lines.append(f"{where}:")
+                  lines.extend("    " + line for line in text[:40])
+                  if len(text) > 40:
+                      lines.append(f"    ({len(text) - 40} more lines in the result bundle)")
+              for child in node.get("children", []):
+                  walk(child, place)
+
+          for node in json.load(open(sys.argv[1])).get("testNodes", []):
+              walk(node, None)
+          print("\n".join(lines) if lines else "The test results name no failure.")
+          EOF
+
       - name: Strings in the catalog
         # Every key the app's code uses is in the String Catalog: Tools/check-project.sh checks those for German, but one
         # never imported (xcodebuild -exportLocalizations, Tools/localize.py --import) shows in English in the German
@@ -129,7 +177,9 @@ jobs:
           CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
 
       - name: Keep the test results
-        if: failure()
+        # Also when the job is cancelled: a job that runs into its time limit counts as cancelled, not failed, so the
+        # results of a test that hung until then weren't kept.
+        if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: TestResults

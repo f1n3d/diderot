@@ -339,6 +339,10 @@ final class WebDocumentEngine: DocumentEngine {
     @ObservationIgnored var onUnsentChangesKept: (@MainActor ((any Error)?) -> Void)?
     @ObservationIgnored var holdsChanges = false
     @ObservationIgnored var onHeld: (@MainActor (EngineHold) -> Void)?
+    /// How long `open` waits for the engine's page to say it's ready. The app waits 15 s. `EngineBridgeTests` wait
+    /// longer: on GitHub's runners a page's web process took 15 to 20 s to launch, and a page given up for a new one
+    /// starts that launch again.
+    @ObservationIgnored var startDeadline: Duration = .seconds(15)
 
     private let session: AppSession
     /// Scripts the engine's page runs before the engine: `EngineBridgeTests` stand in for the collab server with one.
@@ -427,11 +431,12 @@ final class WebDocumentEngine: DocumentEngine {
 
         // With the server as base URL, the collab WebSocket is same-origin.
         page.load(html: Self.html(), baseURL: ready.server.url)
+        let deadline = startDeadline
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 readyContinuation = continuation
                 Task { [weak self] in
-                    try? await Task.sleep(for: .seconds(15))
+                    try? await Task.sleep(for: deadline)
                     if let self, self.opens == attempt, let pending = self.readyContinuation {
                         self.readyContinuation = nil
                         pending.resume(throwing: APIError.server(status: 0, message: String(localized: "The editor engine did not start.")))
