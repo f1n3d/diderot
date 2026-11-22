@@ -62,16 +62,61 @@ extension AppSessionRaceTests {
             }
         }
 
+        /// What the server hasn't confirmed is kept with the document it makes, both from one answer of the engine: the
+        /// save asked for the document again, which the app decoded on the main actor only to store it again, every 2 s
+        /// while someone typed offline. The changes, more than one slice of the engine's base64 (`base64` in
+        /// Engine/src/engine.ts), come back whole on the next open.
+        @MainActor @Test(.timeLimit(.minutes(3))) func unsentChangesKeepTheirDocumentFromOneAnswer() async throws {
+            let session = try await sessionOnA()
+            let store = try #require(session.ready?.unsentChanges)
+            let pageId = "bridge-\(UUID().uuidString)"
+            // About 72 KB, with a letter UTF-8 writes in two bytes.
+            let long = String(repeating: "Nicht bestätigt. ", count: 4000)
+            try await withEngine(session: session, pageId: pageId) { engine, _ in
+                try #require(await until { engine.status == .synced }, "The engine didn't sync: \(engine.status)")
+                #expect(await engine.insertBlocks([paragraph("u", long)], relativeTo: nil, position: .after) == .applied)
+                try #require(await until { engine.unconfirmedChanges > 0 }, "The stand-in confirmed the change")
+                // Counts the app's reads of the document from here on.
+                _ = try await engine.webPage?.callJavaScript("""
+                    const engine = window.DocmostEngine, read = engine.currentDocument;
+                    window.documentReads = 0;
+                    engine.currentDocument = function () { window.documentReads++; return read.call(this); };
+                    """)
+                await engine.saveUnsentChanges()
+                let reads = try await engine.webPage?.callJavaScript("return window.documentReads;") as? Int
+                #expect(reads == 0, "the save asked for the document again")
+                let kept = try await store.read(PMNode.self, key: CacheKey.unsentDocument(pageId))
+                let shown = await engine.currentDocument()
+                #expect(kept != nil && kept == shown, "the document of the unsent changes wasn't kept")
+
+                // Closed and opened again, the engine has the changes it kept. An open that throws (changes it can't
+                // read) is recorded here: `withEngine` records only failed checks.
+                await engine.close()
+                StubURLProtocol.body.withLock { $0 = #"{"data": {"token": "collab"}}"# }
+                defer { StubURLProtocol.body.withLock { $0 = nil } }
+                do {
+                    try await engine.open(pageId: pageId)
+                } catch {
+                    Issue.record(error, "The engine didn't open again with the changes it kept")
+                    return
+                }
+                try #require(await until { engine.status == .synced }, "The engine didn't sync again: \(engine.status)")
+                let (_, path) = try await find("u", in: engine)
+                #expect(await block(at: path, in: engine)?.plainText == long, "the kept changes didn't come back whole")
+            }
+        }
+
         /// The page's changes the stand-in collab server got (`StandInCollab`): updates, and sync answers with content.
         @MainActor private func changesReceived(by engine: WebDocumentEngine) async -> Int {
             ((try? await engine.webPage?.callJavaScript("return window.standInChanges ?? 0;")) as? Int) ?? -1
         }
 
-        /// An engine on a new page of the stand-in collab server for `body`, closed again however that ends; `holds`:
-        /// its changes wait for `release` (`holdsChanges`).
-        @MainActor private func withEngine(holds: Bool = false, _ body: (WebDocumentEngine, Seen) async throws -> Void) async throws {
+        /// An engine on a page of the stand-in collab server for `body`, closed again however that ends; `holds`: its
+        /// changes wait for `release` (`holdsChanges`). In `session` if given, else in a new one on a.
+        @MainActor private func withEngine(holds: Bool = false, session: AppSession? = nil, pageId: String = "bridge-\(UUID().uuidString)",
+                                           _ body: (WebDocumentEngine, Seen) async throws -> Void) async throws {
             reached("its start")
-            let session = try await sessionOnA()
+            let session = if let session { session } else { try await sessionOnA() }
             defer { UnsentChanges.removeAll(server: a) }
             let engine = WebDocumentEngine(session: session, pageScripts: [StandInCollab.script])
             engine.holdsChanges = holds
@@ -90,7 +135,7 @@ extension AppSessionRaceTests {
                 defer { StubURLProtocol.body.withLock { $0 = nil } }
                 for attempt in 1...2 {
                     do {
-                        try await engine.open(pageId: "bridge-\(UUID().uuidString)")
+                        try await engine.open(pageId: pageId)
                         break
                     } catch where attempt < 2 {
                         continue

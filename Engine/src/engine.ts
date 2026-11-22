@@ -49,6 +49,17 @@ function emit(type: string, payload: Record<string, unknown> = {}) {
   window.webkit?.messageHandlers?.engine?.postMessage(message);
 }
 
+/**
+ * The bytes as base64, turned into text a slice at a time: a call and a string per byte took about eight times as long,
+ * on the engine's only thread. `apply` takes the slice as it is; spread into the call, it was hardly faster in
+ * JavaScriptCore. A slice stays well below the most arguments a call takes.
+ */
+function base64(bytes: Uint8Array): string {
+  let text = "";
+  for (let start = 0; start < bytes.length; start += 0x8000) text += Reflect.apply(String.fromCharCode, null, bytes.subarray(start, start + 0x8000));
+  return btoa(text);
+}
+
 class DocmostEngine {
   private socket?: HocuspocusProviderWebsocket;
   private provider?: HocuspocusProvider;
@@ -159,10 +170,11 @@ class DocmostEngine {
   }
 
   /**
-   * After up to 2 s for the server to confirm changes on their way: "" if it has them all, else the whole document as a
-   * base64 Yjs update for the next `open` (a full state, which merges idempotently); undefined once the page is closed.
+   * After up to 2 s for the server to confirm changes on their way: `changes` "" if it has them all, else the whole
+   * document as a base64 Yjs update for the next `open` (a full state, which merges idempotently), with `document`, the
+   * page they make as JSON for the app to keep as it is (null before the first sync); undefined once the page is closed.
    */
-  async unsentChanges(): Promise<string | undefined> {
+  async unsentChanges(): Promise<{ changes: string; document: string | null } | undefined> {
     // A deadline, not a count of timeouts: timers may run late in a page no view shows, as when the app goes to the
     // background.
     const deadline = Date.now() + 2000;
@@ -171,8 +183,10 @@ class DocmostEngine {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     if (!this.provider) return undefined;
-    if (!this.provider.hasUnsyncedChanges && !this.hold?.withheld) return "";
-    return btoa(Array.from(Y.encodeStateAsUpdate(this.provider.document), (byte) => String.fromCharCode(byte)).join(""));
+    if (!this.provider.hasUnsyncedChanges && !this.hold?.withheld) return { changes: "", document: null };
+    // In the same answer, so the app needn't ask for the document and decode it only to store it again; this runs every
+    // 2 s while someone types offline.
+    return { changes: base64(Y.encodeStateAsUpdate(this.provider.document)), document: this.editor ? JSON.stringify(this.editor.getJSON()) : null };
   }
 
   getDocument(): JSONContent {

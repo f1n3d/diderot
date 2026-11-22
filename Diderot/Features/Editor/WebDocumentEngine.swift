@@ -482,12 +482,14 @@ final class WebDocumentEngine: DocumentEngine {
     }
 
     /// Kept until the server confirms them; no answer (engine closed itself or failed) keeps what's stored. The
-    /// document only after the first sync (`currentDocument`): until then the stored one still fits. Whether the changes
-    /// were kept goes to `onUnsentChangesKept`: a failed write left them only in the engine, and said so only in the log.
+    /// document only after the first sync: until then the stored one still fits. Whether the changes were kept goes to
+    /// `onUnsentChangesKept`: a failed write left them only in the engine, and said so only in the log.
     func saveUnsentChanges() async {
         guard let page, let unsentStore,
-              let unsent = try? await page.callJavaScript("return window.DocmostEngine.unsentChanges();") as? String
+              let answer = try? await page.callJavaScript("return window.DocmostEngine.unsentChanges();") as? [String: Any],
+              let unsent = answer["changes"] as? String
         else { return }
+        let document = answer["document"] as? String
         let (store, pageId) = unsentStore
         // All confirmed: what is stored is in the server's document already, and sent again it changes nothing (Yjs).
         guard !unsent.isEmpty else {
@@ -508,10 +510,12 @@ final class WebDocumentEngine: DocumentEngine {
             return
         }
         onUnsentChangesKept?(nil)
-        // Only what the page shows offline until it connects again; the changes themselves are kept above.
-        if let current = await currentDocument() {
+        // Only what the page shows offline until it connects again; the changes themselves are kept above. As the engine
+        // wrote it: decoding the whole page here, on the main actor, only to encode it again took as long as a document
+        // event, every 2 s while someone typed offline.
+        if let document {
             do {
-                try await store.write(current, key: CacheKey.unsentDocument(pageId))
+                try await store.writeJSON(Data(document.utf8), key: CacheKey.unsentDocument(pageId))
             } catch {
                 AppLog.ui.error("Document of unsent changes not kept: \(error.localizedDescription, privacy: .public)")
             }

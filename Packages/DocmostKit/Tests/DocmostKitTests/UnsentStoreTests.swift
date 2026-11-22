@@ -33,6 +33,19 @@ struct UnsentStoreTests {
         #expect(try await store.read([String: String].self, key: "nothing") == nil)
     }
 
+    /// JSON kept as it came (the engine's document) reads as the value it encodes, and goes with `remove`.
+    @Test func readsJSONKeptAsItCame() async throws {
+        let base = directory()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = UnsentStore(directory: base)
+        let json = #"{"type":"doc","content":[{"type":"paragraph","attrs":{"id":"a","indent":1},"content":[{"type":"text","text":"Eins"}]}]}"#
+        try await store.writeJSON(Data(json.utf8), key: "unsentDocument/p1")
+        let paragraph = PMNode(type: "paragraph", attrs: ["id": "a", "indent": 1], content: [PMNode(type: "text", text: "Eins")])
+        #expect(try await store.read(PMNode.self, key: "unsentDocument/p1") == PMNode(type: "doc", content: [paragraph]))
+        try await store.remove(key: "unsentDocument/p1")
+        #expect(try await store.read(PMNode.self, key: "unsentDocument/p1") == nil)
+    }
+
     /// A value it can't read throws, also for `update`, which then leaves it as it was; one it can't write throws.
     @Test func saysWhatFails() async throws {
         let base = directory()
