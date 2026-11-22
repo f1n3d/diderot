@@ -36,13 +36,15 @@ public enum JSONValue: Sendable, Hashable, Codable {
         Self.decodingDepth = depth + 1
         defer { Self.decodingDepth = depth }
         let container = try decoder.singleValueContainer()
-        // Most likely types first: each failed probe throws, and JSONDecoder never converts between these types.
+        // Each wrong guess throws an error that is thrown away, so the most frequent kinds go first: strings outnumber
+        // objects in page content, and an attribute's value is almost never an object. JSONDecoder never converts
+        // between these kinds, so the order doesn't change what a value decodes as.
         if container.decodeNil() {
             self = .null
-        } else if let object = try? container.decode([String: JSONValue].self) {
-            self = .object(object)
         } else if let string = try? container.decode(String.self) {
             self = .string(string)
+        } else if let object = try? container.decode([String: JSONValue].self) {
+            self = .object(object)
         } else if let array = try? container.decode([JSONValue].self) {
             self = .array(array)
         } else if let number = try? container.decode(Double.self) {
