@@ -71,6 +71,49 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// A send of kept inputs asked for while one is on its way (back in the app and the network returning at once) goes
+        /// after it, with an input kept meanwhile: it used to be dropped, and that input waited for the next return to the
+        /// app or network change.
+        @Test(.timeLimit(.minutes(1))) func keptInputsSentMeanwhileGoAfterTheRunningSend() async throws {
+            let (model, session) = try await editableBase()
+            let update = "a.example.com/api/bases/rows/update"
+            let (released, release) = AsyncStream<Void>.makeStream()
+            defer {
+                release.finish()
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+                StubURLProtocol.beforeNextAnswer.withLock { $0 = nil }
+                StubURLProtocol.status.withLock { $0 = 200 }
+                StubURLProtocol.body.withLock { $0 = nil }
+                UnsentChanges.removeAll(server: a)
+            }
+            StubURLProtocol.status.withLock { $0 = 500 }
+            await model.setCell(rowId: "r1", propertyId: "p1", to: .string("eins"), typed: "eins")
+            StubURLProtocol.status.withLock { $0 = 200 }
+
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "r1", "cells": {}}}"# }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = update }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { for await _ in released {} } }
+            let first = Task { await session.sendUnsentCells() }
+            while StubURLProtocol.beforeNextAnswer.withLock({ $0 != nil }) { try await Task.sleep(for: .milliseconds(10)) }
+            // Typed while that send waits, after it read the kept inputs; its own save fails too.
+            StubURLProtocol.status.withLock { $0 = 500 }
+            await model.setCell(rowId: "r1", propertyId: "p2", to: .string("zwei"), typed: "zwei")
+            StubURLProtocol.status.withLock { $0 = 200 }
+            #expect(try await keptCells(session).count == 2)
+
+            var asked = false
+            let second = Task {
+                asked = true
+                return await session.sendUnsentCells()
+            }
+            while !asked { try await Task.sleep(for: .milliseconds(10)) }
+            release.finish()
+            #expect(await first.value.isEmpty)
+            #expect(await second.value.isEmpty)
+            #expect(try await keptCells(session).isEmpty, "the input kept meanwhile went too")
+            await removeCaches()
+        }
+
         /// A kept input that went to the server while its database stayed open no longer shows once that loads again, and a
         /// field closed with it unchanged doesn't send it again: it overwrote what a colleague had changed since.
         @Test func deliveredKeptInputDoesNotGoAgain() async throws {

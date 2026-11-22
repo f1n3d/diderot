@@ -90,6 +90,45 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// "Edit" chosen while the app sends kept titles on its own (back in the app, a slow server) sends the page's title
+        /// once that send is done. The page's send used to be dropped meanwhile, and the app's own skips a verified page:
+        /// the title stayed on the device for as long as the page was open, which said it goes once the server answers.
+        @Test(.timeLimit(.minutes(1))) func keptTitleGoesAfterEditWhileTheAppSendsItsOwn() async throws {
+            let (session, _) = try await licensed(["page:verification"])
+            let (released, release) = AsyncStream<Void>.makeStream()
+            defer {
+                release.finish()
+                StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil }
+                StubURLProtocol.beforeNextAnswer.withLock { $0 = nil }
+                resetStub()
+                UnsentChanges.removeAll(server: a)
+            }
+            await session.keepUnsentTitle("Neu", pageId: "p1", spaceId: "s1")
+            // One answer for the verification and the rename alike.
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"id": "p1", "title": "Neu", "status": "verified"}}"# }
+            // The app's send waits for the page's verification.
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/pages/verification-info" }
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { for await _ in released {} } }
+            let appsOwn = Task { await session.sendUnsentTitles() }
+            while StubURLProtocol.beforeNextAnswer.withLock({ $0 != nil }) { try await Task.sleep(for: .milliseconds(10)) }
+
+            let edit = PageTitleEdit()
+            var reports: [String] = []
+            let page = try Self.page(canEdit: true)
+            let afterEdit = Task {
+                await edit.showUnsent(of: page, consented: .verified, typing: { false }, isOffline: { false },
+                                      session: session, changes: ContentChanges()) { reports.append($0) }
+            }
+            // Shown as not sent: the page's send has then come to the app's, which still waits.
+            while edit.unsent == nil { try await Task.sleep(for: .milliseconds(10)) }
+            release.finish()
+            #expect(await appsOwn.value.spaces.isEmpty, "the app's own send skips the verified page")
+            #expect(await afterEdit.value, "the page's send went after it")
+            #expect(edit.unsent == nil && reports.isEmpty)
+            #expect(await session.unsentTitle(pageId: "p1") == nil)
+            await removeCaches()
+        }
+
         /// Without the license feature nothing is asked, nor on Docmost 0.97, whose edits kept a verification and whose
         /// web didn't ask: every page edits as before.
         @Test(arguments: [(["bases"], "0.98.0"), (["page:verification"], "0.97.0")])

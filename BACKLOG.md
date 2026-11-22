@@ -205,7 +205,7 @@ Checked on October 24, 2026, in the Xcode 27.1 simulator (Apple's guidance: the 
 - Postponed in the code review of November 6, 2026 (rare, or the server refuses with a message):
   - Notices of work that outlives its page (a failed close-save on a full disk, a failed upload) are lost when a sign-out, a 401 or a server switch replaces the main view, and a staged camera photo is then deleted without a word (V21). The fix keeps the notices above the session.
   - Unsent changes of a server added under an older spelling (upper case, `:443`, before the address was normalized) can't be found after signing out and adding it again (V23). Only for servers added before that.
-  - One send at a time for kept titles and fields, and one for pending sign-outs: a second request while one waits (30 s on an unreachable server) is dropped until the next activation or network change (V24).
+  - One send at a time for pending sign-outs: a second request while one waits (30 s on an unreachable server) is dropped until the next activation or network change (V24). Kept titles and fields wait for the running send instead since the code review of November 21, 2026.
   - After an offline start with the network up, turning a VPN on doesn't reconnect; only returning to the app or a network change does (V25; the note above on servers that don't answer says "or of the network", which a VPN doesn't change).
   - With two iPad windows on the server setup, Continue in one and Cancel in the other can end on the new server's sign-in (V26).
   - A late "Try Again" of a sign-in writes its user into the cache before it knows the sign-in still counts (V27, suspected: to confirm with a session test that delays the retry's `users/me`).
