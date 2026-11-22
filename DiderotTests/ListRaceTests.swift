@@ -107,6 +107,25 @@ extension AppSessionRaceTests {
             await removeCaches()
         }
 
+        /// A star whose request is still on its way when the ids load starts stays too: the load began after the tap, but
+        /// its answer can still be from before the server took the star.
+        @Test func aStarOnItsWayWhenTheIdsLoadStartsStays() async throws {
+            let session = try await sessionOnA()
+            let favorites = FavoritesStore(session: session)
+            StubURLProtocol.body.withLock { $0 = #"{"data": {"items": ["p1"]}}"# }
+            StubURLProtocol.beforeNextAnswerFor.withLock { $0 = "a.example.com/api/favorites/add" }
+            defer { StubURLProtocol.beforeNextAnswerFor.withLock { $0 = nil } }
+            // While the star's request waits for its answer, the ids load and answer without it.
+            StubURLProtocol.beforeNextAnswer.withLock { $0 = { @MainActor in await favorites.loadIds() } }
+            await favorites.togglePage("p2")
+            StubURLProtocol.body.withLock { $0 = nil }
+            #expect(favorites.isFavorite(pageId: "p2"))
+            #expect(favorites.isFavorite(pageId: "p1"), "the rest of the answer counts")
+            #expect(favorites.toast == nil)
+            withExtendedLifetime(session) {}
+            await removeCaches()
+        }
+
         /// A slow comments load that ends after a newer one doesn't overwrite it: a comment just posted disappeared from the
         /// list and the badge, and a deleted one came back.
         @Test func lateCommentsAnswerKeepsTheNewerList() async throws {
