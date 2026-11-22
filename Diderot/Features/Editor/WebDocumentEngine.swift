@@ -374,16 +374,6 @@ final class WebDocumentEngine: DocumentEngine {
         } catch {
             AppLog.ui.error("Unsent changes unreadable: \(error.localizedDescription, privacy: .public)")
         }
-        if unsent == nil, let legacy = await ready.cache.readData(key: CacheKey.unsentChanges(pageId)) {
-            // Kept in the offline cache by earlier builds; they leave it once the store has them.
-            do {
-                try await unsentStore.store.writeData(legacy, key: CacheKey.unsentChanges(pageId))
-                await ready.cache.remove(key: CacheKey.unsentChanges(pageId))
-            } catch {
-                AppLog.ui.error("Unsent changes left in the cache: \(error.localizedDescription, privacy: .public)")
-            }
-            unsent = legacy
-        }
         guard opens == attempt else { return }
         // In-flight events of a closed page would overwrite the idle state after `close`, or the next open's.
         let handler = EngineMessageHandler { [weak self] message in
