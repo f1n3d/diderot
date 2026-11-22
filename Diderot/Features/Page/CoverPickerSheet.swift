@@ -218,7 +218,7 @@ private struct UploadedCoverThumbnail: View {
     var body: some View {
         Color.clear
             .overlay {
-                if let image { Image(uiImage: image).resizable().scaledToFill() }
+                if let image { ResizableImage(image: image).scaledToFill() }
             }
             .task(id: path) {
                 guard let url = context.baseURL.flatMap({ ImageURL.resolveContentMedia(path, baseURL: $0) }),

@@ -340,6 +340,58 @@ struct MediaBlockViewTests {
         #expect(gate.maxBytes == nil && gate != MediaGate())
     }
 
+    /// An animated GIF plays in the page (the reader, the editor, a presentation), as on the web, and VoiceOver still
+    /// reads it as the image it is: SwiftUI's `Image` showed its first frame only.
+    @Test func animatedImagesPlay() async throws {
+        let file = URL.temporaryDirectory.appending(path: "animated-\(UUID().uuidString).gif")
+        try MediaLoaderTests.animation(.gif, delays: [0.1, 0.1, 0.1], width: 40, height: 30).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let server = URL(string: "https://animated.docmost.invalid")!
+        let context = RenderContext(baseURL: server, client: nil, mediaLoader: MediaLoader(client: APIClient(baseURL: server)), token: nil, pageId: nil)
+        let doc = PMNode(type: "doc", content: [PMNode(type: "image", attrs: ["src": .string(file.absoluteString), "alt": "Screen recording"])])
+        let view = BlockView(block: try #require(ContentParser.parse(doc).blocks.first)).environment(\.renderContext, context)
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: view)
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        #expect(await poll { imageViews(in: window).contains { $0.image?.images?.count == 3 && $0.window != nil } })
+        let playing = try #require(imageViews(in: window).first { $0.image?.images != nil })
+        // UIImageView plays it as an animation of its layer's contents.
+        #expect(playing.layer.animationKeys()?.isEmpty == false)
+        #expect(playing.bounds.width > 0 && abs(playing.bounds.width / playing.bounds.height - 4 / 3) < 0.01, "\(playing.bounds)")
+        #expect(labels(in: window).contains("Screen recording"))
+    }
+
+    /// One that plays once or a few times, as its file says, stops on its last frame, as the web's `<img>` does, in
+    /// the page and full screen. UIImageView played it on and on.
+    @Test func animationsStopAfterTheirPlays() async throws {
+        // A GIF that plays once: ImageIO writes it without a NETSCAPE block.
+        let data = try MediaLoaderTests.animation(.gif, delays: [0.5, 0.5, 0.5], width: 40, height: 30, loops: 1)
+        let image = try #require(await MediaLoader.decode(data, targetPixelWidth: 512))
+        let last = try #require(image.images?.last)
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: ResizableImage(image: image).frame(width: 40, height: 30))
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let viewer = ImageZoomView(image: image)
+        viewer.frame = CGRect(x: 0, y: 100, width: 200, height: 200)
+        window.addSubview(viewer)
+
+        // The image views with its frames (a scroll view may have image views of its own).
+        func shown() -> [UIImageView] { imageViews(in: window).filter { $0.image?.images != nil || $0.animationImages != nil } }
+        func playing(_ view: UIImageView) -> Bool { view.layer.animationKeys()?.isEmpty == false }
+        #expect(await poll { shown().count == 2 && shown().allSatisfy(playing) })
+        #expect(await poll(tries: 100) { shown().allSatisfy { !playing($0) && $0.image === last } })
+    }
+
+    private func imageViews(in view: UIView) -> [UIImageView] {
+        view.layoutIfNeeded()
+        return [view as? UIImageView].compactMap(\.self) + view.subviews.flatMap(imageViews)
+    }
+
     /// Taps the element whose label holds `text` until `done`. Again where needed: SwiftUI may build the view anew
     /// while other tests' windows come and go, and a tap on an element of the view before reaches nothing.
     private func tap(_ text: String, in window: UIWindow, until done: () -> Bool) async -> Bool {

@@ -46,6 +46,48 @@ final class PageComments {
     /// Why the last send, delete or resolve failed: kept here like the draft, so a sheet closed while sending shows it
     /// when it opens again.
     var error: String?
+    /// The draft is going out. Kept here like the draft: in the sheet, one closed while sending opened again with Send
+    /// enabled and the same draft, and a tap posted the comment twice.
+    private(set) var isSending = false
+
+    /// What a send wrote, for the sheet to show: a new thread, a reply in a thread, or an edit.
+    enum Sent: Equatable {
+        case new(thread: String)
+        case reply(thread: String)
+        case edit
+    }
+
+    /// Sends the draft as `composing` says. The composer starts over only if it still holds the text sent: text
+    /// written after Send didn't go out, and starting over lost it. `nil` when nothing went out (another send runs,
+    /// the draft is empty) or it failed (`error` says why).
+    func send() async -> Sent? {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !isSending else { return nil }
+        let mode = composing
+        isSending = true
+        defer { isSending = false }
+        error = nil
+        do {
+            let sent: Sent
+            switch mode {
+            case .new: sent = .new(thread: try await create(text: text, replyTo: nil).id)
+            case .reply(let comment):
+                try await create(text: text, replyTo: comment)
+                sent = .reply(thread: comment.parentCommentId ?? comment.id)
+            case .edit(let comment):
+                try await update(comment, text: text)
+                sent = .edit
+            }
+            if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text {
+                composing = .new
+                draft = ""
+            }
+            return sent
+        } catch {
+            self.error = error.userMessage
+            return nil
+        }
+    }
 
     /// The comment with this ID, loading the list again if it's unknown: a collaborator's new comment whose mark came
     /// through the live document already.
