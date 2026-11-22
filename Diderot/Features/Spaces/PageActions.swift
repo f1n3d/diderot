@@ -49,11 +49,31 @@ final class PageActionRunner {
         toast = String(localized: "Link copied")
     }
 
+    /// The pages being duplicated or copied to another space, one request at a time each: the server answers once it has
+    /// copied the whole tree, which can take minutes, and every request makes a copy.
+    private var copying: Set<String> = []
+
+    /// While true, the menu turns Duplicate and Copy to Space off for the page.
+    func isCopying(_ page: PageRef) -> Bool { copying.contains(page.id) }
+
     func duplicate(_ page: PageRef, toSpaceId: String? = nil) async {
+        guard copying.insert(page.id).inserted else { return }
+        defer { copying.remove(page.id) }
         await run {
-            _ = try await $0.send(Endpoints.Pages.duplicate(pageId: page.id, spaceId: toSpaceId))
+            // Nothing else shows that it started until the server answers.
+            self.toast = toSpaceId == nil ? String(localized: "Duplicating page…") : String(localized: "Copying page…")
+            let done: String
+            do {
+                _ = try await $0.send(Endpoints.Pages.duplicate(pageId: page.id, spaceId: toSpaceId))
+                done = toSpaceId == nil ? String(localized: "Page duplicated") : String(localized: "Page copied")
+            } catch let error as APIError where error.serverMayStillBeWorking {
+                // The server makes the new pages first and answers once it has copied their attachments; it goes on
+                // after the app, or a gateway in front of it, stops waiting. The tree shows the copy, and the toast
+                // doesn't invite a second one.
+                done = String(localized: "The server is still making the copy. It may take a while to appear.")
+            }
             self.changes.pageChanged(in: toSpaceId ?? page.spaceId)
-            self.toast = toSpaceId == nil ? String(localized: "Page duplicated") : String(localized: "Page copied")
+            self.toast = done
         }
     }
 
@@ -122,8 +142,10 @@ struct PageActionsMenu: View {
         if canEdit {
             Divider()
             Button("Duplicate", systemImage: "doc.on.doc") { Task { await runner.duplicate(page) } }
+                .disabled(runner.isCopying(page))
             Button("Move to Space…", systemImage: "folder") { runner.pending = .moveToSpace(page) }
             Button("Copy to Space…", systemImage: "folder.badge.plus") { runner.pending = .copyToSpace(page) }
+                .disabled(runner.isCopying(page))
             Button("Move to Trash", systemImage: "trash", role: .destructive) { runner.trashCandidate = page }
         }
     }

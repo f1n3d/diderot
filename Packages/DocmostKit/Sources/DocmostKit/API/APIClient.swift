@@ -234,10 +234,10 @@ public actor APIClient {
     /// A request whose answer goes to a file (`downloadFile`): the same checks, and the file goes whenever one fails.
     private func download(_ request: URLRequest, path: String, readsClock: Bool, maxBytes: Int64?) async throws -> (file: URL, response: HTTPURLResponse) {
         let file = downloads.appending(path: UUID().uuidString)
-        return try await execute(request, path: path, readsClock: readsClock, errorBody: Self.errorBody(inFile:), discard: Self.discard) { refusal in
+        return try await execute(request, path: path, readsClock: readsClock, errorBody: Self.errorBody(inFile:), discard: Self.discard) { delegate in
             do {
                 // `execute` decides which requests follow no redirect, and hands a delegate for those.
-                return (file, try await self.transfer(request, to: file, maxBytes: maxBytes, refusesRedirects: refusal != nil))
+                return (file, try await self.transfer(request, to: file, maxBytes: maxBytes, refusesRedirects: delegate != nil))
             } catch {
                 Self.discard(file)
                 throw error
@@ -294,7 +294,7 @@ public actor APIClient {
         // and cookie (a password, the MFA cookie, page content) on to wherever one points, another host or plain HTTP
         // included, and drop its token, so the server's 401 would sign out. Files on other hosts follow them.
         let toServer = request.url.map { Origin($0) == Origin(baseURL) } == true
-        let delegate = toServer ? RedirectRefusal() : nil
+        let delegate = toServer ? ServerTaskDelegate() : nil
         do {
             let (body, response) = try await send(delegate)
             do {
@@ -326,7 +326,8 @@ public actor APIClient {
             throw CancellationError()
         } catch let error as URLError {
             log(method: method, path: path, status: nil, started: started, error: error.localizedDescription)
-            throw APIError.network(error)
+            // A timeout alone doesn't say whether the server got the request: one it can't reach times out as well.
+            throw APIError.network(delegate?.requestWasSent == true ? error.afterSending() : error)
         } catch {
             // Not the server's doing (an upload's body file gone, say): the error keeps its cause.
             log(method: method, path: path, status: nil, started: started, error: error.localizedDescription)
@@ -363,12 +364,24 @@ public actor APIClient {
     }
 }
 
-/// Hands a redirect back as the response instead of following it (see `APIClient.execute`).
-private final class RedirectRefusal: NSObject, URLSessionTaskDelegate {
+/// The delegate of a request to the server (see `APIClient.execute`): hands a redirect back as the response instead of
+/// following it, and notes whether the request went out whole.
+private final class ServerTaskDelegate: NSObject, URLSessionTaskDelegate, Sendable {
+    private let sent = Mutex(false)
+
+    /// Known once the task has ended: URLSession hands over the task's metrics before it ends the task.
+    var requestWasSent: Bool { sent.withLock { $0 } }
+
     func urlSession(
         _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
     ) async -> URLRequest? {
         nil
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        // The last attempt is the one that ended the task: URLSession may send a request again on a new connection.
+        let wentOut = metrics.transactionMetrics.last?.requestEndDate != nil
+        sent.withLock { $0 = wentOut }
     }
 }
 

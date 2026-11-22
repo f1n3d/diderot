@@ -74,6 +74,66 @@ struct APIClientTests {
         #expect(MockURLProtocol.recordedRequests.first?.timeoutInterval == 3)
     }
 
+    /// The server answers a duplicate once it has copied every attachment of the tree, and starts an export with
+    /// attachments once it has read them all: with a large tree that took longer than the client's 30 s, and the server
+    /// finished the work anyway, so a second Duplicate made a second copy.
+    @Test func duplicateAndExportWaitLong() async throws {
+        MockURLProtocol.respond(byPath: [
+            "/api/pages/duplicate": .init(body: Data(#"{"data":{"id":"p2","title":"Plan","spaceId":"s1"},"success":true,"status":200}"#.utf8)),
+            "/api/pages/export": .init(body: Data("file".utf8)),
+        ])
+        let client = TestSupport.mockClient()
+        _ = try await client.send(Endpoints.Pages.duplicate(pageId: "p1"))
+        _ = try await client.send(Endpoints.Pages.duplicate(pageId: "p1", spaceId: "s2"))
+        let (file, _) = try await client.download(
+            Endpoints.Pages.export(pageId: "p1", format: .markdown, includeChildren: true, includeAttachments: true)
+        )
+        withExtendedLifetime(client) { try? FileManager.default.removeItem(at: file) }
+        #expect(MockURLProtocol.recordedRequests.map(\.timeoutInterval) == [300, 300, 300])
+    }
+
+    /// A request that went out and got no answer in time says so, and one that timed out before it got out doesn't:
+    /// only the first may still be at work on the server (a duplicate copying attachments). A server that can't be
+    /// reached, one behind a VPN that is off, times out before anything goes out, and the app said its copy was coming.
+    @Test func aTimeoutSaysWhetherTheRequestWentOut() async throws {
+        let late = Endpoint<NoContent>.post("pages/duplicate", timeout: 1)
+        let server = try await SilentServer()
+        let unanswered = await #expect(throws: APIError.self) {
+            try await APIClient(baseURL: server.url, token: "t").send(late)
+        }
+        withExtendedLifetime(server) {}
+        guard case .network(let error)? = unanswered else {
+            Issue.record("Expected a network error, got \(String(describing: unanswered))")
+            return
+        }
+        #expect(error.code == .timedOut && error.requestWasSent)
+        #expect(unanswered?.serverMayStillBeWorking == true)
+
+        // URLSession sends nothing itself for a request a `URLProtocol` answers, as for a server it can't reach.
+        MockURLProtocol.respond(with: .init(error: URLError(.timedOut)))
+        let unsent = await #expect(throws: APIError.self) { try await TestSupport.mockClient().send(late) }
+        guard case .network(let error)? = unsent else {
+            Issue.record("Expected a network error, got \(String(describing: unsent))")
+            return
+        }
+        #expect(error.code == .timedOut && !error.requestWasSent)
+        #expect(unsent?.serverMayStillBeWorking == false)
+    }
+
+    /// A gateway that gave up waiting for the server's answer (nginx's 504 after 60 s, Cloudflare's 524 after 100 s)
+    /// leaves the server at work, as the client's own timeout after the request went out does. Other errors don't.
+    @Test func aGatewayTimeoutLeavesTheServerAtWork() {
+        let page = Data("<html><body><h1>504 Gateway Time-out</h1></body></html>".utf8)
+        #expect(APIError.from(status: 504, data: page).serverMayStillBeWorking)
+        #expect(APIError.from(status: 524, data: Data()).serverMayStillBeWorking)
+        #expect(!APIError.from(status: 502, data: page).serverMayStillBeWorking)
+        #expect(!APIError.from(status: 500, data: Data(#"{"statusCode":500,"message":"Internal server error"}"#.utf8)).serverMayStillBeWorking)
+        #expect(APIError.network(URLError(.timedOut).afterSending()).serverMayStillBeWorking)
+        #expect(!APIError.network(URLError(.timedOut)).serverMayStillBeWorking)
+        // A connection that broke after the request went out may have been one the server had closed before it came.
+        #expect(!APIError.network(URLError(.networkConnectionLost).afterSending()).serverMayStillBeWorking)
+    }
+
     @Test func missingPayloadIsAnError() async throws {
         MockURLProtocol.respond(with: .init(body: try TestSupport.fixture("void-response")))
         await #expect(throws: APIError.unexpectedPayload) {

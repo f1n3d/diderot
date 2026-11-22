@@ -53,6 +53,19 @@ public enum APIError: Error, Sendable, Equatable {
         }
     }
 
+    /// The request reached the server, or a gateway in front of it, and no answer came in time: the client's own timeout
+    /// after the request went out, or a gateway's while it waited for the server (504; Cloudflare's 524). The server
+    /// may still be doing the work. nginx also answers 504 when it couldn't reach the server at all, which its answer
+    /// doesn't tell apart. A timeout before the request went out, as to a server behind a VPN that is off, is no such
+    /// error: the server never got it.
+    public var serverMayStillBeWorking: Bool {
+        switch self {
+        case .network(let error): error.code == .timedOut && error.requestWasSent
+        case .server(let status, _): status == 504 || status == 524
+        default: false
+        }
+    }
+
     /// Maps a non-2xx response to an error.
     static func from(status: Int, data: Data) -> APIError {
         let body = try? JSONDecoding.makeDecoder().decode(ServerErrorBody.self, from: data)
@@ -78,6 +91,19 @@ public enum APIError: Error, Sendable, Equatable {
             return .server(status: status, message: first)
         }
     }
+}
+
+extension URLError {
+    /// Whether the request had gone out whole when this error ended it. `APIClient` notes it for its requests to the
+    /// server (`send`, uploads), not for downloads.
+    public var requestWasSent: Bool { (userInfo[Self.requestWasSentKey] as? Bool) == true }
+
+    /// This error, noted as one that came after the request had gone out whole.
+    public func afterSending() -> URLError {
+        URLError(code, userInfo: userInfo.merging([Self.requestWasSentKey: true]) { $1 })
+    }
+
+    private static let requestWasSentKey = "DocmostKitRequestWasSent"
 }
 
 struct ServerErrorBody: Decodable {

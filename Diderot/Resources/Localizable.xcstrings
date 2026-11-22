@@ -1594,6 +1594,16 @@
         }
       }
     },
+    "Copying page…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seite wird kopiert …"
+          }
+        }
+      }
+    },
     "Could not read the server response (%@).": {
       "extractionState": "manual",
       "localizations": {
@@ -2150,6 +2160,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Duplizieren"
+          }
+        }
+      }
+    },
+    "Duplicating page…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seite wird dupliziert …"
           }
         }
       }
@@ -6571,6 +6591,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Server hat die Notiz angenommen, aber die Seite hat sich nicht geändert. Möglicherweise ist die Synchronisierung für die Zusammenarbeit auf diesem Server deaktiviert."
+          }
+        }
+      }
+    },
+    "The server is still making the copy. It may take a while to appear.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server erstellt die Kopie noch. Es kann eine Weile dauern, bis sie erscheint."
           }
         }
       }
