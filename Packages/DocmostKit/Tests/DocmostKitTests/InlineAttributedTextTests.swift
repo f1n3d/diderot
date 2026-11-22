@@ -148,16 +148,22 @@ struct InlineAttributedTextTests {
         #expect(InlineAttributedText.inlines(from: text).last == PMNode(type: "mathInline", attrs: ["text": "x^2"]))
     }
 
-    /// Empty status and math atoms (possible on the web) get placeholder display text and survive editing.
-    @Test func keepsEmptyStatusAndFormula() {
+    /// Atoms without text get placeholder display text and survive editing: empty status and math atoms (possible on the
+    /// web), a page mention with an empty label and an integration mention without an address (from an import or
+    /// another client; the web and the app write "Untitled" for an untitled page).
+    @Test func keepsAtomsWithoutText() {
         let inlines: [PMNode] = [
             PMNode(type: "text", text: "A "),
             PMNode(type: "status", attrs: ["text": "", "color": "blue"]),
             PMNode(type: "text", text: " B "),
             PMNode(type: "mathInline", attrs: ["text": ""]),
+            PMNode(type: "text", text: " C "),
+            PMNode(type: "mention", attrs: ["id": "m1", "label": "", "entityType": "page", "entityId": "p1", "slugId": "abc123"]),
+            PMNode(type: "text", text: " D "),
+            PMNode(type: "integrationMention", attrs: ["url": "", "provider": "github"]),
         ]
         let text = InlineAttributedText.attributedString(from: inlines)
-        #expect(String(text.characters) == "A \u{00A0} B \u{00A0}")
+        #expect(String(text.characters) == "A \u{00A0} B \u{00A0} C \u{00A0} D \u{00A0}")
         #expect(InlineAttributedText.inlines(from: text) == inlines)
     }
 
