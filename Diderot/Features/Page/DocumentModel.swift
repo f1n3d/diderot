@@ -290,7 +290,9 @@ final class DocumentModel {
 
     /// A connect of the engine that holds the page's changes until `releaseChanges` (`DocumentEngine.holdsChanges`): the
     /// page takes it (`takeHeldChanges`) and asks for its verification first. A value rather than a callback: a closure
-    /// set by the page would keep the page's state, and with it this model, alive after the page is gone.
+    /// set by the page would keep the page's state, and with it this model, alive after the page is gone. A page left
+    /// while an upload runs takes no hold: what the engine holds then (the upload's block) stays on the device with the
+    /// unsent changes and goes once the page is opened again, where it can ask, as a verified page must.
     private(set) var heldChanges: EngineHold?
 
     /// The hold waiting for the page, once: a page that shows again doesn't ask twice.
