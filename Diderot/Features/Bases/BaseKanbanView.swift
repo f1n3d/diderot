@@ -37,6 +37,9 @@ struct BaseKanbanView: View {
             .scrollPosition($position)
             .scrollTargetBehavior(KanbanColumnSnapping(columnCount: model.columns.count))
             .scrollIndicators(.hidden)
+            // The whole visible board, gaps and padding included, in the coordinates paging works in.
+            .contentShape(Rectangle())
+            .onDrop(of: DragPayload.types, delegate: KanbanBoardDropDelegate(drag: drag))
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { drag.boardWidth = $0 }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in offsetX = x }
             .onChange(of: drag.scrollRequest) { _, request in
@@ -165,6 +168,12 @@ final class KanbanDragState {
     @ObservationIgnored var boardWidth: CGFloat = 0
     @ObservationIgnored private var edgeDirection = 0
     @ObservationIgnored private var edgeTask: Task<Void, Never>?
+    /// What the pauses between pages run on; tests move a clock of their own (`TestClock`).
+    @ObservationIgnored private let clock: any Clock<Duration>
+
+    init(clock: any Clock<Duration> = ContinuousClock()) {
+        self.clock = clock
+    }
 
     /// Finger at the edge (x in visible board coordinates): pages one column per short pause while it stays there.
     func hover(atBoardX x: CGFloat) {
@@ -174,25 +183,64 @@ final class KanbanDragState {
         edgeDirection = direction
         edgeTask?.cancel()
         guard direction != 0 else { return }
+        let clock = clock
         edgeTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(550))
+                try? await clock.sleep(for: .milliseconds(550))
                 guard !Task.isCancelled, let self else { return }
                 self.scrollRequest = ScrollRequest(direction: direction)
             }
         }
     }
 
-    func leave(rowId: String?, columnId: String) {
-        if target?.columnId == columnId, target?.rowId == rowId { target = nil }
+    /// Finger left a drop area, a card (`rowId`) or the rest of a column: clears its insertion mark and aims paging at
+    /// where it left (`location`, in the area's coordinates; the area is `size` large, its leading edge at `boardMinX`).
+    /// Out through a column's top or bottom the finger is in the board's padding or already off the board (the header,
+    /// the navigation bar), so it stops; in the padding the board's own drop area pages on near the edge. Out beside a
+    /// column, into a gap that paging moves under a finger held at the edge, it goes on while the finger is near the
+    /// edge. A card's top and bottom border its column, which takes the drag over. Once another area has taken it, or
+    /// the drag has ended, nothing changes: the order of one area's exit and the next one's entry isn't documented.
+    func leave(rowId: String?, columnId: String, at location: CGPoint, size: CGSize, boardMinX: CGFloat) {
+        guard target?.columnId == columnId, target?.rowId == rowId else { return }
+        target = nil
+        if rowId == nil, Self.leftThroughTopOrBottom(location, size: size) {
+            stopPaging()
+        } else {
+            hover(atBoardX: boardMinX + location.x)
+        }
+    }
+
+    /// Finger on the board beside every column and card (a gap between columns, the board's padding): pages while it
+    /// is near the edge. While a column or card has the drag, it aims paging itself.
+    func hoverBoard(atBoardX x: CGFloat) {
+        guard target == nil else { return }
+        hover(atBoardX: x)
+    }
+
+    /// Finger left the board, or moved on into a column or card: off the board no other drop area would stop paging.
+    /// Into a column, its entry may come before this exit, which then changes nothing, or after it, starting paging
+    /// again near the edge.
+    func leaveBoard() {
+        guard target == nil else { return }
+        stopPaging()
     }
 
     func end() {
         draggedRowId = nil
         target = nil
+        stopPaging()
+    }
+
+    private func stopPaging() {
         edgeDirection = 0
         edgeTask?.cancel()
         edgeTask = nil
+    }
+
+    /// Whether the edge nearest to where a drag left an area is its top or bottom: the point may lie just outside the
+    /// area or still just inside it.
+    private static func leftThroughTopOrBottom(_ location: CGPoint, size: CGSize) -> Bool {
+        min(location.y, size.height - location.y) < min(location.x, size.width - location.x)
     }
 }
 
@@ -214,13 +262,14 @@ private struct KanbanDropDelegate: DropDelegate {
     let model: BaseModel
     let columnId: String
     var rowId: String?
-    var height: CGFloat = 0
+    /// A card's halves place the drop; a column's edges tell which way the finger left it.
+    var size: CGSize = .zero
     /// Board x of the drop area's leading edge; read only while dragging, so scrolling redraws no columns or cards.
     let boardMinX: () -> CGFloat
     let drag: KanbanDragState
 
     private func target(_ info: DropInfo) -> KanbanDropTarget {
-        KanbanDropTarget(columnId: columnId, rowId: rowId, below: rowId != nil && info.location.y > height / 2)
+        KanbanDropTarget(columnId: columnId, rowId: rowId, below: rowId != nil && info.location.y > size.height / 2)
     }
 
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: DragPayload.types) }
@@ -233,7 +282,7 @@ private struct KanbanDropDelegate: DropDelegate {
     }
 
     func dropExited(info: DropInfo) {
-        drag.leave(rowId: rowId, columnId: columnId)
+        drag.leave(rowId: rowId, columnId: columnId, at: info.location, size: size, boardMinX: boardMinX())
     }
 
     func performDrop(info: DropInfo) -> Bool {
@@ -252,6 +301,25 @@ private struct KanbanDropDelegate: DropDelegate {
     }
 }
 
+/// The visible board behind its columns: nothing lands in a gap or the padding, but a finger there pages near the
+/// edge, and leaving the board from there stops paging. Columns and cards lie above it and take their drops.
+private struct KanbanBoardDropDelegate: DropDelegate {
+    let drag: KanbanDragState
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: DragPayload.types) }
+
+    func dropEntered(info: DropInfo) { drag.hoverBoard(atBoardX: info.location.x) }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        drag.hoverBoard(atBoardX: info.location.x)
+        return DropProposal(operation: .cancel)
+    }
+
+    func dropExited(info: DropInfo) { drag.leaveBoard() }
+
+    func performDrop(info: DropInfo) -> Bool { false }
+}
+
 // MARK: - Column
 
 private struct KanbanColumnView: View {
@@ -261,6 +329,7 @@ private struct KanbanColumnView: View {
     let drag: KanbanDragState
     let onOpen: (BaseRowRoute) -> Void
     @State private var minX: CGFloat = 0
+    @State private var size: CGSize = .zero
     @State private var isCreating = false
 
     static let cardInset: CGFloat = 8
@@ -328,9 +397,10 @@ private struct KanbanColumnView: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView(axis: .horizontal)).minX } action: { minX = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .onDrop(
             of: DragPayload.types,
-            delegate: KanbanDropDelegate(model: model, columnId: column.id, boardMinX: { minX }, drag: drag)
+            delegate: KanbanDropDelegate(model: model, columnId: column.id, size: size, boardMinX: { minX }, drag: drag)
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("base-column-\(column.id)")
@@ -395,7 +465,7 @@ private struct KanbanCard: View {
     let drag: KanbanDragState
     let boardMinX: () -> CGFloat
     let onOpen: (BaseRowRoute) -> Void
-    @State private var height: CGFloat = 0
+    @State private var size: CGSize = .zero
     @State private var confirmsDelete = false
 
     private var mark: KanbanDropTarget? {
@@ -436,13 +506,13 @@ private struct KanbanCard: View {
                 InsertionMark().offset(y: mark.below ? 5.5 : -5.5)
             }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .deleteEntryConfirmation(isPresented: $confirmsDelete) { Task { await model.deleteRow(row.id) } }
         if model.canEdit {
             card.onDrop(
                 of: DragPayload.types,
                 delegate: KanbanDropDelegate(
-                    model: model, columnId: column.id, rowId: row.id, height: height, boardMinX: boardMinX, drag: drag
+                    model: model, columnId: column.id, rowId: row.id, size: size, boardMinX: boardMinX, drag: drag
                 )
             )
         } else {
