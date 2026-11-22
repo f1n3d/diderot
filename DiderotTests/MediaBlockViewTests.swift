@@ -415,10 +415,11 @@ struct MediaBlockViewTests {
 
         #expect(await poll { imageViews(in: window).contains { $0.image?.images?.count == 3 && $0.window != nil } })
         let playing = try #require(imageViews(in: window).first { $0.image?.images != nil })
-        // UIImageView plays it as an animation of its layer's contents.
-        #expect(playing.layer.animationKeys()?.isEmpty == false)
+        // UIImageView plays it as an animation of its layer's contents. Both this and the label come after the image is
+        // set, on a later layout pass: read once, they were sometimes not there yet within the suite.
+        #expect(await poll { playing.layer.animationKeys()?.isEmpty == false })
         #expect(playing.bounds.width > 0 && abs(playing.bounds.width / playing.bounds.height - 4 / 3) < 0.01, "\(playing.bounds)")
-        #expect(labels(in: window).contains("Screen recording"))
+        #expect(await poll { labels(in: window).contains("Screen recording") }, "\(labels(in: window))")
     }
 
     /// One that plays once or a few times, as its file says, stops on its last frame, as the web's `<img>` does, in
