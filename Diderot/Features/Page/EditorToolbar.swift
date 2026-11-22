@@ -482,8 +482,7 @@ struct LinkSheet: View {
     @State private var pageQuery = ""
     @State private var pages: [MentionSuggestion] = []
     /// Captured on open: once the address field has focus, the editor no longer has it.
-    @State private var targetRange: Range<AttributedString.Index>?
-    @State private var insertionPoint: AttributedString.Index?
+    @State private var target: Target?
 
     /// Range the link applies to: the selection or the whole link under the cursor.
     static func target(
@@ -501,14 +500,55 @@ struct LinkSheet: View {
         }
     }
 
+    /// What the sheet links (`target(in:selection:)`), in characters of the block's text it opened on, as the comment
+    /// sheet keeps its passage. Indices of that text don't fit another: a Return or Backspace still on its way to the
+    /// engine makes another block active while the sheet is open, and Apply then inserted past the new text's end (a
+    /// crash) or linked other text.
+    struct Target {
+        /// The block (`NodeRef.identity`) and its text.
+        let block: String
+        let characters: String
+        let range: Range<Int>?
+        let insertionPoint: Int?
+
+        init?(block: String?, text: AttributedString, selection: AttributedTextSelection) {
+            guard let block else { return nil }
+            let (range, insertionPoint) = LinkSheet.target(in: text, selection: selection)
+            let offset = { text.characters.distance(from: text.startIndex, to: $0) }
+            self.block = block
+            characters = String(text.characters)
+            self.range = range.map { offset($0.lowerBound)..<offset($0.upperBound) }
+            self.insertionPoint = insertionPoint.map(offset)
+        }
+
+        /// The target's indices in `text`, the active text of `block`: nil once another block is active or its text
+        /// changed. A format change keeps it.
+        func indices(
+            in text: AttributedString, of block: String?
+        ) -> (range: Range<AttributedString.Index>?, insertionPoint: AttributedString.Index?)? {
+            guard block == self.block, String(text.characters) == characters else { return nil }
+            let index = { text.characters.index(text.startIndex, offsetBy: $0) }
+            return (range.map { index($0.lowerBound)..<index($0.upperBound) }, insertionPoint.map(index))
+        }
+    }
+
+    /// The target in the active text as it is now: nil before the sheet appeared and once that text is gone. Everything
+    /// reads it, the body too: the body shows the new text before `onChange` closes the sheet.
+    private var current: (range: Range<AttributedString.Index>?, insertionPoint: AttributedString.Index?)? {
+        target?.indices(in: model.activeText, of: model.active?.ref.identity)
+    }
+
+    /// The text the sheet opened on is gone: the sheet closes without a change.
+    private var targetIsGone: Bool { target != nil && current == nil }
+
     private var existingLink: URL? {
-        guard let range = targetRange else { return nil }
+        guard let range = current?.range else { return nil }
         return model.activeText[range].runs.first?.link
     }
 
     /// The whole link the sheet edits (a selection may cover part of it): what becomes a card or mention.
     private var wholeLink: Range<AttributedString.Index>? {
-        guard let range = targetRange, let url = existingLink else { return nil }
+        guard let range = current?.range, let url = existingLink else { return nil }
         return model.activeText.runs[\.link].first { link, linkRange in link == url && linkRange.contains(range.lowerBound) }?.1
     }
 
@@ -531,7 +571,7 @@ struct LinkSheet: View {
                     if let typed = ContentLinkRouter.normalizedLink(address), !ContentLinkRouter.isLinkable(typed) {
                         Text("Only web, mail and phone addresses can be linked.")
                     } else {
-                        Text(targetRange != nil ? "The link is applied to the selected text." : "Select text first to turn it into a link; otherwise the address is inserted as text.")
+                        Text(current?.range != nil ? "The link is applied to the selected text." : "Select text first to turn it into a link; otherwise the address is inserted as text.")
                     }
                 }
                 Section("Link to a page") {
@@ -560,20 +600,14 @@ struct LinkSheet: View {
                 if let range = wholeLink, let provider = model.integrationProvider(ofLinkIn: range) {
                     Section {
                         if model.canShowLinkAsCard(in: range) {
-                            Button("Show as Card") {
-                                model.showLink(in: range, provider: provider, as: .card)
-                                dismiss()
-                            }
+                            Button("Show as Card") { showLink(provider: provider, as: .card) }
                         }
-                        Button("Show as Mention") {
-                            model.showLink(in: range, provider: provider, as: .mention)
-                            dismiss()
-                        }
+                        Button("Show as Mention") { showLink(provider: provider, as: .mention) }
                     }
                 }
                 if existingLink != nil {
                     Button("Remove Link", role: .destructive) {
-                        if let range = targetRange { model.activeText[range].link = nil }
+                        if let range = current?.range { model.activeText[range].link = nil }
                         dismiss()
                     }
                 }
@@ -589,8 +623,13 @@ struct LinkSheet: View {
                 }
             }
             .onAppear {
-                (targetRange, insertionPoint) = Self.target(in: model.activeText, selection: model.activeSelection)
+                target = Target(block: model.active?.ref.identity, text: model.activeText, selection: model.activeSelection)
                 if let existing = existingLink { address = existing.absoluteString }
+            }
+            // Another block became active: a Return or Backspace was still on its way to the engine when the sheet
+            // opened.
+            .onChange(of: targetIsGone) { _, gone in
+                if gone { dismiss() }
             }
             .task(id: pageQuery) {
                 let query = pageQuery.trimmingCharacters(in: .whitespaces)
@@ -608,14 +647,25 @@ struct LinkSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    /// With the link as it is when tapped: the button holds the range of the body that drew it.
+    private func showLink(provider: String, as display: DocumentModel.IntegrationDisplay) {
+        if let range = wholeLink { model.showLink(in: range, provider: provider, as: display) }
+        dismiss()
+    }
+
     private func apply() {
         guard let url = link else { return }
-        if let range = targetRange {
+        // The text the sheet opened on is gone: nothing changes (the sheet is closing anyway).
+        guard let current else {
+            dismiss()
+            return
+        }
+        if let range = current.range {
             model.activeText[range].link = url
         } else {
             var run = AttributedString(url.absoluteString)
             run.link = url
-            let index = insertionPoint ?? model.activeText.endIndex
+            let index = current.insertionPoint ?? model.activeText.endIndex
             model.activeText.transform(updating: &model.activeSelection) { text in
                 text.insert(run, at: index)
             }

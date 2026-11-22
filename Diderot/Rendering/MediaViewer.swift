@@ -215,7 +215,8 @@ private struct MediaViewerPage: View {
             if media.isDiagram {
                 markup = DiagramView.svg(in: try await MediaLoader.read(source))
             } else {
-                // As sharp as the loader decodes at all (`MediaLoader.maxPixels`): the viewer zooms to 4×.
+                // As sharp as the loader decodes at all (`MediaLoader.maxPixels`): the viewer zooms to 4×. An
+                // animation's frames share `maxAnimationPixels` here as on the page.
                 image = await MediaLoader.decode(file: source, targetPixelWidth: 16_384)
             }
             guard markup != nil || image != nil else { throw MediaUnreadable() }
@@ -239,25 +240,31 @@ private struct ZoomableImage: UIViewRepresentable {
     let close: () -> Void
 
     func makeUIView(context: Context) -> ImageZoomView {
-        ImageZoomView(image: image)
+        ImageZoomView(image: shown(context))
     }
 
     func updateUIView(_ view: ImageZoomView, context: Context) {
+        view.imageView.show(shown(context))
         view.imageView.accessibilityLabel = label
         view.close = close
+    }
+
+    /// The image view plays an animated image, as the page does (`ResizableImage`), unless Animated Images is off.
+    private func shown(_ context: Context) -> UIImage {
+        context.environment.accessibilityPlayAnimatedImages ? image : image.images?.first ?? image
     }
 }
 
 /// Fits the image, zooms it up to 4× (pinch, double tap) and pans it; pulled down at its normal size, it closes.
 final class ImageZoomView: UIScrollView, UIScrollViewDelegate {
-    let imageView: UIImageView
+    let imageView = AnimatedImageView()
     var close: () -> Void = {}
     /// The size the image was last fitted into.
     private var fittedSize: CGSize = .zero
 
     init(image: UIImage) {
-        imageView = UIImageView(image: image)
         super.init(frame: .zero)
+        imageView.show(image)
         delegate = self
         maximumZoomScale = 4
         // Pulls down at the normal size too; sideways the pages swipe.

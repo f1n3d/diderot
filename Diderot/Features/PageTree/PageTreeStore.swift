@@ -28,7 +28,8 @@ final class PageTreeStore {
 
     /// - Parameters:
     ///   - loader: loads one batch of children (`nil` = root); without one the tree stays local (tests).
-    ///   - cache: offline copy per level, shown when loading fails unless the level is gone (403, 404).
+    ///   - cache: offline copy per level, shown when loading fails unless the level is gone (403, 404) or the load was
+    ///     cancelled.
     init(spaceId: String, cache: DiskCache? = nil, loader: (@MainActor (String?, String?) async throws -> Paginated<SidebarPage>)? = nil) {
         self.spaceId = spaceId
         self.cache = cache
@@ -169,6 +170,12 @@ final class PageTreeStore {
             }
             let loaded = await loadLevels(below: open, generation: generation)
             guard generation == reloads else { return }
+            // A cancelled refresh would collapse the pages whose levels it didn't reload: the tree stays as it was, and
+            // with nothing shown `loadRootIfNeeded` starts again.
+            if Task.isCancelled {
+                if rootState.value == nil { rootState = .idle }
+                return
+            }
             depth = []
             for parent in open {
                 guard let level = loaded[parent] else { continue }
@@ -247,7 +254,8 @@ final class PageTreeStore {
     }
 
     /// Loads a level until `hasNextPage` is false, like the web client (`limit: 100`). A load error falls back to the
-    /// cached level and rethrows only without one; a level that is gone (403, 404) drops its cache and rethrows.
+    /// cached level and rethrows only without one; a level that is gone (403, 404) drops its cache and rethrows, and a
+    /// cancelled load rethrows.
     private func loadAll(parent: String?) async throws -> [SidebarPage] {
         guard let loader else { return children[parent ?? Self.rootKey] ?? [] }
         let cacheKey = CacheKey.tree(spaceId: spaceId, parentPageId: parent)
@@ -258,6 +266,10 @@ final class PageTreeStore {
         } catch let error as APIError where error.isGone {
             await cache?.remove(key: cacheKey)
             throw error
+        } catch is CancellationError {
+            // A push or tab switch cancelled the space view's load: the saved copy showed as the current tree, and as
+            // loaded, so nothing loaded it again when the space showed again.
+            throw CancellationError()
         } catch {
             if let cached = await cache?.read([SidebarPage].self, key: cacheKey) {
                 return cached

@@ -59,6 +59,7 @@ final class EngineConnection {
     /// `suspend` calls whose close is still to come: the page stays closing until the last one is done, and an open
     /// queued between them doesn't make it live.
     @ObservationIgnored private var pendingCloses = 0
+    /// The page left while uploads ran (`leave`): the last one to end closes the engine.
     @ObservationIgnored private var suspendsAfterUploads = false
     /// The engine was opened again after an error (`EngineFailure.engineError`); another one leaves the page read-only.
     @ObservationIgnored private var restartedAfterError = false
@@ -152,7 +153,18 @@ final class EngineConnection {
     func saveUnsentChanges() async {
         guard let engine, isLive else { return }
         await owner?.connectionWritesInput()
-        await engine.saveUnsentChanges()
+        // Queued like the scheduled save: the app saves when it becomes inactive and again in the background, and side
+        // by side one save's late write of the document could land after the other found everything confirmed and
+        // dropped what was kept.
+        let previous = engineStep
+        let step = Task {
+            await previous?.value
+            // A close queued meanwhile kept them.
+            guard isLive else { return }
+            await engine.saveUnsentChanges()
+        }
+        engineStep = step
+        await step.value
     }
 
     /// The page showed a document of the engine. Every local change brings one, also those that bypass the page's saves
@@ -247,8 +259,7 @@ final class EngineConnection {
             owner?.connectionKeepsInput()
             if isLive, !restartedAfterError {
                 restartedAfterError = true
-                suspend()
-                resume()
+                restart()
             } else {
                 owner?.connectionEndsEditing()
                 // It closed itself.
@@ -268,8 +279,16 @@ final class EngineConnection {
             if lifecycle == .opening { lifecycle = .closed }
             return
         }
+        restart()
+    }
+
+    /// Closes the live engine and opens it again, after an error or a web process that ended. A page that left during an
+    /// upload stays left: `resume` is for a page that appeared, and the engine stayed open off-screen after the upload.
+    private func restart() {
+        let leaving = suspendsAfterUploads
         suspend()
         resume()
+        suspendsAfterUploads = leaving
     }
 
     private func stop(_ owner: (any EngineConnectionOwner)?) async {
