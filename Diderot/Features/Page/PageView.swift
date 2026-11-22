@@ -896,7 +896,10 @@ struct PageView: View {
 
     /// The saved copy first, then the server's page (`PageLoader`), in the session current now: the page's from then on.
     private func load(force: Bool) async {
-        guard let ready = session.ready else { return }
+        // Back in the app while the license and version are asked for, the editor is built by their answer: whether it
+        // holds the page's changes for its verification, whether it opens at all on a newer Docmost. Left meanwhile, the
+        // page loads when it shows again.
+        guard let ready = await session.readyOnceAnswered(), !Task.isCancelled else { return }
         pageSession = ready
         let loader = PageLoader(pageId: selection.pageId, owner: ready, session: session)
         if state.value == nil || force {
@@ -995,10 +998,11 @@ struct PageView: View {
             self.model = nil
             return
         }
-        if let model, model.engine != nil {
-            if page.canEdit && !page.isInTrash && verificationGate == .open { return }
+        if let model, let engine = model.engine {
+            if let pageSession, PageLoader.keepsEditor(engine, for: page, verification: verificationGate, on: pageSession) { return }
             // Trashed, edit rights lost since the cached state, or verified meanwhile: the collab server drops every edit,
-            // or an edit would take the verification back, so rebuild read-only.
+            // or an edit would take the verification back, so rebuild read-only. Built before the verification check
+            // turned on, the engine holds nothing: rebuilt, it holds.
             model.suspend()
         }
         // A database page gets none: no document and no engine; its content is rows, not text.

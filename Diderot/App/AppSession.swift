@@ -70,7 +70,8 @@ final class AppSession {
     }
 
     /// How long a start with saved content waits for the server: one that doesn't answer (behind a VPN that is off)
-    /// would keep the launch screen up until the requests' timeout (30 s).
+    /// would keep the launch screen up until the requests' timeout (30 s). A page waits as long for the license and
+    /// version asked for on returning to the app (`readyOnceAnswered`).
     @ObservationIgnored var startDeadline: Duration = .seconds(5)
 
     /// How often returning to the app asks for the license and version again (`askLicenseAndVersionIfDue`): Docmost 0.96
@@ -542,6 +543,26 @@ final class AppSession {
         if !session.restoredOffline { await askLicenseAndVersionIfDue(of: session)?.value }
         guard isStillCurrent(session), let current = ready else { return false }
         return PageLoader.checksVerification(on: current)
+    }
+
+    /// The current session; while returning to the app or the network asks for the license and version
+    /// (`askLicenseAndVersionIfDue`), once they have come. A page loading meanwhile builds its editor by them
+    /// (`PageView.load`): an engine reads only when it opens whether it holds its changes for the page's verification,
+    /// so one built from the session as it was never held, and its kept changes took a verification back on the return
+    /// that first found Docmost 0.98 with `page:verification`. At once where no question runs: it starts none. At most
+    /// `startDeadline`: a server that doesn't answer (behind a VPN that is off) would keep the page empty until the
+    /// requests' timeout (30 s), and its editor can't connect to it either.
+    func readyOnceAnswered() async -> ReadySession? {
+        if let asking = askingLicenseAndVersion, isStillCurrent(asking.session) {
+            let deadline = startDeadline
+            let (over, end) = AsyncStream<Void>.makeStream()
+            // Unstructured: waiting for the question's task doesn't end when cancelled, so a task group would wait it out.
+            Task { await asking.task.value; end.finish() }
+            let timeout = Task { try? await Task.sleep(for: deadline); end.finish() }
+            for await _ in over {}
+            timeout.cancel()
+        }
+        return ready
     }
 
     /// The page's lock (`PageVerification.lock`) as the server says it now; nil without one, also where the server has

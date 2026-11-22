@@ -117,6 +117,14 @@ struct PageLoader {
         }
     }
 
+    /// Whether the page's open editor (`engine`) stays as `page` loads again in `owner`, `verification` known: the page
+    /// still takes edits, and the engine holds its changes where `owner` checks verification. An engine reads that only
+    /// when it opens: one opened before returning to the app found the check turned on (a Docmost upgrade, a license
+    /// change) would hold none, not on a reconnect after someone verified the page either.
+    static func keepsEditor(_ engine: any DocumentEngine, for page: Page, verification: Verification, on owner: ReadySession) -> Bool {
+        page.canEdit && !page.isInTrash && verification == .open && (engine.holdsChanges || !checksVerification(on: owner))
+    }
+
     /// The page's document model: editable with an engine, or read-only with the reason; nil for a database page, whose
     /// content is rows. `unsent`: the document with changes the server doesn't have yet, shown offline and until the
     /// engine's first sync (which sends them), not where they can't go. A page left open in the engine shortly before
