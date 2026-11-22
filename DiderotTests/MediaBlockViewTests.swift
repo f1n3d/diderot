@@ -176,6 +176,28 @@ struct MediaBlockViewTests {
         #expect(SelfReferenceURLProtocol.requests.withLock { $0 } == 1)
     }
 
+    /// A subpages block where no page is open, as in a template's preview, says there are none, as the web does, and
+    /// asks the server nothing. It showed a spinner that never ended.
+    @Test func subpagesWithoutAPageSaySo() async throws {
+        let server = URL(string: "https://nopage-subpages.docmost.invalid")!
+        OnceURLProtocol.requests.withLock { $0[server.host()!] = nil }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [OnceURLProtocol.self]
+        let client = APIClient(baseURL: server, configuration: configuration)
+        let context = RenderContext(baseURL: server, client: client, mediaLoader: MediaLoader(client: client), token: nil, pageId: nil)
+        let block = try #require(ContentParser.parse(PMNode(type: "doc", content: [PMNode(type: "subpages")])).blocks.first)
+        let host = UIHostingController(rootView: BlockView(block: block).environment(\.renderContext, context).environment(ReaderNavigation()))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        #expect(await poll(tries: 200) { labels(in: window).contains(String(localized: "No subpages.")) }, "\(labels(in: window))")
+        #expect(!spinner(in: window))
+        #expect(OnceURLProtocol.requests.withLock { $0[server.host()!] } == nil)
+    }
+
     /// A formula is blank after its web process ended (iOS reclaimed its memory in the background, a crash). Coming
     /// back into view renders it again. GitHub's simulator sometimes doesn't let the app end the process (RunningBoard:
     /// "Client not entitled"); the test is cancelled then, as there is nothing to check.

@@ -411,7 +411,9 @@ struct SubpagesBlockView: View {
     }
 
     private func load() async {
-        guard context.canRequest, let pageId = context.pageId else { return }
+        // Without a page (a template's preview) there are none, as on the web; the spinner would never end.
+        guard let pageId = context.pageId else { subpages.show([]); return }
+        guard context.canRequest else { return }
         await subpages.load { try await Paginated.all { try await context.send(Endpoints.Pages.children(of: pageId, cursor: $0)) } }
     }
 }
